@@ -257,17 +257,17 @@ class TestDocsEndpointsbypassAuth:
 
 
 # ---------------------------------------------------------------------------
-# Tests — Unconfigured API key → 503
+# Tests — Unconfigured API key → 401
 # ---------------------------------------------------------------------------
 
 
 class TestUnconfiguredApiKey:
-    """When admin_api_key is empty string, admin endpoints return 503."""
+    """When admin_api_key is empty string, admin endpoints return 401."""
 
-    def test_unconfigured_api_key_returns_503(self) -> None:
+    def test_unconfigured_api_key_returns_401(self) -> None:
         client = _client(admin_api_key="")
         resp = client.get("/api/v1/admin/queue")
-        assert resp.status_code == 503
+        assert resp.status_code == 401
         body = resp.json()
         assert "error" in body
         assert body["error"] == "Admin API key not configured"
