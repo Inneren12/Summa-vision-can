@@ -52,7 +52,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         The ASGI application to wrap.
     admin_api_key:
         The expected API key value.  If empty, admin endpoints return
-        HTTP 503 ("Admin API key not configured").
+        HTTP 401 ("Admin API key not configured").
     rate_limiter:
         Optional :class:`InMemoryRateLimiter` for secondary rate limiting
         of admin endpoints (default: 10 req/min).
@@ -99,7 +99,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         -------
         Response
             Either the upstream response or a JSON error response
-            (401 / 429 / 503).
+            (401 / 429).
         """
         path: str = request.url.path
 

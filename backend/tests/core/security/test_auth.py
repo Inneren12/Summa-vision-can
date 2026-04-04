@@ -6,7 +6,7 @@ Tests exercise:
 3. Public endpoints (``/api/v1/public/*``) bypass auth → 200 without key.
 4. Health endpoint (``/api/health``) bypasses auth → 200 without key.
 5. Docs/OpenAPI endpoints bypass auth.
-6. Unconfigured API key (``""``) returns 503 for admin paths.
+6. Unconfigured API key (``""``) returns 401 for admin paths.
 7. Rate limiting: 11th request with valid key returns 429.
 8. Rate limiting does NOT affect public endpoints.
 """
