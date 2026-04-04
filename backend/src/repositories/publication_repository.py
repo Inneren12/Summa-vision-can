@@ -3,6 +3,14 @@
 All database access for publications goes through this class.
 Services must never import SQLAlchemy models directly — they use
 this repository to decouple business logic from persistence.
+
+Commit semantics:
+    Repositories perform ``session.flush()`` and ``session.refresh()``
+    on create operations but do **not** call ``session.commit()``.
+    Commits are handled by the FastAPI ``get_db`` dependency (auto-commit
+    on successful request, rollback on exception).  Callers outside of
+    a request context (e.g. background tasks, scripts) must commit
+    explicitly.
 """
 
 from __future__ import annotations

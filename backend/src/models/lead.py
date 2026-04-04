@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, String, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
@@ -32,6 +32,15 @@ class Lead(Base):
     """
 
     __tablename__ = "leads"
+    __table_args__ = (
+        UniqueConstraint("email", "asset_id", name="uq_lead_email_asset"),
+        Index(
+            "ix_lead_unsynced_lookup",
+            "esp_synced",
+            "esp_sync_failed_permanent",
+            "created_at",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
@@ -40,7 +49,7 @@ class Lead(Base):
     is_b2b: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     company_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
     esp_synced: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0", index=True
+        Boolean, nullable=False, default=False, server_default="0"
     )
     esp_sync_failed_permanent: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"

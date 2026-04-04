@@ -1,8 +1,12 @@
-"""Repository for Lead CRUD operations.
+"""Lead repository — data access layer for email leads.
 
-Handles lead creation and deduplication checks.  Services call
-``exists()`` before inserting to avoid duplicating a lead for
-the same email + asset combination.
+Commit semantics:
+    Repositories perform ``session.flush()`` and ``session.refresh()``
+    on create operations but do **not** call ``session.commit()``.
+    Commits are handled by the FastAPI ``get_db`` dependency (auto-commit
+    on successful request, rollback on exception).  Callers outside of
+    a request context (e.g. background tasks, scripts) must commit
+    explicitly.
 """
 
 from __future__ import annotations
@@ -98,8 +102,8 @@ class LeadRepository:
         stmt = (
             select(Lead)
             .where(
-                Lead.esp_synced == False,
-                Lead.esp_sync_failed_permanent == False,
+                Lead.esp_synced.is_(False),
+                Lead.esp_sync_failed_permanent.is_(False),
             )
             .order_by(Lead.created_at.asc())
             .limit(limit)
