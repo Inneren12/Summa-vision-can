@@ -34,13 +34,13 @@ class Lead(Base):
     __tablename__ = "leads"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
     ip_address: Mapped[str] = mapped_column(String(45), nullable=False)
-    asset_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    asset_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     is_b2b: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     company_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
     esp_synced: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
+        Boolean, nullable=False, default=False, server_default="0", index=True
     )
     esp_sync_failed_permanent: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
