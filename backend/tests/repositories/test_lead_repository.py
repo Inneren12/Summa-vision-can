@@ -176,3 +176,20 @@ class TestLeadRepository:
         assert await repo.exists(email=email, asset_id="pub-A") is True
         assert await repo.exists(email=email, asset_id="pub-B") is True
         assert await repo.exists(email=email, asset_id="pub-C") is False
+
+    async def test_get_unsynced_excludes_permanently_failed(
+        self, db_session: AsyncSession
+    ) -> None:
+        """get_unsynced must NOT return leads with esp_sync_failed_permanent=True."""
+        repo = LeadRepository(db_session)
+        lead = await repo.create(
+            email="fail@test.com",
+            ip_address="1.1.1.1",
+            asset_id="a1",
+            is_b2b=False,
+        )
+        await db_session.commit()
+        await repo.mark_permanently_failed(lead.id)
+        await db_session.commit()
+        unsynced = await repo.get_unsynced(limit=100)
+        assert lead.id not in [l.id for l in unsynced]

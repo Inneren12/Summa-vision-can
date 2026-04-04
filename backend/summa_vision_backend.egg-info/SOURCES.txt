@@ -2,6 +2,7 @@ pyproject.toml
 migrations/env.py
 migrations/versions/05de14ff39c6_initial.py
 migrations/versions/4b8b21989d14_add_esp_fields_to_lead.py
+migrations/versions/ab79f3662ba3_add_indexes.py
 scripts/export_schemas.py
 src/__init__.py
 src/main.py
