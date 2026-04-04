@@ -52,11 +52,13 @@ class Publication(Base):
         nullable=False,
         default=PublicationStatus.DRAFT,
         server_default="DRAFT",
+        index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
+        index=True,
     )
 
     def __repr__(self) -> str:  # pragma: no cover
