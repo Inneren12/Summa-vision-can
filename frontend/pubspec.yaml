@@ -1,0 +1,35 @@
+name: summa_vision_admin
+description: "Summa Vision Admin Panel — internal journalist tooling for reviewing AI-scored briefs and triggering graphic generation."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+  dio: ^5.4.3
+  flutter_dotenv: ^5.1.0
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.9.0
+  go_router: ^13.2.0
+  path_provider: ^2.1.3
+  file_picker: ^8.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.9
+  freezed: ^2.5.2
+  json_serializable: ^6.8.0
+  riverpod_generator: ^2.4.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env

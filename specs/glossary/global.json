@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "namespace": "global",
+  "terms": {
+    "ETL": {
+      "full": "Extract, Transform, Load",
+      "definition": "The process of extracting raw data from external APIs, transforming it via schema validation and scalar factor normalization, and loading results to S3 or local DB.",
+      "examples": ["StatCan ETL Service", "CMHC extraction pipeline"]
+    },
+    "Scalar Factor": {
+      "full": "Metric Multiplier",
+      "definition": "A base-10 exponent multiplier that must be applied to raw StatCan response values (e.g., x1000 for 'thousands').",
+      "examples": ["Applying scalar_factor_code to raw_value in pandas"]
+    },
+    "SSOT": {
+      "full": "Single Source of Truth",
+      "definition": "The single authoritative data source for a given piece of information.",
+      "examples": ["Sprint spec is SSOT for acceptance criteria", "S3 as SSOT for cleaned datasets"]
+    },
+    "DI": {
+      "full": "Dependency Injection",
+      "definition": "Design pattern where classes receive their dependencies from external sources rather than creating them internally.",
+      "examples": ["StatCanClient receives httpx.AsyncClient via __init__", "TaskManager injected via FastAPI Depends"]
+    },
+    "AC": {
+      "full": "Acceptance Criteria",
+      "definition": "A set of verifiable conditions that must all be satisfied for a PR to be considered complete.",
+      "examples": ["<ac-block id='S1-PR01-AC1'>"]
+    },
+    "Maintenance Window": {
+      "full": "StatCan Downtime Period",
+      "definition": "The period from 00:00 to 08:30 EST during which StatCan API is unavailable and no requests should be sent.",
+      "examples": ["StatCanMaintenanceGuard.is_maintenance_window()"]
+    },
+    "Token Bucket": {
+      "full": "Rate Limiting Algorithm",
+      "definition": "An algorithm that controls network traffic by using tokens to represent allowed requests, with tokens refilling at a fixed rate.",
+      "examples": ["AsyncTokenBucket with capacity=10, refill_rate=10/sec"]
+    },
+    "SummaVisionError": {
+      "full": "Base Exception Class",
+      "definition": "The root exception class for all Summa Vision domain errors. Carries machine-readable error_code, human-readable message, and structured context dict. All domain exceptions must inherit from it (ARCH-ERR-001).",
+      "examples": ["DataSourceError", "AIServiceError", "StorageError", "ValidationError", "AuthError"]
+    },
+    "DataQualityReport": {
+      "full": "NaN Metrics Summary",
+      "definition": "A frozen Pydantic model returned alongside normalized DataFrames, reporting total_rows, valid_rows, nan_rows, and nan_percentage. Used to detect poor-quality StatCan datasets.",
+      "examples": ["normalize_dataset() returns tuple[DataFrame, DataQualityReport]"]
+    },
+    "TaskManager": {
+      "full": "Async Background Task Engine",
+      "definition": "An in-memory task tracker that wraps asyncio.create_task with UUID-keyed status tracking (PENDING → RUNNING → COMPLETED | FAILED). Enables HTTP 202 Accepted + polling pattern for long-running operations.",
+      "examples": ["tm.submit_task(coro) → task_id", "tm.get_task_status(task_id) → TaskStatusResponse"]
+    },
+    "HTML Snapshot": {
+      "full": "Raw HTML Archive",
+      "definition": "A verbatim copy of the HTML page source saved to storage BEFORE any parsing or validation. Used to debug parser failures when external sites change their DOM structure.",
+      "examples": ["cmhc/snapshots/2026-03-16_toronto.html stored via StorageInterface.upload_raw()"]
+    },
+    "StorageInterface": {
+      "full": "Storage Abstraction Layer",
+      "definition": "An abstract base class defining a backend-agnostic contract for file persistence. Concrete implementations include S3StorageManager (production) and LocalStorageManager (development).",
+      "examples": ["get_storage_manager() factory selects by STORAGE_BACKEND setting"]
+    },
+    "HTTP 202 Pattern": {
+      "full": "Accepted + Polling",
+      "definition": "A REST API pattern where long-running operations return HTTP 202 Accepted immediately with a task_id, and clients poll a separate status endpoint until the task completes or fails.",
+      "examples": ["POST /api/v1/cmhc/sync → 202 {task_id}", "GET /api/v1/tasks/{task_id} → TaskStatusResponse"]
+    },
+    "structlog": {
+      "full": "Structured Logging Library",
+      "definition": "A Python logging library that produces JSON-formatted log lines in production and human-readable colored output in development. All Summa Vision logging MUST go through structlog (ARCH-LOG-001).",
+      "examples": ["logger.warning('Retryable HTTP status', attempt=1, status_code=503)"]
+    }
+  }
+}

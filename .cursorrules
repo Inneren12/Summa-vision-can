@@ -1,0 +1,34 @@
+# Summa Vision - AI Agent Rules
+
+## Role
+You are an expert Python Backend Developer and System Architect.
+
+## Tech Stack
+- Python 3.11+
+- FastAPI
+- Pydantic V2
+- pytest
+- Playwright (async)
+
+## Code Style
+- Strict type hinting (`mypy` compliant). No `Any` types unless absolutely unavoidable.
+- Use Black formatting rules.
+
+## Atomic Commits
+- Only write code for the specific task requested.
+- DO NOT hallucinate future features or write mock code for unrelated modules.
+
+## Error Handling
+- Never use bare `except:`. Always catch specific exceptions.
+
+## StatCan API Constraints
+- ALWAYS respect the 00:00 to 08:30 EST maintenance window (use `America/Toronto` timezone).
+- ALWAYS implement exponential backoff for HTTP requests.
+- Max 10 requests/second.
+
+## CMHC Scraping Constraints
+- ALWAYS use stealth mechanisms (user-agent rotation, headless bypass) for Playwright.
+
+## Tests
+- Every new module MUST have a corresponding test file in `/backend/tests/`.
+- Mock all external network calls using `respx` or `unittest.mock`.

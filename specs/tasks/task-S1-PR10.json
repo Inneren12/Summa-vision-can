@@ -1,0 +1,33 @@
+{
+  "id": "task-S1-PR10",
+  "title": "CMHC Оркестратор (Stealth + Parser + S3)",
+  "sprint": "sprint-1",
+  "depends_on": [
+    "task-S1-PR7",
+    "task-S1-PR8",
+    "task-S1-PR9"
+  ],
+  "branch": "feature/s1-pr10-cmhc-orchestrator",
+  "arch_scopes": [
+    "core"
+  ],
+  "glossary_scopes": [
+    "global"
+  ],
+  "ac_id": "S1-PR10-AC1",
+  "touches": {
+    "include": [
+      "backend/src/services/cmhc/service.py",
+      "backend/tests/services/cmhc/test_service.py",
+      "docs/modules/cmhc.md"
+    ],
+    "exclude": []
+  },
+  "estimated_files": [
+    "backend/src/services/cmhc/service.py",
+    "backend/tests/services/cmhc/test_service.py"
+  ],
+  "expected_hash": "4827af74f5c9515b6051dfc830e811b9f4f0dcb9a47f3eef344445739f5870a4",
+  "status": "ready",
+  "assignee": null
+}

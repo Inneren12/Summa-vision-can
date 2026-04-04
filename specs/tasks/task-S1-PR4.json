@@ -1,0 +1,32 @@
+{
+  "id": "task-S1-PR4",
+  "title": "Базовый HTTP-клиент StatCan (Интеграция Guard и Limiter)",
+  "sprint": "sprint-1",
+  "depends_on": [
+    "task-S1-PR2",
+    "task-S1-PR3"
+  ],
+  "branch": "feature/s1-pr4-statcan-client",
+  "arch_scopes": [
+    "core"
+  ],
+  "glossary_scopes": [
+    "global"
+  ],
+  "ac_id": "S1-PR04-AC1",
+  "touches": {
+    "include": [
+      "backend/src/services/statcan/client.py",
+      "backend/tests/services/statcan/test_client.py",
+      "docs/modules/statcan.md"
+    ],
+    "exclude": []
+  },
+  "estimated_files": [
+    "backend/src/services/statcan/client.py",
+    "backend/tests/services/statcan/test_client.py"
+  ],
+  "expected_hash": "77ad2a34026eba93ddb06e0bbdffc0fafa6f9fb760e78e7124c2c18d634f41be",
+  "status": "done",
+  "assignee": null
+}

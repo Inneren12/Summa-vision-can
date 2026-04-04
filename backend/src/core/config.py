@@ -1,0 +1,81 @@
+"""Application configuration via Pydantic BaseSettings.
+
+Settings are loaded from environment variables (and optionally a `.env` file).
+Use the ``get_settings`` dependency in FastAPI route signatures to access
+the parsed, validated configuration — never import a global instance.
+"""
+
+from functools import lru_cache
+from typing import Literal
+
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    """Central configuration for the Summa Vision API.
+
+    Attributes:
+        app_name: Human-readable service name.
+        debug: Enable debug-level logging and stack traces.
+        cors_origins: Comma-separated list of allowed CORS origins.
+            Defaults to ``"*"`` (allow all) for local development.
+        storage_backend: Which storage implementation to use.
+            ``"local"`` writes to disk (dev); ``"s3"`` uses AWS S3 (prod).
+        s3_bucket_name: Name of the S3 bucket (required when *storage_backend*
+            is ``"s3"``).
+        s3_region: AWS region for the S3 bucket.
+        s3_endpoint_url: Optional custom S3 endpoint (e.g. for LocalStack).
+        s3_access_key_id: AWS access key ID (optional; falls back to
+            standard AWS credential chain).
+        s3_secret_access_key: AWS secret access key (optional; falls back
+            to standard AWS credential chain).
+        local_storage_dir: Filesystem directory used by
+            ``LocalStorageManager``.
+    """
+
+    app_name: str = "Summa Vision API"
+    debug: bool = False
+    cors_origins: str = "*"
+
+    # --- Database ---
+    database_url: str = ""
+
+    # --- Storage ---
+    storage_backend: Literal["s3", "local"] = "local"
+    s3_bucket_name: str = ""
+    s3_region: str = "ca-central-1"
+    s3_endpoint_url: str = ""
+    s3_access_key_id: str = ""
+    s3_secret_access_key: str = ""
+    local_storage_dir: str = "./data/local_storage"
+
+    # --- Scheduler ---
+    scheduler_db_url: str = "sqlite:///data/jobs.sqlite"
+    scheduler_enabled: bool = True
+
+    # --- Security ---
+    admin_api_key: str = ""  # Set via ADMIN_API_KEY env var
+
+    # --- LLM / Gemini ---
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
+    daily_llm_budget: float = 5.00
+    llm_cache_ttl_seconds: int = 86400  # 24 hours
+
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return a cached ``Settings`` instance (singleton per process).
+
+    This function is designed to be used as a **FastAPI dependency**::
+
+        @app.get("/example")
+        async def example(settings: Settings = Depends(get_settings)):
+            ...
+
+    The ``@lru_cache`` decorator ensures the ``.env`` file is read only
+    once, making repeated dependency resolution essentially free.
+    """
+    return Settings()

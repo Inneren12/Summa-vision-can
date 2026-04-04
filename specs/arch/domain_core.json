@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "domain": "core",
+  "rules": [
+    {
+      "rule_id": "ARCH-PURA-001",
+      "title": "Pure Data Transformations",
+      "constraint": "All data processing logic must be distinct from I/O bounds like HTTP or Databases.",
+      "rationale": "Enables completely isolated unit testing for mathematical normalizations like scalar factor adjustments, avoiding flaky HTTP mocks.",
+      "applies_to": ["backend/src/services/**/transformers.py", "backend/src/domain/**/*.py"],
+      "code_pattern": {
+        "required": "def transform_data(data: AbstractData) -> Model:",
+        "forbidden": "await client.get("
+      },
+      "violations": ["Making database queries inside a data transformer function"],
+      "exceptions": ["backend/src/services/**/client.py"]
+    },
+    {
+      "rule_id": "ARCH-DPEN-001",
+      "title": "Strict Dependency Injection",
+      "constraint": "Classes cannot instantiate their own heavy dependencies (e.g., HTTP clients, db connections).",
+      "rationale": "Ensures mocking is cleanly configurable and classes are isolated.",
+      "applies_to": ["backend/src/services/**/*.py"],
+      "code_pattern": {
+        "required": "def __init__(self, client: AsyncClient):",
+        "forbidden": "self.client = httpx.AsyncClient()"
+      },
+      "violations": ["Instantiating httpx.AsyncClient inside the __init__ of a service class"],
+      "exceptions": ["backend/src/main.py", "backend/src/dependencies.py"]
+    }
+  ]
+}

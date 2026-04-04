@@ -1,0 +1,29 @@
+{
+  "id": "task-S1-PR7",
+  "title": "Интерфейс облачного хранилища (S3 Manager)",
+  "sprint": "sprint-1",
+  "depends_on": [],
+  "branch": "feature/s1-pr7-s3-storage",
+  "arch_scopes": [
+    "core"
+  ],
+  "glossary_scopes": [
+    "global"
+  ],
+  "ac_id": "S1-PR07-AC1",
+  "touches": {
+    "include": [
+      "backend/src/core/storage.py",
+      "backend/tests/core/test_storage.py",
+      "docs/modules/storage.md"
+    ],
+    "exclude": []
+  },
+  "estimated_files": [
+    "backend/src/core/storage.py",
+    "backend/tests/core/test_storage.py"
+  ],
+  "expected_hash": "dba03f61cb81ee8f3c49a5593ee3cf54aa1a42b41f8cf980a81b94384faa72d5",
+  "status": "ready",
+  "assignee": null
+}

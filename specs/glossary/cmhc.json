@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "namespace": "cmhc",
+  "terms": {
+    "CMHC": {
+      "full": "Canada Mortgage and Housing Corporation",
+      "definition": "Canadian federal crown corporation providing housing data including rental and vacancy statistics.",
+      "examples": ["CMHC scraping pipeline"]
+    },
+    "Stealth Browser": {
+      "full": "Anti-Detection Browser Instance",
+      "definition": "A Playwright browser context configured with playwright-stealth to bypass Cloudflare anti-bot detection.",
+      "examples": ["get_stealth_context() -> BrowserContext"]
+    },
+    "DOM Parser": {
+      "full": "Document Object Model Parser",
+      "definition": "A component that extracts structured data from raw HTML using BeautifulSoup4, completely decoupled from network I/O.",
+      "examples": ["CMHCParser takes HTML string in, DataFrame out"]
+    },
+    "Exponential Backoff": {
+      "full": "Retry Delay Strategy",
+      "definition": "A retry strategy where wait time doubles after each failed attempt, used for retryable HTTP errors (429, 409, 503).",
+      "examples": ["1s -> 2s -> 4s retry delays in StatCanClient"]
+    },
+    "validate_structure": {
+      "full": "DOM Structural Validation",
+      "definition": "A pre-parse check in CMHCParser that verifies expected HTML elements (<table>, <thead>) exist before attempting data extraction. Returns False and logs CRITICAL if the CMHC portal changed its DOM layout.",
+      "examples": ["parser.validate_structure(html) -> bool"]
+    }
+  }
+}

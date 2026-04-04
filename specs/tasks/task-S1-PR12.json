@@ -1,0 +1,31 @@
+{
+  "id": "task-S1-PR12",
+  "title": "Настройка планировщика фоновых задач (APScheduler)",
+  "sprint": "sprint-1",
+  "depends_on": [
+    "task-S1-PR6"
+  ],
+  "branch": "feature/s1-pr12-task-scheduler",
+  "arch_scopes": [
+    "core"
+  ],
+  "glossary_scopes": [
+    "global"
+  ],
+  "ac_id": "S1-PR12-AC1",
+  "touches": {
+    "include": [
+      "backend/src/core/scheduler.py",
+      "backend/tests/core/test_scheduler.py",
+      "docs/modules/statcan.md"
+    ],
+    "exclude": []
+  },
+  "estimated_files": [
+    "backend/src/core/scheduler.py",
+    "backend/tests/core/test_scheduler.py"
+  ],
+  "expected_hash": "309f839a7f275976cf971ec217b1d8fd41a3f89fd1a7550176d1456313884998",
+  "status": "ready",
+  "assignee": null
+}

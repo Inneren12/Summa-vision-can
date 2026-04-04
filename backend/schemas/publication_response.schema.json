@@ -1,0 +1,47 @@
+{
+  "description": "Admin-facing publication representation for the queue endpoint.\n\nAttributes:\n    id: Publication primary key.\n    headline: Short title of the graphic.\n    chart_type: Type of chart (e.g. ``\"BAR\"``, ``\"LINE\"``).\n    virality_score: AI-estimated virality score (0.0 \u2013 10.0).\n    status: Current lifecycle status (``DRAFT`` or ``PUBLISHED``).\n    created_at: UTC timestamp of record creation.",
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "integer"
+    },
+    "headline": {
+      "title": "Headline",
+      "type": "string"
+    },
+    "chart_type": {
+      "title": "Chart Type",
+      "type": "string"
+    },
+    "virality_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Virality Score"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "headline",
+    "chart_type",
+    "status",
+    "created_at"
+  ],
+  "title": "PublicationResponse",
+  "type": "object"
+}

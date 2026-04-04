@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+:root {
+  /* Summa Vision brand palette */
+  --background:      #141414;
+  --surface:         #1E1E1E;
+  --neon-green:      #00FF94;
+  --neon-blue:       #00D4FF;
+  --neon-pink:       #FF006E;
+  --neon-yellow:     #FFB700;
+  --text-primary:    #FFFFFF;
+  --text-secondary:  #B0B0B0;
+  --error-red:       #CF6679;
+}
+
+@theme inline {
+  --color-background:     var(--background);
+  --color-surface:        var(--surface);
+  --color-neon-green:     var(--neon-green);
+  --color-neon-blue:      var(--neon-blue);
+  --color-neon-pink:      var(--neon-pink);
+  --color-neon-yellow:    var(--neon-yellow);
+  --color-text-primary:   var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-error-red:      var(--error-red);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
