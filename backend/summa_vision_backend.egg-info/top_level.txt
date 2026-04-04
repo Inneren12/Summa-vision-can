@@ -1,6 +1,7 @@
 data
 migrations
 prompts
+schemas
+scripts
 src
 tests
-venv
