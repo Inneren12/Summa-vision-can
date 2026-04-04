@@ -53,18 +53,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://summa.vision",
-        "https://www.summa.vision",
-        "http://localhost:3000",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # ---------------------------------------------------------------------------
 # Global exception handlers
 # ---------------------------------------------------------------------------
@@ -82,7 +70,10 @@ app.include_router(public_leads_router)
 app.include_router(admin_graphics_router)
 
 # ---------------------------------------------------------------------------
-# Auth middleware (registered AFTER routers — Starlette wraps the full app)
+# Middlewares (registered AFTER routers — Starlette wraps the full app)
+# Order matters: outermost middleware is added LAST.
+# CORSMiddleware must be added AFTER AuthMiddleware so it runs FIRST
+# and handles OPTIONS preflight requests before auth blocks them.
 # ---------------------------------------------------------------------------
 
 app.add_middleware(
@@ -90,6 +81,17 @@ app.add_middleware(
     admin_api_key=settings_on_startup.admin_api_key,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://summa.vision",
+        "https://www.summa.vision",
+        "http://localhost:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ---------------------------------------------------------------------------
 # Health-check endpoint

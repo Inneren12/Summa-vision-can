@@ -117,7 +117,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             if self._admin_api_key == "":
                 return JSONResponse(
                     {"error": "Admin API key not configured"},
-                    status_code=503,
+                    status_code=401,
                 )
 
             # 2b. Extract and validate API key from header
