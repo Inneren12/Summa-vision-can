@@ -31,7 +31,20 @@ schemas/
 repositories/
 ├── ...existing...
 └── job_repository.py  ← Job CRUD + SKIP LOCKED claiming (0-2)
+
+services/jobs/
+├── __init__.py
+├── handlers.py        ← Handler registry + protocol (0-3)
+├── runner.py          ← JobRunner: claim → dispatch → result (0-3)
+└── dedupe.py          ← Canonical dedupe key generators (0-3)
 ```
+
+### Job Services
+| Component | Module | Description |
+|-----------|--------|-------------|
+| `HANDLER_REGISTRY` | `services.jobs.handlers` | Dict mapping job_type → async handler function. Populated by later PRs. |
+| `register_handler` | `services.jobs.handlers` | Registers a handler for a job type. Raises if already registered. |
+| `JobRunner` | `services.jobs.runner` | Polling loop that claims persistent jobs, validates typed payloads, dispatches to handlers, manages retry/cool-down, and stops on shutdown. |
 
 ## Classes
 

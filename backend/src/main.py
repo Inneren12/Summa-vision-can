@@ -69,16 +69,38 @@ async def lifespan(app: FastAPI):
 
     structlog.get_logger().info("app_started", semaphores="initialized")
 
+    # Job runner — background loop (R7)
+    from src.services.jobs.runner import JobRunner
+    from src.core.database import async_session_factory
+
+    runner = JobRunner(async_session_factory, app.state)
+    runner_task = asyncio.create_task(runner.run_loop(poll_interval=2.0))
+
     yield
 
     # --- Shutdown (R20) ---
     app.state.shutting_down = True
     structlog.get_logger().info("shutdown_initiated", grace_period_s=30)
 
-    # Wait for running jobs (placeholder until Job runner exists)
-    # await _wait_for_running_jobs(timeout=30)
-
     shutdown_scheduler()
+
+    # Wait for runner to finish current job (up to 30s)
+    try:
+        await asyncio.wait_for(runner_task, timeout=30.0)
+    except asyncio.TimeoutError:
+        structlog.get_logger().warning(
+            "shutdown_timeout",
+            message="Runner did not finish within 30s. "
+            "Leaving job in 'running' state for zombie reaper.",
+        )
+        runner_task.cancel()
+        # NOTE: cancel() may interrupt the handler mid-execution.
+        # This is intentional (R20): the job stays in 'running' status
+        # and the zombie reaper will pick it up on next startup.
+        try:
+            await runner_task
+        except asyncio.CancelledError:
+            pass
 
     # Dispose DB engine
     from src.core.database import engine
