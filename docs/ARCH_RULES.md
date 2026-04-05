@@ -69,6 +69,13 @@
 - **Required pattern:** `job_repo.enqueue(type, payload) → 202 Accepted`
 - **Forbidden pattern:** `await long_operation()` inside router handler.
 
+## ARCH-JOBS-002: Job Handler Idempotency
+- **Constraint:** Job handlers MUST be safe for re-execution after
+  zombie reaper requeue or retry.
+- **Rationale:** Prevents data duplication and side-effect repetition.
+- **Required pattern:** Check if output already exists before writing.
+- **Forbidden pattern:** Unconditional write without existence check.
+
 ---
 
 ## Maintenance
