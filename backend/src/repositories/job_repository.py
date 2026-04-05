@@ -16,6 +16,7 @@ from typing import Sequence
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from src.models.job import Job, JobStatus
 
@@ -54,7 +55,18 @@ class JobRepository:
             max_attempts=max_attempts,
         )
         self._session.add(job)
-        await self._session.flush()
+
+        try:
+            await self._session.flush()
+        except IntegrityError:
+            # Race condition: another session inserted with same dedupe_key
+            # between our SELECT and INSERT. Roll back and fetch the winner.
+            await self._session.rollback()
+            existing = await self._find_active_by_dedupe(dedupe_key)
+            if existing is not None:
+                return existing
+            raise  # Unknown integrity error — re-raise
+
         await self._session.refresh(job)
         return job
 
@@ -173,7 +185,11 @@ class JobRepository:
                 Job.started_at < cutoff,
                 Job.attempt_count < Job.max_attempts,
             )
-            .values(status=JobStatus.QUEUED)
+            .values(
+                status=JobStatus.QUEUED,
+                attempt_count=Job.attempt_count + 1,  # R8: increment
+                started_at=None,  # Reset so it doesn't re-trigger reaper
+            )
         )
         return result.rowcount  # type: ignore[return-value]
 

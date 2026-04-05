@@ -92,6 +92,12 @@ PAYLOAD_REGISTRY: dict[str, type[BaseModel]] = {
 def parse_payload(job_type: str, payload_json: str) -> BaseModel:
     """Validate and deserialize a job payload.
 
+    NOTE: Roadmap specifies ``parse_payload(job) -> BaseModel``.
+    This implementation accepts (job_type, payload_json) directly
+    for flexibility — callers may not always have the full Job object
+    (e.g. in tests, in API validation before enqueue).
+    The runner calls: ``parse_payload(job.job_type, job.payload_json)``.
+
     Args:
         job_type: The job's type identifier.
         payload_json: Raw JSON string from ``Job.payload_json``.
