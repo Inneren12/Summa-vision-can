@@ -15,22 +15,15 @@ WORKDIR /app
 
 # --- Install Python deps first (layer cache) ---
 COPY pyproject.toml .
-RUN pip install --no-cache-dir -e ".[dev]"
-
-# --- Copy source ---
 COPY . .
+RUN pip install --no-cache-dir -e ".[dev]"
 
 # --- Alembic migrations run before app start ---
 # In production, run: alembic upgrade head && uvicorn ...
 # For simplicity, CMD only starts uvicorn. Migrations in entrypoint or CI.
 
 # --- Single worker (R9) ---
-CMD ["uvicorn", "src.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--workers", "1", \
-     "--proxy-headers", \
-     "--forwarded-allow-ips=*"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips=*"]
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD curl -f http://localhost:8000/api/health || exit 1

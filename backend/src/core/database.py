@@ -1,22 +1,12 @@
 """Async database engine, session factory, and FastAPI dependency.
 
-This module sets up the SQLAlchemy 2.0 async engine and session maker.
-The ``DATABASE_URL`` is read from the application settings (via
-``pydantic-settings``).  When the variable is empty or not set, it falls
-back to a local SQLite file for development.
-
-Usage in FastAPI routes::
-
-    from src.core.database import get_db
-
-    @router.get("/items")
-    async def list_items(session: AsyncSession = Depends(get_db)):
-        ...
+Connects to PostgreSQL via ``DATABASE_URL`` from application settings.
+SQLite is NOT supported as a runtime database — it is used only in
+unit test fixtures.
 
 Architecture note:
-    Route handlers (and services) receive an ``AsyncSession`` via
-    dependency injection.  They must **never** create their own engine or
-    session – this module is the single source of truth for DB wiring.
+    Route handlers receive ``AsyncSession`` via dependency injection.
+    They must never create their own engine or session.
 """
 
 from __future__ import annotations
