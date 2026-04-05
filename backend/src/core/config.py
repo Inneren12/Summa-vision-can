@@ -54,12 +54,21 @@ class Settings(BaseSettings):
     polars_max_threads: int = 2
 
     # --- Storage ---
-    storage_backend: Literal["s3", "local"] = "s3"  # "s3" or "local"
+    storage_backend: Literal["s3", "local"] = "local"  # "s3" or "local"
     s3_bucket: str = "summa-vision-dev"
     s3_endpoint_url: str = ""  # http://minio:9000 for dev, empty for AWS
     s3_access_key_id: str = ""
     s3_secret_access_key: str = ""
     s3_region: str = "us-east-1"
+    # CDN_BASE_URL is the base URL for public lowres assets.
+    # Gallery API constructs URLs as: f"{cdn_base_url}/{s3_key}"
+    # where s3_key is the object key within the S3 bucket.
+    #
+    # Dev (MinIO direct): http://localhost:9000/summa-vision-dev
+    # Prod (CloudFront):  https://cdn.summa.vision
+    #
+    # The key already contains the full path (e.g. "publications/42/v1/abc_lowres.png"),
+    # so CDN_BASE_URL should NOT include a trailing path component.
     cdn_base_url: str = "http://localhost:9000/summa-vision-dev"
     local_storage_dir: str = "./data/local_storage"
 

@@ -13,14 +13,20 @@ ENV POLARS_MAX_THREADS=2
 
 WORKDIR /app
 
-# --- Install Python deps first (layer cache) ---
+# Dependencies cached in separate layer — only re-downloaded when pyproject.toml changes
 COPY pyproject.toml .
-COPY . .
-RUN pip install --no-cache-dir -e ".[dev]"
+RUN mkdir -p src && touch src/__init__.py && \
+    pip install --no-cache-dir . && \
+    rm -rf src/
 
-# --- Alembic migrations run before app start ---
-# In production, run: alembic upgrade head && uvicorn ...
-# For simplicity, CMD only starts uvicorn. Migrations in entrypoint or CI.
+# Layer 2: Full source + reinstall
+COPY . .
+RUN pip install --no-cache-dir .
+
+# TODO (0-2 or later): Add entrypoint script that runs
+# alembic upgrade head before starting uvicorn.
+# For now, run migrations manually after deploy:
+#   docker compose exec api alembic upgrade head
 
 # --- Single worker (R9) ---
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips=*"]

@@ -10,13 +10,32 @@
 | 0-4 | AuditEvent Foundation | ⬜ | 0-2 |
 | 0-5 | Backup + Alerting Baseline | ⬜ | 0-1 |
 
-## Previously Completed (Sprint 1 + Phase 1.5)
+## Previously Completed
 
+### Sprint 1: StatCan ETL Pipeline ✅
 | PR | Title | Status |
 |----|-------|--------|
-| PR-1..PR-6 | StatCan ETL Pipeline | ✅ |
+| PR-1 | FastAPI Base + HealthCheck | ✅ |
+| PR-2 | Maintenance Guard (Timezone) | ✅ |
+| PR-3 | Rate Limiter (Token Bucket) | ✅ |
+| PR-4 | StatCan HTTP Client | ✅ |
+| PR-5 | Pydantic Schemas | ✅ |
+| PR-6 | ETL Service + NaN Handling | ✅ |
+
+### Phase 1.5: Persistence Layer ✅
+| PR | Title | Status |
+|----|-------|--------|
 | PR-39 | Database Schema & Models | ✅ |
 | PR-40 | Repository Layer | ✅ |
 | PR-41 | Public Gallery API | ✅ |
+
+### Phase 2.5: Security ✅
+| PR | Title | Status |
+|----|-------|--------|
 | PR-42 | Auth Middleware | ✅ |
-| FIX-01..09 | Foundation Repairs | ✅ |
+
+### Foundation Fixes ✅
+| PR | Title | Status |
+|----|-------|--------|
+| FIX-01..08 | Foundation repairs | ✅ |
+| 0-1 | Docker + Compose + Health + MinIO | ✅ |
