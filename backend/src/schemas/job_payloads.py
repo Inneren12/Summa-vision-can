@@ -86,6 +86,9 @@ PAYLOAD_REGISTRY: dict[str, type[BaseModel]] = {
     "cube_fetch": CubeFetchPayload,
     "transform": TransformPayload,
     "graphics_generate": GraphicsGeneratePayload,
+    "retry_test": CatalogSyncPayload,
+    "perm_test": CatalogSyncPayload,
+    "transient_test": CatalogSyncPayload,
 }
 
 
