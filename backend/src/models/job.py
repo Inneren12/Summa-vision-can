@@ -55,9 +55,10 @@ class Job(Base):
         started_at: When the job was last claimed by a runner.
         finished_at: When the job reached a terminal state.
         created_by: Operator / system identifier that enqueued the job.
-        dedupe_key: Optional unique key preventing duplicate jobs.
-            If a job with the same dedupe_key exists in queued/running
-            status, enqueue returns the existing job instead.
+        dedupe_key: Optional key preventing duplicate ACTIVE jobs.
+            Enforced by partial unique index ix_jobs_dedupe_active:
+            only one queued/running job per dedupe_key at any time.
+            Completed/failed/cancelled jobs may reuse the same key.
     """
 
     __tablename__ = "jobs"

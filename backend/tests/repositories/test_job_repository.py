@@ -183,6 +183,52 @@ async def test_parse_payload_incompatible_version(
 
 # ---- Zombie reaper ----
 
+async def test_requeue_stale_does_not_requeue_exhausted(
+    db_session: AsyncSession,
+) -> None:
+    """Stale job with attempt_count >= max_attempts is NOT requeued."""
+    from datetime import timedelta
+
+    repo = JobRepository(db_session)
+    job = await repo.enqueue("test", '{"schema_version": 1}')
+    job.status = JobStatus.RUNNING
+    job.started_at = datetime.now(timezone.utc) - timedelta(minutes=20)
+    job.attempt_count = 3
+    job.max_attempts = 3  # exhausted
+    await db_session.flush()
+    await db_session.commit()
+
+    requeued = await repo.requeue_stale_running(stale_threshold_minutes=10)
+    await db_session.commit()
+
+    assert requeued == 0
+    await db_session.refresh(job)
+    assert job.status == JobStatus.RUNNING  # unchanged
+
+
+async def test_requeue_stale_increments_attempt_count(
+    db_session: AsyncSession,
+) -> None:
+    """Zombie reaper increments attempt_count on requeue (R8)."""
+    from datetime import timedelta
+
+    repo = JobRepository(db_session)
+    job = await repo.enqueue("test", '{"schema_version": 1}')
+    job.status = JobStatus.RUNNING
+    job.started_at = datetime.now(timezone.utc) - timedelta(minutes=20)
+    job.attempt_count = 1
+    await db_session.flush()
+    await db_session.commit()
+
+    await repo.requeue_stale_running(stale_threshold_minutes=10)
+    await db_session.commit()
+
+    await db_session.refresh(job)
+    assert job.status == JobStatus.QUEUED
+    assert job.attempt_count == 2  # was 1, now 2
+    assert job.started_at is None  # reset
+
+
 async def test_requeue_stale_running_jobs(
     db_session: AsyncSession,
 ) -> None:
