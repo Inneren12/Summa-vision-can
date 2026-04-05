@@ -65,6 +65,9 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `models/*.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
 | `repositories/*.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
 | `core/scheduler.py` | >90% | ✅ 98% | `tests/core/test_scheduler.py` |
+| `models/job.py` | >90% | ⬜ | |
+| `repositories/job_repository.py` | >90% | ⬜ | |
+| `schemas/job_payloads.py` | >90% | ⬜ | |
 | `core/security/ip_rate_limiter.py` | >90% | ✅ 100% | `tests/api/test_public_graphics.py` |
 | `api/routers/public_graphics.py` | >90% | ✅ 96% | `tests/api/test_public_graphics.py` |
 | `services/ai/llm_interface.py` | >90% | ✅ 100% | `tests/services/ai/test_llm_interface.py` |
@@ -96,6 +99,7 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `google-genai` (Gemini SDK) | `unittest.mock.MagicMock` on `genai.Client.models.generate_content` |
 | `StorageInterface` | `LocalStorageManager` for integration tests, `unittest.mock.AsyncMock` for unit tests |
 | `TaskManager` | In-memory instance with mock coroutines |
+| Job repository (in runner tests) | Direct SQLite-backed AsyncSession |
 | Database (AsyncSession) | In-memory `aiosqlite` via `create_async_engine("sqlite+aiosqlite://")` |
 | `InMemoryRateLimiter` | Injected via `Depends` override in public graphics tests |
 | `PublicationRepository` / `LeadRepository` | Direct in-memory SQLite integration tests |

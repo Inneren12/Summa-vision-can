@@ -53,9 +53,19 @@ async def lifespan(app: FastAPI):
     app.state.shutting_down = False
 
     # Zombie reaper (R8) — runs once on startup
-    # NOTE: This will be implemented when Job model exists (PR 0-2).
-    # For now, leave as placeholder:
-    # await _requeue_stale_jobs()
+    from src.core.database import async_session_factory
+    from src.repositories.job_repository import JobRepository
+
+    async with async_session_factory() as session:
+        job_repo = JobRepository(session)
+        requeued = await job_repo.requeue_stale_running(stale_threshold_minutes=10)
+        await session.commit()
+        if requeued > 0:
+            structlog.get_logger().warning(
+                "zombie_reaper_requeued",
+                count=requeued,
+                threshold_minutes=10,
+            )
 
     structlog.get_logger().info("app_started", semaphores="initialized")
 

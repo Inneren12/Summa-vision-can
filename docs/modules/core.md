@@ -20,9 +20,29 @@ core/
 ├── task_manager.py    ← In-memory task manager (legacy, being replaced by Job model)
 ├── scheduler.py       ← APScheduler CRON integration
 └── database.py        ← SQLAlchemy async engine + session factory
+
+models/
+├── ...existing...
+└── job.py             ← Persistent Job model (0-2)
+
+schemas/
+└── job_payloads.py    ← Typed payload models + registry (0-2)
+
+repositories/
+├── ...existing...
+└── job_repository.py  ← Job CRUD + SKIP LOCKED claiming (0-2)
 ```
 
 ## Classes
+
+### `Job` (models/job.py)
+Persistent job record with status, payload, retry tracking.
+
+### `JobRepository` (repositories/job_repository.py)
+enqueue, claim_next (SKIP LOCKED on PG), mark_success/failed, zombie reaper.
+
+### `parse_payload` (schemas/job_payloads.py)
+Typed dispatch from job_type → Pydantic model.
 
 ### `InMemoryRateLimiter` (ip_rate_limiter.py)
 configurable sliding window per IP.
