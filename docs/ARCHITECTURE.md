@@ -5,14 +5,20 @@
 The current flow is:
 
 ```
-   Data Sources → ETL Pipeline → Cube Catalog (search) → Data Workbench → Visual Engine → Publication
-                                                                              ↓
+   Data Sources → ETL Pipeline → Cube Catalog (search) → Data Workbench → LLM Gate → Visual Engine → Publication
+                                                                              ↓                ↓
                                                                      Human-in-the-Loop (Admin)
 ```
+*(Note: LLM Gate is backlogged, but the module architecture remains)*
 
 ## Infrastructure Layer
 
-Docker, PostgreSQL, MinIO (dev), health endpoints, resource semaphores (data_sem, render_sem, io_sem), persistent job manager (coming in 0-2).
+- **Docker:** Dockerfile + two compose files
+- **Health endpoints:** `/api/health` (liveness), `/api/health/ready` (readiness)
+- **Resource semaphores:** data_sem(2), render_sem(2), io_sem(10)
+- **Database:** PostgreSQL-only runtime, pool_size=8
+- **Storage:** MinIO (dev) / S3 (prod)
+- **Background Jobs:** persistent job manager (coming in 0-2)
 
 ## ETL Pipelines
 
@@ -75,8 +81,8 @@ Note template backgrounds instead of AI backgrounds for MVP.
    │   ├── lead_repository.py
    │   └── llm_request_repository.py
    └── services/
-       ├── statcan/ (maintenance, client, schemas, service, validators)
-       ├── cmhc/ (browser, parser, service) — stubs
-       ├── ai/ (llm_interface, scoring, cache, cost_tracker, schemas) — stubs
-       └── graphics/ (svg_generator, compositor, ai_image_client) — stubs
+       ├── statcan/ (Complete: maintenance guard, HTTP client, schemas, ETL service)
+       ├── cmhc/ (Stub: browser, parser, service files exist but contain no implementation)
+       ├── ai/ (Stub: llm_interface, scoring, cache exist but are not connected to pipeline)
+       └── graphics/ (Stub: svg_generator, compositor exist with basic implementation)
 ```
