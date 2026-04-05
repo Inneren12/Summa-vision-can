@@ -14,18 +14,30 @@ core/
 ├── error_handler.py   ← Global FastAPI exception handler
 ├── rate_limit.py      ← AsyncTokenBucket
 ├── storage.py         ← StorageInterface + S3/Local backends
-├── task_manager.py    ← Async task engine (HTTP 202 pattern)
+├── security/
+│   ├── auth.py            ← AuthMiddleware (X-API-KEY)
+│   └── ip_rate_limiter.py ← InMemoryRateLimiter (per-IP sliding window)
+├── task_manager.py    ← In-memory task manager (legacy, being replaced by Job model)
 ├── scheduler.py       ← APScheduler CRON integration
 └── database.py        ← SQLAlchemy async engine + session factory
 ```
 
 ## Classes
 
+### `InMemoryRateLimiter` (ip_rate_limiter.py)
+configurable sliding window per IP.
+
+### `AuthMiddleware` (auth.py)
+X-API-KEY check for `/api/v1/admin/*`.
+
+### Health router (health.py)
+liveness + readiness probes.
+
 ### `Settings` (config.py)
 Pydantic `BaseSettings` subclass for reading environment variables.
 - Loaded via FastAPI `Depends(get_settings)` (no global state).
 - Reads from `.env` file.
-- Key settings: `storage_backend` (`Literal["s3", "local"]`), `database_url`, S3 config fields.
+- Key settings: `storage_backend` (`Literal["s3", "local"]`), `database_url`, S3 config fields, `cdn_base_url`, `s3_bucket`, `s3_endpoint_url`, hard cap fields (R15).
 
 ### `SummaVisionError` (exceptions.py) — ✅ Complete
 Base exception with fields: `message: str`, `error_code: str`, `context: dict[str, object]`.

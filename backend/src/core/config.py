@@ -21,7 +21,7 @@ class Settings(BaseSettings):
             Defaults to ``"*"`` (allow all) for local development.
         storage_backend: Which storage implementation to use.
             ``"local"`` writes to disk (dev); ``"s3"`` uses AWS S3 (prod).
-        s3_bucket_name: Name of the S3 bucket (required when *storage_backend*
+        s3_bucket: Name of the S3 bucket (required when *storage_backend*
             is ``"s3"``).
         s3_region: AWS region for the S3 bucket.
         s3_endpoint_url: Optional custom S3 endpoint (e.g. for LocalStack).
@@ -40,12 +40,6 @@ class Settings(BaseSettings):
     # --- Database ---
     database_url: str = "postgresql+asyncpg://summa:devpassword@localhost:5432/summa"
 
-    # --- Infrastructure (0-1) ---
-    cdn_base_url: str = "http://localhost:9000/summa-vision-dev"  # R1
-    s3_bucket: str = "summa-vision-dev"
-    s3_endpoint_url: str = ""  # Set to http://minio:9000 for dev, empty for real AWS
-    s3_region: str = "us-east-1"
-
     # --- Hard Caps (R15) ---
     max_preview_rows: int = 100
     max_chart_points: int = 500
@@ -60,12 +54,13 @@ class Settings(BaseSettings):
     polars_max_threads: int = 2
 
     # --- Storage ---
-    storage_backend: Literal["s3", "local"] = "local"
-    s3_bucket_name: str = ""
-    s3_region: str = "ca-central-1"
-    s3_endpoint_url: str = ""
+    storage_backend: Literal["s3", "local"] = "s3"  # "s3" or "local"
+    s3_bucket: str = "summa-vision-dev"
+    s3_endpoint_url: str = ""  # http://minio:9000 for dev, empty for AWS
     s3_access_key_id: str = ""
     s3_secret_access_key: str = ""
+    s3_region: str = "us-east-1"
+    cdn_base_url: str = "http://localhost:9000/summa-vision-dev"
     local_storage_dir: str = "./data/local_storage"
 
     # --- Scheduler ---

@@ -311,7 +311,7 @@ def _make_s3_manager(
     """Build an ``S3StorageManager`` with a mocked aiobotocore session."""
     settings = Settings(
         storage_backend="s3",
-        s3_bucket_name="test-bucket",
+        s3_bucket="test-bucket",
         s3_region="us-east-1",
     )
     mock_session = MagicMock()

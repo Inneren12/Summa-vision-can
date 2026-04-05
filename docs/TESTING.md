@@ -1,5 +1,12 @@
 # Testing Strategy
 
+## Docker Test Strategy
+- Two-level: SQLite unit + PostgreSQL integration
+- Markers: `@pytest.mark.integration`, `@pytest.mark.slow`
+- CI Gate Policy applies to these tests.
+- Health endpoint test coverage requirements included.
+- New test file: `tests/api/test_health.py`
+
 ## Test Framework
 - **Runner**: `pytest` with `pytest-asyncio`
 - **Async Mode**: `auto` (all async tests discovered automatically)
@@ -44,6 +51,7 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `core/storage.py` | >90% | ✅ 92% | `tests/core/test_storage.py` |
 | `core/task_manager.py` | >90% | ✅ 100% | `tests/core/test_task_manager.py` |
 | `core/database.py` | >90% | ⚠️ 61% | (tested via repository tests) |
+| `api/routers/health.py` | >90% | ✅ 100% | `tests/api/test_health.py` |
 | `services/statcan/maintenance.py` | >90% | ✅ 100% | `tests/services/statcan/test_maintenance.py` |
 | `services/statcan/client.py` | >90% | ✅ 100% | `tests/services/statcan/test_client.py` |
 | `services/statcan/schemas.py` | >90% | ✅ 100% | `tests/services/statcan/test_schemas.py` |

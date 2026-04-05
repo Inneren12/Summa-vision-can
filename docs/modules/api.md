@@ -10,12 +10,20 @@ api/
 ├── __init__.py
 └── routers/
     ├── __init__.py
+    ├── health.py             ← GET /api/health, GET /api/health/ready
     ├── tasks.py              ← GET /api/v1/admin/tasks/{task_id}
     ├── cmhc.py               ← POST /api/v1/admin/cmhc/sync
     └── public_graphics.py    ← GET /api/v1/public/graphics
 ```
 
 ## Endpoints
+
+### Health Check (`routers/health.py`)
+
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| `GET` | `/api/health` | 200 | Liveness probe with timestamp |
+| `GET` | `/api/health/ready` | 200 / 503 | Readiness, checks DB + temp dir, returns 503 if not ready |
 
 ### Task Polling Router (`routers/tasks.py`) — ✅ Complete
 
@@ -60,12 +68,6 @@ api/
 - Each item's `preview_url` is a presigned S3 URL (TTL 3600s) generated from `s3_key_lowres`.
 - **Does NOT expose** `s3_key_lowres` or `s3_key_highres` in the response.
 - Injects `PublicationRepository`, `StorageInterface`, and `InMemoryRateLimiter` via `Depends`.
-
-### Health Check (`main.py`)
-
-| Method | Path | Status | Description |
-|--------|------|--------|-------------|
-| `GET` | `/api/health` | 200 | Liveness probe with timestamp |
 
 ## Schemas
 

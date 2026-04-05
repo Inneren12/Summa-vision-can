@@ -124,7 +124,7 @@ class S3StorageManager(StorageInterface):
         settings: Settings,
         session: AioSession | None = None,
     ) -> None:
-        self._bucket: str = settings.s3_bucket_name
+        self._bucket: str = settings.s3_bucket
         self._region: str = settings.s3_region
         self._endpoint_url: str = settings.s3_endpoint_url
         self._access_key_id: str = settings.s3_access_key_id

@@ -9,7 +9,6 @@ circular imports and connection pool contention.
 
 from __future__ import annotations
 
-import os
 import tempfile
 from datetime import datetime, timezone
 

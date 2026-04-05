@@ -46,6 +46,29 @@
 - **Forbidden pattern:** `parser.validate_structure(html); storage.upload_raw(html, path)`
 - **Enforced in:** `services/cmhc/service.py` lines 132–139
 
+## ARCH-RSEM-001: Resource Semaphore Isolation
+- **Constraint:** All CPU-heavy sync operations must run under appropriate
+  semaphore AND `run_in_threadpool`.
+- **Rationale:** Prevents event loop blocking in async FastAPI.
+- **Applies to:** All services calling Polars, Pandas, CairoSVG, Pillow.
+- **Required pattern:** `async with app.state.data_sem: await run_in_threadpool(fn)`
+- **Forbidden pattern:** Direct synchronous call in async endpoint.
+
+## ARCH-PLRS-001: Polars/Pandas Boundary
+- **Constraint:** New data pipeline code uses Polars only. Legacy StatCan
+  code (service.py, schemas.py, client.py) uses Pandas.
+- **Rationale:** Prevents Pandas/Polars chimera. One conversion point only.
+- **Legacy files:** `services/statcan/service.py`, `schemas.py`, `client.py`
+- **Polars files:** `services/statcan/data_fetch.py`, `services/data/workbench.py`
+- **Forbidden:** `import pandas` in any Polars-path file.
+
+## ARCH-JOBS-001: Persistent Job Orchestration
+- **Constraint:** All long-running operations must be submitted as persistent
+  DB-backed jobs, not executed synchronously in HTTP handlers.
+- **Rationale:** Jobs survive server restarts. Status visible to operators.
+- **Required pattern:** `job_repo.enqueue(type, payload) → 202 Accepted`
+- **Forbidden pattern:** `await long_operation()` inside router handler.
+
 ---
 
 ## Maintenance
