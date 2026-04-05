@@ -9,10 +9,13 @@ tests) can do::
 from src.models.lead import Lead
 from src.models.llm_request import LLMRequest
 from src.models.publication import Publication, PublicationStatus
+from src.models.job import Job, JobStatus
 
 __all__ = [
     "Lead",
     "LLMRequest",
     "Publication",
     "PublicationStatus",
+    "Job",
+    "JobStatus",
 ]
