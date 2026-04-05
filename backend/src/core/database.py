@@ -53,18 +53,15 @@ class Base(AsyncAttrs, DeclarativeBase):
 
 _settings = get_settings()
 
-DATABASE_URL: str = (
-    _settings.database_url
-    if _settings.database_url
-    else "sqlite+aiosqlite:///./summa.db"
+engine = create_async_engine(
+    _settings.database_url,
+    echo=_settings.debug,
+    pool_size=8,
+    max_overflow=8,
+    pool_pre_ping=True,
 )
 
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=_settings.debug,
-    # Required for SQLite — ignored by PostgreSQL drivers.
-    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
-)
+__all__ = ["Base", "engine", "async_session_factory", "get_db"]
 
 async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
     bind=engine,

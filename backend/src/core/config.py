@@ -38,7 +38,26 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
 
     # --- Database ---
-    database_url: str = ""
+    database_url: str = "postgresql+asyncpg://summa:devpassword@localhost:5432/summa"
+
+    # --- Infrastructure (0-1) ---
+    cdn_base_url: str = "http://localhost:9000/summa-vision-dev"  # R1
+    s3_bucket: str = "summa-vision-dev"
+    s3_endpoint_url: str = ""  # Set to http://minio:9000 for dev, empty for real AWS
+    s3_region: str = "us-east-1"
+
+    # --- Hard Caps (R15) ---
+    max_preview_rows: int = 100
+    max_chart_points: int = 500
+    max_zip_size_mb: int = 100
+    max_export_rows: int = 250_000
+    max_token_uses: int = 5
+    magic_token_ttl_hours: int = 48
+    signed_url_ttl_minutes: int = 10
+    max_job_retries: int = 3
+
+    # --- Polars ---
+    polars_max_threads: int = 2
 
     # --- Storage ---
     storage_backend: Literal["s3", "local"] = "local"
@@ -62,7 +81,7 @@ class Settings(BaseSettings):
     daily_llm_budget: float = 5.00
     llm_cache_ttl_seconds: int = 86400  # 24 hours
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 @lru_cache(maxsize=1)
