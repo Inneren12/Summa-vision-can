@@ -12,11 +12,13 @@ from src.api.routers.cmhc import router as cmhc_router
 from src.api.routers.public_graphics import router as public_graphics_router
 from src.api.routers.public_leads import router as public_leads_router
 from src.api.routers.tasks import router as tasks_router
+from src.api.routers.health import router as health_router
 from src.core.config import Settings, get_settings
 from src.core.error_handler import register_exception_handlers
 from src.core.logging import setup_logging
 from src.core.scheduler import shutdown_scheduler, start_scheduler
 from src.core.security.auth import AuthMiddleware
+import structlog
 
 import sys
 import asyncio
@@ -39,11 +41,40 @@ settings_on_startup: Settings = get_settings()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI):
     """Manage startup/shutdown lifecycle events."""
     start_scheduler()
+
+    # --- Startup ---
+    # Resource semaphores (R2)
+    app.state.data_sem = asyncio.Semaphore(2)
+    app.state.render_sem = asyncio.Semaphore(2)
+    app.state.io_sem = asyncio.Semaphore(10)
+    app.state.shutting_down = False
+
+    # Zombie reaper (R8) — runs once on startup
+    # NOTE: This will be implemented when Job model exists (PR 0-2).
+    # For now, leave as placeholder:
+    # await _requeue_stale_jobs()
+
+    structlog.get_logger().info("app_started", semaphores="initialized")
+
     yield
+
+    # --- Shutdown (R20) ---
+    app.state.shutting_down = True
+    structlog.get_logger().info("shutdown_initiated", grace_period_s=30)
+
+    # Wait for running jobs (placeholder until Job runner exists)
+    # await _wait_for_running_jobs(timeout=30)
+
     shutdown_scheduler()
+
+    # Dispose DB engine
+    from src.core.database import engine
+    await engine.dispose()
+
+    structlog.get_logger().info("app_stopped")
 
 
 app = FastAPI(
@@ -63,6 +94,7 @@ register_exception_handlers(app)
 # Routers
 # ---------------------------------------------------------------------------
 
+app.include_router(health_router)
 app.include_router(tasks_router)
 app.include_router(cmhc_router)
 app.include_router(public_graphics_router)
@@ -93,22 +125,3 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------------------------
-# Health-check endpoint
-# ---------------------------------------------------------------------------
-
-
-@app.get("/api/health")
-async def health(
-    settings: Settings = Depends(get_settings),
-) -> dict[str, str]:
-    """Liveness probe – returns service status and current UTC timestamp.
-
-    This endpoint is used by AWS ALB health checks and CI/CD pipelines.
-    The ``settings`` dependency is injected to prove the DI wiring works
-    and to make the endpoint easily configurable in the future.
-    """
-    return {
-        "status": "ok",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }

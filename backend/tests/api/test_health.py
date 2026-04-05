@@ -78,7 +78,7 @@ def test_health_response_keys() -> None:
 def test_health_with_frozen_time() -> None:
     """Verify the exact timestamp value when ``datetime.now`` is mocked."""
     frozen = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-    with patch("src.main.datetime") as mock_dt:
+    with patch("src.api.routers.health.datetime") as mock_dt:
         mock_dt.now.return_value = frozen
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
         data: dict[str, str] = client.get("/api/health").json()
@@ -101,7 +101,7 @@ def test_get_settings_is_cached() -> None:
 
 def test_settings_defaults() -> None:
     """Default ``Settings`` should carry the expected values."""
-    settings = Settings()
+    settings = Settings(_env_file=None)
     assert settings.app_name == "Summa Vision API"
     assert settings.debug is False
     assert settings.cors_origins == "*"

@@ -462,9 +462,13 @@ class TestS3StorageManagerClientKwargs:
     def test_omits_optional_fields_when_empty(self) -> None:
         """Empty optional fields should be omitted from client kwargs."""
         settings = Settings(
+            _env_file=None,
             storage_backend="s3",
             s3_bucket_name="b",
             s3_region="us-east-1",
+            s3_endpoint_url="",
+            s3_access_key_id="",
+            s3_secret_access_key="",
         )
         mgr = S3StorageManager(settings=settings)
         kwargs = mgr._client_kwargs()
