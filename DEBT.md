@@ -13,17 +13,19 @@
 | **Severity** | `critical` / `high` / `medium` / `low` |
 | **Category** | `architecture` / `testing` / `security` / `ops` / `code-quality` |
 | **Status** | `active` — confirmed, needs work; `accepted` — known, deferred intentionally; `in-progress` — being fixed |
-| **Description** | Factual statement of what the debt IS (not "may be") |
+| **Description** | Factual statement of what the debt IS (not hypotheses) |
 | **Impact** | What breaks or degrades if not fixed |
 | **Resolution** | Concrete action to resolve |
 | **Target** | Specific PR, étape, or milestone |
 
 Rules:
 - Every entry must be a **verified fact**, not a hypothesis.
-- Do NOT add "may be" or "might have" items — verify first, then add.
+- Do NOT add speculative or unverified items — verify first, then add.
 - Backlog features and future enhancements go in ROADMAP, not here.
 - When resolving: move entry to Resolved table with PR link and date.
-- When updating severity/target: edit in-place, add comment with date.
+- When updating severity/target: edit in-place and append a changelog
+  line at the bottom of the entry:
+  `> Updated YYYY-MM-DD: severity high→medium, moved target to B-3.`
 
 ---
 
@@ -36,7 +38,8 @@ Rules:
 - **Category:** architecture
 - **Status:** accepted
 - **Description:** `_is_cooled_down()` in runner.py matches `'"product_id":"value"'` via `payload_json.contains()`. This depends on exact JSON serialization without spaces.
-- **Impact:** False negatives if Pydantic serialization format changes. Currently safe because `model_dump_json()` produces compact JSON.
+- **Impact:** False negatives if Pydantic serialization format changes. Currently tolerated — Pydantic's `model_dump_json()` produces compact
+JSON, but any serialization change would silently break the match.
 - **Resolution:** Add `subject_key` column to Job model, or migrate payload to JSONB column with proper JSON path queries.
 - **Target:** When Job model is next modified (B-3 or later).
 
@@ -71,7 +74,7 @@ Rules:
 - **Description:** `core/task_manager.py` (in-memory dict for async tasks) still exists. Persistent Job system (PR 0-2/0-3) replaces it.
 - **Impact:** Dead code. May confuse contributors about which task system to use.
 - **Resolution:** Delete TaskManager and update any remaining references (routers, tests) after all consumers use Job system.
-- **Target:** After no code depends on TaskManager (verify with grep).
+- **Target:** Cleanup PR after all consumers migrated to Job system.
 
 ### DEBT-005: StorageInterface lacks upload_bytes / download_bytes
 - **Source:** A-5 implementation
@@ -90,7 +93,7 @@ Rules:
 - **Severity:** low
 - **Category:** architecture
 - **Status:** accepted
-- **Description:** `services/cmhc/` directory contains dead code with 7 total definitions (browser.py: 1, service.py: 3, parser.py: 3).
+- **Description:** `services/cmhc/` directory contains browser.py, parser.py, service.py with partial implementations from Sprint 1. Not used in the current pipeline — CMHC scraping is deferred.
 - **Impact:** Dead code. May confuse contributors.
 - **Resolution:** Delete or clearly mark as backlog feature stubs. Add `# BACKLOG: Not used in current pipeline` header to each file.
 - **Target:** Cleanup PR before Étape D.
@@ -101,7 +104,7 @@ Rules:
 - **Severity:** low
 - **Category:** architecture
 - **Status:** accepted
-- **Description:** `services/ai/` directory contains dead code with 26 total definitions (scoring_service.py: 5, cost_tracker.py: 2, schemas.py: 2, llm_interface.py: 10, llm_cache.py: 7).
+- **Description:** `services/ai/` directory contains llm_interface.py, scoring_service.py, llm_cache.py, cost_tracker.py, schemas.py from before the LLM-removal architecture pivot. Not used in the current pipeline — LLM is optional backlog feature.
 - **Impact:** Dead code. May confuse contributors.
 - **Resolution:** Delete or clearly mark as backlog feature stubs. Add `# BACKLOG: Not used in current pipeline` header to each file.
 - **Target:** Cleanup PR before Étape D.
@@ -129,7 +132,7 @@ Rules:
 - **Target:** After Étape D when real traffic generates events.
 
 ### DEBT-012: Admin graphics API uses placeholder data
-- **Source:** Code scan (backend/src/api/routers/admin_graphics.py)
+- **Source:** Manual code review, 2026-04-05 (admin_graphics.py)
 - **Added:** 2026-04-05
 - **Severity:** medium
 - **Category:** architecture
@@ -140,7 +143,7 @@ Rules:
 - **Target:** Before feature launch.
 
 ### DEBT-013: Admin graphics API uploads same file for high-res variant
-- **Source:** Code scan (backend/src/api/routers/admin_graphics.py)
+- **Source:** Manual code review, 2026-04-05 (admin_graphics.py)
 - **Added:** 2026-04-05
 - **Severity:** low
 - **Category:** architecture
