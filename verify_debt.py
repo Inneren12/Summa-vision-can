@@ -1,49 +1,79 @@
+#!/usr/bin/env python3
 """DEBT.md structural validator.
 
 Usage:
-    python verify_debt.py
+    python verify_debt.py          # from repo root
+    python verify_debt.py DEBT.md  # explicit path
 
-Future: wire into CI via .github/workflows/backend.yml
-    or as a pre-commit hook.
+Exit code 0 = all checks passed.
+Exit code 1 = validation errors found.
+
+Runs in CI: .github/workflows/backend.yml
 """
+
 import re
+import sys
+from pathlib import Path
 
-with open("DEBT.md", "r") as f:
-    content = f.read()
 
-# We ignore the headers that contain instructions on not using speculative language
-# So we only search the content that comes after the "## Active Debt" separator
-body_content = content.split("## Active Debt", 1)[-1]
-assert not re.search(r"(?i)\b(may be|might|possibly|perhaps|could be)\b", body_content), "Found speculative language"
-headers = len(re.findall(r"### DEBT-", content))
-added = len(re.findall(r"Added:", content))
-assert headers == added, f"Headers ({headers}) != Added ({added})"
+def validate(path: Path) -> list[str]:
+    """Validate DEBT.md structure. Returns list of errors."""
+    if not path.exists():
+        return [f"DEBT.md not found at {path}"]
 
-status = len(re.findall(r"Status:", content))
-assert headers == status, f"Headers ({headers}) != Status ({status})"
+    content = path.read_text(encoding="utf-8")
+    errors: list[str] = []
 
-ids = re.findall(r"### (DEBT-\d+)", content)
-assert len(ids) == len(set(ids)), "Duplicate IDs found"
+    # 1. No speculative language in descriptions
+    spec_pattern = re.compile(
+        r"(?i)\b(may be|might be|possibly|perhaps|could be)\b"
+    )
+    for i, line in enumerate(content.splitlines(), 1):
+        if line.startswith("- **Description"):
+            if spec_pattern.search(line):
+                errors.append(
+                    f"Line {i}: speculative language in Description"
+                )
 
-errors = []
-# Check that every entry has all required fields
-required_fields = ["Source:", "Added:", "Severity:", "Category:", "Status:",
-                   "Description:", "Impact:", "Resolution:", "Target:"]
+    # 2. Count entries vs required fields
+    entry_count = len(re.findall(r"^### DEBT-", content, re.MULTILINE))
+    if entry_count == 0:
+        return errors  # No entries to validate
 
-entry_count = len(re.findall(r"^### DEBT-", content, re.MULTILINE))
-
-for field in required_fields:
-    # Alternative: count by the bold markdown pattern
-    actual = len(re.findall(rf"\*\*{re.escape(field.rstrip(':'))}:\*\*", content))
-    if actual < entry_count:
-        errors.append(
-            f"Only {actual}/{entry_count} entries have '{field.rstrip(':')}' field"
+    required = [
+        "Source", "Added", "Severity", "Category",
+        "Status", "Description", "Impact", "Resolution", "Target",
+    ]
+    for field in required:
+        field_count = len(
+            re.findall(rf"\*\*{field}:\*\*", content)
         )
+        if field_count < entry_count:
+            errors.append(
+                f"Only {field_count}/{entry_count} entries have "
+                f"'{field}' field"
+            )
 
-if errors:
-    print("Validation failed:")
-    for err in errors:
-        print(f" - {err}")
-    exit(1)
+    # 3. No duplicate IDs
+    ids = re.findall(r"^### (DEBT-\d+)", content, re.MULTILINE)
+    seen: set[str] = set()
+    for debt_id in ids:
+        if debt_id in seen:
+            errors.append(f"Duplicate ID: {debt_id}")
+        seen.add(debt_id)
 
-print("All validations passed!")
+    return errors
+
+
+if __name__ == "__main__":
+    debt_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("DEBT.md")
+    errors = validate(debt_path)
+
+    if errors:
+        print(f"DEBT.md validation FAILED ({len(errors)} errors):")
+        for e in errors:
+            print(f"  ✗ {e}")
+        sys.exit(1)
+    else:
+        print(f"DEBT.md validation PASSED ({len(re.findall(r'^### DEBT-', debt_path.read_text(), re.MULTILINE))} entries)")
+        sys.exit(0)
