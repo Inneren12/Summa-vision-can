@@ -76,17 +76,6 @@ JSON, but any serialization change would silently break the match.
 - **Resolution:** Delete TaskManager and update any remaining references (routers, tests) after all consumers use Job system.
 - **Target:** Cleanup PR after all consumers migrated to Job system.
 
-### DEBT-005: StorageInterface lacks upload_bytes / download_bytes
-- **Source:** A-5 implementation
-- **Added:** 2026-04-05
-- **Severity:** high
-- **Category:** architecture
-- **Status:** active
-- **Description:** `StorageInterface` defines `upload_dataframe_as_csv()` and `upload_json()` but not `upload_bytes()` or `download_bytes()`. Parquet storage (R3) requires raw bytes upload/download.
-- **Impact:** DataFetchService and Transform API use workarounds (temp files, method detection via hasattr). Fragile and inconsistent.
-- **Resolution:** Add `upload_bytes(data: bytes, key: str)` and `download_bytes(key: str) -> bytes` to StorageInterface and both implementations (S3StorageManager, LocalStorageManager).
-- **Target:** Before B-3 (pipeline needs clean storage interface).
-
 ### DEBT-006: Dead code in services/cmhc/ directory
 - **Source:** Sprint 1 scope
 - **Added:** 2026-04-05
@@ -159,3 +148,4 @@ JSON, but any serialization change would silently break the match.
 
 | ID | Description | Resolved in | Date |
 |----|-------------|-------------|------|
+| DEBT-005 | StorageInterface upload_bytes/download_bytes | PR #XX | 2026-04-XX |
