@@ -63,15 +63,15 @@ def validate_entry(entry_id: str, entry_text: str) -> list[str]:
 
     # Check all required fields are present in THIS entry
     for field in REQUIRED_FIELDS:
-        pattern = rf"\*\*{field}\*\*:"
+        pattern = rf"\*\*{field}:\*\*"
         if not re.search(pattern, entry_text):
             errors.append(f"{entry_id}: missing required field '{field}'")
 
     # Check for speculative language in Description and Impact
     for field in NO_SPECULATION_FIELDS:
-        # Extract field value (everything after **Field**: until next **Field**: or end)
+        # Extract field value (everything after **Field:** until next **Field:** or end)
         field_match = re.search(
-            rf"\*\*{field}\*\*:\s*(.*?)(?=\n- \*\*|\n###|\Z)",
+            rf"\*\*{field}:\*\*\s*(.*?)(?=\n- \*\*|\n###|\Z)",
             entry_text,
             re.DOTALL,
         )
