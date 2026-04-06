@@ -118,8 +118,10 @@ docker compose logs api | grep zombie_reaper
 ### Database connection issues:
 ```bash
 docker compose exec api python3 -c "
+import os
 from sqlalchemy import create_engine, text
-e = create_engine('postgresql://summa:devpassword@db:5432/summa')
+url = os.environ['DATABASE_URL'].replace('+asyncpg', '')
+e = create_engine(url)
 with e.connect() as c:
     print(c.execute(text('SELECT 1')).scalar())
 "
