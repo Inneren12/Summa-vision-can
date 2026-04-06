@@ -11,6 +11,7 @@ on:
       - "backend/**"
       - "DEBT.md"
       - "verify_debt.py"
+  workflow_dispatch:
 
 permissions:
   contents: read
