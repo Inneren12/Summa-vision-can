@@ -66,6 +66,32 @@ class StorageInterface(abc.ABC):
         """
 
     @abc.abstractmethod
+    async def upload_bytes(self, data: bytes, key: str) -> None:
+        """Upload raw bytes to storage.
+
+        Used for Parquet files, images, ZIP archives, and any
+        binary content that isn't a DataFrame or JSON dict.
+
+        Args:
+            data: Raw bytes to upload.
+            key: Storage key / path (e.g. "statcan/processed/14-10-0127/2024-01-01.parquet").
+        """
+
+    @abc.abstractmethod
+    async def download_bytes(self, key: str) -> bytes:
+        """Download raw bytes from storage.
+
+        Args:
+            key: Storage key / path.
+
+        Returns:
+            Raw bytes content.
+
+        Raises:
+            StorageError: If key does not exist or download fails.
+        """
+
+    @abc.abstractmethod
     async def download_csv(self, path: str) -> pd.DataFrame:
         """Download a CSV object at *path* and return it as a DataFrame.
 
@@ -179,6 +205,43 @@ class S3StorageManager(StorageInterface):
                 ContentType=content_type,
             )
 
+    async def upload_bytes(self, data: bytes, key: str) -> None:
+        """Upload raw bytes to S3 at *key*."""
+        async with self._session.create_client(
+            "s3", **self._client_kwargs()
+        ) as client:
+            client: S3Client  # type: ignore[no-redef]
+            await client.put_object(
+                Bucket=self._bucket,
+                Key=key,
+                Body=data,
+            )
+
+    async def download_bytes(self, key: str) -> bytes:
+        """Download raw bytes from S3 at *key*.
+
+        Raises:
+            StorageError: If the key does not exist.
+        """
+        from src.core.exceptions import StorageError
+
+        async with self._session.create_client(
+            "s3", **self._client_kwargs()
+        ) as client:
+            client: S3Client  # type: ignore[no-redef]
+            try:
+                response = await client.get_object(
+                    Bucket=self._bucket, Key=key
+                )
+            except client.exceptions.NoSuchKey:
+                raise StorageError(
+                    message=f"S3 object not found: s3://{self._bucket}/{key}",
+                    error_code="STORAGE_NOT_FOUND",
+                    context={"key": key, "bucket": self._bucket},
+                )
+            body = await response["Body"].read()
+        return body
+
     async def download_csv(self, path: str) -> pd.DataFrame:
         """Download a CSV from S3 at *path* and return a DataFrame.
 
@@ -282,6 +345,29 @@ class LocalStorageManager(StorageInterface):
             target.write_text(data, encoding="utf-8")
         else:
             target.write_bytes(data)
+
+    async def upload_bytes(self, data: bytes, key: str) -> None:
+        """Write raw bytes to a file on disk at *key*."""
+        target = self._resolve(key)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+
+    async def download_bytes(self, key: str) -> bytes:
+        """Read raw bytes from disk at *key*.
+
+        Raises:
+            StorageError: If the file does not exist.
+        """
+        from src.core.exceptions import StorageError
+
+        target = self._resolve(key)
+        if not target.is_file():
+            raise StorageError(
+                message=f"Local file not found: {target}",
+                error_code="STORAGE_NOT_FOUND",
+                context={"key": key, "path": str(target)},
+            )
+        return target.read_bytes()
 
     async def download_csv(self, path: str) -> pd.DataFrame:
         """Read a CSV file from disk and return a DataFrame.

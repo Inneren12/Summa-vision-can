@@ -40,6 +40,79 @@ def _sample_df() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 
+class TestLocalStorageManagerBytes:
+    """Tests for upload_bytes and download_bytes."""
+
+    @pytest.fixture()
+    def storage(self, tmp_path: Path) -> LocalStorageManager:
+        return LocalStorageManager(base_dir=str(tmp_path))
+
+    @pytest.mark.asyncio
+    async def test_upload_and_download_bytes(self, storage: LocalStorageManager) -> None:
+        """Upload bytes, download, assert equal."""
+        data = b"hello world parquet data here"
+        key = "test/data.parquet"
+
+        await storage.upload_bytes(data, key)
+        result = await storage.download_bytes(key)
+
+        assert result == data
+
+    @pytest.mark.asyncio
+    async def test_upload_bytes_creates_directories(self, storage: LocalStorageManager) -> None:
+        """Nested key creates parent directories."""
+        data = b"\x00\x01\x02\x03"
+        key = "deep/nested/path/file.parquet"
+
+        await storage.upload_bytes(data, key)
+        result = await storage.download_bytes(key)
+
+        assert result == data
+
+    @pytest.mark.asyncio
+    async def test_download_bytes_not_found_raises(self, storage: LocalStorageManager) -> None:
+        """Download of non-existent key raises StorageError."""
+        from src.core.exceptions import StorageError
+
+        with pytest.raises(StorageError) as exc_info:
+            await storage.download_bytes("nonexistent/key.parquet")
+
+        assert exc_info.value.error_code == "STORAGE_NOT_FOUND"
+
+    @pytest.mark.asyncio
+    async def test_upload_bytes_overwrites(self, storage: LocalStorageManager) -> None:
+        """Second upload to same key overwrites content."""
+        key = "test/overwrite.parquet"
+
+        await storage.upload_bytes(b"version1", key)
+        await storage.upload_bytes(b"version2", key)
+
+        result = await storage.download_bytes(key)
+        assert result == b"version2"
+
+    @pytest.mark.asyncio
+    async def test_upload_bytes_binary_content(self, storage: LocalStorageManager) -> None:
+        """Handles binary content with null bytes and high bytes."""
+        data = bytes(range(256)) * 100  # 25.6 KB of every byte value
+        key = "test/binary.parquet"
+
+        await storage.upload_bytes(data, key)
+        result = await storage.download_bytes(key)
+
+        assert result == data
+        assert len(result) == 25600
+
+    @pytest.mark.asyncio
+    async def test_upload_bytes_empty(self, storage: LocalStorageManager) -> None:
+        """Empty bytes upload and download works."""
+        key = "test/empty.parquet"
+
+        await storage.upload_bytes(b"", key)
+        result = await storage.download_bytes(key)
+
+        assert result == b""
+
+
 class TestLocalStorageManagerUpload:
     """Tests for ``LocalStorageManager.upload_dataframe_as_csv``."""
 
@@ -319,6 +392,63 @@ def _make_s3_manager(
         mock_client
     )
     return S3StorageManager(settings=settings, session=mock_session)
+
+
+class TestS3StorageManagerBytes:
+    """Tests for upload_bytes and download_bytes."""
+
+    @pytest.mark.asyncio
+    async def test_upload_bytes_calls_put_object(self) -> None:
+        """Uploading bytes should call ``put_object`` on S3."""
+        mock_client = MagicMock()
+        mock_client.put_object = AsyncMock()
+
+        mgr = _make_s3_manager(mock_client)
+        data = b"binary data"
+        await mgr.upload_bytes(data, "reports/data.parquet")
+
+        mock_client.put_object.assert_awaited_once()
+        call_kwargs = mock_client.put_object.call_args.kwargs
+        assert call_kwargs["Bucket"] == "test-bucket"
+        assert call_kwargs["Key"] == "reports/data.parquet"
+        assert call_kwargs["Body"] == b"binary data"
+
+    @pytest.mark.asyncio
+    async def test_download_bytes_returns_data(self) -> None:
+        """Downloading bytes from S3 should return the raw data."""
+        data = b"binary data"
+
+        mock_body = AsyncMock()
+        mock_body.read = AsyncMock(return_value=data)
+
+        mock_client = MagicMock()
+        mock_client.get_object = AsyncMock(
+            return_value={"Body": mock_body}
+        )
+
+        mgr = _make_s3_manager(mock_client)
+        result = await mgr.download_bytes("data.parquet")
+
+        assert result == data
+
+    @pytest.mark.asyncio
+    async def test_download_bytes_missing_raises_storage_error(self) -> None:
+        """Downloading a non-existent S3 key should raise StorageError."""
+        from src.core.exceptions import StorageError
+
+        mock_client = MagicMock()
+
+        # Simulate NoSuchKey exception
+        no_such_key = type("NoSuchKey", (Exception,), {})
+        mock_client.exceptions = MagicMock()
+        mock_client.exceptions.NoSuchKey = no_such_key
+        mock_client.get_object = AsyncMock(side_effect=no_such_key())
+
+        mgr = _make_s3_manager(mock_client)
+        with pytest.raises(StorageError) as exc_info:
+            await mgr.download_bytes("missing.parquet")
+
+        assert exc_info.value.error_code == "STORAGE_NOT_FOUND"
 
 
 class TestS3StorageManagerUpload:
