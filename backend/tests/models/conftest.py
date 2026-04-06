@@ -18,7 +18,6 @@ async def pg_session():
 
     from alembic.config import Config
     from alembic import command
-    import os
 
     alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "..", "alembic.ini"))
     alembic_cfg.set_main_option("sqlalchemy.url", pg_url.replace("+asyncpg", ""))
