@@ -4,7 +4,6 @@ import subprocess
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.core.database import Base
 
 @pytest.fixture
 async def pg_session():
@@ -41,7 +40,19 @@ async def pg_session():
     async with session_factory() as session:
         yield session
 
-    # Cleanup: drop all tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
+
+    # Cleanup via Alembic, not Base.metadata.drop_all().
+    # Otherwise alembic_version remains in the DB, and the next
+    # "alembic upgrade head" becomes a no-op against a partially dropped schema.
+    result = subprocess.run(
+        ["alembic", "downgrade", "base"],
+        cwd=os.path.join(os.path.dirname(__file__), "..", ".."),
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    if result.returncode != 0:
+        pytest.fail(
+            f"alembic downgrade base failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
