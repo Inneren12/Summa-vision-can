@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     debug: bool = False
     cors_origins: str = "*"
 
+    # --- Application ---
+    log_format: str = "console"  # "console" for dev, "json" for production
+
     # --- Database ---
     database_url: str = "postgresql+asyncpg://summa:devpassword@localhost:5432/summa"
 
@@ -52,6 +55,10 @@ class Settings(BaseSettings):
 
     # --- Polars ---
     polars_max_threads: int = 2
+
+    # --- Backup ---
+    backup_s3_bucket: str = ""  # Set in production
+    backup_retention_days: int = 30
 
     # --- Storage ---
     storage_backend: Literal["s3", "local"] = "local"  # "s3" or "local"

@@ -29,13 +29,7 @@ import sys
 import structlog
 
 
-def _is_local_environment() -> bool:
-    """Return ``True`` when running in local/development mode.
-
-    The check reads ``ENVIRONMENT`` from the process environment and falls
-    back to ``"local"`` when the variable is absent.
-    """
-    return os.getenv("ENVIRONMENT", "local").lower() == "local"
+from src.core.config import get_settings
 
 
 def setup_logging(*, force_json: bool = False) -> None:
@@ -43,9 +37,12 @@ def setup_logging(*, force_json: bool = False) -> None:
 
     Args:
         force_json: When ``True``, always use JSON rendering regardless of
-            the ``ENVIRONMENT`` variable.  Useful for testing.
+            the config. Useful for testing.
     """
-    use_json = force_json or not _is_local_environment()
+    settings = get_settings()
+    log_format = getattr(settings, "log_format", "console")
+
+    use_json = force_json or log_format == "json"
 
     # Processors shared between structlog-native and stdlib loggers.
     shared_processors: list[structlog.types.Processor] = [

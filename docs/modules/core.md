@@ -45,6 +45,13 @@ services/jobs/
 └── dedupe.py          ← Canonical dedupe key generators (0-3)
 ```
 
+scripts/ops/
+└── backup_db.sh       ← PostgreSQL backup → S3 (0-5)
+
+docs/
+├── MONITORING.md      ← Alerting setup + operational queries (0-5)
+└── OPERATIONS.md      ← Deploy, backup, secrets, troubleshooting (0-5)
+
 ### Job Services
 | Component | Module | Description |
 |-----------|--------|-------------|

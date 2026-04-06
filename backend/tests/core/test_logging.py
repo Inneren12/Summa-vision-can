@@ -1,8 +1,8 @@
 """Tests for the structured logging configuration.
 
 Coverage targets:
-- ``setup_logging()`` produces valid JSON when ``ENVIRONMENT=prod``.
-- ``setup_logging()`` uses ``ConsoleRenderer`` when ``ENVIRONMENT=local``.
+- ``setup_logging()`` produces valid JSON when ``LOG_FORMAT=json``.
+- ``setup_logging()`` uses ``ConsoleRenderer`` when ``LOG_FORMAT=console``.
 - ``get_logger()`` returns a usable bound logger.
 - ``force_json`` parameter overrides the environment check.
 - Repeated ``setup_logging()`` calls do not stack handlers.
@@ -63,7 +63,9 @@ class TestSetupLoggingJSON:
     """Verify JSON rendering in production mode."""
 
     def test_json_output_when_env_is_prod(self) -> None:
-        with patch.dict(os.environ, {"ENVIRONMENT": "prod"}):
+        with patch.dict(os.environ, {"LOG_FORMAT": "json"}):
+            from src.core.config import get_settings
+            get_settings.cache_clear()
             setup_logging()
 
         output = _capture_log_output("test.json_prod", "hello from prod")
@@ -74,7 +76,9 @@ class TestSetupLoggingJSON:
         assert parsed["level"] == "info"
 
     def test_force_json_overrides_local_env(self) -> None:
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+        with patch.dict(os.environ, {"LOG_FORMAT": "console"}):
+            from src.core.config import get_settings
+            get_settings.cache_clear()
             setup_logging(force_json=True)
 
         output = _capture_log_output("test.force_json", "forced json")
@@ -86,7 +90,9 @@ class TestSetupLoggingConsole:
     """Verify console rendering in local/development mode."""
 
     def test_console_output_when_env_is_local(self) -> None:
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+        with patch.dict(os.environ, {"LOG_FORMAT": "console"}):
+            from src.core.config import get_settings
+            get_settings.cache_clear()
             setup_logging()
 
         output = _capture_log_output("test.console", "hello console")
@@ -95,10 +101,12 @@ class TestSetupLoggingConsole:
         assert "hello console" in output
 
     def test_console_output_when_env_is_unset(self) -> None:
-        """Default (no ENVIRONMENT var) should use console renderer."""
+        """Default (no LOG_FORMAT var) should use console renderer."""
         env = os.environ.copy()
-        env.pop("ENVIRONMENT", None)
+        env.pop("LOG_FORMAT", None)
         with patch.dict(os.environ, env, clear=True):
+            from src.core.config import get_settings
+            get_settings.cache_clear()
             setup_logging()
 
         output = _capture_log_output("test.default", "default console")

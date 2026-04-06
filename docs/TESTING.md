@@ -1,5 +1,10 @@
 # Testing Strategy
 
+## Operational Scripts
+
+- `scripts/ops/backup_db.sh` — tested manually, not in CI.
+  Verification: `aws s3 ls s3://${BACKUP_S3_BUCKET}/backups/$(date +%Y-%m-%d)/`
+
 ## Docker Test Strategy
 - Two-level: SQLite unit + PostgreSQL integration
 - Markers: `@pytest.mark.integration`, `@pytest.mark.slow`
