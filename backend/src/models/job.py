@@ -73,7 +73,7 @@ class Job(Base):
         String(50), nullable=False, index=True
     )
     status: Mapped[JobStatus] = mapped_column(
-        Enum(JobStatus, name="job_status"),
+        Enum(JobStatus, name="job_status", values_callable=lambda obj: [e.value for e in obj]),
         nullable=False,
         default=JobStatus.QUEUED,
         server_default="queued",
