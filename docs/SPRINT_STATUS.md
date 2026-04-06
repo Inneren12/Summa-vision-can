@@ -7,7 +7,7 @@
 | 0-1 | Docker + Compose + Health + MinIO | 🔄 Fixing | — |
 | 0-2 | Job Model + Typed Payloads + Repository | 🔄 | 0-1 |
 | 0-3 | Job Runner + Dedupe + Retry | ✅ | 0-2 |
-| 0-4 | AuditEvent Foundation | ✅ | 0-2 |
+| 0-4 | AuditEvent Foundation | 🔄 | 0-2 |
 | 0-5 | Backup + Alerting Baseline | ⬜ | 0-1 |
 
 ## Previously Completed
