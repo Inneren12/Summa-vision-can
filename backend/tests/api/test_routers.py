@@ -53,6 +53,13 @@ def _override_task_manager() -> TaskManager:
 class _MockStorage(StorageInterface):
     """Minimal mock storage that satisfies the abstract interface."""
 
+    async def upload_bytes(self, data: bytes, key: str) -> None:
+        pass
+
+    async def download_bytes(self, key: str) -> bytes:
+        from src.core.exceptions import StorageError
+        raise StorageError(f"File not found: {key}")
+
     async def upload_dataframe_as_csv(self, df: Any, path: str) -> None:
         pass
 

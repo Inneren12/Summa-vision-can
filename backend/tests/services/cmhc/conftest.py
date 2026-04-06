@@ -162,6 +162,15 @@ class MockStorage(StorageInterface):
     async def generate_presigned_url(self, path: str, ttl: int = 3600) -> str:
         return f"mock://presigned/{path}?ttl={ttl}"
 
+    async def upload_bytes(self, data: bytes, key: str) -> None:
+        self.data[key] = data
+
+    async def download_bytes(self, key: str) -> bytes:
+        if key not in self.data:
+            from src.core.exceptions import StorageError
+            raise StorageError(f"File not found: {key}")
+        return self.data[key]
+
 
 # ---------------------------------------------------------------------------
 # Pytest fixtures

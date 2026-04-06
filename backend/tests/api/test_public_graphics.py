@@ -79,6 +79,13 @@ def _make_publications(count: int = 3) -> list[_FakePublication]:
 class _MockStorage(StorageInterface):
     """Minimal mock storage that returns predictable presigned URLs."""
 
+    async def upload_bytes(self, data: bytes, key: str) -> None:
+        pass
+
+    async def download_bytes(self, key: str) -> bytes:
+        from src.core.exceptions import StorageError
+        raise StorageError(f"File not found: {key}")
+
     async def upload_dataframe_as_csv(self, df: Any, path: str) -> None:
         pass
 
