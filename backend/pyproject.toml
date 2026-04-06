@@ -65,6 +65,9 @@ target-version = ["py311"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "integration: requires PostgreSQL (not SQLite)",
+]
 filterwarnings = [
     "ignore::DeprecationWarning:kaleido",
     "ignore::DeprecationWarning:pytest_asyncio",
