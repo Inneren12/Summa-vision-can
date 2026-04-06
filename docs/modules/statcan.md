@@ -15,6 +15,22 @@ services/statcan/
 └── validators.py      ← DataQualityReport model
 ```
 
+## Related Models
+
+### `CubeCatalog` (models/cube_catalog.py)
+Index of all ~7,000 StatCan data cubes with bilingual metadata.
+- `product_id` (str, unique) — StatCan business identifier (e.g. "14-10-0127-01")
+- `cube_id_statcan` (int) — StatCan numeric ID
+- `title_en` / `title_fr` — bilingual titles
+- `subject_code` / `subject_en` — subject classification
+- `frequency` — release cadence (Daily/Monthly/Quarterly/Annual)
+- PostgreSQL: weighted full-text search (`search_vector`) + trigram similarity
+- SQLite: LIKE-based fallback search in repository (A-2)
+
+Populated by `CatalogSyncService` (A-3).
+Queried by `CubeCatalogRepository` (A-2) and Search API (A-4).
+Read by `DataFetchService` (A-5) for dynamic periods.
+
 ## Classes
 
 ### `StatCanMaintenanceGuard` (maintenance.py) — ✅ Complete

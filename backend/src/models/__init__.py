@@ -11,6 +11,7 @@ from src.models.llm_request import LLMRequest
 from src.models.publication import Publication, PublicationStatus
 from src.models.audit_event import AuditEvent
 from src.models.job import Job, JobStatus
+from src.models.cube_catalog import CubeCatalog
 
 __all__ = [
     "Lead",
@@ -20,4 +21,5 @@ __all__ = [
     "Job",
     "JobStatus",
     "AuditEvent",
+    "CubeCatalog",
 ]

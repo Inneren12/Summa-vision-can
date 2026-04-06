@@ -77,6 +77,7 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `services/jobs/handlers.py` | >90% | ⬜ | |
 | `services/jobs/dedupe.py` | >90% | ⬜ | |
 | `models/audit_event.py` | >90% | ⬜ | |
+| `models/cube_catalog.py` | >90% | ⬜ | |
 | `schemas/events.py` | >90% | ⬜ | |
 | `services/audit.py` | >90% | ⬜ | |
 | `core/security/ip_rate_limiter.py` | >90% | ✅ 100% | `tests/api/test_public_graphics.py` |
@@ -126,6 +127,14 @@ pytest tests/services/statcan/test_maintenance.py -v
 - CMHC tests use static HTML fixtures via `conftest.py` (`tests/services/cmhc/conftest.py`)
 - StatCan tests use inline JSON/CSV data within test functions
 - Repository tests use shared `conftest.py` with async SQLite engine fixture
+
+### FTS Integration Tests
+
+`tests/models/test_cube_catalog_fts.py` requires PostgreSQL.
+Marked with `@pytest.mark.integration`. Skipped when
+`TEST_DATABASE_URL` is not set.
+
+Run: `TEST_DATABASE_URL=postgresql+asyncpg://... pytest -m integration`
 
 ---
 
