@@ -24,7 +24,8 @@ core/
 models/
 ├── ...existing...
 ├── audit_event.py     ← AuditEvent generic event record (0-4)
-└── job.py             ← Persistent Job model (0-2)
+├── job.py             ← Persistent Job model (0-2)
+└── cube_catalog.py    ← StatCan cube metadata index (A-1)
 
 schemas/
 ├── events.py          ← EventType strict taxonomy enum (0-4)
