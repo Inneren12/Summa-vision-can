@@ -41,23 +41,36 @@ class Base(AsyncAttrs, DeclarativeBase):
 # Engine & session factory
 # ---------------------------------------------------------------------------
 
-_settings = get_settings()
+_engine = None
+_session_factory = None
 
-engine = create_async_engine(
-    _settings.database_url,
-    echo=_settings.debug,
-    pool_size=8,
-    max_overflow=8,
-    pool_pre_ping=True,
-)
 
-__all__ = ["Base", "engine", "async_session_factory", "get_db"]
+def get_engine():
+    global _engine
+    if _engine is None:
+        _settings = get_settings()
+        _engine = create_async_engine(
+            _settings.database_url,
+            echo=_settings.debug,
+            pool_size=8,
+            max_overflow=8,
+            pool_pre_ping=True,
+        )
+    return _engine
 
-async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
+
+def get_session_factory():
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = async_sessionmaker(
+            get_engine(),
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+    return _session_factory
+
+
+__all__ = ["Base", "get_engine", "get_session_factory", "get_db"]
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +88,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     The session is committed automatically on successful completion;
     any exception triggers a rollback before the session is closed.
     """
-    async with async_session_factory() as session:
+    factory = get_session_factory()
+    async with factory() as session:
         try:
             yield session
             await session.commit()

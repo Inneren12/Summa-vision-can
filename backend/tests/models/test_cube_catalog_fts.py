@@ -149,7 +149,7 @@ async def test_fts_finds_mixed_language_query(pg_session: AsyncSession) -> None:
     assert len(result_fr.fetchall()) >= 1, "FR search should work"
 
 
-async def test_fts_indexes_exist_after_migration(pg_session: AsyncSession) -> None:
+async def test_fts_indexes_exist_after_alembic_upgrade(pg_session: AsyncSession) -> None:
     """Verify FTS and trigram indexes exist on the real Alembic schema."""
     result = await pg_session.execute(
         text(

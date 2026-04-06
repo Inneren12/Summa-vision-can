@@ -142,21 +142,11 @@ JSON, but any serialization change would silently break the match.
 - **Resolution:** Generate actual high-res variant.
 - **Target:** Before feature launch.
 
-### DEBT-014: database.py creates engine at module level
-- **Source:** PR A-1 review
-- **Added:** 2026-04-06
-- **Severity:** medium
-- **Category:** testing
-- **Status:** active
-- **Description:** `src/core/database.py` creates the async engine directly at the module level. This blocks Alembic programmatic usage in tests because importing models triggers psycopg2 import via Alembic's `env.py`, while tests use asyncpg.
-- **Impact:** Integration tests must use a workaround: `Base.metadata.create_all()` plus raw SQL for FTS features, rather than a clean `alembic upgrade head`.
-- **Resolution:** Refactor `database.py` to create the engine lazily (e.g., within a function or dependency) to decouple import time from initialization.
-- **Target:** Next database architecture cleanup sprint.
-
 ---
 
 ## Resolved
 
 | ID | Description | Resolved in | Date |
 |----|-------------|-------------|------|
+| DEBT-014 | database.py creates engine at module level | PR A-1 fix | 2026-04-06 |
 | DEBT-005 | StorageInterface upload_bytes/download_bytes | PR #XX | 2026-04-XX |
