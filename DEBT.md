@@ -31,6 +31,17 @@ Rules:
 
 ## Active Debt
 
+### DEBT-002: Repository directly coupled to AuditWriter
+- **Source:** PR 0-4 (AuditEvent Foundation)
+- **Added:** 2024-04-05
+- **Severity:** Low
+- **Category:** Architecture
+- **Status:** Accepted
+- **Description:** `JobRepository.enqueue()` imports and instantiates `AuditWriter` directly to emit the `job.created` event, breaking pure dependency injection.
+- **Impact:** Makes repository harder to unit test in isolation without a database or mocking the audit service.
+- **Resolution:** Implement a proper event bus/pub-sub or inject an `EventDispatcher` dependency into repositories to decouple audit logging.
+- **Target:** Post-PMF Refactor
+
 ### DEBT-001: Cooldown query uses text match on JSON payload
 - **Source:** PR #17 review
 - **Added:** 2026-04-05

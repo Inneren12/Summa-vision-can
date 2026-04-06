@@ -23,17 +23,33 @@ def _make_test_session_factory(db_session: AsyncSession):
     return _factory
 
 
+from types import SimpleNamespace
+import pytest
+import asyncio
+
+from tests.services.jobs.conftest import _clean_registries
+
+@pytest.fixture
+def app_state():
+    """Fake app.state with shutdown flag and semaphores."""
+    state = SimpleNamespace()
+    state.shutting_down = False
+    state.data_sem = asyncio.Semaphore(2)
+    state.render_sem = asyncio.Semaphore(2)
+    state.io_sem = asyncio.Semaphore(10)
+    return state
+
+
+# Ensure we use the clean registries fixture from jobs tests
+pytestmark = pytest.mark.usefixtures("_clean_registries")
+
 async def test_runner_writes_audit_events_on_success(
     db_session: AsyncSession,
+    app_state: SimpleNamespace,
 ) -> None:
     """Runner writes job.started and job.succeeded audit events."""
-    app_state = SimpleNamespace()
-
     async def ok_handler(payload, *, app_state):
         return {"ok": True}
-
-    from src.schemas.job_payloads import PAYLOAD_REGISTRY, CatalogSyncPayload
-    PAYLOAD_REGISTRY["audit_success_test"] = CatalogSyncPayload
 
     register_handler("audit_success_test", ok_handler)
 
@@ -66,15 +82,11 @@ async def test_runner_writes_audit_events_on_success(
 
 async def test_runner_writes_audit_events_on_failure(
     db_session: AsyncSession,
+    app_state: SimpleNamespace,
 ) -> None:
     """Runner writes job.started and job.failed audit events."""
-    app_state = SimpleNamespace()
-
     async def fail_handler(payload, *, app_state):
         raise RuntimeError("intentional failure")
-
-    from src.schemas.job_payloads import PAYLOAD_REGISTRY, CatalogSyncPayload
-    PAYLOAD_REGISTRY["audit_fail_test"] = CatalogSyncPayload
 
     register_handler("audit_fail_test", fail_handler)
 

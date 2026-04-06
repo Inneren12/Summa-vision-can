@@ -16,7 +16,16 @@ def _clean_registries():
     saved_payloads = dict(PAYLOAD_REGISTRY)
 
     # Register test-only payload types
-    test_types = ["retry_test", "perm_test", "transient_test", "test"]
+    test_types = [
+        "retry_test",
+        "perm_test",
+        "transient_test",
+        "test",
+        "audit_success_test",
+        "audit_fail_test",
+    ]
+
+    from src.schemas.job_payloads import CatalogSyncPayload
     for t in test_types:
         PAYLOAD_REGISTRY[t] = CatalogSyncPayload
 
