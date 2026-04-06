@@ -10,8 +10,9 @@
 | 0-4 | AuditEvent Foundation | 🔄 | 0-2 |
 | 0-5 | Backup + Alerting Baseline | 🔄 | 0-1 |
 
-**Étape 0 complete.** Infrastructure foundation: Docker, persistent jobs,
-audit events, backup, monitoring.
+**Étape 0 status:** All PRs merged. Backup script operational.
+Infrastructure foundation: Docker, persistent jobs,
+audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 
 ## Previously Completed
 

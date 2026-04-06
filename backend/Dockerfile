@@ -6,7 +6,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 libpangocairo-1.0-0 \
     fonts-noto fonts-noto-cjk fonts-liberation \
     curl \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
+
+# AWS CLI for backup script
+# postgresql-client + awscli are needed for backup_db.sh
+# If backups move to a separate container, these can be removed.
+RUN pip install --no-cache-dir awscli
 
 # --- Polars CPU guard (R5) ---
 ENV POLARS_MAX_THREADS=2

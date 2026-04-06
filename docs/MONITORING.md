@@ -54,7 +54,7 @@ WHERE event_type = 'job.failed'
 **Detection:** Cron output goes to log file. If log contains "ERROR"
 or backup file not found in S3 for today's date.
 **Setup:**
-- Wrap cron entry: `backup_db.sh || curl -X POST https://hooks.slack.com/...`
+- Wrap cron entry: `backup_db.sh || curl -fsS -X POST "${ALERT_WEBHOOK_URL}" -d '{"text":"Backup failed"}'`
 - Or use healthcheck.io / cronitor.io for dead man's switch monitoring
 
 ## Operational Queries
