@@ -68,6 +68,23 @@ class JobRepository:
             raise  # Unknown integrity error — re-raise
 
         await self._session.refresh(job)
+
+        # Emit job.created audit event
+        from src.services.audit import AuditWriter
+        from src.schemas.events import EventType
+
+        audit = AuditWriter(self._session)
+        await audit.log_event(
+            event_type=EventType.JOB_CREATED,
+            entity_type="job",
+            entity_id=str(job.id),
+            metadata={
+                "job_type": job_type,
+                "dedupe_key": dedupe_key,
+            },
+            actor=created_by or "system",
+        )
+
         return job
 
     async def claim_next(

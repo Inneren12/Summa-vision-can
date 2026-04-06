@@ -91,6 +91,9 @@ class AuditWriter:
 
         return event
 
+    # Module-level cache — EventType members don't change at runtime
+    _VALID_EVENT_VALUES: frozenset[str] = frozenset(e.value for e in EventType)
+
     @staticmethod
     def _validate_event_type(event_type: EventType | str) -> str:
         """Ensure event_type is a member of the EventType enum.
@@ -103,11 +106,9 @@ class AuditWriter:
         if isinstance(event_type, EventType):
             return event_type.value
 
-        # Check if string matches any enum value
-        valid_values = {e.value for e in EventType}
-        if event_type not in valid_values:
+        if event_type not in AuditWriter._VALID_EVENT_VALUES:
             raise ValueError(
                 f"Unknown event_type: {event_type!r}. "
-                f"Must be one of: {sorted(valid_values)}"
+                f"Must be one of: {sorted(AuditWriter._VALID_EVENT_VALUES)}"
             )
         return event_type

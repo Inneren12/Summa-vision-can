@@ -109,8 +109,6 @@ class JobRunner:
         Returns True if a job was claimed and processed (success or failure).
         Returns False if no queued job was available.
         """
-        # NOTE: job.created events are emitted by the API endpoint that
-        # calls repo.enqueue(), not by the runner. See A-3, A-4, B-4.
         async with self._session_factory() as session:
             repo = JobRepository(session)
             job = await repo.claim_next()
