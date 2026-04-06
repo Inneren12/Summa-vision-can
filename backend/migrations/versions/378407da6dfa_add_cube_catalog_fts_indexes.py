@@ -38,6 +38,7 @@ def upgrade() -> None:
         ADD COLUMN search_vector tsvector
         GENERATED ALWAYS AS (
             setweight(to_tsvector('english', coalesce(title_en, '')), 'A') ||
+            setweight(to_tsvector('french', coalesce(title_fr, '')), 'A') ||
             setweight(to_tsvector('english', coalesce(subject_en, '')), 'B')
         ) STORED
     """)
