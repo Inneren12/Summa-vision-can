@@ -148,4 +148,5 @@ JSON, but any serialization change would silently break the match.
 
 | ID | Description | Resolved in | Date |
 |----|-------------|-------------|------|
+| DEBT-014 | database.py creates engine at module level | PR A-1 fix | 2026-04-06 |
 | DEBT-005 | StorageInterface upload_bytes/download_bytes | PR #XX | 2026-04-XX |

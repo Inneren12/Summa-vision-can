@@ -15,16 +15,14 @@ Architecture decision R12:
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
-    Index,
     Integer,
     String,
-    Text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -55,16 +53,11 @@ class CubeCatalog(Base):
     """
 
     __tablename__ = "cube_catalog"
-    __table_args__ = (
-        Index("ix_cube_catalog_product_id", "product_id", unique=True),
-        Index("ix_cube_catalog_cube_id", "cube_id_statcan"),
-        Index("ix_cube_catalog_subject", "subject_code"),
-    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     product_id: Mapped[str] = mapped_column(
-        String(30), nullable=False, unique=True
+        String(30), nullable=False, unique=True, index=True
     )
     cube_id_statcan: Mapped[int] = mapped_column(
         Integer, nullable=False, index=True
@@ -89,7 +82,7 @@ class CubeCatalog(Base):
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     archive_status: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
+        Boolean, nullable=False, default=False, server_default="false"
     )
 
     last_synced_at: Mapped[datetime | None] = mapped_column(

@@ -53,10 +53,11 @@ async def lifespan(app: FastAPI):
     app.state.shutting_down = False
 
     # Zombie reaper (R8) — runs once on startup
-    from src.core.database import async_session_factory
+    from src.core.database import get_session_factory
     from src.repositories.job_repository import JobRepository
 
-    async with async_session_factory() as session:
+    factory = get_session_factory()
+    async with factory() as session:
         job_repo = JobRepository(session)
         requeued = await job_repo.requeue_stale_running(stale_threshold_minutes=10)
         await session.commit()
@@ -71,9 +72,9 @@ async def lifespan(app: FastAPI):
 
     # Job runner — background loop (R7)
     from src.services.jobs.runner import JobRunner
-    from src.core.database import async_session_factory
+    from src.core.database import get_session_factory
 
-    runner = JobRunner(async_session_factory, app.state)
+    runner = JobRunner(get_session_factory(), app.state)
     runner_task = asyncio.create_task(runner.run_loop(poll_interval=2.0))
 
     yield
@@ -103,8 +104,8 @@ async def lifespan(app: FastAPI):
             pass
 
     # Dispose DB engine
-    from src.core.database import engine
-    await engine.dispose()
+    from src.core.database import get_engine
+    await get_engine().dispose()
 
     structlog.get_logger().info("app_stopped")
 

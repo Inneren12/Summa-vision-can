@@ -16,7 +16,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from src.core.database import engine
+from src.core.database import get_engine
 
 router = APIRouter(prefix="/api", tags=["health"])
 
@@ -37,7 +37,7 @@ async def readiness() -> JSONResponse:
 
     # Check 1: Database
     try:
-        async with engine.connect() as conn:
+        async with get_engine().connect() as conn:
             await conn.execute(text("SELECT 1"))
         checks["database"] = "ok"
     except Exception as exc:

@@ -33,10 +33,9 @@ def upgrade() -> None:
     sa.Column('frequency', sa.String(length=20), nullable=False),
     sa.Column('start_date', sa.Date(), nullable=True),
     sa.Column('end_date', sa.Date(), nullable=True),
-    sa.Column('archive_status', sa.Boolean(), server_default='0', nullable=False),
+    sa.Column('archive_status', sa.Boolean(), server_default='false', nullable=False),
     sa.Column('last_synced_at', sa.DateTime(timezone=True), nullable=True),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('product_id')
+    sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('cube_catalog', schema=None) as batch_op:
         batch_op.create_index('ix_cube_catalog_cube_id', ['cube_id_statcan'], unique=False)

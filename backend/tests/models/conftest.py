@@ -1,42 +1,58 @@
 import os
+import subprocess
+
 import pytest
-import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from src.core.database import Base
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 
 @pytest.fixture
 async def pg_session():
-    """PostgreSQL session for integration tests.
+    """PostgreSQL session with schema applied via Alembic migrations.
 
-    Requires PostgreSQL to be available (e.g. via docker-compose
-    or GitHub Actions services block).
+    This ensures we test against the REAL production schema,
+    including partial indexes, generated columns, and FTS indexes
+    that are defined in migration SQL, not in SQLAlchemy metadata.
     """
     pg_url = os.environ.get("TEST_DATABASE_URL")
     if not pg_url or "sqlite" in pg_url:
         pytest.skip("TEST_DATABASE_URL not set to PostgreSQL — skipping PG integration test")
 
-    engine = create_async_engine(pg_url)
-    async with engine.begin() as conn:
-        # We need to run migrations to get the FTS features
-        await conn.run_sync(Base.metadata.create_all)
+    # Run Alembic in a subprocess to avoid event loop conflict
+    # IMPORTANT: migrations/env.py uses async_engine_from_config(...),
+    # so Alembic must receive the async URL, not a sync psycopg2 URL.
+    env = {**os.environ, "DATABASE_URL": pg_url}
+    result = subprocess.run(
+        ["alembic", "upgrade", "head"],
+        cwd=os.path.join(os.path.dirname(__file__), "..", ".."),
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    if result.returncode != 0:
+        pytest.fail(
+            f"alembic upgrade head failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
-        # Add the trigram extension for testing
-        await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
-
-        # Add the generated search_vector column since Base.metadata.create_all doesn't run our raw SQL migrations
-        await conn.execute(sa.text("""
-            ALTER TABLE cube_catalog
-            ADD COLUMN IF NOT EXISTS search_vector tsvector
-            GENERATED ALWAYS AS (
-                setweight(to_tsvector('english', coalesce(title_en, '')), 'A') ||
-                setweight(to_tsvector('english', coalesce(subject_en, '')), 'B')
-            ) STORED
-        """))
-
-    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    engine = create_async_engine(pg_url, echo=False)
+    session_factory = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
     async with session_factory() as session:
         yield session
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
+
+    # Cleanup via Alembic, not Base.metadata.drop_all().
+    # Otherwise alembic_version remains in the DB, and the next
+    # "alembic upgrade head" becomes a no-op against a partially dropped schema.
+    result = subprocess.run(
+        ["alembic", "downgrade", "base"],
+        cwd=os.path.join(os.path.dirname(__file__), "..", ".."),
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    if result.returncode != 0:
+        pytest.fail(
+            f"alembic downgrade base failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )

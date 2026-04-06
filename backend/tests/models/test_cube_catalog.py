@@ -151,11 +151,14 @@ async def test_all_frequency_values(
 # ---- Indexes exist ----
 
 def test_indexes_defined() -> None:
-    """Verify expected indexes are defined on the model."""
-    index_names = {idx.name for idx in CubeCatalog.__table__.indexes}
-    assert "ix_cube_catalog_product_id" in index_names
-    assert "ix_cube_catalog_cube_id" in index_names
-    assert "ix_cube_catalog_subject" in index_names
+    """Verify expected column-level indexes are defined on the model."""
+    from src.models.cube_catalog import CubeCatalog
+
+    # Check column properties directly
+    assert CubeCatalog.product_id.property.columns[0].unique is True
+    assert CubeCatalog.product_id.property.columns[0].index is True
+    assert CubeCatalog.cube_id_statcan.property.columns[0].index is True
+    assert CubeCatalog.subject_code.property.columns[0].index is True
 
 
 # ---- Repr ----
