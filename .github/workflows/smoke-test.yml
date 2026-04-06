@@ -2,10 +2,8 @@ name: Smoke Test (Docker)
 
 on:
   schedule:
-    # Nightly at 4:00 AM UTC
     - cron: '0 4 * * *'
   workflow_dispatch:
-    # Manual trigger for pre-release verification
     inputs:
       reason:
         description: 'Reason for manual run'
@@ -15,7 +13,7 @@ on:
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 15  # ~5min build + ~5min checks + buffer
 
     steps:
       - uses: actions/checkout@v4
@@ -33,35 +31,31 @@ jobs:
           S3_REGION=us-east-1
           CDN_BASE_URL=http://localhost:9000/summa-vision-dev
           LOG_FORMAT=json
-          BACKUP_S3_BUCKET=summa-vision-dev
+          BACKUP_S3_BUCKET=summa-vision-backups-dev
           BACKUP_RETENTION_DAYS=30
           EOF
 
-      # ---------------------------------------------------------------
-      # BUILD & START
-      # ---------------------------------------------------------------
+      # === BUILD & START ===
       - name: Build and start stack
         run: docker compose -f docker-compose.dev.yml up -d --build
 
       - name: Wait for services to be ready
         run: |
           echo "Waiting for API to be healthy..."
-          for i in $(seq 1 30); do
+          for i in $(seq 1 60); do
             if curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
               echo "API healthy after ${i}s"
               break
             fi
-            if [ "$i" = "30" ]; then
-              echo "ERROR: API not healthy after 30s"
-              docker compose -f docker-compose.dev.yml logs api
+            if [ "$i" = "60" ]; then
+              echo "ERROR: API not healthy after 60s"
+              docker compose -f docker-compose.dev.yml logs api | tail -30
               exit 1
             fi
             sleep 1
           done
 
-      # ---------------------------------------------------------------
-      # HEALTH CHECKS
-      # ---------------------------------------------------------------
+      # === HEALTH ===
       - name: "Check: Liveness endpoint"
         run: |
           RESPONSE=$(curl -sf http://localhost:8000/api/health)
@@ -80,18 +74,15 @@ jobs:
           data = json.load(sys.stdin)
           assert data['status'] == 'ready', f'Expected ready, got {data}'
           assert data['checks']['database'] == 'ok', 'DB check failed'
-          print('✓ Readiness: ok (DB + temp dir)')
+          print('✓ Readiness: ok')
           "
 
-      # ---------------------------------------------------------------
-      # AUTH
-      # ---------------------------------------------------------------
+      # === AUTH ===
       - name: "Check: Admin auth rejects without key"
         run: |
-          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
-            http://localhost:8000/api/v1/admin/queue 2>/dev/null || true)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            http://localhost:8000/api/v1/admin/queue 2>/dev/null || echo "000")
           echo "Status without key: $STATUS"
-          # Accept 401 or 403
           if [ "$STATUS" != "401" ] && [ "$STATUS" != "403" ]; then
             echo "ERROR: Expected 401/403, got $STATUS"
             exit 1
@@ -100,54 +91,60 @@ jobs:
 
       - name: "Check: Admin auth accepts with key"
         run: |
-          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "X-API-KEY: smoke-test-key" \
-            http://localhost:8000/api/v1/admin/queue 2>/dev/null || true)
+            http://localhost:8000/api/v1/admin/queue 2>/dev/null || echo "000")
           echo "Status with key: $STATUS"
-          # Accept 200 or 404 (route may not exist yet), but NOT 401
-          if [ "$STATUS" = "401" ] || [ "$STATUS" = "403" ]; then
-            echo "ERROR: Auth rejected valid key"
-            exit 1
-          fi
-          echo "✓ Auth: accepts valid API key"
+          case "$STATUS" in
+            200|404|405)
+              echo "✓ Auth: accepts valid API key (status $STATUS)"
+              ;;
+            401|403)
+              echo "ERROR: Auth rejected valid API key"
+              exit 1
+              ;;
+            *)
+              echo "ERROR: Unexpected status $STATUS"
+              exit 1
+              ;;
+          esac
 
-      # ---------------------------------------------------------------
-      # ALEMBIC
-      # ---------------------------------------------------------------
+      # === ALEMBIC ===
       - name: "Check: Alembic has one head"
         run: |
-          HEADS=$(docker compose -f docker-compose.dev.yml exec -T api \
-            alembic heads 2>&1 | grep -cE '^[a-f0-9]{12}' || echo "0")
-          echo "Alembic heads: $HEADS"
-          if [ "$HEADS" != "1" ]; then
-            echo "ERROR: Expected 1 head"
+          HEAD_COUNT=$(docker compose -f docker-compose.dev.yml exec -T api \
+            alembic heads 2>/dev/null | grep -cE '^[a-f0-9]{12}' || echo "0")
+          echo "Alembic head count: $HEAD_COUNT"
+          if [ "$HEAD_COUNT" != "1" ]; then
+            echo "ERROR: Expected 1 head, found $HEAD_COUNT"
             docker compose -f docker-compose.dev.yml exec -T api alembic heads
             exit 1
           fi
           echo "✓ Alembic: single head"
 
-      # ---------------------------------------------------------------
-      # JOB SYSTEM
-      # ---------------------------------------------------------------
+      # === JOB SYSTEM ===
       - name: "Check: Job enqueue + audit event"
         run: |
           docker compose -f docker-compose.dev.yml exec -T api python3 -c "
           import asyncio
-          from sqlalchemy import select, func
+          from datetime import datetime, timezone
 
           async def test():
               from src.core.database import async_session_factory
               from src.repositories.job_repository import JobRepository
               from src.schemas.job_payloads import CatalogSyncPayload
               from src.models.audit_event import AuditEvent
+              from sqlalchemy import select, func
+
+              ts = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+              dedupe = f'ci_smoke_{ts}'
 
               async with async_session_factory() as session:
-                  # Enqueue a test job
                   repo = JobRepository(session)
                   job = await repo.enqueue(
                       'catalog_sync',
                       CatalogSyncPayload().model_dump_json(),
-                      dedupe_key='ci_smoke_test',
+                      dedupe_key=dedupe,
                       created_by='ci:smoke',
                   )
                   await session.commit()
@@ -156,7 +153,6 @@ jobs:
                   assert job.status.value == 'queued', f'Expected queued, got {job.status}'
                   print(f'✓ Job enqueued: id={job.id}')
 
-                  # Verify audit event
                   count = await session.scalar(
                       select(func.count(AuditEvent.id)).where(
                           AuditEvent.event_type == 'job.created',
@@ -169,67 +165,64 @@ jobs:
           asyncio.run(test())
           "
 
-      # ---------------------------------------------------------------
-      # RUNNER
-      # ---------------------------------------------------------------
+      # === RUNNER ===
       - name: "Check: Job runner is active"
         run: |
-          docker compose -f docker-compose.dev.yml logs api 2>&1 | \
-            grep -q "job_runner_started" && \
-            echo "✓ Runner: started" || \
-            echo "⚠ Runner: start log not found (may have scrolled)"
+          if docker compose -f docker-compose.dev.yml logs api 2>&1 | \
+              grep -q "job_runner_started"; then
+            echo "✓ Runner: started"
+          else
+            echo "ERROR: job_runner_started not found in api logs"
+            docker compose -f docker-compose.dev.yml logs api 2>&1 | tail -30
+            exit 1
+          fi
 
-      # ---------------------------------------------------------------
-      # BACKUP TOOLS
-      # ---------------------------------------------------------------
+      # === BACKUP TOOLS ===
       - name: "Check: Backup tools available"
         run: |
           docker compose -f docker-compose.dev.yml exec -T api \
-            bash -c "which pg_dump && which aws" && \
-            echo "✓ Backup tools: pg_dump + aws available" || \
-            echo "⚠ Backup tools: missing (check Dockerfile)"
+            bash -c "which pg_dump && which aws" || {
+              echo "ERROR: pg_dump or aws CLI missing from api container"
+              exit 1
+            }
+          echo "✓ Backup tools: pg_dump + aws available"
 
-      # ---------------------------------------------------------------
-      # MINIO
-      # ---------------------------------------------------------------
-      - name: "Check: MinIO bucket exists"
+      # === MINIO ===
+      - name: "Check: MinIO bucket accessible"
         run: |
-          docker compose -f docker-compose.dev.yml logs minio-init 2>&1 | \
-            grep -qi "ready\|already\|exists" && \
-            echo "✓ MinIO: bucket ready" || \
-            echo "⚠ MinIO: bucket status unclear"
+          docker compose -f docker-compose.dev.yml exec -T api \
+            bash -c '
+              AWS_ACCESS_KEY_ID=minioadmin \
+              AWS_SECRET_ACCESS_KEY=minioadmin \
+              aws --endpoint-url http://minio:9000 \
+                  s3 ls s3://summa-vision-dev/ 2>&1
+            ' && echo "✓ MinIO: bucket accessible" || {
+              echo "ERROR: MinIO bucket summa-vision-dev not accessible"
+              exit 1
+            }
 
-      # ---------------------------------------------------------------
-      # TESTS INSIDE CONTAINER
-      # ---------------------------------------------------------------
+      # === UNIT TESTS ===
       - name: "Run: Unit tests in container"
         run: |
           docker compose -f docker-compose.dev.yml exec -T api \
-            pytest tests/ -m "not integration" --tb=short -q 2>&1 | tail -10
+            pytest tests/ -m "not integration" --tb=short -q
 
-      # ---------------------------------------------------------------
-      # GRACEFUL SHUTDOWN
-      # ---------------------------------------------------------------
+      # === GRACEFUL SHUTDOWN ===
       - name: "Check: Graceful shutdown"
         run: |
           docker compose -f docker-compose.dev.yml stop api
           sleep 2
-          SHUTDOWN_LOG=$(docker compose -f docker-compose.dev.yml logs api 2>&1 | tail -15)
+          SHUTDOWN_LOG=$(docker compose -f docker-compose.dev.yml logs api 2>&1 | tail -20)
           echo "$SHUTDOWN_LOG"
-          echo "$SHUTDOWN_LOG" | grep -q "shutdown_initiated\|app_stopped\|runner_stopped" && \
-            echo "✓ Shutdown: graceful" || \
-            echo "⚠ Shutdown: graceful signal not found in logs"
 
-      # ---------------------------------------------------------------
-      # CLEANUP
-      # ---------------------------------------------------------------
+          if echo "$SHUTDOWN_LOG" | grep -q "shutdown_initiated"; then
+            echo "✓ Shutdown: graceful"
+          else
+            echo "ERROR: shutdown_initiated not found in shutdown logs"
+            exit 1
+          fi
+
+      # === CLEANUP ===
       - name: Cleanup
         if: always()
         run: docker compose -f docker-compose.dev.yml down -v --remove-orphans
-
-      # ---------------------------------------------------------------
-      # SUMMARY
-      # ---------------------------------------------------------------
-      - name: Summary
-        if: always()
-        run: echo "Smoke test complete. Check step results above."
