@@ -71,6 +71,9 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `services/jobs/runner.py` | >90% | ⬜ | |
 | `services/jobs/handlers.py` | >90% | ⬜ | |
 | `services/jobs/dedupe.py` | >90% | ⬜ | |
+| `models/audit_event.py` | >90% | ⬜ | |
+| `schemas/events.py` | >90% | ⬜ | |
+| `services/audit.py` | >90% | ⬜ | |
 | `core/security/ip_rate_limiter.py` | >90% | ✅ 100% | `tests/api/test_public_graphics.py` |
 | `api/routers/public_graphics.py` | >90% | ✅ 96% | `tests/api/test_public_graphics.py` |
 | `services/ai/llm_interface.py` | >90% | ✅ 100% | `tests/services/ai/test_llm_interface.py` |

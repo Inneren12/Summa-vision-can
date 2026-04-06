@@ -9,6 +9,7 @@ tests) can do::
 from src.models.lead import Lead
 from src.models.llm_request import LLMRequest
 from src.models.publication import Publication, PublicationStatus
+from src.models.audit_event import AuditEvent
 from src.models.job import Job, JobStatus
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "PublicationStatus",
     "Job",
     "JobStatus",
+    "AuditEvent",
 ]

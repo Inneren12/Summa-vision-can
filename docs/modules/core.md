@@ -23,14 +23,20 @@ core/
 
 models/
 ├── ...existing...
+├── audit_event.py     ← AuditEvent generic event record (0-4)
 └── job.py             ← Persistent Job model (0-2)
 
 schemas/
+├── events.py          ← EventType strict taxonomy enum (0-4)
 └── job_payloads.py    ← Typed payload models + registry (0-2)
 
 repositories/
 ├── ...existing...
 └── job_repository.py  ← Job CRUD + SKIP LOCKED claiming (0-2)
+
+services/
+├── ...existing...
+└── audit.py           ← AuditWriter validated event recorder (0-4)
 
 services/jobs/
 ├── __init__.py
@@ -53,6 +59,15 @@ Persistent job record with status, payload, retry tracking.
 
 ### `JobRepository` (repositories/job_repository.py)
 enqueue, claim_next (SKIP LOCKED on PG), mark_success/failed, zombie reaper.
+
+### `AuditEvent` (models/audit_event.py)
+Generic operational event with typed `event_type`, entity reference, JSON metadata, actor tracking. Composite index on `(event_type, created_at)`.
+
+### `EventType` (schemas/events.py)
+Strict `str, Enum` defining all valid event types. Arbitrary strings rejected. New types added here as features are built.
+
+### `AuditWriter` (services/audit.py)
+Service that validates event_type against EventType and writes AuditEvent records. Does not commit — caller's responsibility.
 
 ### `parse_payload` (schemas/job_payloads.py)
 Typed dispatch from job_type → Pydantic model.

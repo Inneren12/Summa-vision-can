@@ -76,6 +76,9 @@ class Settings(BaseSettings):
     scheduler_db_url: str = "sqlite:///data/jobs.sqlite"
     scheduler_enabled: bool = True
 
+    # --- Audit (R18) ---
+    audit_retention_days: int = 90
+
     # --- Security ---
     admin_api_key: str = ""  # Set via ADMIN_API_KEY env var
 

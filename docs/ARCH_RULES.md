@@ -76,6 +76,15 @@
 - **Required pattern:** Check if output already exists before writing.
 - **Forbidden pattern:** Unconditional write without existence check.
 
+## ARCH-AUDT-001: Typed Event Taxonomy
+- **Constraint:** Every AuditEvent must use a value from the ``EventType``
+  enum. Arbitrary strings are rejected at write time.
+- **Rationale:** Prevents taxonomy drift (``job.failed`` vs ``job_failure``
+  vs ``job-failed``) which silently breaks KPI queries.
+- **Applies to:** All code calling ``AuditWriter.log_event()``.
+- **Required pattern:** ``await writer.log_event(EventType.JOB_FAILED, ...)``
+- **Forbidden pattern:** ``await writer.log_event("job_error", ...)``
+
 ---
 
 ## Maintenance

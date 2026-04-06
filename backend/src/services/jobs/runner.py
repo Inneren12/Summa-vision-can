@@ -109,9 +109,27 @@ class JobRunner:
         Returns True if a job was claimed and processed (success or failure).
         Returns False if no queued job was available.
         """
+        # NOTE: job.created events are emitted by the API endpoint that
+        # calls repo.enqueue(), not by the runner. See A-3, A-4, B-4.
         async with self._session_factory() as session:
             repo = JobRepository(session)
             job = await repo.claim_next()
+            if job is not None:
+                # Record job.started audit event
+                from src.services.audit import AuditWriter
+                from src.schemas.events import EventType
+
+                audit = AuditWriter(session)
+                await audit.log_event(
+                    event_type=EventType.JOB_STARTED,
+                    entity_type="job",
+                    entity_id=str(job.id),
+                    metadata={
+                        "job_type": job.job_type,
+                        "attempt": job.attempt_count,
+                    },
+                    actor="system",
+                )
             await session.commit()
 
         if job is None:
@@ -214,6 +232,18 @@ class JobRunner:
         async with self._session_factory() as session:
             repo = JobRepository(session)
             await repo.mark_success(job_id, result_json)
+
+            from src.services.audit import AuditWriter
+            from src.schemas.events import EventType
+            audit = AuditWriter(session)
+            await audit.log_event(
+                event_type=EventType.JOB_SUCCEEDED,
+                entity_type="job",
+                entity_id=str(job_id),
+                metadata={"result_size": len(result_json) if result_json else 0},
+                actor="system",
+            )
+
             await session.commit()
 
     async def _fail_job(
@@ -260,6 +290,21 @@ class JobRunner:
                         attempt=attempt_count,
                         max_attempts=max_attempts,
                     )
+
+            from src.services.audit import AuditWriter
+            from src.schemas.events import EventType
+            audit = AuditWriter(session)
+            await audit.log_event(
+                event_type=EventType.JOB_FAILED,
+                entity_type="job",
+                entity_id=str(job_id),
+                metadata={
+                    "error_code": error_code,
+                    "retryable": retryable,
+                    "attempt": attempt_count,
+                },
+                actor="system",
+            )
 
             await session.commit()
 
