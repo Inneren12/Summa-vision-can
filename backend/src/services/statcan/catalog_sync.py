@@ -3,10 +3,9 @@
 Architecture decisions:
     R7  — Sync runs as a persistent DB-backed job.
     R16 — Idempotent: re-running sync for same day updates existing records.
-    R18 — Emits AuditEvents for job lifecycle.
 
 StatCan API endpoint:
-    POST https://www150.statcan.gc.ca/t1/tbl1/en/dtl!getAllCubesList
+    GET https://www150.statcan.gc.ca/t1/tbl1/en/dtl!getAllCubesList
     Returns: JSON array of ~7000 cube metadata objects.
 """
 
@@ -107,7 +106,7 @@ class CatalogSyncService:
         upserted = await self._repo.upsert_batch(parsed_cubes)
 
         count_after = await self._repo.count()
-        new_count = count_after - count_before
+        new_count = max(0, count_after - count_before)
         updated_count = max(0, upserted - new_count)
 
         report = SyncReport(

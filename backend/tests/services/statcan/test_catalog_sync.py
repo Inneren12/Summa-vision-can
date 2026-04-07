@@ -132,15 +132,31 @@ async def test_sync_empty_response(db_session: AsyncSession) -> None:
 
 async def test_sync_calls_correct_url(db_session: AsyncSession) -> None:
     """Service calls getAllCubesList endpoint."""
-    client = _mock_http([])
+    import httpx
+    import respx
+
     repo = CubeCatalogRepository(db_session)
-    service = CatalogSyncService(client, repo)
 
-    await service.sync_full_catalog()
+    with respx.mock(assert_all_called=True) as respx_mock:
+        route = respx_mock.get("https://www150.statcan.gc.ca/t1/tbl1/en/dtl!getAllCubesList").mock(
+            return_value=httpx.Response(200, json=[])
+        )
+        async with httpx.AsyncClient() as client:
+            service = CatalogSyncService(client, repo)
+            await service.sync_full_catalog()
 
-    client.request.assert_called_once()
-    url = client.request.call_args[0][1]
-    assert "getAllCubesList" in url
+        assert route.call_count == 1
+
+
+async def test_sync_wrapped_response(db_session: AsyncSession) -> None:
+    """Service handles responses wrapped in a container object."""
+    wrapped_response = {"data": [_make_statcan_cube()]}
+    repo = CubeCatalogRepository(db_session)
+    service = CatalogSyncService(_mock_http(wrapped_response), repo)
+
+    report = await service.sync_full_catalog()
+    assert report.total == 1
+    assert report.errors == 0
 
 
 async def test_sync_updates_existing(db_session: AsyncSession) -> None:

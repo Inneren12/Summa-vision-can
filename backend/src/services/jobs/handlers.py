@@ -67,11 +67,12 @@ async def handle_catalog_sync(
     app_state: Any,
 ) -> dict[str, Any] | None:
     """Execute catalog_sync job: download and sync StatCan cube list."""
-    from src.core.database import async_session_factory
+    from src.core.database import get_session_factory
     from src.repositories.cube_catalog_repository import CubeCatalogRepository
     from src.services.statcan.catalog_sync import CatalogSyncService
 
-    async with async_session_factory() as session:
+    factory = get_session_factory()
+    async with factory() as session:
         repo = CubeCatalogRepository(session)
 
         # Use StatCanClient from app_state if available,
