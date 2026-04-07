@@ -105,7 +105,7 @@ async def trigger_catalog_sync(
 
     payload = CatalogSyncPayload()
 
-    job, created = await repo.enqueue(
+    result = await repo.enqueue(
         job_type="catalog_sync",
         payload_json=payload.model_dump_json(),
         dedupe_key=dedupe,
@@ -114,9 +114,9 @@ async def trigger_catalog_sync(
     await session.commit()
 
     return {
-        "job_id": job.id,
-        "status": job.status.value,
-        "dedupe": "new" if created else "existing",
+        "job_id": result.job.id,
+        "status": result.job.status.value,
+        "dedupe": "new" if result.created else "existing",
     }
 
 

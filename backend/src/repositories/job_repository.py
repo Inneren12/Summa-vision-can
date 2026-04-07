@@ -15,10 +15,18 @@ from datetime import datetime, timezone
 from typing import Sequence
 
 from sqlalchemy import select, update
+from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from src.models.job import Job, JobStatus
+
+
+@dataclass(frozen=True, slots=True)
+class EnqueueResult:
+    """Result of an enqueue operation."""
+    job: Job
+    created: bool
 
 
 class JobRepository:
@@ -35,7 +43,7 @@ class JobRepository:
         dedupe_key: str | None = None,
         created_by: str | None = None,
         max_attempts: int = 3,
-    ) -> tuple[Job, bool]:
+    ) -> EnqueueResult:
         """Create a new job or return existing if dedupe_key matches.
 
         If ``dedupe_key`` is provided and a job with the same key already
@@ -43,13 +51,12 @@ class JobRepository:
         returned instead of creating a duplicate.
 
         Returns:
-            Tuple of (job, created) where created is True if a new job
-            was created, False if an existing deduped job was returned.
+            EnqueueResult with the job and a created boolean flag.
         """
         if dedupe_key is not None:
             existing = await self._find_active_by_dedupe(dedupe_key)
             if existing is not None:
-                return existing, False
+                return EnqueueResult(job=existing, created=False)
 
         job = Job(
             job_type=job_type,
@@ -68,7 +75,7 @@ class JobRepository:
             await self._session.rollback()
             existing = await self._find_active_by_dedupe(dedupe_key)
             if existing is not None:
-                return existing, False
+                return EnqueueResult(job=existing, created=False)
             raise  # Unknown integrity error — re-raise
 
         await self._session.refresh(job)
@@ -89,7 +96,7 @@ class JobRepository:
             actor=created_by or "system",
         )
 
-        return job, True
+        return EnqueueResult(job=job, created=True)
 
     async def claim_next(
         self,

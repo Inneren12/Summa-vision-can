@@ -40,6 +40,8 @@ def _set_test_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.main import settings_on_startup
     settings_on_startup.admin_api_key = "test-secret-key"
 
+    # TODO: Replace middleware kwargs mutation with app factory / DI-based auth override.
+    # Current approach depends on Starlette internals and is fragile.
     for middleware in app.user_middleware:
         if hasattr(middleware, 'kwargs') and 'admin_api_key' in middleware.kwargs:
             middleware.kwargs['admin_api_key'] = "test-secret-key"

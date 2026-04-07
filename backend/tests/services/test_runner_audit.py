@@ -38,7 +38,7 @@ async def test_runner_writes_audit_events_on_success(
     register_handler("audit_success_test", ok_handler)
 
     repo = JobRepository(db_session)
-    job, _ = await repo.enqueue(
+    result = await repo.enqueue(
         "audit_success_test",
         '{"schema_version": 1}',
     )
@@ -79,7 +79,7 @@ async def test_runner_writes_audit_events_on_failure(
     register_handler("audit_fail_test", fail_handler)
 
     repo = JobRepository(db_session)
-    job, _ = await repo.enqueue(
+    result = await repo.enqueue(
         "audit_fail_test",
         '{"schema_version": 1}',
         max_attempts=1,  # No retry — immediate failure
@@ -110,7 +110,7 @@ async def test_enqueue_writes_job_created_event(
 ) -> None:
     """JobRepository.enqueue() writes job.created audit event."""
     repo = JobRepository(db_session)
-    job, _ = await repo.enqueue(
+    result = await repo.enqueue(
         "catalog_sync",
         '{"schema_version": 1}',
         created_by="admin:test",
@@ -120,7 +120,7 @@ async def test_enqueue_writes_job_created_event(
     result = await db_session.execute(
         select(AuditEvent).where(
             AuditEvent.event_type == "job.created",
-            AuditEvent.entity_id == str(job.id),
+            AuditEvent.entity_id == str(result.job.id),
         )
     )
     event = result.scalar_one_or_none()
@@ -135,7 +135,7 @@ async def test_dedupe_enqueue_does_not_create_duplicate_event(
 ) -> None:
     """Deduped enqueue returns existing job without new job.created event."""
     repo = JobRepository(db_session)
-    job1, _ = await repo.enqueue(
+    result1 = await repo.enqueue(
         "catalog_sync",
         '{"schema_version": 1}',
         dedupe_key="test_dedupe",
@@ -149,14 +149,14 @@ async def test_dedupe_enqueue_does_not_create_duplicate_event(
     )
 
     # Second enqueue with same dedupe_key — should return existing
-    job2, _ = await repo.enqueue(
+    result2 = await repo.enqueue(
         "catalog_sync",
         '{"schema_version": 1}',
         dedupe_key="test_dedupe",
     )
     await db_session.commit()
 
-    assert job2.id == job1.id  # same job
+    assert result2.job.id == result1.job.id  # same job
 
     count_after = await db_session.scalar(
         select(func.count(AuditEvent.id)).where(

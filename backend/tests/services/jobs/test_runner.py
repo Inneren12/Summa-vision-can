@@ -55,7 +55,7 @@ async def test_runner_executes_job_successfully(
     register_handler("catalog_sync", mock_handler)
 
     repo = JobRepository(db_session)
-    job, _ = await repo.enqueue(
+    result = await repo.enqueue(
         "catalog_sync",
         CatalogSyncPayload().model_dump_json(),
     )
@@ -89,7 +89,7 @@ async def test_runner_retries_on_retryable_error(
     register_handler("catalog_sync", failing_handler)
 
     repo = JobRepository(db_session)
-    job, _ = await repo.enqueue(
+    result = await repo.enqueue(
         "catalog_sync",
         CatalogSyncPayload().model_dump_json(),
     )
@@ -108,7 +108,7 @@ async def test_runner_retries_on_retryable_error(
     # Job should be in QUEUED status
     queued = await repo.list_jobs(status=JobStatus.QUEUED)
     assert len(queued) == 1
-    assert queued[0].id == job.id
+    assert queued[0].id == result.job.id
     assert queued[0].attempt_count == 1
 
 async def test_runner_retry_chain_stops_after_max_attempts(
@@ -130,7 +130,7 @@ async def test_runner_retry_chain_stops_after_max_attempts(
     register_handler("retry_test", always_fail)
 
     repo = JobRepository(db_session)
-    job, _ = await repo.enqueue(
+    result = await repo.enqueue(
         "retry_test",
         '{"schema_version": 1}',
         max_attempts=3,
@@ -180,7 +180,7 @@ async def test_runner_honors_retryable_false_attribute(
     register_handler("perm_test", handler_permanent)
 
     repo = JobRepository(db_session)
-    job, _ = await repo.enqueue(
+    result = await repo.enqueue(
         "perm_test",
         '{"schema_version": 1}',
         max_attempts=5,
@@ -221,7 +221,7 @@ async def test_runner_honors_retryable_true_attribute(
     register_handler("transient_test", handler_transient)
 
     repo = JobRepository(db_session)
-    job, _ = await repo.enqueue(
+    result = await repo.enqueue(
         "transient_test",
         '{"schema_version": 1}',
         max_attempts=3,
@@ -264,7 +264,7 @@ async def test_runner_does_not_retry_non_retryable_error(
     register_handler("cube_fetch", contract_handler)
 
     repo = JobRepository(db_session)
-    job, _ = await repo.enqueue(
+    result = await repo.enqueue(
         "cube_fetch",
         CubeFetchPayload(product_id="14-10-0127").model_dump_json(),
     )
@@ -355,7 +355,7 @@ async def test_runner_skips_cooled_down_cube(
     await db_session.flush()
 
     # Now enqueue a new fetch for the same cube
-    job, _ = await repo.enqueue(
+    result = await repo.enqueue(
         "cube_fetch",
         payload.model_dump_json(),
     )
