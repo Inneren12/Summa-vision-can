@@ -10,6 +10,8 @@ tests under ``tests/``.
 
 from __future__ import annotations
 
+import os
+import subprocess
 from collections.abc import AsyncGenerator
 
 import pytest

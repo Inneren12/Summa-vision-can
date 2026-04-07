@@ -31,6 +31,11 @@ class CubeCatalogRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    @property
+    def _dialect(self) -> str:
+        """Current database dialect name."""
+        return self._session.bind.dialect.name if self._session.bind else ""
+
     async def upsert_batch(
         self,
         cubes: list[CubeCatalogCreate],
@@ -44,13 +49,12 @@ class CubeCatalogRepository:
         Processes in chunks of ``chunk_size`` to avoid memory issues
         with large catalog syncs (~7000 cubes).
         """
-        dialect = self._session.bind.dialect.name if self._session.bind else ""
         total = 0
 
         for i in range(0, len(cubes), chunk_size):
             chunk = cubes[i : i + chunk_size]
 
-            if dialect == "postgresql":
+            if self._dialect == "postgresql":
                 total += await self._upsert_chunk_pg(chunk)
             else:
                 total += await self._upsert_chunk_sqlite(chunk)
@@ -77,11 +81,15 @@ class CubeCatalogRepository:
 
         Returns:
             List of matching CubeCatalog records, ranked by relevance.
+
+        Note:
+            Empty/whitespace query returns empty list from repository.
+            The HTTP 422 response for empty queries is enforced at the
+            API router level (A-4), not here.
         """
         limit = min(limit, 100)
-        dialect = self._session.bind.dialect.name if self._session.bind else ""
 
-        if dialect == "postgresql":
+        if self._dialect == "postgresql":
             return await self._search_pg(query, limit)
         else:
             return await self._search_sqlite(query, limit)
@@ -165,31 +173,51 @@ class CubeCatalogRepository:
             },
         )
 
-        result = await self._session.execute(stmt)
-        return result.rowcount  # type: ignore[return-value]
+        await self._session.execute(stmt)
+        # Return deterministic count — number of input records processed,
+        # not driver-dependent rowcount.
+        return len(chunk)
 
     async def _search_pg(
         self,
         query: str,
         limit: int,
     ) -> Sequence[CubeCatalog]:
-        """PostgreSQL FTS + trigram similarity search."""
-        # Combine full-text rank and trigram similarity for best results
+        """PostgreSQL bilingual FTS + trigram similarity search.
+
+        Combines:
+        - English FTS: websearch_to_tsquery('english', query)
+        - French FTS: websearch_to_tsquery('french', query)
+        - Trigram similarity on title_en and title_fr
+
+        Results ranked by combined relevance score.
+        """
         stmt = text("""
-            SELECT cc.*,
-                   ts_rank(cc.search_vector, websearch_to_tsquery('english', :query)) AS fts_rank,
+            SELECT cc.product_id,
+                   (
+                       COALESCE(ts_rank(cc.search_vector,
+                           websearch_to_tsquery('english', :query)), 0) +
+                       COALESCE(ts_rank(cc.search_vector,
+                           websearch_to_tsquery('french', :query)), 0)
+                   ) * 2 AS fts_score,
                    GREATEST(
                        similarity(cc.title_en, :query),
                        COALESCE(similarity(cc.title_fr, :query), 0)
                    ) AS trgm_score
             FROM cube_catalog cc
             WHERE cc.search_vector @@ websearch_to_tsquery('english', :query)
+               OR cc.search_vector @@ websearch_to_tsquery('french', :query)
                OR similarity(cc.title_en, :query) > 0.1
-               OR similarity(COALESCE(cc.title_fr, ''), :query) > 0.1
-            ORDER BY (ts_rank(cc.search_vector, websearch_to_tsquery('english', :query)) * 2 +
-                      GREATEST(similarity(cc.title_en, :query),
-                               COALESCE(similarity(cc.title_fr, :query), 0)))
-                     DESC
+               OR COALESCE(similarity(cc.title_fr, :query), 0) > 0.1
+            ORDER BY (
+                COALESCE(ts_rank(cc.search_vector,
+                    websearch_to_tsquery('english', :query)), 0) +
+                COALESCE(ts_rank(cc.search_vector,
+                    websearch_to_tsquery('french', :query)), 0)
+            ) * 2 + GREATEST(
+                similarity(cc.title_en, :query),
+                COALESCE(similarity(cc.title_fr, :query), 0)
+            ) DESC
             LIMIT :limit
         """)
 
@@ -198,11 +226,19 @@ class CubeCatalogRepository:
         )
         rows = result.fetchall()
 
-        # Convert raw rows back to CubeCatalog instances
         if not rows:
             return []
 
-        product_ids = [row.product_id for row in rows]
+        # Deduplicate product_ids preserving relevance order
+        seen: set[str] = set()
+        product_ids: list[str] = []
+        for row in rows:
+            pid = row.product_id
+            if pid not in seen:
+                seen.add(pid)
+                product_ids.append(pid)
+
+        # Fetch full ORM objects
         orm_result = await self._session.execute(
             select(CubeCatalog).where(
                 CubeCatalog.product_id.in_(product_ids)
@@ -210,7 +246,6 @@ class CubeCatalogRepository:
         )
         cubes_by_pid = {c.product_id: c for c in orm_result.scalars().all()}
 
-        # Preserve relevance order from the raw query
         return [cubes_by_pid[pid] for pid in product_ids if pid in cubes_by_pid]
 
     # ------------------------------------------------------------------
