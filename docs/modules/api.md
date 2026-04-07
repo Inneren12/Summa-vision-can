@@ -18,6 +18,17 @@ api/
 
 ## Endpoints
 
+### Admin Cubes Router (`routers/admin_cubes.py`)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/api/v1/admin/cubes/search` | Full-text search with typo tolerance | X-API-KEY |
+| POST | `/api/v1/admin/cubes/sync` | Trigger catalog sync (persistent job → 202) | X-API-KEY |
+| GET | `/api/v1/admin/cubes/{product_id}` | Full cube metadata | X-API-KEY |
+
+Query params for search: `q` (required, min 1 char), `limit` (default 20, max 100).
+Sync uses dedupe_key `catalog_sync:{date}` — same-day requests return existing job.
+
 ### Health Check (`routers/health.py`)
 
 | Method | Path | Status | Description |

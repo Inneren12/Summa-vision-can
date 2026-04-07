@@ -69,6 +69,7 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `api/routers/cmhc.py` | >90% | ✅ 95% | `tests/api/test_routers.py` |
 | `models/*.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
 | `repositories/*.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
+| `api/routers/admin_cubes.py` | >90% | ⬜ | |
 | `repositories/cube_catalog_repository.py` | >90% | ⬜ | |
 | `core/scheduler.py` | >90% | ✅ 98% | `tests/core/test_scheduler.py` |
 | `models/job.py` | >90% | ⬜ | |
