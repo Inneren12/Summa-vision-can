@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import subprocess
 
 import pytest
 from sqlalchemy.ext.asyncio import (
@@ -30,18 +31,24 @@ async def pg_engine():
     if not PG_URL:
         pytest.skip("TEST_DATABASE_URL not set")
 
-    engine = create_async_engine(PG_URL, echo=False)
+    env = {**os.environ, "DATABASE_URL": PG_URL}
+    subprocess.run(
+        ["alembic", "upgrade", "head"],
+        cwd=os.path.join(os.path.dirname(__file__), "..", ".."),
+        env=env,
+        check=True,
+    )
 
-    # Create tables
-    from src.core.database import Base
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    engine = create_async_engine(PG_URL, echo=False)
 
     yield engine
 
-    # Cleanup
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    subprocess.run(
+        ["alembic", "downgrade", "base"],
+        cwd=os.path.join(os.path.dirname(__file__), "..", ".."),
+        env=env,
+        check=True,
+    )
     await engine.dispose()
 
 
