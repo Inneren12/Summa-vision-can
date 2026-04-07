@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.api.routers.admin_cubes import router as admin_cubes_router
 from src.api.routers.admin_graphics import router as admin_graphics_router
 from src.api.routers.cmhc import router as cmhc_router
 from src.api.routers.public_graphics import router as public_graphics_router
@@ -135,6 +136,7 @@ app.include_router(cmhc_router)
 app.include_router(public_graphics_router)
 app.include_router(public_leads_router)
 app.include_router(admin_graphics_router)
+app.include_router(admin_cubes_router)
 
 # ---------------------------------------------------------------------------
 # Middlewares (registered AFTER routers — Starlette wraps the full app)
