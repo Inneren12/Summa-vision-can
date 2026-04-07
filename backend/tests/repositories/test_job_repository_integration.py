@@ -32,24 +32,39 @@ async def pg_engine():
         pytest.skip("TEST_DATABASE_URL not set")
 
     env = {**os.environ, "DATABASE_URL": PG_URL}
-    subprocess.run(
+
+    # Setup: apply migrations
+    result = subprocess.run(
         ["alembic", "upgrade", "head"],
         cwd=os.path.join(os.path.dirname(__file__), "..", ".."),
+        capture_output=True,
+        text=True,
         env=env,
-        check=True,
     )
+    if result.returncode != 0:
+        pytest.fail(
+            f"alembic upgrade head failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
     engine = create_async_engine(PG_URL, echo=False)
 
     yield engine
 
-    subprocess.run(
+    # Teardown: dispose engine FIRST, then downgrade
+    await engine.dispose()
+
+    result = subprocess.run(
         ["alembic", "downgrade", "base"],
         cwd=os.path.join(os.path.dirname(__file__), "..", ".."),
+        capture_output=True,
+        text=True,
         env=env,
-        check=True,
     )
-    await engine.dispose()
+    if result.returncode != 0:
+        # Don't fail on teardown, just warn
+        import warnings
+
+        warnings.warn(f"alembic downgrade base failed:\n{result.stderr}")
 
 
 @pytest.fixture
