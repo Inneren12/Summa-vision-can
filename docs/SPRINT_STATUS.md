@@ -19,7 +19,7 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 | PR | Title | Status | Dependencies |
 |----|-------|--------|--------------|
 | A-1 | CubeCatalog Model + Bilingual FTS | 🔄 | Étape 0 |
-| A-2 | CubeCatalogRepository | ⬜ | A-1 |
+| A-2 | CubeCatalogRepository | 🔄 | A-1 |
 | A-3 | CatalogSyncService | ⬜ | A-2 |
 | A-4 | Cube Search API | ⬜ | A-2, A-3 |
 | A-5 | DataFetchService (Polars-first) | ⬜ | A-1, A-4 |

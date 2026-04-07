@@ -69,6 +69,7 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `api/routers/cmhc.py` | >90% | ✅ 95% | `tests/api/test_routers.py` |
 | `models/*.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
 | `repositories/*.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
+| `repositories/cube_catalog_repository.py` | >90% | ⬜ | |
 | `core/scheduler.py` | >90% | ✅ 98% | `tests/core/test_scheduler.py` |
 | `models/job.py` | >90% | ⬜ | |
 | `repositories/job_repository.py` | >90% | ⬜ | |
@@ -133,6 +134,9 @@ pytest tests/services/statcan/test_maintenance.py -v
 `tests/models/test_cube_catalog_fts.py` requires PostgreSQL.
 Marked with `@pytest.mark.integration`. Skipped when
 `TEST_DATABASE_URL` is not set.
+FTS integration tests (PostgreSQL trigram/tsvector) are in
+test_cube_catalog_fts.py with @pytest.mark.integration marker.
+SQLite LIKE-based search is tested in unit tests.
 
 Run: `TEST_DATABASE_URL=postgresql+asyncpg://... pytest -m integration`
 
