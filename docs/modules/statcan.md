@@ -38,7 +38,7 @@ Downloads full StatCan cube catalog and syncs to `cube_catalog` table.
 - `sync_full_catalog() -> SyncReport(total, new, updated, errors)`
 - Uses `getAllCubesList` endpoint, batch upsert (500), progress log every 1000
 - Runs as persistent job: `dedupe_key = catalog_sync:{yyyy-mm-dd}`
-- Scheduled daily at 09:15 EST
+- TODO: wire to scheduler in future PR
 
 ### `StatCanMaintenanceGuard` (maintenance.py) — ✅ Complete
 Prevents API calls during the StatCan maintenance window (00:00–08:30 EST).
