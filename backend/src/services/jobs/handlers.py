@@ -55,3 +55,48 @@ def register_handler(job_type: str, handler: JobHandlerFunc) -> None:
 def get_handler(job_type: str) -> JobHandlerFunc | None:
     """Look up the handler for a job type. Returns None if not found."""
     return HANDLER_REGISTRY.get(job_type)
+
+
+# ---------------------------------------------------------------------------
+# Catalog sync handler (A-3)
+# ---------------------------------------------------------------------------
+
+async def handle_catalog_sync(
+    payload: BaseModel,
+    *,
+    app_state: Any,
+) -> dict[str, Any] | None:
+    """Execute catalog_sync job: download and sync StatCan cube list."""
+    from src.core.database import async_session_factory
+    from src.repositories.cube_catalog_repository import CubeCatalogRepository
+    from src.services.statcan.catalog_sync import CatalogSyncService
+
+    async with async_session_factory() as session:
+        repo = CubeCatalogRepository(session)
+
+        # Use StatCanClient from app_state if available,
+        # otherwise create a simple httpx client
+        http_client = getattr(app_state, "statcan_client", None)
+        if http_client is None:
+            import httpx
+            http_client = httpx.AsyncClient(timeout=60.0)
+
+        service = CatalogSyncService(http_client, repo)
+
+        try:
+            report = await service.sync_full_catalog()
+            await session.commit()
+        finally:
+            # Clean up httpx client if we created it
+            if not hasattr(app_state, "statcan_client"):
+                await http_client.aclose()
+
+    return {
+        "total": report.total,
+        "new": report.new,
+        "updated": report.updated,
+        "errors": report.errors,
+    }
+
+
+register_handler("catalog_sync", handle_catalog_sync)
