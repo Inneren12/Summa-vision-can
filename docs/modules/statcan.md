@@ -33,6 +33,13 @@ Read by `DataFetchService` (A-5) for dynamic periods.
 
 ## Classes
 
+### `CatalogSyncService` (services/statcan/catalog_sync.py)
+Downloads full StatCan cube catalog and syncs to `cube_catalog` table.
+- `sync_full_catalog() -> SyncReport(total, new, updated, errors)`
+- Uses `getAllCubesList` endpoint, batch upsert (500), progress log every 1000
+- Runs as persistent job: `dedupe_key = catalog_sync:{yyyy-mm-dd}`
+- Scheduled daily at 09:15 EST
+
 ### `StatCanMaintenanceGuard` (maintenance.py) — ✅ Complete
 Prevents API calls during the StatCan maintenance window (00:00–08:30 EST).
 - `is_maintenance_window(current_time: datetime) -> bool` — Pure function, no `datetime.now()`.

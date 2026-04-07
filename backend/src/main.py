@@ -43,6 +43,8 @@ settings_on_startup: Settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage startup/shutdown lifecycle events."""
+    import src.services.jobs.handlers  # noqa: F401
+
     start_scheduler()
 
     # --- Startup ---
