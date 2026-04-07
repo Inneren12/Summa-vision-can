@@ -92,11 +92,11 @@ async def test_skip_locked_prevents_double_claim(
     # Enqueue 2 jobs
     async with pg_session_factory() as session:
         repo = JobRepository(session)
-        job1 = await repo.enqueue("test_type", payload, dedupe_key="skip1")
-        job2 = await repo.enqueue("test_type", payload, dedupe_key="skip2")
+        result1 = await repo.enqueue("test_type", payload, dedupe_key="skip1")
+        result2 = await repo.enqueue("test_type", payload, dedupe_key="skip2")
         await session.commit()
-        job1_id = job1.id
-        job2_id = job2.id
+        job1_id = result1.job.id
+        job2_id = result2.job.id
 
     # Claim from two concurrent sessions
     claimed_ids: list[int] = []
@@ -128,19 +128,24 @@ async def test_dedupe_race_condition_safe(
     from src.schemas.job_payloads import CatalogSyncPayload
 
     payload = CatalogSyncPayload().model_dump_json()
-    results: list[int] = []
+    results: list[tuple[int, bool]] = []
 
     async def enqueue_one():
         async with pg_session_factory() as session:
             repo = JobRepository(session)
-            job = await repo.enqueue(
+            result = await repo.enqueue(
                 "test_type", payload, dedupe_key="race_test"
             )
-            results.append(job.id)
+            results.append((result.job.id, result.created))
             await session.commit()
 
     await asyncio.gather(enqueue_one(), enqueue_one())
 
     # Both should return the same job_id (one created, one deduped)
     assert len(results) == 2
-    assert results[0] == results[1]
+    assert results[0][0] == results[1][0]
+
+    # Exactly one should have created=True
+    created_flags = [r[1] for r in results]
+    assert created_flags.count(True) == 1
+    assert created_flags.count(False) == 1

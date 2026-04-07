@@ -27,16 +27,17 @@ async def test_enqueue_creates_job(db_session: AsyncSession) -> None:
     """Enqueue creates a job in QUEUED status."""
     repo = JobRepository(db_session)
     payload = CatalogSyncPayload()
-    job = await repo.enqueue(
+    result = await repo.enqueue(
         "catalog_sync",
         payload.model_dump_json(),
     )
     await db_session.commit()
 
-    assert job.id is not None
-    assert job.status == JobStatus.QUEUED
-    assert job.attempt_count == 0
-    assert job.job_type == "catalog_sync"
+    assert result.created is True
+    assert result.job.id is not None
+    assert result.job.status == JobStatus.QUEUED
+    assert result.job.attempt_count == 0
+    assert result.job.job_type == "catalog_sync"
 
 
 async def test_claim_next_returns_job_and_marks_running(
@@ -45,7 +46,7 @@ async def test_claim_next_returns_job_and_marks_running(
     """claim_next returns oldest queued job and sets status to RUNNING."""
     repo = JobRepository(db_session)
     payload = CatalogSyncPayload()
-    await repo.enqueue("catalog_sync", payload.model_dump_json())
+    result = await repo.enqueue("catalog_sync", payload.model_dump_json())
     await db_session.commit()
 
     claimed = await repo.claim_next()
@@ -74,15 +75,17 @@ async def test_dedupe_key_prevents_duplicate(
     payload = CatalogSyncPayload()
     json_str = payload.model_dump_json()
 
-    job1 = await repo.enqueue(
+    result1 = await repo.enqueue(
         "catalog_sync", json_str, dedupe_key="sync:2025-04-04"
     )
     await db_session.commit()
 
-    job2 = await repo.enqueue(
+    result2 = await repo.enqueue(
         "catalog_sync", json_str, dedupe_key="sync:2025-04-04"
     )
-    assert job2.id == job1.id  # same job returned
+    assert result1.created is True
+    assert result2.created is False
+    assert result2.job.id == result1.job.id  # same job returned
 
 
 async def test_dedupe_allows_after_completion(
@@ -93,19 +96,21 @@ async def test_dedupe_allows_after_completion(
     payload = CatalogSyncPayload()
     json_str = payload.model_dump_json()
 
-    job1 = await repo.enqueue(
+    result1 = await repo.enqueue(
         "catalog_sync", json_str, dedupe_key="sync:2025-04-04"
     )
     await db_session.commit()
-    await repo.mark_success(job1.id)
+    await repo.mark_success(result1.job.id)
     await db_session.commit()
 
-    job2 = await repo.enqueue(
+    result2 = await repo.enqueue(
         "catalog_sync", json_str, dedupe_key="sync:2025-04-04"
     )
     await db_session.commit()
 
-    assert job2.id != job1.id  # new job created
+    assert result1.created is True
+    assert result2.created is True
+    assert result2.job.id != result1.job.id  # new job created
 
 
 # ---- Status transitions ----
@@ -115,15 +120,15 @@ async def test_mark_success_persists_result(
 ) -> None:
     """mark_success sets status=SUCCESS and saves result."""
     repo = JobRepository(db_session)
-    job = await repo.enqueue(
+    result = await repo.enqueue(
         "catalog_sync", CatalogSyncPayload().model_dump_json()
     )
     await db_session.commit()
 
-    await repo.mark_success(job.id, result_json='{"total": 7000}')
+    await repo.mark_success(result.job.id, result_json='{"total": 7000}')
     await db_session.commit()
 
-    fetched = await repo.get_job(job.id)
+    fetched = await repo.get_job(result.job.id)
     assert fetched is not None
     assert fetched.status == JobStatus.SUCCESS
     assert fetched.result_json == '{"total": 7000}'
@@ -135,20 +140,20 @@ async def test_mark_failed_persists_error(
 ) -> None:
     """mark_failed sets status=FAILED with error details."""
     repo = JobRepository(db_session)
-    job = await repo.enqueue(
+    result = await repo.enqueue(
         "cube_fetch",
         CubeFetchPayload(product_id="14-10-0127").model_dump_json(),
     )
     await db_session.commit()
 
     await repo.mark_failed(
-        job.id,
+        result.job.id,
         error_code="DATA_CONTRACT_VIOLATION",
         error_message="Missing column: SCALAR_ID",
     )
     await db_session.commit()
 
-    fetched = await repo.get_job(job.id)
+    fetched = await repo.get_job(result.job.id)
     assert fetched is not None
     assert fetched.status == JobStatus.FAILED
     assert fetched.error_code == "DATA_CONTRACT_VIOLATION"
@@ -190,11 +195,11 @@ async def test_requeue_stale_does_not_requeue_exhausted(
     from datetime import timedelta
 
     repo = JobRepository(db_session)
-    job = await repo.enqueue("test", '{"schema_version": 1}')
-    job.status = JobStatus.RUNNING
-    job.started_at = datetime.now(timezone.utc) - timedelta(minutes=20)
-    job.attempt_count = 3
-    job.max_attempts = 3  # exhausted
+    result = await repo.enqueue("test", '{"schema_version": 1}')
+    result.job.status = JobStatus.RUNNING
+    result.job.started_at = datetime.now(timezone.utc) - timedelta(minutes=20)
+    result.job.attempt_count = 3
+    result.job.max_attempts = 3  # exhausted
     await db_session.flush()
     await db_session.commit()
 
@@ -202,8 +207,8 @@ async def test_requeue_stale_does_not_requeue_exhausted(
     await db_session.commit()
 
     assert requeued == 0
-    await db_session.refresh(job)
-    assert job.status == JobStatus.RUNNING  # unchanged
+    await db_session.refresh(result.job)
+    assert result.job.status == JobStatus.RUNNING  # unchanged
 
 
 async def test_requeue_stale_increments_attempt_count(
@@ -213,20 +218,20 @@ async def test_requeue_stale_increments_attempt_count(
     from datetime import timedelta
 
     repo = JobRepository(db_session)
-    job = await repo.enqueue("test", '{"schema_version": 1}')
-    job.status = JobStatus.RUNNING
-    job.started_at = datetime.now(timezone.utc) - timedelta(minutes=20)
-    job.attempt_count = 1
+    result = await repo.enqueue("test", '{"schema_version": 1}')
+    result.job.status = JobStatus.RUNNING
+    result.job.started_at = datetime.now(timezone.utc) - timedelta(minutes=20)
+    result.job.attempt_count = 1
     await db_session.flush()
     await db_session.commit()
 
     await repo.requeue_stale_running(stale_threshold_minutes=10)
     await db_session.commit()
 
-    await db_session.refresh(job)
-    assert job.status == JobStatus.QUEUED
-    assert job.attempt_count == 2  # was 1, now 2
-    assert job.started_at is None  # reset
+    await db_session.refresh(result.job)
+    assert result.job.status == JobStatus.QUEUED
+    assert result.job.attempt_count == 2  # was 1, now 2
+    assert result.job.started_at is None  # reset
 
 
 async def test_requeue_stale_running_jobs(
@@ -238,23 +243,23 @@ async def test_requeue_stale_running_jobs(
     repo = JobRepository(db_session)
 
     # Create a "stale" running job (started 20 min ago)
-    stale_job = await repo.enqueue(
+    stale_result = await repo.enqueue(
         "catalog_sync", CatalogSyncPayload().model_dump_json()
     )
-    stale_job.status = JobStatus.RUNNING
-    stale_job.started_at = datetime.now(timezone.utc) - timedelta(minutes=20)
-    stale_job.attempt_count = 1
+    stale_result.job.status = JobStatus.RUNNING
+    stale_result.job.started_at = datetime.now(timezone.utc) - timedelta(minutes=20)
+    stale_result.job.attempt_count = 1
     await db_session.flush()
 
     # Create a "fresh" running job (started 2 min ago)
-    fresh_job = await repo.enqueue(
+    fresh_result = await repo.enqueue(
         "cube_fetch",
         CubeFetchPayload(product_id="test").model_dump_json(),
         dedupe_key="fresh-test",
     )
-    fresh_job.status = JobStatus.RUNNING
-    fresh_job.started_at = datetime.now(timezone.utc) - timedelta(minutes=2)
-    fresh_job.attempt_count = 1
+    fresh_result.job.status = JobStatus.RUNNING
+    fresh_result.job.started_at = datetime.now(timezone.utc) - timedelta(minutes=2)
+    fresh_result.job.attempt_count = 1
     await db_session.flush()
     await db_session.commit()
 
@@ -265,12 +270,12 @@ async def test_requeue_stale_running_jobs(
     await db_session.commit()
 
     # Stale job requeued
-    await db_session.refresh(stale_job)
-    assert stale_job.status == JobStatus.QUEUED
+    await db_session.refresh(stale_result.job)
+    assert stale_result.job.status == JobStatus.QUEUED
 
     # Fresh job untouched
-    await db_session.refresh(fresh_job)
-    assert fresh_job.status == JobStatus.RUNNING
+    await db_session.refresh(fresh_result.job)
+    assert fresh_result.job.status == JobStatus.RUNNING
 
     assert requeued_count == 1
 
@@ -282,10 +287,10 @@ async def test_list_jobs_with_filters(
 ) -> None:
     """list_jobs filters by type and status correctly."""
     repo = JobRepository(db_session)
-    await repo.enqueue(
+    result = await repo.enqueue(
         "catalog_sync", CatalogSyncPayload().model_dump_json()
     )
-    await repo.enqueue(
+    result = await repo.enqueue(
         "cube_fetch",
         CubeFetchPayload(product_id="x").model_dump_json(),
     )

@@ -61,14 +61,15 @@ async def search_cubes(
     """
     # Strip whitespace — FastAPI min_length=1 catches empty string,
     # but "   " (whitespace only) would pass. Handle explicitly:
-    if not q.strip():
+    normalized_q = q.strip()
+    if not normalized_q:
         raise HTTPException(
             status_code=422,
             detail="Search query must not be empty or whitespace-only.",
         )
 
     repo = CubeCatalogRepository(session)
-    cubes = await repo.search(q.strip(), limit=limit)
+    cubes = await repo.search(normalized_q, limit=limit)
 
     return [
         CubeSearchResult.model_validate(cube, from_attributes=True)
@@ -104,7 +105,7 @@ async def trigger_catalog_sync(
 
     payload = CatalogSyncPayload()
 
-    job = await repo.enqueue(
+    result = await repo.enqueue(
         job_type="catalog_sync",
         payload_json=payload.model_dump_json(),
         dedupe_key=dedupe,
@@ -112,13 +113,10 @@ async def trigger_catalog_sync(
     )
     await session.commit()
 
-    # Determine if this is a new job or deduped existing
-    is_new = job.attempt_count == 0 and job.created_by == "admin:api"
-
     return {
-        "job_id": job.id,
-        "status": job.status.value,
-        "dedupe": "new" if is_new else "existing",
+        "job_id": result.job.id,
+        "status": result.job.status.value,
+        "dedupe": "new" if result.created else "existing",
     }
 
 
