@@ -33,7 +33,13 @@ schemas/
 
 repositories/
 ├── ...existing...
-└── job_repository.py  ← Job CRUD + SKIP LOCKED claiming (0-2)
+├── job_repository.py          ← Job CRUD + SKIP LOCKED claiming (0-2)
+└── cube_catalog_repository.py ← CubeCatalog CRUD + bilingual search (A-2)
+
+schemas/
+├── events.py                  ← EventType strict taxonomy enum (0-4)
+├── job_payloads.py            ← Typed payload models + registry (0-2)
+└── cube_catalog.py            ← CubeCatalogCreate, CubeCatalogResponse, CubeSearchResult (A-2)
 
 services/
 ├── ...existing...
