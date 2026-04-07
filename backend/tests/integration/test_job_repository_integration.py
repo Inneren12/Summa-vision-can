@@ -92,8 +92,8 @@ async def test_skip_locked_prevents_double_claim(
     # Enqueue 2 jobs
     async with pg_session_factory() as session:
         repo = JobRepository(session)
-        job1 = await repo.enqueue("test_type", payload, dedupe_key="skip1")
-        job2 = await repo.enqueue("test_type", payload, dedupe_key="skip2")
+        job1, _ = await repo.enqueue("test_type", payload, dedupe_key="skip1")
+        job2, _ = await repo.enqueue("test_type", payload, dedupe_key="skip2")
         await session.commit()
         job1_id = job1.id
         job2_id = job2.id
@@ -133,7 +133,7 @@ async def test_dedupe_race_condition_safe(
     async def enqueue_one():
         async with pg_session_factory() as session:
             repo = JobRepository(session)
-            job = await repo.enqueue(
+            job, _ = await repo.enqueue(
                 "test_type", payload, dedupe_key="race_test"
             )
             results.append(job.id)

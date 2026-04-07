@@ -35,17 +35,21 @@ class JobRepository:
         dedupe_key: str | None = None,
         created_by: str | None = None,
         max_attempts: int = 3,
-    ) -> Job:
+    ) -> tuple[Job, bool]:
         """Create a new job or return existing if dedupe_key matches.
 
         If ``dedupe_key`` is provided and a job with the same key already
         exists in ``queued`` or ``running`` status, the existing job is
         returned instead of creating a duplicate.
+
+        Returns:
+            Tuple of (job, created) where created is True if a new job
+            was created, False if an existing deduped job was returned.
         """
         if dedupe_key is not None:
             existing = await self._find_active_by_dedupe(dedupe_key)
             if existing is not None:
-                return existing
+                return existing, False
 
         job = Job(
             job_type=job_type,
@@ -64,7 +68,7 @@ class JobRepository:
             await self._session.rollback()
             existing = await self._find_active_by_dedupe(dedupe_key)
             if existing is not None:
-                return existing
+                return existing, False
             raise  # Unknown integrity error — re-raise
 
         await self._session.refresh(job)
@@ -85,7 +89,7 @@ class JobRepository:
             actor=created_by or "system",
         )
 
-        return job
+        return job, True
 
     async def claim_next(
         self,

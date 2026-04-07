@@ -7,7 +7,7 @@ Rules in ROADMAP_v8_FINAL.md).
 
 Usage:
     payload = CubeFetchPayload(product_id="14-10-0127")
-    job = await repo.enqueue("cube_fetch", payload)
+    job, _ = await repo.enqueue("cube_fetch", payload)
 
     # Later, in runner:
     typed = parse_payload(job)  # returns CubeFetchPayload

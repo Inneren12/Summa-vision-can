@@ -38,7 +38,7 @@ async def test_runner_writes_audit_events_on_success(
     register_handler("audit_success_test", ok_handler)
 
     repo = JobRepository(db_session)
-    await repo.enqueue(
+    job, _ = await repo.enqueue(
         "audit_success_test",
         '{"schema_version": 1}',
     )
@@ -79,7 +79,7 @@ async def test_runner_writes_audit_events_on_failure(
     register_handler("audit_fail_test", fail_handler)
 
     repo = JobRepository(db_session)
-    await repo.enqueue(
+    job, _ = await repo.enqueue(
         "audit_fail_test",
         '{"schema_version": 1}',
         max_attempts=1,  # No retry — immediate failure
@@ -110,7 +110,7 @@ async def test_enqueue_writes_job_created_event(
 ) -> None:
     """JobRepository.enqueue() writes job.created audit event."""
     repo = JobRepository(db_session)
-    job = await repo.enqueue(
+    job, _ = await repo.enqueue(
         "catalog_sync",
         '{"schema_version": 1}',
         created_by="admin:test",
@@ -135,7 +135,7 @@ async def test_dedupe_enqueue_does_not_create_duplicate_event(
 ) -> None:
     """Deduped enqueue returns existing job without new job.created event."""
     repo = JobRepository(db_session)
-    job1 = await repo.enqueue(
+    job1, _ = await repo.enqueue(
         "catalog_sync",
         '{"schema_version": 1}',
         dedupe_key="test_dedupe",
@@ -149,7 +149,7 @@ async def test_dedupe_enqueue_does_not_create_duplicate_event(
     )
 
     # Second enqueue with same dedupe_key — should return existing
-    job2 = await repo.enqueue(
+    job2, _ = await repo.enqueue(
         "catalog_sync",
         '{"schema_version": 1}',
         dedupe_key="test_dedupe",
