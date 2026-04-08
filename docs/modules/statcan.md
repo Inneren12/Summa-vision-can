@@ -40,6 +40,17 @@ Downloads full StatCan cube catalog and syncs to `cube_catalog` table.
 - Runs as persistent job: `dedupe_key = catalog_sync:{yyyy-mm-dd}`
 - TODO: wire to scheduler in future PR
 
+### `DataFetchService` (services/statcan/data_fetch.py) — Polars zone
+Downloads StatCan cube data vectors, validates schema, normalizes
+scalar factors, saves as Parquet.
+- `fetch_cube_data(product_id) -> FetchResult`
+- Polars-native: NO pandas import (R4)
+- Parquet-only output (R3)
+- Dynamic periods by frequency (R13)
+- Schema validation: REQUIRED_COLUMNS contract (R14)
+- Data quality: null % warning threshold
+- Runs as persistent job: `dedupe_key = fetch:{product_id}:{date}`
+
 ### `StatCanMaintenanceGuard` (maintenance.py) — ✅ Complete
 Prevents API calls during the StatCan maintenance window (00:00–08:30 EST).
 - `is_maintenance_window(current_time: datetime) -> bool` — Pure function, no `datetime.now()`.

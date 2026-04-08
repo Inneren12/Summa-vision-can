@@ -22,7 +22,7 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 | A-2 | CubeCatalogRepository | 🔄 | A-1 |
 | A-3 | CatalogSyncService | 🔄 | A-2 |
 | A-4 | Cube Search API | 🔄 | A-2, A-3 |
-| A-5 | DataFetchService (Polars-first) | ⬜ | A-1, A-4 |
+| A-5 | DataFetchService (Polars-first) | 🔄 | A-1, A-4 |
 | A-6 | DataWorkbench (Pure Polars) | ⬜ | — |
 | A-7 | Transform API | ⬜ | A-5, A-6 |
 
