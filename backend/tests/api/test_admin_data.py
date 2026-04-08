@@ -20,7 +20,7 @@ from unittest.mock import patch
 from src.main import app
 from src.core.database import get_db
 
-API_KEY = {"X-API-KEY": "test-secret-key"}
+API_KEY = {"X-API-KEY": "test-ci-key"}
 
 @pytest.fixture
 async def client_no_auth(db_session: AsyncSession) -> AsyncClient:
@@ -37,15 +37,15 @@ async def client_no_auth(db_session: AsyncSession) -> AsyncClient:
 @pytest.fixture(autouse=True)
 def _set_test_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """Set the API key in the environment and app settings before tests run."""
-    monkeypatch.setenv("ADMIN_API_KEY", "test-secret-key")
+    monkeypatch.setenv("ADMIN_API_KEY", "test-ci-key")
     from src.main import settings_on_startup
-    settings_on_startup.admin_api_key = "test-secret-key"
+    settings_on_startup.admin_api_key = "test-ci-key"
 
     # TODO: Replace middleware kwargs mutation with app factory / DI-based auth override.
     # Current approach depends on Starlette internals and is fragile.
     for middleware in app.user_middleware:
         if hasattr(middleware, 'kwargs') and 'admin_api_key' in middleware.kwargs:
-            middleware.kwargs['admin_api_key'] = "test-secret-key"
+            middleware.kwargs['admin_api_key'] = "test-ci-key"
 
 
 @pytest.fixture
