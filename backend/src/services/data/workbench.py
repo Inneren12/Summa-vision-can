@@ -107,7 +107,8 @@ def aggregate_time(
             context={"method": method},
         )
 
-    result = working.group_by(groups).agg(agg_expr).sort(period_col)
+    groups_to_sort = [period_col] + (group_cols or [])
+    result = working.group_by(groups).agg(agg_expr).sort(groups_to_sort)
 
     # Rename period column back to original date column name
     result = result.rename({period_col: date_col})
@@ -123,25 +124,36 @@ def filter_geo(
     df: pl.DataFrame,
     geography: str,
     geo_col: str = "GEO",
+    match_mode: str = "contains",
 ) -> pl.DataFrame:
-    """Filter DataFrame to a specific geography.
+    """Filter DataFrame by geography.
 
     Args:
         df: Input DataFrame.
-        geography: Geography value to keep (e.g. ``"Alberta"``).
-            Case-insensitive contains match.
-        geo_col: Name of the geography column.
+        geography: Geography name to filter.
+        geo_col: Column name containing geography.
+        match_mode: 'exact' for exact case-insensitive match,
+                    'contains' for substring match (default).
 
     Returns:
         New filtered DataFrame.
     """
     _validate_columns(df, [geo_col])
 
-    return df.filter(
-        pl.col(geo_col).str.to_lowercase().str.contains(
-            geography.lower()
+    if match_mode == "exact":
+        return df.filter(
+            pl.col(geo_col).str.to_lowercase() == geography.lower()
         )
-    )
+    elif match_mode == "contains":
+        return df.filter(
+            pl.col(geo_col).str.to_lowercase().str.contains(geography.lower())
+        )
+    else:
+        raise WorkbenchError(
+            message=f"Invalid match_mode: {match_mode!r}. Must be 'exact' or 'contains'.",
+            error_code="INVALID_MATCH_MODE",
+            context={"match_mode": match_mode},
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +205,10 @@ def calc_yoy_change(
 ) -> pl.DataFrame:
     """Calculate Year-over-Year percentage change.
 
+    IMPORTANT: Assumes continuous monthly series with no gaps.
+    For quarterly or annual data, or series with missing months,
+    results will be incorrect. Use only on validated monthly data.
+
     Args:
         df: Input DataFrame sorted by date.
         value_col: Column with numeric values.
@@ -202,10 +218,17 @@ def calc_yoy_change(
 
     Returns:
         DataFrame with added YoY change column.
+
+    Raises:
+        WorkbenchError: If data does not appear to be continuous monthly.
     """
     _validate_columns(df, [value_col, date_col])
 
     working = _ensure_date_column(df, date_col).sort(date_col)
+
+    geo_col = group_cols[0] if group_cols else "GEO"
+    if geo_col in working.columns:
+        _validate_monthly_continuity(working, date_col, geo_col)
 
     if group_cols:
         _validate_columns(df, group_cols)
@@ -233,11 +256,18 @@ def calc_mom_change(
 ) -> pl.DataFrame:
     """Calculate Month-over-Month percentage change.
 
-    Same as YoY but with shift(1) instead of shift(12).
+    IMPORTANT: Assumes continuous monthly series with no gaps.
+
+    Raises:
+        WorkbenchError: If data does not appear to be continuous monthly.
     """
     _validate_columns(df, [value_col, date_col])
 
     working = _ensure_date_column(df, date_col).sort(date_col)
+
+    geo_col = group_cols[0] if group_cols else "GEO"
+    if geo_col in working.columns:
+        _validate_monthly_continuity(working, date_col, geo_col)
 
     if group_cols:
         _validate_columns(df, group_cols)
@@ -254,6 +284,60 @@ def calc_mom_change(
         )
 
     return result
+
+
+def _validate_monthly_continuity(
+    df: pl.DataFrame,
+    date_col: str,
+    geo_col: str,
+) -> None:
+    """Check that data looks like continuous monthly series.
+
+    Validates by checking the most common interval between dates
+    within each geography. If it's not ~28-31 days, raises error.
+    """
+    if df.height < 3:
+        return  # Too few rows to validate
+
+    # Sample the first geography
+    geos = df.select(geo_col).unique()
+    if geos.height == 0:
+        return
+
+    first_geo = geos[0, 0]
+    subset = (
+        df.filter(pl.col(geo_col) == first_geo)
+        .sort(date_col)
+        .select(date_col)
+    )
+
+    if subset.height < 3:
+        return
+
+    # Check interval between consecutive dates
+    diffs = subset.with_columns(
+        pl.col(date_col).diff().dt.total_days().alias("_diff_days")
+    ).drop_nulls("_diff_days")
+
+    if diffs.height == 0:
+        return
+
+    median_diff = diffs.select(pl.col("_diff_days").median()).item()
+
+    # Monthly data should have ~28-31 day intervals
+    if median_diff < 20 or median_diff > 45:
+        raise WorkbenchError(
+            message=(
+                f"Data does not appear to be monthly series. "
+                f"Median interval between dates is {median_diff:.0f} days. "
+                f"YoY/MoM calculations require continuous monthly data."
+            ),
+            error_code="NON_MONTHLY_DATA",
+            context={
+                "median_interval_days": float(median_diff),
+                "geo_sample": first_geo,
+            },
+        )
 
 
 def calc_rolling_avg(
@@ -309,6 +393,8 @@ def calc_rolling_avg(
 # Multi-cube merge
 # ---------------------------------------------------------------------------
 
+_VALID_JOIN_TYPES = {"inner", "left", "outer", "cross", "full"}
+
 def merge_cubes(
     dfs: list[pl.DataFrame],
     merge_keys: list[str] | None = None,
@@ -332,6 +418,13 @@ def merge_cubes(
         WorkbenchError: If fewer than 2 DataFrames, missing keys,
             or duplicate keys found in any input.
     """
+    if how not in _VALID_JOIN_TYPES:
+        raise WorkbenchError(
+            message=f"Invalid join type: {how!r}. Must be one of: {sorted(_VALID_JOIN_TYPES)}",
+            error_code="INVALID_JOIN_TYPE",
+            context={"how": how},
+        )
+
     if merge_keys is None:
         merge_keys = ["REF_DATE", "GEO"]
 
@@ -371,18 +464,38 @@ def merge_cubes(
 
     # Sequential merge
     result = dfs[0]
-    for i, right in enumerate(dfs[1:], start=1):
-        suffix = (suffixes[i] if suffixes and i < len(suffixes)
-                  else f"_{i}")
+    for i, right_df in enumerate(dfs[1:]):
+        suffix = suffixes[i] if suffixes and i < len(suffixes) else f"_{i + 1}"
+
+        # Rename conflicting columns in right_df
+        conflicting = [c for c in right_df.columns if c not in merge_keys and c in result.columns]
+        rename_map = {c: f"{c}{suffix}" for c in conflicting}
+        right_renamed = right_df.rename(rename_map)
 
         # Determine correct full join parameter
         join_type = "full" if how == "outer" else how
+
+        # coalesce=True handles merge_keys properly in full joins avoiding key duplication
         result = result.join(
-            right,
+            right_renamed,
             on=merge_keys,
             how=join_type,  # type: ignore[arg-type]
-            suffix=suffix,
+            coalesce=True,
+            suffix="_right_tmp" # temporary suffix for any unforeseen duplicate names not handled manually
         )
+
+        # Clean up any leftover temporary suffixes if they sneaked in
+        tmp_cols = [c for c in result.columns if c.endswith("_right_tmp")]
+        if tmp_cols:
+            raise WorkbenchError(
+                message=(
+                    f"Unexpected column conflicts after merge: {tmp_cols}. "
+                    f"This means the rename logic did not fully resolve all "
+                    f"conflicting column names before the join."
+                ),
+                error_code="MERGE_COLUMN_CONFLICT",
+                context={"conflicting_columns": tmp_cols, "merge_keys": merge_keys},
+            )
 
     # Warn if result is suspiciously large
     largest_input = max(df.height for df in dfs)
@@ -416,12 +529,28 @@ def _ensure_date_column(
     df: pl.DataFrame,
     date_col: str,
 ) -> pl.DataFrame:
-    """Cast date column to Date type if it's a string.
+    """Ensure date column is Date type. Parse from string if needed.
 
-    Handles StatCan date formats: "2024-01", "2024-01-01", "2024".
+    Raises:
+        WorkbenchError: If parsing fails (all nulls after parse) or type unsupported.
     """
-    if df[date_col].dtype == pl.Utf8 or df[date_col].dtype == pl.String:
-        return df.with_columns(
+    if date_col not in df.columns:
+        raise WorkbenchError(
+            message=f"Column '{date_col}' not found in DataFrame",
+            error_code="MISSING_COLUMN",
+            context={"date_col": date_col, "columns": df.columns},
+        )
+
+    col_dtype = df[date_col].dtype
+
+    if col_dtype == pl.Date or col_dtype == pl.Datetime:
+        return df
+
+    if col_dtype == pl.Utf8 or col_dtype == pl.String:
+        # Count non-null values before parse
+        non_null_before = df.select(pl.col(date_col).is_not_null().sum()).item()
+
+        parsed = df.with_columns(
             pl.col(date_col)
             .str.strptime(pl.Date, "%Y-%m-%d", strict=False)
             .fill_null(
@@ -434,7 +563,27 @@ def _ensure_date_column(
             )
             .alias(date_col)
         )
-    return df
+
+        # Check if parse produced all nulls from non-null input
+        non_null_after = parsed.select(pl.col(date_col).is_not_null().sum()).item()
+
+        if non_null_before > 0 and non_null_after == 0:
+            raise WorkbenchError(
+                message=(
+                    f"Date column '{date_col}' could not be parsed. "
+                    f"All {non_null_before} non-null values became null after parsing."
+                ),
+                error_code="DATE_PARSE_FAILED",
+                context={"date_col": date_col, "sample": df[date_col].head(5).to_list()},
+            )
+
+        return parsed
+
+    raise WorkbenchError(
+        message=f"Column '{date_col}' has unsupported type {col_dtype} for date operations",
+        error_code="INVALID_DATE_TYPE",
+        context={"date_col": date_col, "dtype": str(col_dtype)},
+    )
 
 
 def _parse_date(d: date | str) -> date:
