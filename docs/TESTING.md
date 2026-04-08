@@ -80,6 +80,7 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `services/jobs/dedupe.py` | >90% | ⬜ | |
 | `services/statcan/catalog_sync.py` | >90% | ⬜ | |
 | `services/statcan/data_fetch.py` | >90% | ⬜ | |
+| services/data/workbench.py | >90% | ⬜ |
 | `models/audit_event.py` | >90% | ⬜ | |
 | `models/cube_catalog.py` | >90% | ⬜ | |
 | `schemas/events.py` | >90% | ⬜ | |

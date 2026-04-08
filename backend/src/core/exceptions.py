@@ -44,6 +44,22 @@ class SummaVisionError(Exception):
 # ---------------------------------------------------------------------------
 
 
+class WorkbenchError(SummaVisionError):
+    """Raised when a data workbench transform fails.
+
+    Examples: missing merge keys, duplicate key violation,
+    invalid frequency/method, empty DataFrame input.
+    """
+
+    def __init__(
+        self,
+        message: str = "Workbench error",
+        error_code: str = "WORKBENCH_ERROR",
+        context: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(message=message, error_code=error_code, context=context)
+
+
 class DataSourceError(SummaVisionError):
     """Raised when an external data source (StatCan, CMHC, etc.) fails.
 
