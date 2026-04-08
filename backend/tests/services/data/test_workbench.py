@@ -246,6 +246,93 @@ def test_merge_requires_minimum_two() -> None:
         merge_cubes([df])
 
 
+# --- YoY/MoM frequency validation ---
+
+def test_yoy_rejects_non_monthly_data() -> None:
+    """YoY raises WorkbenchError on quarterly data."""
+    df = pl.DataFrame({
+        "REF_DATE": ["2020-01-01", "2020-04-01", "2020-07-01", "2020-10-01",
+                     "2021-01-01", "2021-04-01", "2021-07-01", "2021-10-01"],
+        "GEO": ["Canada"] * 8,
+        "VALUE": [100.0] * 8,
+    })
+    df = df.with_columns(pl.col("REF_DATE").str.to_date())
+
+    with pytest.raises(WorkbenchError, match="NON_MONTHLY_DATA|not.*monthly"):
+        calc_yoy_change(df)
+
+
+def test_mom_rejects_annual_data() -> None:
+    """MoM raises WorkbenchError on annual data."""
+    df = pl.DataFrame({
+        "REF_DATE": ["2019-01-01", "2020-01-01", "2021-01-01", "2022-01-01"],
+        "GEO": ["Canada"] * 4,
+        "VALUE": [100.0, 110.0, 120.0, 130.0],
+    })
+    df = df.with_columns(pl.col("REF_DATE").str.to_date())
+
+    with pytest.raises(WorkbenchError, match="NON_MONTHLY_DATA|not.*monthly"):
+        calc_mom_change(df)
+
+
+# --- merge_cubes validation ---
+
+def test_merge_rejects_invalid_how() -> None:
+    """merge_cubes raises WorkbenchError on invalid join type."""
+    df = pl.DataFrame({"REF_DATE": ["2024-01"], "GEO": ["Canada"], "V": [1]})
+    with pytest.raises(WorkbenchError, match="INVALID_JOIN_TYPE|Invalid join"):
+        merge_cubes([df, df], merge_keys=["REF_DATE", "GEO"], how="banana")
+
+
+def test_merge_suffix_indexing() -> None:
+    """First suffix applies to first right DataFrame."""
+    df1 = pl.DataFrame({"REF_DATE": ["2024-01"], "GEO": ["Canada"], "VALUE": [100]})
+    df2 = pl.DataFrame({"REF_DATE": ["2024-01"], "GEO": ["Canada"], "VALUE": [200]})
+    df3 = pl.DataFrame({"REF_DATE": ["2024-01"], "GEO": ["Canada"], "VALUE": [300]})
+
+    result = merge_cubes(
+        [df1, df2, df3],
+        merge_keys=["REF_DATE", "GEO"],
+        suffixes=["_rent", "_vacancy"],
+    )
+    assert "VALUE_rent" in result.columns, f"Expected VALUE_rent, got {result.columns}"
+    assert "VALUE_vacancy" in result.columns, f"Expected VALUE_vacancy, got {result.columns}"
+
+
+# --- date parse failure ---
+
+def test_ensure_date_column_fails_on_bad_format() -> None:
+    """Unparseable date strings raise WorkbenchError."""
+    from src.services.data.workbench import _ensure_date_column
+    df = pl.DataFrame({"REF_DATE": ["not-a-date", "also-bad", "nope"]})
+    with pytest.raises(WorkbenchError) as exc_info:
+        _ensure_date_column(df, "REF_DATE")
+    assert exc_info.value.error_code == "DATE_PARSE_FAILED"
+
+
+# --- filter_geo match modes ---
+
+def test_filter_geo_exact_mode() -> None:
+    """Exact match filters precisely."""
+    df = pl.DataFrame({
+        "GEO": ["Nova Scotia", "Scotia Bank HQ", "Canada"],
+        "VALUE": [1, 2, 3],
+    })
+    result = filter_geo(df, "Nova Scotia", match_mode="exact")
+    assert result.height == 1
+    assert result["GEO"][0] == "Nova Scotia"
+
+
+def test_filter_geo_contains_mode() -> None:
+    """Contains match finds substrings."""
+    df = pl.DataFrame({
+        "GEO": ["Nova Scotia", "Scotia Bank HQ", "Canada"],
+        "VALUE": [1, 2, 3],
+    })
+    result = filter_geo(df, "Scotia", match_mode="contains")
+    assert result.height == 2
+
+
 # ---- Missing columns ----
 
 def test_missing_column_raises_workbench_error() -> None:
