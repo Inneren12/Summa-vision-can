@@ -46,6 +46,40 @@ def _mock_http(csv_data: str = SAMPLE_CSV) -> AsyncMock:
     return client
 
 
+@pytest.mark.asyncio
+async def test_fetch_handles_zipped_csv() -> None:
+    """DataFetchService handles zipped CSV files correctly."""
+    import zipfile
+    import io
+    csv_content = b'REF_DATE,GEO,DGUID,VALUE,SCALAR_ID\n2024-01,Canada,,100,0\n'
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, 'w') as zf:
+        zf.writestr('12345678-eng.csv', csv_content)
+    zip_bytes = zip_buf.getvalue()
+
+    # Mock the HTTP response to return zip_bytes
+    http_mock = MagicMock()
+    response_mock = MagicMock()
+    response_mock.content = zip_bytes
+    response_mock.raise_for_status = MagicMock()
+    http_mock.get = AsyncMock(return_value=response_mock)
+    http_mock.request = AsyncMock(return_value=response_mock)
+
+    catalog_mock = AsyncMock()
+    catalog_mock.get_by_product_id.return_value = MagicMock(frequency="Monthly")
+
+    service = DataFetchService(
+        http_client=http_mock,
+        storage=_mock_storage(),
+        catalog_repo=catalog_mock
+    )
+
+    result = await service.fetch_cube_data("14-10-0127")
+
+    assert result.rows == 1
+    assert result.columns >= 4
+
+
 def _mock_storage() -> AsyncMock:
     """Create mock storage with upload_bytes."""
     storage = AsyncMock()
@@ -67,7 +101,7 @@ def _mock_catalog_repo(frequency: str = "Monthly") -> AsyncMock:
 def test_parse_csv_returns_polars_dataframe() -> None:
     """CSV bytes are parsed into Polars DataFrame."""
     df = DataFetchService._parse_and_clean(
-        SAMPLE_CSV.encode(), "test"
+        SAMPLE_CSV.encode(), "test", 120
     )
     assert isinstance(df, pl.DataFrame)
     assert df.height == 4
@@ -79,7 +113,7 @@ def test_parse_csv_returns_polars_dataframe() -> None:
 def test_parse_csv_casts_value_to_float() -> None:
     """VALUE column is cast to Float64."""
     df = DataFetchService._parse_and_clean(
-        SAMPLE_CSV.encode(), "test"
+        SAMPLE_CSV.encode(), "test", 120
     )
     assert df["VALUE"].dtype == pl.Float64
 
@@ -87,7 +121,7 @@ def test_parse_csv_casts_value_to_float() -> None:
 def test_parse_csv_applies_scalar_factor() -> None:
     """VALUE_SCALED column is created with scalar factor applied."""
     df = DataFetchService._parse_and_clean(
-        SAMPLE_CSV.encode(), "test"
+        SAMPLE_CSV.encode(), "test", 120
     )
     assert "VALUE_SCALED" in df.columns
 
@@ -108,7 +142,7 @@ def test_parse_csv_handles_nan_values() -> None:
     """Non-numeric VALUE entries become null, not crash."""
     csv_with_nan = SAMPLE_CSV.replace("5.3", "..")
     df = DataFetchService._parse_and_clean(
-        csv_with_nan.encode(), "test"
+        csv_with_nan.encode(), "test", 120
     )
     null_count = df.select(pl.col("VALUE").is_null().sum()).item()
     assert null_count >= 1  # ".." became null
@@ -119,7 +153,7 @@ def test_parse_csv_handles_nan_values() -> None:
 def test_validate_schema_passes_with_required_columns() -> None:
     """No error when all required columns present."""
     df = DataFetchService._parse_and_clean(
-        SAMPLE_CSV.encode(), "test"
+        SAMPLE_CSV.encode(), "test", 120
     )
     # Should not raise
     DataFetchService._validate_schema(df, "test")
@@ -139,7 +173,7 @@ def test_validate_schema_raises_on_missing_column() -> None:
 def test_quality_report_accuracy() -> None:
     """DataQualityReport counts nulls correctly."""
     df = DataFetchService._parse_and_clean(
-        SAMPLE_CSV.encode(), "test"
+        SAMPLE_CSV.encode(), "test", 120
     )
     quality = DataFetchService._assess_quality(df)
     assert quality.total_rows == 4
@@ -150,7 +184,7 @@ def test_quality_report_accuracy() -> None:
 def test_quality_report_with_nulls() -> None:
     """Null values are counted in quality report."""
     csv = SAMPLE_CSV.replace("5.3", "").replace("5.5", "")
-    df = DataFetchService._parse_and_clean(csv.encode(), "test")
+    df = DataFetchService._parse_and_clean(csv.encode(), "test", 120)
     quality = DataFetchService._assess_quality(df)
     assert quality.null_rows >= 1
     assert quality.null_percentage > 0
@@ -248,7 +282,7 @@ async def test_fetch_saves_parquet_to_storage() -> None:
 
 def test_no_pandas_import() -> None:
     """data_fetch.py must NOT import pandas (R4)."""
-    source = Path("src/services/statcan/data_fetch.py").read_text()
+    source = (Path(__file__).parent.parent.parent.parent / "src" / "services" / "statcan" / "data_fetch.py").read_text()
     # Ensure it's not imported in the actual code
     import ast
 

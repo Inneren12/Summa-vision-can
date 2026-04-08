@@ -49,7 +49,7 @@ scalar factors, saves as Parquet.
 - Dynamic periods by frequency (R13)
 - Schema validation: REQUIRED_COLUMNS contract (R14)
 - Data quality: null % warning threshold
-- Runs as persistent job: `dedupe_key = fetch:{product_id}:{date}`
+- TODO: wire dedupe_key in API endpoint (A-7)
 
 ### `StatCanMaintenanceGuard` (maintenance.py) — ✅ Complete
 Prevents API calls during the StatCan maintenance window (00:00–08:30 EST).

@@ -112,12 +112,14 @@ async def handle_cube_fetch(
     app_state: Any,
 ) -> dict[str, Any] | None:
     """Execute cube_fetch job: download and process StatCan cube data."""
-    from src.core.database import async_session_factory
+    from src.core.database import get_session_factory
     from src.repositories.cube_catalog_repository import CubeCatalogRepository
     from src.services.statcan.data_fetch import DataFetchService
+    from src.schemas.job_payloads import CubeFetchPayload
 
     # Stage 1: Read metadata (short DB session — R6)
-    async with async_session_factory() as session:
+    factory = get_session_factory()
+    async with factory() as session:
         catalog_repo = CubeCatalogRepository(session)
 
         # Get storage and HTTP client from app_state
@@ -130,10 +132,18 @@ async def handle_cube_fetch(
 
         service = DataFetchService(http_client, storage, catalog_repo)
 
-        # Payload is CubeFetchPayload with product_id
-        product_id = payload.product_id  # type: ignore[attr-defined]
+        try:
+            # Payload is CubeFetchPayload with product_id
+            if isinstance(payload, CubeFetchPayload):
+                product_id = payload.product_id
+            else:
+                product_id = CubeFetchPayload.model_validate(payload.model_dump()).product_id
 
-        result = await service.fetch_cube_data(product_id)
+            result = await service.fetch_cube_data(product_id)
+        finally:
+            # Clean up httpx client if we created it
+            if not hasattr(app_state, "statcan_client"):
+                await http_client.aclose()
 
     return {
         "product_id": result.product_id,
