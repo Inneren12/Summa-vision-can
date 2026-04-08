@@ -101,3 +101,52 @@ async def handle_catalog_sync(
 
 
 register_handler("catalog_sync", handle_catalog_sync)
+
+# ---------------------------------------------------------------------------
+# Cube fetch handler (A-5)
+# ---------------------------------------------------------------------------
+
+async def handle_cube_fetch(
+    payload: BaseModel,
+    *,
+    app_state: Any,
+) -> dict[str, Any] | None:
+    """Execute cube_fetch job: download and process StatCan cube data."""
+    from src.core.database import async_session_factory
+    from src.repositories.cube_catalog_repository import CubeCatalogRepository
+    from src.services.statcan.data_fetch import DataFetchService
+
+    # Stage 1: Read metadata (short DB session — R6)
+    async with async_session_factory() as session:
+        catalog_repo = CubeCatalogRepository(session)
+
+        # Get storage and HTTP client from app_state
+        storage = getattr(app_state, "storage", None)
+        http_client = getattr(app_state, "statcan_client", None)
+
+        if http_client is None:
+            import httpx
+            http_client = httpx.AsyncClient(timeout=120.0)
+
+        service = DataFetchService(http_client, storage, catalog_repo)
+
+        # Payload is CubeFetchPayload with product_id
+        product_id = payload.product_id  # type: ignore[attr-defined]
+
+        result = await service.fetch_cube_data(product_id)
+
+    return {
+        "product_id": result.product_id,
+        "rows": result.rows,
+        "columns": result.columns,
+        "storage_key": result.storage_key,
+        "quality": {
+            "total_rows": result.quality.total_rows,
+            "valid_rows": result.quality.valid_rows,
+            "null_rows": result.quality.null_rows,
+            "null_percentage": result.quality.null_percentage,
+        },
+    }
+
+
+register_handler("cube_fetch", handle_cube_fetch)
