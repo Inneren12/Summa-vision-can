@@ -55,6 +55,7 @@ class CubeFetchPayload(BaseModel):
     """Payload for fetching data vectors for a single cube."""
     schema_version: int = 1
     product_id: str
+    periods_override: int | None = None
 
 
 class TransformPayload(BaseModel):

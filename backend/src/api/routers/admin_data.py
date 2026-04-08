@@ -90,8 +90,7 @@ async def trigger_cube_fetch(
         # Override will be read by the handler
         payload = CubeFetchPayload(
             product_id=product_id,
-            # Note: CubeFetchPayload may not have 'periods' field.
-            # If it doesn't, the handler reads it from CubeCatalog.
+            periods_override=body.periods,
         )
 
     result = await repo.enqueue(
@@ -146,12 +145,15 @@ async def transform_data(
     dfs: list[pl.DataFrame] = []
     for key in body.source_keys:
         parquet_bytes = await _load_parquet_bytes(storage, key)
-        df = pl.read_parquet(io.BytesIO(parquet_bytes))
+        df = await run_in_threadpool(
+            lambda: pl.read_parquet(io.BytesIO(parquet_bytes))
+        )
         dfs.append(df)
 
     # Start with first DataFrame (or merge if multiple sources)
     if len(dfs) == 1:
         result = dfs[0]
+        ops_to_apply = body.operations
     else:
         # Multiple sources — merge first, then transform
         # Find merge operation in the operations list, or auto-merge
@@ -170,16 +172,12 @@ async def transform_data(
             result = merge_cubes(dfs)
             remaining_ops = list(body.operations)
 
-        body = TransformRequest(
-            source_keys=body.source_keys,
-            operations=[TransformOperation(**op.model_dump()) for op in remaining_ops],
-            output_key=body.output_key,
-        )
+        ops_to_apply = remaining_ops
 
     # --- Apply transforms sequentially (heavy — use threadpool) ---
     async def _apply_transforms() -> pl.DataFrame:
         df = result
-        for op in body.operations:
+        for op in ops_to_apply:
             fn = TRANSFORM_DISPATCH.get(op.type)
             if fn is None:
                 raise HTTPException(
@@ -204,7 +202,9 @@ async def transform_data(
 
     # --- Save result as Parquet (R3) ---
     output_key = body.output_key or _generate_output_key(body)
-    parquet_bytes = _df_to_parquet_bytes(transformed)
+    parquet_bytes = await run_in_threadpool(
+        lambda: _df_to_parquet_bytes(transformed)
+    )
 
     await _save_parquet_bytes(storage, output_key, parquet_bytes)
 
@@ -239,8 +239,8 @@ async def transform_data(
 )
 async def preview_data(
     storage_key: str,
+    request: Request,
     limit: int = Query(default=100, ge=1, le=500),
-    request: Request = None,  # type: ignore[assignment]
 ) -> PreviewResponse:
     """Preview stored Parquet data."""
     settings = get_settings()
@@ -256,7 +256,9 @@ async def preview_data(
     except Exception as exc:
         raise HTTPException(404, f"Data not found: {storage_key}") from exc
 
-    df = pl.read_parquet(io.BytesIO(parquet_bytes))
+    df = await run_in_threadpool(
+        lambda: pl.read_parquet(io.BytesIO(parquet_bytes))
+    )
 
     # Cap rows
     preview_df = df.head(max_rows)

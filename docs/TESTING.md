@@ -70,7 +70,7 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `models/*.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
 | `repositories/*.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
 | `api/routers/admin_cubes.py` | >90% | ⬜ | |
-| `api/routers/admin_data.py` | >90% | ✅ 80% | `tests/api/test_admin_data.py` |
+| `api/routers/admin_data.py` | >90% | 🔄 (in progress) | `tests/api/test_admin_data.py` |
 | `repositories/cube_catalog_repository.py` | >90% | ⬜ | |
 | `core/scheduler.py` | >90% | ✅ 98% | `tests/core/test_scheduler.py` |
 | `models/job.py` | >90% | ⬜ | |

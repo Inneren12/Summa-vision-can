@@ -7,25 +7,32 @@ from __future__ import annotations
 
 import io
 import json
-from datetime import date
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import polars as pl
 import pytest
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession
-from unittest.mock import patch
 
 from src.main import app
 from src.core.database import get_db
 
 API_KEY = {"X-API-KEY": "test-ci-key"}
 
+from src.core.security.ip_rate_limiter import InMemoryRateLimiter
+
 @pytest.fixture
 async def client_no_auth(db_session: AsyncSession) -> AsyncClient:
-    """Provide an AsyncClient without auth headers, for auth testing."""
+    """Provide an AsyncClient without auth headers, for auth testing.
+    Also overrides the rate limiter with a high limit to avoid 429s.
+    """
     app.dependency_overrides[get_db] = lambda: db_session
+
+    # Disable rate limiting for these tests by overriding the middleware config
+    for middleware in app.user_middleware:
+        if hasattr(middleware, 'kwargs') and 'rate_limiter' in middleware.kwargs:
+            middleware.kwargs['rate_limiter'] = InMemoryRateLimiter(max_requests=10000, window_seconds=60)
+
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
@@ -82,6 +89,26 @@ async def test_fetch_returns_202(client: AsyncClient) -> None:
     data = resp.json()
     assert "job_id" in data
     assert data["product_id"] == "test-product"
+
+
+@pytest.mark.asyncio
+async def test_fetch_with_periods_override(client: AsyncClient, db_session: AsyncSession) -> None:
+    """periods override in request body is passed to job payload."""
+    resp = await client.post(
+        "/api/v1/admin/cubes/test-product/fetch",
+        headers=API_KEY,
+        json={"periods": 50},
+    )
+    assert resp.status_code == 202
+    data = resp.json()
+    assert "job_id" in data
+
+    # Verify payload contains the override
+    from src.repositories.job_repository import JobRepository
+    repo = JobRepository(db_session)
+    job = await repo.get_job(int(data["job_id"]))
+    payload_data = json.loads(job.payload_json)
+    assert payload_data.get("periods_override") == 50
 
 
 @pytest.mark.asyncio

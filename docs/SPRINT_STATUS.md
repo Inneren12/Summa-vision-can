@@ -26,8 +26,7 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 | A-6 | DataWorkbench (Pure Polars) | 🔄 | — |
 | A-7 | Transform API | 🔄 | A-5, A-6 |
 
-**Étape A complete.** Data Engine: catalog search + Polars fetch +
-workbench transforms + preview API.
+**Étape A: all PRs merged.** Production hardening ongoing. Data Engine: catalog search + Polars fetch + workbench transforms + preview API.
 
 ## Previously Completed
 
