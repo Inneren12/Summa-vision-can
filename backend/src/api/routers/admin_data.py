@@ -21,7 +21,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import get_settings
 from src.core.database import get_db
 from src.repositories.job_repository import JobRepository
 from src.schemas.job_payloads import CubeFetchPayload
@@ -132,7 +131,6 @@ async def transform_data(
     request: Request,
 ) -> TransformResponse:
     """Apply transforms and return output Parquet key."""
-    settings = get_settings()
     log = logger.bind(source_keys=body.source_keys)
 
     # --- Load source DataFrames from storage ---
@@ -162,14 +160,14 @@ async def transform_data(
             None,
         )
         if merge_op:
-            result = merge_cubes(dfs, **merge_op.params)
+            result = await run_in_threadpool(merge_cubes, dfs, **merge_op.params)
             # Remove merge from operations list (already applied)
             remaining_ops = [
                 op for op in body.operations if op.type != "merge_cubes"
             ]
         else:
             # Default merge on REF_DATE + GEO
-            result = merge_cubes(dfs)
+            result = await run_in_threadpool(merge_cubes, dfs)
             remaining_ops = list(body.operations)
 
         ops_to_apply = remaining_ops
@@ -243,6 +241,7 @@ async def preview_data(
     limit: int = Query(default=100, ge=1, le=500),
 ) -> PreviewResponse:
     """Preview stored Parquet data."""
+    from src.core.config import get_settings
     settings = get_settings()
     max_rows = min(limit, settings.max_preview_rows)
 

@@ -23,16 +23,8 @@ from src.core.security.ip_rate_limiter import InMemoryRateLimiter
 
 @pytest.fixture
 async def client_no_auth(db_session: AsyncSession) -> AsyncClient:
-    """Provide an AsyncClient without auth headers, for auth testing.
-    Also overrides the rate limiter with a high limit to avoid 429s.
-    """
+    """Provide an AsyncClient without auth headers, for auth testing."""
     app.dependency_overrides[get_db] = lambda: db_session
-
-    # Disable rate limiting for these tests by overriding the middleware config
-    for middleware in app.user_middleware:
-        if hasattr(middleware, 'kwargs') and 'rate_limiter' in middleware.kwargs:
-            middleware.kwargs['rate_limiter'] = InMemoryRateLimiter(max_requests=10000, window_seconds=60)
-
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
@@ -51,8 +43,10 @@ def _set_test_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     # TODO: Replace middleware kwargs mutation with app factory / DI-based auth override.
     # Current approach depends on Starlette internals and is fragile.
     for middleware in app.user_middleware:
-        if hasattr(middleware, 'kwargs') and 'admin_api_key' in middleware.kwargs:
-            middleware.kwargs['admin_api_key'] = "test-ci-key"
+        if getattr(middleware, "cls", None).__name__ == "AuthMiddleware":
+            if hasattr(middleware, 'kwargs'):
+                middleware.kwargs['admin_api_key'] = "test-ci-key"
+                middleware.kwargs['rate_limiter'] = InMemoryRateLimiter(max_requests=10000, window_seconds=60)
 
 
 @pytest.fixture
