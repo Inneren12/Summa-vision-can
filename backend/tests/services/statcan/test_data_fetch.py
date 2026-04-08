@@ -65,13 +65,9 @@ async def test_fetch_handles_zipped_csv() -> None:
     http_mock.get = AsyncMock(return_value=response_mock)
     http_mock.request = AsyncMock(return_value=response_mock)
 
-    catalog_mock = None
-
-
     service = DataFetchService(
         http_client=http_mock,
         storage=_mock_storage(),
-        catalog_repo=None
     )
 
     result = await service.fetch_cube_data("14-10-0127")
@@ -250,7 +246,6 @@ async def test_fetch_cube_data_full_pipeline() -> None:
     service = DataFetchService(
         _mock_http(),
         _mock_storage(),
-        _mock_catalog_repo("Monthly"),
     )
 
     result = await service.fetch_cube_data(
@@ -269,7 +264,7 @@ async def test_fetch_saves_parquet_to_storage() -> None:
     """Parquet file is saved via storage.upload_bytes."""
     storage = _mock_storage()
     service = DataFetchService(
-        _mock_http(), storage, None
+        _mock_http(), storage
     )
 
     await service.fetch_cube_data("14-10-0127-01", periods=120, frequency="Monthly")

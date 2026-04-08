@@ -129,10 +129,14 @@ async def handle_cube_fetch(
     async with factory() as session:
         catalog_repo = CubeCatalogRepository(session)
         cube = await catalog_repo.get_by_product_id(product_id)
-        if cube:
-            frequency = cube.frequency
-        else:
-            frequency = "Monthly"  # default
+        if cube is None:
+            from src.core.exceptions import DataSourceError
+            raise DataSourceError(
+                message=f"Cube {product_id} not found in catalog. Run catalog sync first.",
+                error_code="CUBE_NOT_FOUND",
+                context={"product_id": product_id},
+            )
+        frequency = cube.frequency
 
     # Session closed here — before heavy I/O
     periods = PERIODS_MAP.get(frequency, 120)
@@ -151,7 +155,6 @@ async def handle_cube_fetch(
         service = DataFetchService(
             http_client=http_client,
             storage=storage,
-            catalog_repo=None,  # Not needed anymore — metadata already resolved
         )
         result = await service.fetch_cube_data(
             product_id=product_id,

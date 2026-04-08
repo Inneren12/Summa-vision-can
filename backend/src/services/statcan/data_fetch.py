@@ -112,11 +112,9 @@ class DataFetchService:
         self,
         http_client: object,
         storage: object,
-        catalog_repo: object,
     ) -> None:
         self._http_client = http_client
         self._storage = storage
-        self._catalog_repo = catalog_repo
 
     async def fetch_cube_data(
         self,
