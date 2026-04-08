@@ -299,6 +299,32 @@ def test_merge_suffix_indexing() -> None:
     assert "VALUE_vacancy" in result.columns, f"Expected VALUE_vacancy, got {result.columns}"
 
 
+def test_merge_raises_on_unresolved_column_conflict() -> None:
+    """merge_cubes raises WorkbenchError if column conflicts remain after rename."""
+    # Create two DataFrames with a column that will conflict
+    # even after the suffix rename logic
+    df1 = pl.DataFrame({
+        "REF_DATE": ["2024-01"],
+        "GEO": ["Canada"],
+        "VALUE": [100],
+        "VALUE_rent": [50],  # This already has the suffix name
+    })
+    df2 = pl.DataFrame({
+        "REF_DATE": ["2024-01"],
+        "GEO": ["Canada"],
+        "VALUE": [200],
+    })
+
+    # With suffix "_rent", df2's VALUE becomes VALUE_rent,
+    # but df1 already has VALUE_rent → Polars creates VALUE_rent_right_tmp
+    with pytest.raises(WorkbenchError, match="MERGE_COLUMN_CONFLICT|column conflicts"):
+        merge_cubes(
+            [df1, df2],
+            merge_keys=["REF_DATE", "GEO"],
+            suffixes=["_rent"],
+        )
+
+
 # --- date parse failure ---
 
 def test_ensure_date_column_fails_on_bad_format() -> None:

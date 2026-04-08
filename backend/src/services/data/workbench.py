@@ -474,17 +474,28 @@ def merge_cubes(
 
         # Determine correct full join parameter
         join_type = "full" if how == "outer" else how
+
+        # coalesce=True handles merge_keys properly in full joins avoiding key duplication
         result = result.join(
             right_renamed,
             on=merge_keys,
             how=join_type,  # type: ignore[arg-type]
+            coalesce=True,
             suffix="_right_tmp" # temporary suffix for any unforeseen duplicate names not handled manually
         )
 
         # Clean up any leftover temporary suffixes if they sneaked in
         tmp_cols = [c for c in result.columns if c.endswith("_right_tmp")]
         if tmp_cols:
-            result = result.drop(tmp_cols)
+            raise WorkbenchError(
+                message=(
+                    f"Unexpected column conflicts after merge: {tmp_cols}. "
+                    f"This means the rename logic did not fully resolve all "
+                    f"conflicting column names before the join."
+                ),
+                error_code="MERGE_COLUMN_CONFLICT",
+                context={"conflicting_columns": tmp_cols, "merge_keys": merge_keys},
+            )
 
     # Warn if result is suspiciously large
     largest_input = max(df.height for df in dfs)
