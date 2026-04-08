@@ -91,6 +91,17 @@ Service orchestrator for the StatCan data pipeline.
   4. Returns `DataQualityReport` with NaN metrics.
   5. Logs `WARNING` via structlog when NaN% > 50%.
 
+### `DataWorkbench` (services/data/workbench.py) — Polars zone, PURE
+Pure transformation library for StatCan data. No I/O.
+- `aggregate_time(df, freq, method)` — resample time series
+- `filter_geo(df, geography)` — filter by province/territory
+- `filter_date_range(df, start, end)` — date window filter
+- `calc_yoy_change(df)` — Year-over-Year % change
+- `calc_mom_change(df)` — Month-over-Month % change
+- `calc_rolling_avg(df, window)` — rolling average
+- `merge_cubes(dfs, merge_keys)` — join multiple cubes (R14 validated)
+All functions return NEW DataFrame. Zero side effects.
+
 ### `DataQualityReport` (validators.py) — ✅ Complete
 Frozen Pydantic model: `total_rows`, `valid_rows`, `nan_rows`, `nan_percentage`.
 
