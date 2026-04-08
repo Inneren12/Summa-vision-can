@@ -121,13 +121,13 @@ class DataFetchService:
     async def fetch_cube_data(
         self,
         product_id: str,
-        *,
-        periods_override: int | None = None,
+        periods: int = 120,
+        frequency: str = "Monthly",
     ) -> FetchResult:
         """Download, validate, clean, and store cube data.
 
         Pipeline (R6 — short DB sessions):
-            1. Open DB → read cube metadata → close DB
+            1. Open DB → read cube metadata → close DB (handled by caller)
             2. Download CSV bytes (io_sem in caller)
             3. Parse + clean + validate (data_sem + threadpool in caller)
             4. Save Parquet to storage
@@ -135,21 +135,18 @@ class DataFetchService:
 
         Args:
             product_id: StatCan product ID (e.g. "14-10-0127-01").
-            periods_override: Override dynamic periods (for testing).
+            periods: Number of distinct reference periods to keep.
+            frequency: StatCan reporting frequency (e.g., 'Monthly').
 
         Returns:
             FetchResult with storage key and quality report.
 
         Raises:
-            DataSourceError: If cube not found, schema invalid, or download fails.
+            DataSourceError: If schema invalid, or download fails.
         """
         log = logger.bind(product_id=product_id)
         today = date.today().isoformat()
 
-        # --- Stage 1: Read metadata (short DB session, handled by caller) ---
-        frequency, periods = await self._resolve_periods(
-            product_id, periods_override
-        )
         log.info(
             "fetch_started",
             frequency=frequency,
@@ -205,26 +202,6 @@ class DataFetchService:
     # Internal methods
     # ------------------------------------------------------------------
 
-    async def _resolve_periods(
-        self,
-        product_id: str,
-        override: int | None,
-    ) -> tuple[str, int]:
-        """Look up cube frequency and calculate periods (R13)."""
-        if override is not None:
-            return ("override", override)
-
-        cube = await self._catalog_repo.get_by_product_id(product_id)
-        if cube is None:
-            raise DataSourceError(
-                message=f"Cube '{product_id}' not found in catalog",
-                error_code="CUBE_NOT_FOUND",
-                context={"product_id": product_id},
-            )
-
-        frequency = cube.frequency
-        periods = PERIODS_MAP.get(frequency, 120)
-        return (frequency, periods)
 
     async def _download_csv(
         self,
@@ -339,7 +316,12 @@ class DataFetchService:
                 ).alias("VALUE_SCALED")
             )
 
-        # Filter to the latest `periods` reference dates
+        # Truncation strategy (v1):
+        # - Takes the N latest DISTINCT REF_DATE values globally across all series
+        # - Filters DataFrame to keep only rows matching those dates
+        # - This is a global date window, NOT a per-series rolling window
+        # - For cubes where different geographies have different date coverage,
+        #   some series may have fewer than N periods after truncation
         if "REF_DATE" in df.columns:
             latest_dates = (
                 df.select("REF_DATE")

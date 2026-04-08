@@ -114,49 +114,65 @@ async def handle_cube_fetch(
     """Execute cube_fetch job: download and process StatCan cube data."""
     from src.core.database import get_session_factory
     from src.repositories.cube_catalog_repository import CubeCatalogRepository
-    from src.services.statcan.data_fetch import DataFetchService
+    from src.services.statcan.data_fetch import DataFetchService, PERIODS_MAP
     from src.schemas.job_payloads import CubeFetchPayload
 
-    # Stage 1: Read metadata (short DB session — R6)
+    # Extract payload
+    if isinstance(payload, CubeFetchPayload):
+        product_id = payload.product_id
+    else:
+        product_id = CubeFetchPayload.model_validate(payload.model_dump()).product_id
+
     factory = get_session_factory()
+
+    # Stage 1: Short DB session — resolve metadata only (R6)
     async with factory() as session:
         catalog_repo = CubeCatalogRepository(session)
+        cube = await catalog_repo.get_by_product_id(product_id)
+        if cube:
+            frequency = cube.frequency
+        else:
+            frequency = "Monthly"  # default
 
-        # Get storage and HTTP client from app_state
-        storage = getattr(app_state, "storage", None)
-        http_client = getattr(app_state, "statcan_client", None)
+    # Session closed here — before heavy I/O
+    periods = PERIODS_MAP.get(frequency, 120)
 
-        if http_client is None:
-            import httpx
-            http_client = httpx.AsyncClient(timeout=120.0)
+    # Stage 2: Heavy pipeline — no DB session held
+    storage = getattr(app_state, "storage", None)
+    http_client = getattr(app_state, "statcan_client", None)
+    created_client = False
 
-        service = DataFetchService(http_client, storage, catalog_repo)
+    if http_client is None:
+        import httpx
+        http_client = httpx.AsyncClient(timeout=120.0)
+        created_client = True
 
-        try:
-            # Payload is CubeFetchPayload with product_id
-            if isinstance(payload, CubeFetchPayload):
-                product_id = payload.product_id
-            else:
-                product_id = CubeFetchPayload.model_validate(payload.model_dump()).product_id
-
-            result = await service.fetch_cube_data(product_id)
-        finally:
-            # Clean up httpx client if we created it
-            if not hasattr(app_state, "statcan_client"):
-                await http_client.aclose()
-
-    return {
-        "product_id": result.product_id,
-        "rows": result.rows,
-        "columns": result.columns,
-        "storage_key": result.storage_key,
-        "quality": {
-            "total_rows": result.quality.total_rows,
-            "valid_rows": result.quality.valid_rows,
-            "null_rows": result.quality.null_rows,
-            "null_percentage": result.quality.null_percentage,
-        },
-    }
+    try:
+        service = DataFetchService(
+            http_client=http_client,
+            storage=storage,
+            catalog_repo=None,  # Not needed anymore — metadata already resolved
+        )
+        result = await service.fetch_cube_data(
+            product_id=product_id,
+            periods=periods,
+            frequency=frequency,
+        )
+        return {
+            "product_id": result.product_id,
+            "rows": result.rows,
+            "columns": result.columns,
+            "storage_key": result.storage_key,
+            "quality": {
+                "total_rows": result.quality.total_rows,
+                "valid_rows": result.quality.valid_rows,
+                "null_rows": result.quality.null_rows,
+                "null_percentage": result.quality.null_percentage,
+            },
+        }
+    finally:
+        if created_client:
+            await http_client.aclose()
 
 
 register_handler("cube_fetch", handle_cube_fetch)
