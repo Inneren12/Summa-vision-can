@@ -24,7 +24,10 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 | A-4 | Cube Search API | 🔄 | A-2, A-3 |
 | A-5 | DataFetchService (Polars-first) | 🔄 | A-1, A-4 |
 | A-6 | DataWorkbench (Pure Polars) | 🔄 | — |
-| A-7 | Transform API | ⬜ | A-5, A-6 |
+| A-7 | Transform API | 🔄 | A-5, A-6 |
+
+**Étape A complete.** Data Engine: catalog search + Polars fetch +
+workbench transforms + preview API.
 
 ## Previously Completed
 
