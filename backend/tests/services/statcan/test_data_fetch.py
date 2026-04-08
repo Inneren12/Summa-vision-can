@@ -46,6 +46,36 @@ def _mock_http(csv_data: str = SAMPLE_CSV) -> AsyncMock:
     return client
 
 
+@pytest.mark.asyncio
+async def test_fetch_handles_zipped_csv() -> None:
+    """DataFetchService handles zipped CSV files correctly."""
+    import zipfile
+    import io
+    csv_content = b'REF_DATE,GEO,DGUID,VALUE,SCALAR_ID\n2024-01,Canada,,100,0\n'
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, 'w') as zf:
+        zf.writestr('12345678-eng.csv', csv_content)
+    zip_bytes = zip_buf.getvalue()
+
+    # Mock the HTTP response to return zip_bytes
+    http_mock = MagicMock()
+    response_mock = MagicMock()
+    response_mock.content = zip_bytes
+    response_mock.raise_for_status = MagicMock()
+    http_mock.get = AsyncMock(return_value=response_mock)
+    http_mock.request = AsyncMock(return_value=response_mock)
+
+    service = DataFetchService(
+        http_client=http_mock,
+        storage=_mock_storage(),
+    )
+
+    result = await service.fetch_cube_data("14-10-0127")
+
+    assert result.rows == 1
+    assert result.columns >= 4
+
+
 def _mock_storage() -> AsyncMock:
     """Create mock storage with upload_bytes."""
     storage = AsyncMock()
@@ -67,7 +97,7 @@ def _mock_catalog_repo(frequency: str = "Monthly") -> AsyncMock:
 def test_parse_csv_returns_polars_dataframe() -> None:
     """CSV bytes are parsed into Polars DataFrame."""
     df = DataFetchService._parse_and_clean(
-        SAMPLE_CSV.encode(), "test"
+        SAMPLE_CSV.encode(), "test", 120
     )
     assert isinstance(df, pl.DataFrame)
     assert df.height == 4
@@ -79,7 +109,7 @@ def test_parse_csv_returns_polars_dataframe() -> None:
 def test_parse_csv_casts_value_to_float() -> None:
     """VALUE column is cast to Float64."""
     df = DataFetchService._parse_and_clean(
-        SAMPLE_CSV.encode(), "test"
+        SAMPLE_CSV.encode(), "test", 120
     )
     assert df["VALUE"].dtype == pl.Float64
 
@@ -87,7 +117,7 @@ def test_parse_csv_casts_value_to_float() -> None:
 def test_parse_csv_applies_scalar_factor() -> None:
     """VALUE_SCALED column is created with scalar factor applied."""
     df = DataFetchService._parse_and_clean(
-        SAMPLE_CSV.encode(), "test"
+        SAMPLE_CSV.encode(), "test", 120
     )
     assert "VALUE_SCALED" in df.columns
 
@@ -108,7 +138,7 @@ def test_parse_csv_handles_nan_values() -> None:
     """Non-numeric VALUE entries become null, not crash."""
     csv_with_nan = SAMPLE_CSV.replace("5.3", "..")
     df = DataFetchService._parse_and_clean(
-        csv_with_nan.encode(), "test"
+        csv_with_nan.encode(), "test", 120
     )
     null_count = df.select(pl.col("VALUE").is_null().sum()).item()
     assert null_count >= 1  # ".." became null
@@ -119,7 +149,7 @@ def test_parse_csv_handles_nan_values() -> None:
 def test_validate_schema_passes_with_required_columns() -> None:
     """No error when all required columns present."""
     df = DataFetchService._parse_and_clean(
-        SAMPLE_CSV.encode(), "test"
+        SAMPLE_CSV.encode(), "test", 120
     )
     # Should not raise
     DataFetchService._validate_schema(df, "test")
@@ -134,12 +164,62 @@ def test_validate_schema_raises_on_missing_column() -> None:
     assert "VALUE" in str(exc_info.value)
 
 
+# ---- Periods Truncation ----
+
+@pytest.mark.asyncio
+async def test_periods_truncation_keeps_latest_dates() -> None:
+    """Monthly cube with periods=2 keeps only 2 latest REF_DATEs."""
+    csv_content = (
+        "REF_DATE,GEO,DGUID,VALUE,SCALAR_ID\n"
+        "2024-01,Canada,,100.0,0\n"
+        "2024-02,Canada,,200.0,0\n"
+        "2024-03,Canada,,300.0,0\n"
+        "2024-04,Canada,,400.0,0\n"
+        "2024-01,Ontario,,110.0,0\n"
+        "2024-02,Ontario,,210.0,0\n"
+        "2024-03,Ontario,,310.0,0\n"
+        "2024-04,Ontario,,410.0,0\n"
+    )
+
+    result_df = DataFetchService._parse_and_clean(
+        csv_bytes=csv_content.encode(),
+        product_id="test",
+        periods=2,
+    )
+
+    unique_dates = result_df.select("REF_DATE").unique().sort("REF_DATE")
+    assert unique_dates.height == 2
+    assert unique_dates["REF_DATE"].to_list() == ["2024-03", "2024-04"]
+
+
+@pytest.mark.asyncio
+async def test_periods_truncation_annual() -> None:
+    """Annual cube with periods=1 keeps only latest year."""
+    csv_content = (
+        "REF_DATE,GEO,DGUID,VALUE,SCALAR_ID\n"
+        "2020,Canada,,1.0,0\n"
+        "2021,Canada,,2.0,0\n"
+        "2022,Canada,,3.0,0\n"
+        "2023,Canada,,4.0,0\n"
+    )
+
+    result_df = DataFetchService._parse_and_clean(
+        csv_bytes=csv_content.encode(),
+        product_id="test",
+        periods=1,
+    )
+
+    unique_dates = result_df.select("REF_DATE").unique().sort("REF_DATE")
+    assert unique_dates.height == 1
+    assert str(unique_dates["REF_DATE"].to_list()[0]) == "2023"
+
+
 # ---- Data quality ----
 
 def test_quality_report_accuracy() -> None:
     """DataQualityReport counts nulls correctly."""
     df = DataFetchService._parse_and_clean(
-        SAMPLE_CSV.encode(), "test"
+        SAMPLE_CSV.encode(), "test", 120
     )
     quality = DataFetchService._assess_quality(df)
     assert quality.total_rows == 4
@@ -150,57 +230,13 @@ def test_quality_report_accuracy() -> None:
 def test_quality_report_with_nulls() -> None:
     """Null values are counted in quality report."""
     csv = SAMPLE_CSV.replace("5.3", "").replace("5.5", "")
-    df = DataFetchService._parse_and_clean(csv.encode(), "test")
+    df = DataFetchService._parse_and_clean(csv.encode(), "test", 120)
     quality = DataFetchService._assess_quality(df)
     assert quality.null_rows >= 1
     assert quality.null_percentage > 0
 
 
 # ---- Dynamic periods ----
-
-@pytest.mark.asyncio
-async def test_resolve_periods_monthly() -> None:
-    """Monthly frequency → 120 periods."""
-    service = DataFetchService(
-        _mock_http(), _mock_storage(), _mock_catalog_repo("Monthly")
-    )
-    freq, periods = await service._resolve_periods("test", None)
-    assert freq == "Monthly"
-    assert periods == 120
-
-
-@pytest.mark.asyncio
-async def test_resolve_periods_annual() -> None:
-    """Annual frequency → 20 periods."""
-    service = DataFetchService(
-        _mock_http(), _mock_storage(), _mock_catalog_repo("Annual")
-    )
-    freq, periods = await service._resolve_periods("test", None)
-    assert freq == "Annual"
-    assert periods == 20
-
-
-@pytest.mark.asyncio
-async def test_resolve_periods_override() -> None:
-    """Override periods ignores frequency."""
-    service = DataFetchService(
-        _mock_http(), _mock_storage(), _mock_catalog_repo("Monthly")
-    )
-    freq, periods = await service._resolve_periods("test", 50)
-    assert periods == 50
-
-
-@pytest.mark.asyncio
-async def test_resolve_periods_cube_not_found() -> None:
-    """Missing cube raises DataSourceError."""
-    repo = AsyncMock()
-    repo.get_by_product_id = AsyncMock(return_value=None)
-    service = DataFetchService(_mock_http(), _mock_storage(), repo)
-
-    with pytest.raises(DataSourceError) as exc_info:
-        await service._resolve_periods("99-99-9999", None)
-    assert exc_info.value.error_code == "CUBE_NOT_FOUND"
-
 
 # ---- Full pipeline ----
 
@@ -210,11 +246,10 @@ async def test_fetch_cube_data_full_pipeline() -> None:
     service = DataFetchService(
         _mock_http(),
         _mock_storage(),
-        _mock_catalog_repo("Monthly"),
     )
 
     result = await service.fetch_cube_data(
-        "14-10-0127-01", periods_override=120
+        "14-10-0127-01", periods=120, frequency="Monthly"
     )
 
     assert isinstance(result, FetchResult)
@@ -229,10 +264,10 @@ async def test_fetch_saves_parquet_to_storage() -> None:
     """Parquet file is saved via storage.upload_bytes."""
     storage = _mock_storage()
     service = DataFetchService(
-        _mock_http(), storage, _mock_catalog_repo("Monthly")
+        _mock_http(), storage
     )
 
-    await service.fetch_cube_data("14-10-0127-01", periods_override=120)
+    await service.fetch_cube_data("14-10-0127-01", periods=120, frequency="Monthly")
 
     # upload_bytes called at least once for parquet
     assert storage.upload_bytes.call_count >= 1
@@ -248,7 +283,7 @@ async def test_fetch_saves_parquet_to_storage() -> None:
 
 def test_no_pandas_import() -> None:
     """data_fetch.py must NOT import pandas (R4)."""
-    source = Path("src/services/statcan/data_fetch.py").read_text()
+    source = (Path(__file__).parent.parent.parent.parent / "src" / "services" / "statcan" / "data_fetch.py").read_text()
     # Ensure it's not imported in the actual code
     import ast
 

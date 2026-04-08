@@ -112,22 +112,20 @@ class DataFetchService:
         self,
         http_client: object,
         storage: object,
-        catalog_repo: object,
     ) -> None:
         self._http_client = http_client
         self._storage = storage
-        self._catalog_repo = catalog_repo
 
     async def fetch_cube_data(
         self,
         product_id: str,
-        *,
-        periods_override: int | None = None,
+        periods: int = 120,
+        frequency: str = "Monthly",
     ) -> FetchResult:
         """Download, validate, clean, and store cube data.
 
         Pipeline (R6 — short DB sessions):
-            1. Open DB → read cube metadata → close DB
+            1. Open DB → read cube metadata → close DB (handled by caller)
             2. Download CSV bytes (io_sem in caller)
             3. Parse + clean + validate (data_sem + threadpool in caller)
             4. Save Parquet to storage
@@ -135,21 +133,18 @@ class DataFetchService:
 
         Args:
             product_id: StatCan product ID (e.g. "14-10-0127-01").
-            periods_override: Override dynamic periods (for testing).
+            periods: Number of distinct reference periods to keep.
+            frequency: StatCan reporting frequency (e.g., 'Monthly').
 
         Returns:
             FetchResult with storage key and quality report.
 
         Raises:
-            DataSourceError: If cube not found, schema invalid, or download fails.
+            DataSourceError: If schema invalid, or download fails.
         """
         log = logger.bind(product_id=product_id)
         today = date.today().isoformat()
 
-        # --- Stage 1: Read metadata (short DB session, handled by caller) ---
-        frequency, periods = await self._resolve_periods(
-            product_id, periods_override
-        )
         log.info(
             "fetch_started",
             frequency=frequency,
@@ -157,7 +152,7 @@ class DataFetchService:
         )
 
         # --- Stage 2: Download CSV bytes ---
-        csv_bytes = await self._download_csv(product_id, periods)
+        csv_bytes = await self._download_csv(product_id)
         log.info("fetch_downloaded", size_bytes=len(csv_bytes))
 
         # --- Stage 3: Save raw CSV (for debugging/audit) ---
@@ -165,7 +160,7 @@ class DataFetchService:
         await self._save_raw(raw_key, csv_bytes)
 
         # --- Stage 4: Parse, clean, validate (CPU-heavy, use threadpool) ---
-        df = self._parse_and_clean(csv_bytes, product_id)
+        df = self._parse_and_clean(csv_bytes, product_id, periods)
         quality = self._assess_quality(df)
 
         if quality.null_percentage > NULL_WARNING_THRESHOLD:
@@ -205,39 +200,18 @@ class DataFetchService:
     # Internal methods
     # ------------------------------------------------------------------
 
-    async def _resolve_periods(
-        self,
-        product_id: str,
-        override: int | None,
-    ) -> tuple[str, int]:
-        """Look up cube frequency and calculate periods (R13)."""
-        if override is not None:
-            return ("override", override)
-
-        cube = await self._catalog_repo.get_by_product_id(product_id)
-        if cube is None:
-            raise DataSourceError(
-                message=f"Cube '{product_id}' not found in catalog",
-                error_code="CUBE_NOT_FOUND",
-                context={"product_id": product_id},
-            )
-
-        frequency = cube.frequency
-        periods = PERIODS_MAP.get(frequency, 120)
-        return (frequency, periods)
 
     async def _download_csv(
         self,
         product_id: str,
-        periods: int,
     ) -> bytes:
-        """Download CSV data from StatCan API."""
+        """Download full table CSV data from StatCan API.
+
+        StatCan CSV is always a full download; the `periods` dynamic
+        configuration is used for post-parse truncation, not the download.
+        """
         # StatCan full table download URL
         # Format: getFullTableDownloadCSV/{productId}
-        # OR: getDataFromCubePidCoordinate with periods param
-        #
-        # The exact URL depends on which StatCanClient method is available.
-        # Try the simplest approach first.
         url = (
             f"https://www150.statcan.gc.ca/n1/tbl/csv/"
             f"{product_id.replace('-', '')}-eng.zip"
@@ -264,6 +238,7 @@ class DataFetchService:
     def _parse_and_clean(
         csv_bytes: bytes,
         product_id: str,
+        periods: int,
     ) -> pl.DataFrame:
         """Parse CSV bytes into a clean Polars DataFrame.
 
@@ -276,6 +251,7 @@ class DataFetchService:
             3. Cast VALUE to Float64 (coerce errors to null)
             4. Cast SCALAR_ID to Int32
             5. Apply scalar factor normalization
+            6. Filter to the latest `periods` reference dates
         """
         try:
             # StatCan CSVs may be inside a ZIP — handle both
@@ -337,6 +313,21 @@ class DataFetchService:
                     )
                 ).alias("VALUE_SCALED")
             )
+
+        # Truncation strategy (v1):
+        # - Takes the N latest DISTINCT REF_DATE values globally across all series
+        # - Filters DataFrame to keep only rows matching those dates
+        # - This is a global date window, NOT a per-series rolling window
+        # - For cubes where different geographies have different date coverage,
+        #   some series may have fewer than N periods after truncation
+        if "REF_DATE" in df.columns:
+            latest_dates = (
+                df.select("REF_DATE")
+                .unique()
+                .sort("REF_DATE", descending=True)
+                .head(periods)
+            )
+            df = df.join(latest_dates, on="REF_DATE", how="inner")
 
         return df
 
@@ -412,50 +403,25 @@ class DataFetchService:
 
     async def _save_raw(self, key: str, data: bytes) -> None:
         """Save raw CSV/ZIP to storage for audit trail."""
-        try:
-            if hasattr(self._storage, "upload_bytes"):
-                await self._storage.upload_bytes(data, key)
-            elif hasattr(self._storage, "upload_json"):
-                # Fallback: some storage interfaces only have upload_json
-                pass  # Raw save is optional, don't fail on it
-        except Exception as exc:
-            logger.warning("raw_save_failed", key=key, error=str(exc))
+        if not self._storage:
+            logger.warning('no_storage_configured', key=key)
+            return
+        if hasattr(self._storage, 'upload_bytes'):
+            await self._storage.upload_bytes(data, key)
+        else:
+            logger.warning('storage_missing_upload_bytes', key=key)
 
     async def _save_parquet(self, key: str, df: pl.DataFrame) -> None:
         """Save Polars DataFrame as Parquet to storage (R3)."""
+        if not self._storage:
+            from src.core.exceptions import StorageError
+            raise StorageError(message='Storage not configured', error_code='STORAGE_ERROR', context={'key': key})
         buf = io.BytesIO()
         df.write_parquet(buf)
         parquet_bytes = buf.getvalue()
 
-        if hasattr(self._storage, "upload_bytes"):
+        if hasattr(self._storage, 'upload_bytes'):
             await self._storage.upload_bytes(parquet_bytes, key)
-        elif hasattr(self._storage, "upload_dataframe_as_csv"):
-            # StorageInterface may not have upload_bytes yet.
-            # Write Parquet to a temp file and upload.
-            import tempfile
-            import os
-
-            with tempfile.NamedTemporaryFile(
-                suffix=".parquet", delete=False
-            ) as tmp:
-                tmp.write(parquet_bytes)
-                tmp_path = tmp.name
-
-            try:
-                # Use upload method that accepts file path if available
-                if hasattr(self._storage, "upload_file"):
-                    await self._storage.upload_file(tmp_path, key)
-                else:
-                    logger.warning(
-                        "storage_no_upload_bytes",
-                        message="StorageInterface lacks upload_bytes method. "
-                        "Parquet saved to temp only.",
-                        key=key,
-                    )
-            finally:
-                os.unlink(tmp_path)
         else:
-            raise DataSourceError(
-                message="Storage interface has no suitable upload method",
-                error_code="STORAGE_ERROR",
-            )
+            from src.core.exceptions import StorageError
+            raise StorageError(message='Storage lacks upload_bytes', error_code='STORAGE_ERROR', context={'key': key})
