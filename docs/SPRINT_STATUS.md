@@ -57,3 +57,12 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 |----|-------|--------|
 | FIX-01..08 | Foundation repairs | ✅ |
 | 0-1 | Docker + Compose + Health + MinIO | ✅ |
+
+## Étape B: Visual Engine
+
+| PR | Title | Status | Dependencies |
+|----|-------|--------|--------------|
+| B-1 | SVG Generator → Real Data | 🔄 | A-5, A-6 |
+| B-2 | Template Backgrounds | ⬜ | — |
+| B-3 | End-to-End Pipeline | ⬜ | B-1, B-2 |
+| B-4 | Admin Graphics API + Batch CLI | ⬜ | B-3 |
