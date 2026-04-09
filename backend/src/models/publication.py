@@ -37,6 +37,10 @@ class Publication(Base):
         virality_score: AI-estimated virality score (0.0 – 1.0).
         status: Current lifecycle status (DRAFT or PUBLISHED).
         created_at: UTC timestamp of record creation.
+        source_product_id: StatCan product ID for versioning.
+        version: Publication version number.
+        config_hash: Hash of the chart configuration.
+        content_hash: Hash of the low-resolution image content.
     """
 
     __tablename__ = "publications"
@@ -47,6 +51,10 @@ class Publication(Base):
     s3_key_lowres: Mapped[str | None] = mapped_column(Text, nullable=True)
     s3_key_highres: Mapped[str | None] = mapped_column(Text, nullable=True)
     virality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_product_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    version: Mapped[int] = mapped_column(nullable=False, default=1, server_default="1")
+    config_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[PublicationStatus] = mapped_column(
         Enum(PublicationStatus, name="publication_status"),
         nullable=False,

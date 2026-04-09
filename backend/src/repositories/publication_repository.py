@@ -15,7 +15,7 @@ Commit semantics:
 
 from __future__ import annotations
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.publication import Publication, PublicationStatus
@@ -35,6 +35,70 @@ class PublicationRepository:
             session: An active SQLAlchemy async session provided by DI.
         """
         self._session = session
+
+    async def get_latest_version(self, source_product_id: str, config_hash: str) -> int | None:
+        """Get the latest version number for a given product and configuration hash.
+
+        Args:
+            source_product_id: The StatCan product ID.
+            config_hash: Hash of the chart configuration.
+
+        Returns:
+            The highest version number, or None if no match is found.
+        """
+        stmt = (
+            select(func.max(Publication.version))
+            .where(Publication.source_product_id == source_product_id)
+            .where(Publication.config_hash == config_hash)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar()
+
+    async def create_published(
+        self,
+        *,
+        headline: str,
+        chart_type: str,
+        s3_key_lowres: str,
+        s3_key_highres: str,
+        source_product_id: str | None,
+        version: int,
+        config_hash: str,
+        content_hash: str,
+        virality_score: float | None = None,
+    ) -> Publication:
+        """Create a new publication record in PUBLISHED state with versioning.
+
+        Args:
+            headline: Short title for the graphic.
+            chart_type: Identifier for the chart type.
+            s3_key_lowres: S3 key for low-res preview.
+            s3_key_highres: S3 key for high-res asset.
+            source_product_id: StatCan product ID.
+            version: The publication version.
+            config_hash: Hash of the configuration.
+            content_hash: Hash of the image content.
+            virality_score: Optional AI-estimated virality score.
+
+        Returns:
+            The newly created ``Publication`` instance.
+        """
+        publication = Publication(
+            headline=headline,
+            chart_type=chart_type,
+            s3_key_lowres=s3_key_lowres,
+            s3_key_highres=s3_key_highres,
+            source_product_id=source_product_id,
+            version=version,
+            config_hash=config_hash,
+            content_hash=content_hash,
+            virality_score=virality_score,
+            status=PublicationStatus.PUBLISHED,
+        )
+        self._session.add(publication)
+        await self._session.flush()
+        await self._session.refresh(publication)
+        return publication
 
     async def create(
         self,

@@ -120,28 +120,6 @@ JSON, but any serialization change would silently break the match.
 - **Resolution:** Add a daily cleanup job: `DELETE FROM audit_events WHERE created_at < NOW() - INTERVAL '90 days'`
 - **Target:** After Étape D when real traffic generates events.
 
-### DEBT-012: Admin graphics API uses placeholder data
-- **Source:** Manual code review, 2026-04-05 (admin_graphics.py)
-- **Added:** 2026-04-05
-- **Severity:** medium
-- **Category:** architecture
-- **Status:** active
-- **Description:** Admin graphics API does not fetch real StatCan data from storage using `publication.cube_id`, building a placeholder DataFrame instead.
-- **Impact:** Chart rendering uses placeholder data instead of real data.
-- **Resolution:** Fetch real StatCan data from storage when available.
-- **Target:** Before feature launch.
-
-### DEBT-013: Admin graphics API uploads same file for high-res variant
-- **Source:** Manual code review, 2026-04-05 (admin_graphics.py)
-- **Added:** 2026-04-05
-- **Severity:** low
-- **Category:** architecture
-- **Status:** active
-- **Description:** Admin graphics API uploads the exact same `png_bytes` variable to both `s3_key_lowres` and `s3_key_highres` paths instead of a real high-res image.
-- **Impact:** High-res images are the same resolution as low-res images.
-- **Resolution:** Generate actual high-res variant.
-- **Target:** Before feature launch.
-
 ---
 
 ## Resolved
@@ -149,4 +127,6 @@ JSON, but any serialization change would silently break the match.
 | ID | Description | Resolved in | Date |
 |----|-------------|-------------|------|
 | DEBT-014 | database.py creates engine at module level | PR A-1 fix | 2026-04-06 |
-| DEBT-005 | StorageInterface upload_bytes/download_bytes | PR #XX | 2026-04-XX |
+| DEBT-005 | StorageInterface upload_bytes/download_bytes | PR B-3 | 2026-04-09 |
+| DEBT-012 | Admin graphics API uses placeholder data | PR B-3 | 2026-04-09 |
+| DEBT-013 | Admin graphics uploads same file for high-res variant | PR B-3 | 2026-04-09 |
