@@ -739,3 +739,16 @@ def test_multi_geo_chart():
     svg = generate_chart_svg(df, "line", mode="statcan")
     assert len(svg) > 100
     assert b"<svg" in svg
+
+
+def test_pandas_statcan_shaped_routes_to_statcan_in_auto():
+    """Pandas DataFrame with REF_DATE+VALUE goes to statcan path in auto mode."""
+    import pandas as pd
+    pdf = pd.DataFrame({
+        'REF_DATE': ['2024-01', '2024-02', '2024-03'],
+        'GEO': ['Canada'] * 3,
+        'VALUE': [100, 200, 300],
+    })
+    svg = generate_chart_svg(pdf, 'line', mode='auto')
+    assert len(svg) > 100
+    assert b'<svg' in svg

@@ -577,6 +577,19 @@ def _generate_chart_svg_legacy(
 _STATCAN_CHART_TYPES = {"line", "bar", "scatter", "area", "stacked_bar"}
 
 
+def _normalize_chart_type(chart_type: str | ChartType) -> ChartType:
+    """Normalize chart_type to ChartType enum."""
+    if isinstance(chart_type, ChartType):
+        return chart_type
+    try:
+        return ChartType(chart_type.upper())
+    except ValueError:
+        raise ValueError(
+            f"Unknown chart type: {chart_type!r}. "
+            f"Valid types: {[ct.value for ct in ChartType]}"
+        )
+
+
 def _generate_statcan_chart(
     df: pl.DataFrame | pd.DataFrame,
     chart_type: str | ChartType,
@@ -587,14 +600,12 @@ def _generate_statcan_chart(
     geo_col: str | None = None,
     max_points: int = 500,
 ) -> bytes:
-    ct_str = chart_type.lower() if isinstance(chart_type, str) else chart_type.value.lower()
+    ct_enum = _normalize_chart_type(chart_type)
+    ct_str = ct_enum.value.lower()
 
-    if ct_str == "heatmap":
-        raise ValueError(
-            "Heatmap is not yet supported for StatCan data. "
-            "It requires a pivot (geography × time) matrix. "
-            "Use line, bar, scatter, area, or stacked_bar."
-        )
+    if ct_str not in _STATCAN_CHART_TYPES:
+        raise ValueError(f"Chart type {ct_str!r} not supported for StatCan data. Supported: {_STATCAN_CHART_TYPES}")
+
     # TODO: Implement heatmap for StatCan data.
     # Requires pivoting: rows=GEO, cols=REF_DATE, values=VALUE
     # Then pass as z-matrix to go.Heatmap.
@@ -716,6 +727,11 @@ def generate_chart_svg(
 
     Returns:
         SVG bytes.
+
+    Note:
+        Heatmap is not yet supported in statcan mode. It requires
+        a pivot matrix (geography × time → value). Use line, bar,
+        scatter, area, or stacked_bar.
     """
 
 
@@ -727,18 +743,24 @@ def generate_chart_svg(
     w, h = size
 
     if mode == "legacy":
-        ct = chart_type if isinstance(chart_type, ChartType) else ChartType(chart_type.upper())
+        ct = _normalize_chart_type(chart_type)
         return _generate_chart_svg_legacy(df, ct, (w, h))
     elif mode == "statcan":
         return _generate_statcan_chart(df, chart_type, (w, h), cfg)
     elif mode == "auto":
-        # Simple, deterministic: Polars → statcan, Pandas → legacy
-        if isinstance(df, pl.DataFrame):
+        # Route by schema: if StatCan columns present → statcan path
+        cols = _get_columns(df)
+        has_statcan_schema = 'REF_DATE' in cols and ('VALUE' in cols or 'VALUE_SCALED' in cols)
+
+        if has_statcan_schema:
             return _generate_statcan_chart(df, chart_type, (w, h), cfg)
         elif isinstance(df, pd.DataFrame):
-            ct = chart_type if isinstance(chart_type, ChartType) else ChartType(chart_type.upper())
+            ct = _normalize_chart_type(chart_type)
             return _generate_chart_svg_legacy(df, ct, (w, h))
         else:
-            raise ValueError(f"Unsupported DataFrame type: {type(df)}")
+            raise ValueError(
+                f'Cannot determine chart mode for DataFrame with columns {cols}. '
+                f'Use mode="statcan" or mode="legacy" explicitly.'
+            )
     else:
         raise ValueError(f"Invalid mode: {mode!r}. Must be 'auto', 'statcan', or 'legacy'.")
