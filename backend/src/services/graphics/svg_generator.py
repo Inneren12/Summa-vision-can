@@ -36,6 +36,7 @@ Example
 from __future__ import annotations
 
 import pandas as pd
+import polars as pl
 import plotly.graph_objects as go
 import plotly.io as pio
 
@@ -371,49 +372,56 @@ _BUILDERS = {
 # DataFrame abstraction helpers (work with both Polars and Pandas)
 # ---------------------------------------------------------------------------
 
-def _get_columns(df: object) -> list[str]:
+def _get_columns(df: pl.DataFrame | pd.DataFrame) -> list[str]:
     """Get column names from Polars or Pandas DataFrame."""
-    if hasattr(df, "columns"):
+    if isinstance(df, pl.DataFrame):
+        return df.columns
+    elif isinstance(df, pd.DataFrame):
         return list(df.columns)
-    return []
+    raise TypeError(f"Unsupported DataFrame type: {type(df)}")
 
 
-def _get_column_values(df: object, col: str) -> list:
+def _get_column_values(df: pl.DataFrame | pd.DataFrame, col: str) -> list:
     """Extract column values as a Python list."""
-    if hasattr(df, "to_series"):
-        # Polars
+    if isinstance(df, pl.DataFrame):
         return df[col].to_list()
-    elif hasattr(df, "iloc"):
-        # Pandas
+    elif isinstance(df, pd.DataFrame):
         return df[col].tolist()
-    return list(df[col])
+    raise TypeError(f"Unsupported DataFrame type: {type(df)}")
 
 
-def _get_unique_values(df: object, col: str) -> list:
+def _get_unique_values(df: pl.DataFrame | pd.DataFrame, col: str) -> list:
     """Get unique values from a column."""
-    if hasattr(df, "to_series"):
-        # Polars
+    if isinstance(df, pl.DataFrame):
         return df[col].unique().sort().to_list()
-    elif hasattr(df, "iloc"):
-        # Pandas
+    elif isinstance(df, pd.DataFrame):
         return sorted(df[col].unique().tolist())
-    return list(set(df[col]))
+    raise TypeError(f"Unsupported DataFrame type: {type(df)}")
 
 
-def _filter_df(df: object, col: str, value: object) -> object:
+def _filter_df(
+    df: pl.DataFrame | pd.DataFrame,
+    col: str,
+    value: str,
+) -> pl.DataFrame | pd.DataFrame:
     """Filter DataFrame to rows where col == value."""
-    try:
-        import polars as pl
-        if isinstance(df, pl.DataFrame):
-            return df.filter(pl.col(col) == value)
-    except ImportError:
-        pass
+    if isinstance(df, pl.DataFrame):
+        return df.filter(pl.col(col) == value)
+    elif isinstance(df, pd.DataFrame):
+        return df[df[col] == value].reset_index(drop=True)
+    raise TypeError(f"Unsupported DataFrame type: {type(df)}")
 
-    # Pandas fallback
-    if hasattr(df, "iloc"):
-        return df[df[col] == value]
 
-    return df
+def _sort_df(
+    df: pl.DataFrame | pd.DataFrame,
+    col: str,
+) -> pl.DataFrame | pd.DataFrame:
+    """Sort DataFrame by column."""
+    if isinstance(df, pl.DataFrame):
+        return df.sort(col)
+    elif isinstance(df, pd.DataFrame):
+        return df.sort_values(col).reset_index(drop=True)
+    raise TypeError(f"Unsupported type: {type(df)}")
 
 
 def _pick_value_col(df: object) -> str:
@@ -436,40 +444,54 @@ def _pick_value_col(df: object) -> str:
     )
 
 
-def _parse_statcan_dates(
-    date_series: list[str] | list[object],
-) -> list[datetime]:
+def _parse_statcan_dates(dates: list[str] | list[object]) -> list[datetime]:
     """Parse StatCan date strings to datetime objects.
 
-    Handles formats:
-        "2024-01-01" → datetime(2024, 1, 1)
-        "2024-01"    → datetime(2024, 1, 1)
-        "2024"       → datetime(2024, 1, 1)
+    Supported formats:
+    - "YYYY-MM" or "YYYY-MM-DD" → standard date
+    - "YYYY" → January 1st of that year (annual data)
+    - "YYYY/YYYY" → January 1st of first year (fiscal year)
 
-    Also handles Polars Date/Datetime objects that may come
-    from read_parquet.
+    Also handles Python date/datetime objects.
+
+    Raises:
+        ValueError: If a date string cannot be parsed.
     """
     from datetime import datetime, date
 
     parsed = []
-    for d in date_series:
+    for d in dates:
         if isinstance(d, datetime):
             parsed.append(d)
+            continue
         elif isinstance(d, date):
             parsed.append(datetime(d.year, d.month, d.day))
-        elif isinstance(d, str):
-            for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
-                try:
-                    parsed.append(datetime.strptime(d, fmt))
-                    break
-                except ValueError:
-                    continue
+            continue
+
+        d_str = str(d).strip()
+        try:
+            if len(d_str) == 7 and d_str[4] == "-":
+                # "2024-01"
+                parsed.append(datetime.strptime(d_str, "%Y-%m"))
+            elif len(d_str) == 10 and d_str[4] == "-":
+                # "2024-01-15"
+                parsed.append(datetime.strptime(d_str, "%Y-%m-%d"))
+            elif len(d_str) == 4 and d_str.isdigit():
+                # "2024"
+                parsed.append(datetime(int(d_str), 1, 1))
+            elif "/" in d_str and len(d_str) >= 9:
+                # "2023/2024" fiscal year
+                year_str = d_str.split("/")[0].strip()
+                if len(year_str) == 4 and year_str.isdigit():
+                    parsed.append(datetime(int(year_str), 1, 1))
+                else:
+                    raise ValueError(f"Cannot parse fiscal year: {d_str!r}")
             else:
-                # Last resort: try pandas-style
-                parsed.append(datetime(int(d[:4]), 1, 1))
-        else:
-            # Polars datetime might be a Python datetime already
-            parsed.append(d)
+                raise ValueError(f"Unrecognized date format: {d_str!r}")
+        except (ValueError, IndexError) as e:
+            raise ValueError(
+                f"Failed to parse StatCan date {d_str!r}: {e}"
+            ) from e
     return parsed
 
 
@@ -552,49 +574,30 @@ def _generate_chart_svg_legacy(
     return svg_bytes
 
 
-def generate_chart_svg(
-    df: object,  # Polars DataFrame or Pandas DataFrame
-    chart_type: str | ChartType = "line",
-    size: tuple[int, int] | str = (1200, 900),
-    config: ChartConfig | None = None,
+_STATCAN_CHART_TYPES = {"line", "bar", "scatter", "area", "stacked_bar"}
+
+
+def _generate_statcan_chart(
+    df: pl.DataFrame | pd.DataFrame,
+    chart_type: str | ChartType,
+    size: tuple[int, int],
+    config: ChartConfig,
     value_col: str | None = None,
     date_col: str | None = None,
     geo_col: str | None = None,
     max_points: int = 500,
 ) -> bytes:
-    """Generate a transparent-background SVG chart from a DataFrame.
+    ct_str = chart_type.lower() if isinstance(chart_type, str) else chart_type.value.lower()
 
-    Accepts both Polars and Pandas DataFrames. For Polars DataFrames,
-    converts to lists internally (chart libraries need plain Python types).
-    Also accepts legacy two-column Pandas DataFrames with a ChartType enum.
-
-    Args:
-        df: Input DataFrame with StatCan-shaped columns.
-        chart_type: One of "line", "bar", "scatter", "area",
-            "stacked_bar", "heatmap", or a ChartType enum.
-        size: Tuple (width, height) in pixels, or preset name
-            ("instagram", "twitter", "reddit").
-        config: Visual configuration. Uses defaults if None.
-        value_col: Override value column (default: VALUE_SCALED or VALUE).
-        date_col: Override date column (default: REF_DATE).
-        geo_col: Override geography column (default: GEO).
-        max_points: Downsample threshold (R15, default 500).
-
-    Returns:
-        SVG bytes (starts with ``<svg``).
-    """
-    # Legacy support
-    if isinstance(chart_type, ChartType) or isinstance(df, pd.DataFrame) and _get_columns(df) and _get_columns(df)[0] != STATCAN_DATE_COL and len(_get_columns(df)) <= 5 and not (STATCAN_DATE_COL in _get_columns(df)):
-        ct = chart_type if isinstance(chart_type, ChartType) else ChartType(chart_type.upper())
-        s = size if isinstance(size, tuple) else SIZE_PRESETS.get(size.lower(), SIZE_INSTAGRAM)
-        return _generate_chart_svg_legacy(df, ct, s)
-
-    if config is None:
-        config = ChartConfig()
-
-    # Resolve size preset
-    if isinstance(size, str):
-        size = SIZE_PRESETS.get(size.lower(), (1200, 900))
+    if ct_str == "heatmap":
+        raise ValueError(
+            "Heatmap is not yet supported for StatCan data. "
+            "It requires a pivot (geography × time) matrix. "
+            "Use line, bar, scatter, area, or stacked_bar."
+        )
+    # TODO: Implement heatmap for StatCan data.
+    # Requires pivoting: rows=GEO, cols=REF_DATE, values=VALUE
+    # Then pass as z-matrix to go.Heatmap.
 
     width, height = size
 
@@ -620,6 +623,9 @@ def generate_chart_svg(
         else:
             subset = df
 
+        # CRITICAL: Sort by date for correct chart rendering
+        subset = _sort_df(subset, _date_col)
+
         x_raw = _get_column_values(subset, _date_col)
         y_raw = _get_column_values(subset, _value_col)
 
@@ -635,8 +641,6 @@ def generate_chart_svg(
         color = config.color_palette[i % len(config.color_palette)]
         name = str(geo) if geo is not None else "Value"
 
-        ct_str = chart_type.lower() if isinstance(chart_type, str) else chart_type.name.lower()
-
         if ct_str == "bar":
             traces.append(go.Bar(x=x_final, y=y_final, name=name,
                                  marker_color=color))
@@ -649,9 +653,6 @@ def generate_chart_svg(
         elif ct_str == "area":
             traces.append(go.Scatter(x=x_final, y=y_final, name=name,
                                      fill="tozeroy", line_color=color))
-        elif ct_str == "heatmap":
-            traces.append(go.Heatmap(x=x_final, y=y_final, z=[y_final],
-                                     colorscale=[[0, "#000000"], [1, color]]))
         else:  # line (default)
             traces.append(go.Scatter(x=x_final, y=y_final, name=name,
                                      mode="lines", line_color=color))
@@ -680,7 +681,6 @@ def generate_chart_svg(
         margin=dict(l=60, r=30, t=60, b=50),
     )
 
-    ct_str = chart_type.lower() if isinstance(chart_type, str) else chart_type.name.lower()
     if ct_str == "stacked_bar":
         layout.barmode = "stack"
 
@@ -690,3 +690,55 @@ def generate_chart_svg(
     svg_bytes: bytes = pio.to_image(fig, format="svg", width=width, height=height)
 
     return svg_bytes
+
+
+def generate_chart_svg(
+    df: pl.DataFrame | pd.DataFrame,
+    chart_type: str | ChartType,
+    size: tuple[int, int] | str = (1080, 1080),
+    config: ChartConfig | None = None,
+    *,
+    mode: str = "auto",
+) -> bytes:
+    """Generate an SVG chart from a DataFrame.
+
+    Args:
+        df: Input data (Polars or Pandas DataFrame).
+        chart_type: Chart type as string or ChartType enum.
+        size: Output dimensions (width, height) or a preset name like 'instagram'.
+        config: Optional chart configuration.
+        mode: Dispatch mode:
+            - "statcan": New path for StatCan-shaped Polars DataFrames
+              with REF_DATE, GEO, VALUE columns.
+            - "legacy": Original path for simple Pandas DataFrames.
+            - "auto": Detect based on DataFrame type — Polars → statcan,
+              Pandas → legacy. (Default)
+
+    Returns:
+        SVG bytes.
+    """
+
+
+    cfg = config or ChartConfig()
+
+    # Resolve size preset
+    if isinstance(size, str):
+        size = SIZE_PRESETS.get(size.lower(), (1080, 1080))
+    w, h = size
+
+    if mode == "legacy":
+        ct = chart_type if isinstance(chart_type, ChartType) else ChartType(chart_type.upper())
+        return _generate_chart_svg_legacy(df, ct, (w, h))
+    elif mode == "statcan":
+        return _generate_statcan_chart(df, chart_type, (w, h), cfg)
+    elif mode == "auto":
+        # Simple, deterministic: Polars → statcan, Pandas → legacy
+        if isinstance(df, pl.DataFrame):
+            return _generate_statcan_chart(df, chart_type, (w, h), cfg)
+        elif isinstance(df, pd.DataFrame):
+            ct = chart_type if isinstance(chart_type, ChartType) else ChartType(chart_type.upper())
+            return _generate_chart_svg_legacy(df, ct, (w, h))
+        else:
+            raise ValueError(f"Unsupported DataFrame type: {type(df)}")
+    else:
+        raise ValueError(f"Invalid mode: {mode!r}. Must be 'auto', 'statcan', or 'legacy'.")
