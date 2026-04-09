@@ -2,7 +2,6 @@ import io
 import math
 import random
 from enum import Enum
-from functools import lru_cache
 
 from PIL import Image, ImageDraw, ImageFilter
 
@@ -66,45 +65,61 @@ class BackgroundGenerator:
 
     @staticmethod
     def _create_variant_2(
-        draw: ImageDraw.ImageDraw,
+        img: Image.Image,
         width: int,
         height: int,
         accent: tuple[int, int, int]
     ) -> None:
         """Variant 2: Diagonal gradient (bottom-left to top-right)."""
-        # We want the top third to be mostly base color.
-        # So gradient effectively stops around y = height // 3.
+        # Create a tiny version (e.g. 1/8th scale) to draw shapes extremely fast
+        # Note: Must ensure small dimensions are at least 1
+        sw = max(1, width // 8)
+        sh = max(1, height // 8)
 
-        for y in range(height):
-            for x in range(width):
-                # Calculate distance from bottom-left corner
-                # We want it to quickly fade as it goes up
-                y_factor = (height - y) / (height * 0.66) # 0 at bottom, 1 at 1/3 from top
+        small_img = Image.new("RGB", (sw, sh), color=BackgroundGenerator.BASE_COLOR)
+        small_draw = ImageDraw.Draw(small_img)
 
-                if y_factor > 1.0:
-                    continue # Keep top pure base
+        # Draw concentric thick lines from bottom-left corner
+        # This will create a diagonal gradient effect when scaled up
+        max_dist = int(math.hypot(sw, sh) * 0.8) # Stop before the top right (negative space)
 
-                x_factor = x / width # 0 at left, 1 at right
+        # Step determines band thickness
+        step = max(1, max_dist // 10)
 
-                # Combine factors, strongest at bottom-left
-                intensity_ratio = max(0.0, 1.0 - math.sqrt(x_factor**2 + y_factor**2))
+        for radius in range(max_dist, 0, -step):
+            # Intensity drops off towards top right
+            distance_ratio = radius / max_dist
+            intensity_ratio = max(0.0, 1.0 - distance_ratio)
+            intensity = int(intensity_ratio**2 * 70)
 
-                intensity = int(intensity_ratio**2 * 70)
+            if intensity > 0:
+                color = (
+                    int(BackgroundGenerator.BASE_COLOR[0] + (accent[0] - BackgroundGenerator.BASE_COLOR[0]) * (intensity / 255)),
+                    int(BackgroundGenerator.BASE_COLOR[1] + (accent[1] - BackgroundGenerator.BASE_COLOR[1]) * (intensity / 255)),
+                    int(BackgroundGenerator.BASE_COLOR[2] + (accent[2] - BackgroundGenerator.BASE_COLOR[2]) * (intensity / 255))
+                )
 
-                if intensity > 0:
-                    color = (
-                        int(BackgroundGenerator.BASE_COLOR[0] + (accent[0] - BackgroundGenerator.BASE_COLOR[0]) * (intensity / 255)),
-                        int(BackgroundGenerator.BASE_COLOR[1] + (accent[1] - BackgroundGenerator.BASE_COLOR[1]) * (intensity / 255)),
-                        int(BackgroundGenerator.BASE_COLOR[2] + (accent[2] - BackgroundGenerator.BASE_COLOR[2]) * (intensity / 255))
-                    )
-                    draw.point((x, y), fill=color)
+                # Draw thick circles originating from bottom-left (0, sh)
+                # Pillow coords: bbox [x0, y0, x1, y1]
+                small_draw.ellipse(
+                    [-radius, sh - radius, radius, sh + radius],
+                    fill=color
+                )
+
+        # Resize small image back to original dimensions using smooth scaling
+        scaled_img = small_img.resize((width, height), resample=Image.Resampling.LANCZOS)
+
+        # Paste the smooth gradient back into the original image
+        img.paste(scaled_img, (0, 0))
 
     @staticmethod
     def _create_variant_3(
         draw: ImageDraw.ImageDraw,
         width: int,
         height: int,
-        accent: tuple[int, int, int]
+        accent: tuple[int, int, int],
+        category: BackgroundCategory,
+        variant: int
     ) -> None:
         """Variant 3: Horizontal bands with subtle noise/texture in lower two thirds."""
         # Top third remains pure base
@@ -132,7 +147,8 @@ class BackgroundGenerator:
         # Add some "noise" pixels in the lower 2/3
         # Seed pseudo-random deterministically so output is same for same size/variant/category
         # Note: the function should be pure, so we instantiate a local PRNG
-        rng = random.Random(width + height * 3)
+        seed = hash((category.value, variant, width, height))
+        rng = random.Random(seed)
         for _ in range(int(width * height * 0.05)): # 5% noise
             x = rng.randint(0, width - 1)
             y = rng.randint(start_y, height - 1)
@@ -148,7 +164,8 @@ class BackgroundGenerator:
 
             draw.point((x, y), fill=(r, g, b))
 
-@lru_cache(maxsize=36)
+MAX_DIMENSION = 4096
+
 def get_background(category: BackgroundCategory, size: tuple[int, int], variant: int = 1) -> bytes:
     """
     Generate a template background image as PNG bytes.
@@ -174,6 +191,8 @@ def get_background(category: BackgroundCategory, size: tuple[int, int], variant:
     width, height = size
     if width <= 0 or height <= 0:
         raise ValueError(f"Invalid size: {size}. Width and height must be positive.")
+    if width > MAX_DIMENSION or height > MAX_DIMENSION:
+        raise ValueError(f"Image dimensions must not exceed {MAX_DIMENSION}px. Got ({width}, {height}).")
 
     # Create base image
     img = Image.new("RGB", size, color=BackgroundGenerator.BASE_COLOR)
@@ -184,9 +203,9 @@ def get_background(category: BackgroundCategory, size: tuple[int, int], variant:
     if variant == 1:
         BackgroundGenerator._create_variant_1(draw, width, height, accent_color)
     elif variant == 2:
-        BackgroundGenerator._create_variant_2(draw, width, height, accent_color)
+        BackgroundGenerator._create_variant_2(img, width, height, accent_color)
     elif variant == 3:
-        BackgroundGenerator._create_variant_3(draw, width, height, accent_color)
+        BackgroundGenerator._create_variant_3(draw, width, height, accent_color, category, variant)
 
     # Optional: subtle overall blur to smooth out gradients, except variant 3 which has noise
     if variant in [1, 2]:

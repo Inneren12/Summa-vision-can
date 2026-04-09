@@ -59,18 +59,11 @@ def test_backgrounds_invalid_category():
     with pytest.raises(TypeError, match="Invalid category type"):
         get_background("NOT_A_CATEGORY", (100, 100), variant=1)  # type: ignore
 
-def test_backgrounds_cache_hit():
-    """Test cache hit: call get_background() twice with same args."""
-    # Ensure cache is clear for this specific combination
-    get_background.cache_clear()
-
-    args = (BackgroundCategory.DEMOGRAPHICS, (500, 500), 1)
-    bg1 = get_background(*args)
-    bg2 = get_background(*args)
-
-    # Python's lru_cache will return the exact same object
-    assert bg1 is bg2
-    assert get_background.cache_info().hits >= 1
+def test_backgrounds_deterministic_output():
+    """Same args produce byte-identical output (true determinism, not cache identity)."""
+    result_1 = get_background(BackgroundCategory.HOUSING, (1080, 1080), variant=1)
+    result_2 = get_background(BackgroundCategory.HOUSING, (1080, 1080), variant=1)
+    assert result_1 == result_2  # byte equality, NOT object identity
 
 def test_backgrounds_upper_third_dark():
     """Test that the upper-third of each background is predominantly dark."""
@@ -111,3 +104,14 @@ def test_backgrounds_invalid_size():
 
     with pytest.raises(ValueError, match="Invalid size"):
         get_background(BackgroundCategory.ENERGY, (100, -100), variant=1)
+
+def test_backgrounds_rejects_oversized():
+    """Test that sizes exceeding MAX_DIMENSION raise ValueError."""
+    with pytest.raises(ValueError, match="must not exceed"):
+        get_background(BackgroundCategory.HOUSING, (5000, 5000))
+
+def test_backgrounds_variant3_differs_by_category():
+    """Test that variant 3 with same size but different categories yields different images due to seed differences."""
+    bg1 = get_background(BackgroundCategory.HOUSING, (800, 600), variant=3)
+    bg2 = get_background(BackgroundCategory.TRADE, (800, 600), variant=3)
+    assert bg1 != bg2
