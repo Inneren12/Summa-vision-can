@@ -13,8 +13,9 @@ import polars as pl
 import structlog
 from fastapi.concurrency import run_in_threadpool
 
+from typing import Callable
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from src.core.config import Settings
-from src.core.database import get_session_factory
 from src.core.exceptions import StorageError
 from src.core.storage import StorageInterface
 from src.models.publication import PublicationStatus
@@ -44,13 +45,11 @@ class GraphicPipeline:
     def __init__(
         self,
         storage: StorageInterface,
-        publication_repo: PublicationRepository,
-        audit_writer: AuditWriter,
+        session_factory: async_sessionmaker[AsyncSession] | Callable[[], AsyncSession],
         settings: Settings,
     ):
         self._storage = storage
-        self._publication_repo = publication_repo
-        self._audit_writer = audit_writer
+        self._session_factory = session_factory
         self._settings = settings
 
 
@@ -136,7 +135,7 @@ class GraphicPipeline:
             # Stage 6 — Resolve Version (short DB session, R6)
             version = 1
             if source_product_id:
-                async with get_session_factory()() as session:
+                async with self._session_factory() as session:
                     repo = PublicationRepository(session)
                     latest_version = await repo.get_latest_version(source_product_id, config_hash)
                     if latest_version:
@@ -216,7 +215,7 @@ class GraphicPipeline:
 
         # Stage 9 — Persist to DB (short session, R6)
         try:
-            async with get_session_factory()() as session:
+            async with self._session_factory() as session:
                 repo = PublicationRepository(session)
                 pub = await repo.create_published(
                     headline=title,
@@ -231,11 +230,21 @@ class GraphicPipeline:
                 db_pub_id = pub.id
                 await session.commit()
         except Exception as e:
-            logger.warning("Pipeline failed at Stage 9 (DB persist). Orphaned S3 objects.", error=str(e), data_key=data_key)
+            logger.warning("Pipeline failed at Stage 9 (DB persist). Cleaning up S3 objects.", error=str(e), data_key=data_key)
+
+            async def cleanup_s3_keys():
+                for key in [s3_key_lowres, s3_key_highres, s3_key_zip]:
+                    try:
+                        await self._storage.delete_object(key)
+                    except Exception as exc:
+                        logger.error("Failed to clean up S3 object", key=key, error=str(exc))
+
+            # Use io_sem to delete the objects
+            await _with_sem(io_sem, cleanup_s3_keys())
             raise
 
         # Stage 10 — Audit Events
-        async with get_session_factory()() as session:
+        async with self._session_factory() as session:
             writer = AuditWriter(session)
             await writer.log_event(
                 event_type=EventType.PUBLICATION_GENERATED,

@@ -120,6 +120,17 @@ JSON, but any serialization change would silently break the match.
 - **Resolution:** Add a daily cleanup job: `DELETE FROM audit_events WHERE created_at < NOW() - INTERVAL '90 days'`
 - **Target:** After Étape D when real traffic generates events.
 
+### DEBT-015: GraphicPipeline generate() method is monolithic
+- **Source:** PR B-3 review
+- **Added:** 2026-04-09
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** active
+- **Description:** `GraphicPipeline.generate()` contains the entire E2E process (11 stages) in a single ~120-line method with nested try/except blocks and inline async functions.
+- **Impact:** Harder to read and maintain. High cognitive load for future developers modifying individual stages.
+- **Resolution:** Refactor `generate()` into smaller private methods (e.g., `_load_data`, `_render_assets`, `_persist_to_db`) while preserving the semaphore boundary semantics.
+- **Target:** Future refactoring sprint or before Étape D.
+
 ---
 
 ## Resolved

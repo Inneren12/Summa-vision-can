@@ -11,7 +11,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, Float, String, Text
+from sqlalchemy import DateTime, Enum, Float, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
@@ -44,6 +44,14 @@ class Publication(Base):
     """
 
     __tablename__ = "publications"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_product_id",
+            "config_hash",
+            "version",
+            name="uq_publication_lineage_version",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     headline: Mapped[str] = mapped_column(String(500), nullable=False)

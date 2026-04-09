@@ -16,6 +16,7 @@ Commit semantics:
 from __future__ import annotations
 
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.publication import Publication, PublicationStatus
@@ -83,22 +84,29 @@ class PublicationRepository:
         Returns:
             The newly created ``Publication`` instance.
         """
-        publication = Publication(
-            headline=headline,
-            chart_type=chart_type,
-            s3_key_lowres=s3_key_lowres,
-            s3_key_highres=s3_key_highres,
-            source_product_id=source_product_id,
-            version=version,
-            config_hash=config_hash,
-            content_hash=content_hash,
-            virality_score=virality_score,
-            status=PublicationStatus.PUBLISHED,
-        )
-        self._session.add(publication)
-        await self._session.flush()
-        await self._session.refresh(publication)
-        return publication
+        for attempt in range(3):
+            try:
+                publication = Publication(
+                    headline=headline,
+                    chart_type=chart_type,
+                    s3_key_lowres=s3_key_lowres,
+                    s3_key_highres=s3_key_highres,
+                    source_product_id=source_product_id,
+                    version=version + attempt,
+                    config_hash=config_hash,
+                    content_hash=content_hash,
+                    virality_score=virality_score,
+                    status=PublicationStatus.PUBLISHED,
+                )
+                self._session.add(publication)
+                await self._session.flush()
+                await self._session.refresh(publication)
+                return publication
+            except IntegrityError:
+                await self._session.rollback()
+                if attempt == 2:
+                    raise
+        raise RuntimeError("Failed to create publication after 3 attempts")
 
     async def create(
         self,
