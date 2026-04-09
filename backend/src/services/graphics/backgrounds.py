@@ -1,3 +1,11 @@
+"""Programmatic generator for template backgrounds.
+
+Generates dark-themed backgrounds with neon brand accents.
+All background generation happens programmatically in-memory via Pillow,
+strictly complying with ARCH-PURA-001 (Pure Data Transformations)
+with no file I/O or external network calls.
+"""
+
 import io
 import math
 import random
@@ -23,22 +31,24 @@ class BackgroundGenerator:
     # Base dark theme color
     BASE_COLOR = (20, 20, 20)  # #141414
 
+    # Max allowed dimension to avoid excessive RAM allocation
+    MAX_DIMENSION = 4096
+
     # Accent color palettes per category (Neon brand colors)
+    # These exact RGB tuples are mixed with the BASE_COLOR
+    # during gradient and noise calculation to theme the image.
     PALETTES = {
-        BackgroundCategory.HOUSING: (0, 229, 255),      # Neon Cyan
-        BackgroundCategory.INFLATION: (255, 107, 53),   # Neon Red/Orange
-        BackgroundCategory.EMPLOYMENT: (57, 255, 20),   # Neon Green
-        BackgroundCategory.TRADE: (191, 64, 191),       # Neon Purple
-        BackgroundCategory.ENERGY: (255, 215, 0),       # Neon Yellow
-        BackgroundCategory.DEMOGRAPHICS: (65, 105, 225) # Neon Blue
+        BackgroundCategory.HOUSING: (0, 229, 255),  # Neon Cyan
+        BackgroundCategory.INFLATION: (255, 107, 53),  # Neon Red/Orange
+        BackgroundCategory.EMPLOYMENT: (57, 255, 20),  # Neon Green
+        BackgroundCategory.TRADE: (191, 64, 191),  # Neon Purple
+        BackgroundCategory.ENERGY: (255, 215, 0),  # Neon Yellow
+        BackgroundCategory.DEMOGRAPHICS: (65, 105, 225),  # Neon Blue
     }
 
     @staticmethod
     def _create_variant_1(
-        draw: ImageDraw.ImageDraw,
-        width: int,
-        height: int,
-        accent: tuple[int, int, int]
+        draw: ImageDraw.ImageDraw, width: int, height: int, accent: tuple[int, int, int]
     ) -> None:
         """Variant 1: Radial gradient from bottom-center."""
         center_x = width // 2
@@ -48,27 +58,38 @@ class BackgroundGenerator:
         for radius in range(max_radius, 0, -5):
             # Intensity drops off non-linearly, keeping top third dark
             distance_ratio = radius / max_radius
-            intensity = int((1 - distance_ratio)**3 * 60)  # max intensity 60
+            intensity = int((1 - distance_ratio) ** 3 * 60)  # max intensity 60
 
             if intensity <= 0:
                 continue
 
-            color = (
-                int(BackgroundGenerator.BASE_COLOR[0] + (accent[0] - BackgroundGenerator.BASE_COLOR[0]) * (intensity / 255)),
-                int(BackgroundGenerator.BASE_COLOR[1] + (accent[1] - BackgroundGenerator.BASE_COLOR[1]) * (intensity / 255)),
-                int(BackgroundGenerator.BASE_COLOR[2] + (accent[2] - BackgroundGenerator.BASE_COLOR[2]) * (intensity / 255))
+            ratio = intensity / 255
+            r = int(
+                BackgroundGenerator.BASE_COLOR[0]
+                + (accent[0] - BackgroundGenerator.BASE_COLOR[0]) * ratio
             )
+            g = int(
+                BackgroundGenerator.BASE_COLOR[1]
+                + (accent[1] - BackgroundGenerator.BASE_COLOR[1]) * ratio
+            )
+            b = int(
+                BackgroundGenerator.BASE_COLOR[2]
+                + (accent[2] - BackgroundGenerator.BASE_COLOR[2]) * ratio
+            )
+
             draw.ellipse(
-                (center_x - radius, center_y - radius, center_x + radius, center_y + radius),
-                fill=color
+                (
+                    center_x - radius,
+                    center_y - radius,
+                    center_x + radius,
+                    center_y + radius,
+                ),
+                fill=(r, g, b),
             )
 
     @staticmethod
     def _create_variant_2(
-        img: Image.Image,
-        width: int,
-        height: int,
-        accent: tuple[int, int, int]
+        img: Image.Image, width: int, height: int, accent: tuple[int, int, int]
     ) -> None:
         """Variant 2: Diagonal gradient (bottom-left to top-right)."""
         # Create a tiny version (e.g. 1/8th scale) to draw shapes extremely fast
@@ -81,7 +102,9 @@ class BackgroundGenerator:
 
         # Draw concentric thick lines from bottom-left corner
         # This will create a diagonal gradient effect when scaled up
-        max_dist = int(math.hypot(sw, sh) * 0.8) # Stop before the top right (negative space)
+        max_dist = int(
+            math.hypot(sw, sh) * 0.8
+        )  # Stop before the top right (negative space)
 
         # Step determines band thickness
         step = max(1, max_dist // 10)
@@ -93,21 +116,30 @@ class BackgroundGenerator:
             intensity = int(intensity_ratio**2 * 70)
 
             if intensity > 0:
-                color = (
-                    int(BackgroundGenerator.BASE_COLOR[0] + (accent[0] - BackgroundGenerator.BASE_COLOR[0]) * (intensity / 255)),
-                    int(BackgroundGenerator.BASE_COLOR[1] + (accent[1] - BackgroundGenerator.BASE_COLOR[1]) * (intensity / 255)),
-                    int(BackgroundGenerator.BASE_COLOR[2] + (accent[2] - BackgroundGenerator.BASE_COLOR[2]) * (intensity / 255))
+                ratio = intensity / 255
+                r = int(
+                    BackgroundGenerator.BASE_COLOR[0]
+                    + (accent[0] - BackgroundGenerator.BASE_COLOR[0]) * ratio
+                )
+                g = int(
+                    BackgroundGenerator.BASE_COLOR[1]
+                    + (accent[1] - BackgroundGenerator.BASE_COLOR[1]) * ratio
+                )
+                b = int(
+                    BackgroundGenerator.BASE_COLOR[2]
+                    + (accent[2] - BackgroundGenerator.BASE_COLOR[2]) * ratio
                 )
 
                 # Draw thick circles originating from bottom-left (0, sh)
                 # Pillow coords: bbox [x0, y0, x1, y1]
                 small_draw.ellipse(
-                    [-radius, sh - radius, radius, sh + radius],
-                    fill=color
+                    [-radius, sh - radius, radius, sh + radius], fill=(r, g, b)
                 )
 
         # Resize small image back to original dimensions using smooth scaling
-        scaled_img = small_img.resize((width, height), resample=Image.Resampling.LANCZOS)
+        scaled_img = small_img.resize(
+            (width, height), resample=Image.Resampling.LANCZOS
+        )
 
         # Paste the smooth gradient back into the original image
         img.paste(scaled_img, (0, 0))
@@ -119,7 +151,7 @@ class BackgroundGenerator:
         height: int,
         accent: tuple[int, int, int],
         category: BackgroundCategory,
-        variant: int
+        variant: int,
     ) -> None:
         """Variant 3: Horizontal bands with subtle noise/texture in lower two thirds."""
         # Top third remains pure base
@@ -135,21 +167,29 @@ class BackgroundGenerator:
 
             # Vary intensity per band
             intensity = int((i / num_bands) * 50) + 10
+            ratio = intensity / 255
 
-            color = (
-                int(BackgroundGenerator.BASE_COLOR[0] + (accent[0] - BackgroundGenerator.BASE_COLOR[0]) * (intensity / 255)),
-                int(BackgroundGenerator.BASE_COLOR[1] + (accent[1] - BackgroundGenerator.BASE_COLOR[1]) * (intensity / 255)),
-                int(BackgroundGenerator.BASE_COLOR[2] + (accent[2] - BackgroundGenerator.BASE_COLOR[2]) * (intensity / 255))
+            r = int(
+                BackgroundGenerator.BASE_COLOR[0]
+                + (accent[0] - BackgroundGenerator.BASE_COLOR[0]) * ratio
+            )
+            g = int(
+                BackgroundGenerator.BASE_COLOR[1]
+                + (accent[1] - BackgroundGenerator.BASE_COLOR[1]) * ratio
+            )
+            b = int(
+                BackgroundGenerator.BASE_COLOR[2]
+                + (accent[2] - BackgroundGenerator.BASE_COLOR[2]) * ratio
             )
 
-            draw.rectangle([0, y1, width, y2], fill=color)
+            draw.rectangle([0, y1, width, y2], fill=(r, g, b))
 
         # Add some "noise" pixels in the lower 2/3
         # Seed pseudo-random deterministically so output is same for same size/variant/category
         # Note: the function should be pure, so we instantiate a local PRNG
         seed = hash((category.value, variant, width, height))
         rng = random.Random(seed)
-        for _ in range(int(width * height * 0.05)): # 5% noise
+        for _ in range(int(width * height * 0.05)):  # 5% noise
             x = rng.randint(0, width - 1)
             y = rng.randint(start_y, height - 1)
             noise_val = rng.randint(-15, 15)
@@ -157,22 +197,50 @@ class BackgroundGenerator:
             # Get current pixel roughly
             curr_y_ratio = (y - start_y) / (height - start_y)
             curr_intensity = int(curr_y_ratio * 50) + 10
+            ratio = curr_intensity / 255
 
-            r = min(255, max(0, BackgroundGenerator.BASE_COLOR[0] + int((accent[0] - BackgroundGenerator.BASE_COLOR[0]) * (curr_intensity / 255)) + noise_val))
-            g = min(255, max(0, BackgroundGenerator.BASE_COLOR[1] + int((accent[1] - BackgroundGenerator.BASE_COLOR[1]) * (curr_intensity / 255)) + noise_val))
-            b = min(255, max(0, BackgroundGenerator.BASE_COLOR[2] + int((accent[2] - BackgroundGenerator.BASE_COLOR[2]) * (curr_intensity / 255)) + noise_val))
+            r = min(
+                255,
+                max(
+                    0,
+                    BackgroundGenerator.BASE_COLOR[0]
+                    + int((accent[0] - BackgroundGenerator.BASE_COLOR[0]) * ratio)
+                    + noise_val,
+                ),
+            )
+            g = min(
+                255,
+                max(
+                    0,
+                    BackgroundGenerator.BASE_COLOR[1]
+                    + int((accent[1] - BackgroundGenerator.BASE_COLOR[1]) * ratio)
+                    + noise_val,
+                ),
+            )
+            b = min(
+                255,
+                max(
+                    0,
+                    BackgroundGenerator.BASE_COLOR[2]
+                    + int((accent[2] - BackgroundGenerator.BASE_COLOR[2]) * ratio)
+                    + noise_val,
+                ),
+            )
 
             draw.point((x, y), fill=(r, g, b))
 
-MAX_DIMENSION = 4096
 
-def get_background(category: BackgroundCategory, size: tuple[int, int], variant: int = 1) -> bytes:
+def get_background(
+    category: BackgroundCategory, size: tuple[int, int], variant: int = 1
+) -> bytes:
     """
     Generate a template background image as PNG bytes.
 
     Args:
         category: The BackgroundCategory defining the accent color.
         size: A tuple of (width, height) in pixels.
+              Should typically match standard presets like SIZE_INSTAGRAM (1080, 1080),
+              SIZE_TWITTER (1200, 628), or SIZE_REDDIT (1200, 900).
         variant: An integer 1, 2, or 3 representing the visual style.
 
     Returns:
@@ -183,7 +251,9 @@ def get_background(category: BackgroundCategory, size: tuple[int, int], variant:
         TypeError: If category is not a BackgroundCategory.
     """
     if not isinstance(category, BackgroundCategory):
-        raise TypeError(f"Invalid category type: {type(category)}. Must be BackgroundCategory.")
+        raise TypeError(
+            f"Invalid category type: {type(category)}. Must be BackgroundCategory."
+        )
 
     if variant not in [1, 2, 3]:
         raise ValueError(f"Invalid variant: {variant}. Must be 1, 2, or 3.")
@@ -191,8 +261,13 @@ def get_background(category: BackgroundCategory, size: tuple[int, int], variant:
     width, height = size
     if width <= 0 or height <= 0:
         raise ValueError(f"Invalid size: {size}. Width and height must be positive.")
-    if width > MAX_DIMENSION or height > MAX_DIMENSION:
-        raise ValueError(f"Image dimensions must not exceed {MAX_DIMENSION}px. Got ({width}, {height}).")
+    if (
+        width > BackgroundGenerator.MAX_DIMENSION
+        or height > BackgroundGenerator.MAX_DIMENSION
+    ):
+        raise ValueError(
+            f"Image dimensions must not exceed {BackgroundGenerator.MAX_DIMENSION}px. Got ({width}, {height})."
+        )
 
     # Create base image
     img = Image.new("RGB", size, color=BackgroundGenerator.BASE_COLOR)
@@ -205,7 +280,9 @@ def get_background(category: BackgroundCategory, size: tuple[int, int], variant:
     elif variant == 2:
         BackgroundGenerator._create_variant_2(img, width, height, accent_color)
     elif variant == 3:
-        BackgroundGenerator._create_variant_3(draw, width, height, accent_color, category, variant)
+        BackgroundGenerator._create_variant_3(
+            draw, width, height, accent_color, category, variant
+        )
 
     # Optional: subtle overall blur to smooth out gradients, except variant 3 which has noise
     if variant in [1, 2]:
