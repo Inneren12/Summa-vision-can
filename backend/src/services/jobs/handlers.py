@@ -139,7 +139,11 @@ async def handle_cube_fetch(
         frequency = cube.frequency
 
     # Session closed here — before heavy I/O
-    periods = PERIODS_MAP.get(frequency, 120)
+    periods_override = getattr(payload, 'periods_override', None)
+    if periods_override is not None:
+        periods = periods_override
+    else:
+        periods = PERIODS_MAP.get(frequency, 120)
 
     # Stage 2: Heavy pipeline — no DB session held
     storage = getattr(app_state, "storage", None)
