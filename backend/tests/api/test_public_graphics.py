@@ -104,6 +104,9 @@ class _MockStorage(StorageInterface):
     async def generate_presigned_url(self, path: str, ttl: int = 3600) -> str:
         return f"https://cdn.example.com/{path}?ttl={ttl}"
 
+    async def delete_object(self, key: str) -> None:
+        pass
+
 
 def _build_test_app(
     publications: list[_FakePublication] | None = None,

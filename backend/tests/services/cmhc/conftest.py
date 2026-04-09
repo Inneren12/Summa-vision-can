@@ -162,6 +162,9 @@ class MockStorage(StorageInterface):
     async def generate_presigned_url(self, path: str, ttl: int = 3600) -> str:
         return f"mock://presigned/{path}?ttl={ttl}"
 
+    async def delete_object(self, key: str) -> None:
+        self.data.pop(key, None)
+
     async def upload_bytes(self, data: bytes, key: str) -> None:
         self.data[key] = data
 

@@ -106,6 +106,14 @@ class StorageInterface(abc.ABC):
         """
 
     @abc.abstractmethod
+    async def delete_object(self, key: str) -> None:
+        """Delete an object from storage.
+
+        Args:
+            key: Storage key / path.
+        """
+
+    @abc.abstractmethod
     async def list_objects(self, prefix: str) -> list[str]:
         """List object keys whose path starts with *prefix*.
 
@@ -278,6 +286,17 @@ class S3StorageManager(StorageInterface):
                     keys.append(obj["Key"])
         return keys
 
+    async def delete_object(self, key: str) -> None:
+        """Delete an object from S3. Does not raise if key doesn't exist."""
+        async with self._session.create_client(
+            "s3", **self._client_kwargs()
+        ) as client:
+            client: S3Client  # type: ignore[no-redef]
+            await client.delete_object(
+                Bucket=self._bucket,
+                Key=key,
+            )
+
     async def generate_presigned_url(
         self, path: str, ttl: int = 3600
     ) -> str:
@@ -398,6 +417,12 @@ class LocalStorageManager(StorageInterface):
                         str(item.relative_to(self._base)).replace("\\", "/")
                     )
         return sorted(results)
+
+    async def delete_object(self, key: str) -> None:
+        """Delete an object from local disk. Does not raise if missing."""
+        target = self._resolve(key)
+        if target.is_file():
+            target.unlink()
 
     async def generate_presigned_url(
         self, path: str, ttl: int = 3600

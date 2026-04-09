@@ -97,6 +97,7 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `services/graphics/backgrounds.py` | >90% | ✅ | `tests/services/graphics/test_backgrounds.py` |
 | `services/graphics/ai_image_client.py` | >90% | ✅ 100% | `tests/services/graphics/test_ai_image_client.py` |
 | `services/graphics/compositor.py` | >90% | ✅ 86% | `tests/services/graphics/test_compositor.py` |
+| `services/graphics/pipeline.py` | >90% | ✅ | `tests/services/graphics/test_pipeline.py` |
 | `api/routers/admin_graphics.py` | >90% | ✅ 97% | `tests/api/test_admin_graphics.py` |
 | `api/schemas/admin_graphics.py` | >90% | ✅ 100% | `tests/api/test_admin_graphics.py` |
 | `core/security/auth.py` | >90% | ✅ 100% | `tests/core/security/test_auth.py` |

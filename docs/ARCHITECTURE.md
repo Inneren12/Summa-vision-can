@@ -84,5 +84,5 @@ Note template backgrounds instead of AI backgrounds for MVP.
        ├── statcan/ (Complete: maintenance guard, HTTP client, schemas, ETL service)
        ├── cmhc/ (Stub: browser, parser, service files exist but contain no implementation)
        ├── ai/ (Stub: llm_interface, scoring, cache exist but are not connected to pipeline)
-       └── graphics/ (svg_generator, backgrounds, compositor exist with basic implementation)
+       └── graphics/ (svg_generator, backgrounds, compositor, pipeline exist with implementation)
 ```
