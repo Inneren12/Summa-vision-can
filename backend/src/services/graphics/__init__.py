@@ -14,6 +14,7 @@ import this package from the specific sub-module instead::
 """
 
 from src.services.graphics.ai_image_client import AIImageClient
+from src.services.graphics.backgrounds import BackgroundCategory, get_background
 from src.services.graphics.compositor import composite_image
 from src.services.graphics.svg_generator import (
     NEON_PALETTE,
@@ -25,10 +26,12 @@ from src.services.graphics.svg_generator import (
 
 __all__ = [
     "AIImageClient",
+    "BackgroundCategory",
     "NEON_PALETTE",
     "SIZE_INSTAGRAM",
     "SIZE_REDDIT",
     "SIZE_TWITTER",
     "composite_image",
     "generate_chart_svg",
+    "get_background",
 ]
