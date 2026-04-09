@@ -124,7 +124,6 @@ class GraphicPipeline:
 
 
 
-        temp_dir = ""
         try:
             # Stage 5 — Compute Hashes & Version (no semaphore, no DB yet)
             config_dict = {"chart_type": chart_type, "size": size, "title": title}
@@ -140,8 +139,40 @@ class GraphicPipeline:
                     latest_version = await repo.get_latest_version(source_product_id, config_hash)
                     if latest_version:
                         version = latest_version + 1
+        except Exception as e:
+            logger.error("Pipeline failed at Stage 5 or 6", error=str(e), data_key=data_key)
+            raise
 
-            # Stage 7 — Create ZIP (temp files, strict cleanup)
+        # Stage 7 — DB persist with DRAFT status (short session)
+        try:
+            async with self._session_factory() as session:
+                repo = PublicationRepository(session)
+                pub = await repo.create_published(
+                    headline=title,
+                    chart_type=chart_type,
+                    s3_key_lowres="",       # placeholder — updated after upload
+                    s3_key_highres="",      # placeholder — updated after upload
+                    source_product_id=source_product_id,
+                    version=version,
+                    config_hash=config_hash,
+                    content_hash=content_hash,
+                    status=PublicationStatus.DRAFT,  # NOT published yet
+                )
+                await session.commit()
+                pub_id = pub.id
+                final_version = pub.version  # THIS is the authoritative version
+        except Exception as e:
+            logger.error("Pipeline failed at Stage 7 (DB DRAFT create)", error=str(e), data_key=data_key)
+            raise
+
+        # Stage 8 — Build S3 keys using final_version and pub_id
+        s3_key_lowres = f"publications/{pub_id}/v{final_version}/{content_hash[:8]}_lowres.png"
+        s3_key_highres = f"publications/{pub_id}/v{final_version}/{content_hash[:8]}_highres.png"
+        s3_key_zip = f"publications/{pub_id}/v{final_version}/archive.zip"
+
+        # Stage 9 — Create ZIP with final_version in metadata
+        temp_dir = ""
+        try:
             temp_dir = tempfile.mkdtemp()
             lowres_path = os.path.join(temp_dir, "lowres.png")
             highres_path = os.path.join(temp_dir, "highres.png")
@@ -154,10 +185,11 @@ class GraphicPipeline:
                 f.write(highres_bytes)
 
             metadata = {
+                "publication_id": pub_id,
+                "version": final_version,
                 "title": title,
                 "chart_type": chart_type,
                 "source_product_id": source_product_id,
-                "version": version,
                 "generated_at": datetime.now(timezone.utc).isoformat()
             }
             with open(metadata_path, "w") as meta_f:
@@ -174,32 +206,25 @@ class GraphicPipeline:
 
             with open(zip_path, "rb") as zip_f:
                 zip_bytes = zip_f.read()
-
         except Exception as e:
-            logger.error("Pipeline failed at Stage 5, 6, or 7", error=str(e), data_key=data_key)
+            logger.error("Pipeline failed at Stage 9 (ZIP creation)", error=str(e), data_key=data_key)
             if temp_dir and os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir, ignore_errors=True)
             raise
 
-        # Stage 8 — Upload to S3 (io_sem)
-        import uuid
-        pub_id = str(uuid.uuid4())
-        s3_key_lowres  = f"publications/{pub_id}/v{version}/{content_hash[:8]}_lowres.png"
-        s3_key_highres = f"publications/{pub_id}/v{version}/{content_hash[:8]}_highres.png"
-        s3_key_zip     = f"publications/{pub_id}/v{version}/archive.zip"
-
+        # Stage 10 — Upload to S3 (io_sem)
         async def upload_files():
             try:
                 await self._storage.upload_bytes(lowres_bytes, s3_key_lowres)
             except Exception as e:
-                logger.error("Pipeline failed at Stage 8a (lowres upload)", error=str(e), data_key=data_key)
+                logger.error("Pipeline failed at Stage 10a (lowres upload)", error=str(e), data_key=data_key)
                 raise
 
             try:
                 await self._storage.upload_bytes(highres_bytes, s3_key_highres)
                 await self._storage.upload_bytes(zip_bytes, s3_key_zip)
             except Exception as e:
-                logger.error("Pipeline failed at Stage 8b (highres/ZIP upload)", error=str(e), data_key=data_key)
+                logger.error("Pipeline failed at Stage 10b (highres/ZIP upload)", error=str(e), data_key=data_key)
                 await self._storage.delete_object(s3_key_lowres)
                 raise
 
@@ -213,24 +238,19 @@ class GraphicPipeline:
             if temp_dir and os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
-        # Stage 9 — Persist to DB (short session, R6)
+        # Stage 11 — Update publication with S3 keys + set status=PUBLISHED
         try:
             async with self._session_factory() as session:
                 repo = PublicationRepository(session)
-                pub = await repo.create_published(
-                    headline=title,
-                    chart_type=chart_type,
+                await repo.update_s3_keys_and_publish(
+                    publication_id=pub_id,
                     s3_key_lowres=s3_key_lowres,
                     s3_key_highres=s3_key_highres,
-                    source_product_id=source_product_id,
-                    version=version,
-                    config_hash=config_hash,
-                    content_hash=content_hash,
+                    status=PublicationStatus.PUBLISHED,
                 )
-                db_pub_id = pub.id
                 await session.commit()
         except Exception as e:
-            logger.warning("Pipeline failed at Stage 9 (DB persist). Cleaning up S3 objects.", error=str(e), data_key=data_key)
+            logger.warning("Pipeline failed at Stage 11 (DB update to PUBLISHED). Cleaning up S3 objects.", error=str(e), data_key=data_key)
 
             async def cleanup_s3_keys():
                 for key in [s3_key_lowres, s3_key_highres, s3_key_zip]:
@@ -243,28 +263,28 @@ class GraphicPipeline:
             await _with_sem(io_sem, cleanup_s3_keys())
             raise
 
-        # Stage 10 — Audit Events
+        # Stage 12 — Audit Events
         async with self._session_factory() as session:
             writer = AuditWriter(session)
             await writer.log_event(
                 event_type=EventType.PUBLICATION_GENERATED,
                 entity_type="publication",
-                entity_id=str(db_pub_id),
-                metadata={"version": version, "chart_type": chart_type, "size": size, "category": category}
+                entity_id=str(pub_id),
+                metadata={"version": final_version, "chart_type": chart_type, "size": list(size), "category": category}
             )
             await writer.log_event(
                 event_type=EventType.PUBLICATION_PUBLISHED,
                 entity_type="publication",
-                entity_id=str(db_pub_id),
-                metadata={"version": version}
+                entity_id=str(pub_id),
+                metadata={"version": final_version}
             )
             await session.commit()
 
-        # Stage 11 — Return Result
+        # Stage 13 — Return Result
         cdn_url_lowres = f"{self._settings.cdn_base_url}/{s3_key_lowres}"
         return GenerationResult(
-            publication_id=db_pub_id,
+            publication_id=pub_id,
             cdn_url_lowres=cdn_url_lowres,
             s3_key_highres=s3_key_highres,
-            version=version
+            version=final_version
         )

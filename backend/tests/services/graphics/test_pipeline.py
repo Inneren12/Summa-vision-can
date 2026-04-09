@@ -17,6 +17,7 @@ from src.services.graphics.pipeline import GraphicPipeline
 
 class DummyPub:
     id = 42
+    version = 1
 
 @pytest.fixture
 def mock_settings():
@@ -42,7 +43,14 @@ def mock_storage():
 def mock_repo():
     repo = AsyncMock()
     repo.get_latest_version.return_value = 1
-    repo.create_published.return_value = DummyPub()
+
+    # Return DummyPub but ensure it respects the version requested
+    async def create_side_effect(*args, **kwargs):
+        pub = DummyPub()
+        pub.version = kwargs.get("version", 1)
+        return pub
+
+    repo.create_published.side_effect = create_side_effect
     return repo
 
 @pytest.fixture
@@ -113,7 +121,7 @@ async def test_pipeline_happy_path(pipeline, mock_storage, mock_repo, mock_audit
         event_type=EventType.PUBLICATION_GENERATED,
         entity_type="publication",
         entity_id="42",
-        metadata={"version": 2, "chart_type": "line", "size": (1080, 1080), "category": "housing"}
+            metadata={"version": 2, "chart_type": "line", "size": [1080, 1080], "category": "housing"}
     )
 
 @pytest.mark.asyncio
@@ -131,7 +139,7 @@ async def test_pipeline_failure_stage2_svg(pipeline, mock_storage, mock_dependen
     mock_storage.upload_bytes.assert_not_called()
 
 @pytest.mark.asyncio
-async def test_pipeline_failure_stage8a_lowres_upload(pipeline, mock_storage, mock_dependencies):
+async def test_pipeline_failure_stage10a_lowres_upload(pipeline, mock_storage, mock_repo, mock_dependencies):
     mock_storage.upload_bytes.side_effect = [Exception("Upload failed"), None, None]
 
     with pytest.raises(Exception, match="Upload failed"):
@@ -145,9 +153,12 @@ async def test_pipeline_failure_stage8a_lowres_upload(pipeline, mock_storage, mo
 
     assert mock_storage.upload_bytes.call_count == 1
     mock_storage.delete_object.assert_not_called()
+    # DRAFT should have been created (stage 7), but NOT updated (stage 11)
+    mock_repo.create_published.assert_called_once()
+    mock_repo.update_s3_keys_and_publish.assert_not_called()
 
 @pytest.mark.asyncio
-async def test_pipeline_failure_stage8b_highres_upload(pipeline, mock_storage, mock_dependencies):
+async def test_pipeline_failure_stage10b_highres_upload(pipeline, mock_storage, mock_repo, mock_dependencies):
     async def upload_side_effect(data, key):
         if "highres" in key:
             raise Exception("Highres failed")
@@ -165,10 +176,11 @@ async def test_pipeline_failure_stage8b_highres_upload(pipeline, mock_storage, m
 
     assert mock_storage.upload_bytes.call_count == 2
     mock_storage.delete_object.assert_called_once()
+    mock_repo.update_s3_keys_and_publish.assert_not_called()
 
 @pytest.mark.asyncio
-async def test_pipeline_failure_stage9_db_write(pipeline, mock_storage, mock_repo, mock_dependencies):
-    mock_repo.create_published.side_effect = Exception("DB failed")
+async def test_pipeline_failure_stage11_db_update(pipeline, mock_storage, mock_repo, mock_dependencies):
+    mock_repo.update_s3_keys_and_publish.side_effect = Exception("DB failed")
 
     with pytest.raises(Exception, match="DB failed"):
         await pipeline.generate(
@@ -270,15 +282,63 @@ async def test_pipeline_content_hash_determinism(pipeline, mock_storage, mock_re
     assert hash1 == hash2
 
 @pytest.mark.asyncio
-async def test_pipeline_concurrent_creates_handled(pipeline, mock_storage, mock_repo, mock_dependencies):
-    from sqlalchemy.exc import IntegrityError
+async def test_pipeline_version_propagation_after_retry(pipeline, mock_storage, mock_repo, mock_audit, mock_dependencies):
+    """When create_published retries and bumps version, all downstream
+    artifacts (S3 keys, metadata, audit, result) use the final version."""
 
-    # This test asserts that the publication repo has the retry logic
-    # since we mocked create_published directly, pipeline won't retry on its own!
-    # The retry logic is inside PublicationRepository.create_published.
-    # Therefore, the test should instantiate the actual PublicationRepository and mock the session,
-    # or test the repository method directly. Let's test the repo directly.
-    pass
+    # Return DummyPub but ensure it respects the version requested
+    async def create_side_effect(*args, **kwargs):
+        pub = DummyPub()
+        pub.version = 2
+        return pub
+
+    mock_repo.get_latest_version.return_value = None  # first version
+    mock_repo.create_published.side_effect = create_side_effect
+    mock_repo.update_s3_keys_and_publish = AsyncMock()
+
+    result = await pipeline.generate(
+        data_key="test.parquet",
+        chart_type="line",
+        title="Test",
+        size=(1080, 1080),
+        category="housing",
+    )
+
+    assert result.version == 2
+    assert "/v2/" in result.cdn_url_lowres
+
+    # Check S3 upload keys
+    upload_calls = mock_storage.upload_bytes.call_args_list
+    for call in upload_calls:
+        key = call[1].get("key") or call[0][1]
+        if "publications/" in key:
+            assert "/v2/" in key, f"S3 key {key} should contain /v2/"
+
+    # Check audit events
+    audit_calls = mock_audit.log_event.call_args_list
+    for call in audit_calls:
+        metadata = call[1].get("metadata") or call[0][3]
+        if metadata and "version" in metadata:
+            assert metadata["version"] == 2
+
+@pytest.mark.asyncio
+async def test_pipeline_draft_stays_on_upload_failure(pipeline, mock_storage, mock_repo, mock_dependencies):
+    """If S3 upload fails after DB DRAFT creation, publication stays DRAFT
+    (not visible in gallery) and no orphaned PUBLISHED record exists."""
+
+    mock_storage.upload_bytes.side_effect = Exception("S3 Upload Failed")
+
+    with pytest.raises(Exception, match="S3 Upload Failed"):
+        await pipeline.generate(
+            data_key="test.parquet",
+            chart_type="line",
+            title="Test",
+            size=(1080, 1080),
+            category="housing",
+        )
+
+    mock_repo.create_published.assert_called_once()  # Called to create DRAFT
+    mock_repo.update_s3_keys_and_publish.assert_not_called()  # Never published
 
 @pytest.mark.asyncio
 async def test_repo_create_published_retry_logic():

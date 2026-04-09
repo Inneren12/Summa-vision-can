@@ -67,8 +67,9 @@ class PublicationRepository:
         config_hash: str,
         content_hash: str,
         virality_score: float | None = None,
+        status: PublicationStatus = PublicationStatus.PUBLISHED,
     ) -> Publication:
-        """Create a new publication record in PUBLISHED state with versioning.
+        """Create a new publication record with versioning.
 
         Args:
             headline: Short title for the graphic.
@@ -96,7 +97,7 @@ class PublicationRepository:
                     config_hash=config_hash,
                     content_hash=content_hash,
                     virality_score=virality_score,
-                    status=PublicationStatus.PUBLISHED,
+                    status=status,
                 )
                 self._session.add(publication)
                 await self._session.flush()
@@ -271,6 +272,32 @@ class PublicationRepository:
             .values(
                 s3_key_lowres=s3_key_lowres,
                 s3_key_highres=s3_key_highres,
+            )
+        )
+        await self._session.execute(stmt)
+
+    async def update_s3_keys_and_publish(
+        self,
+        publication_id: int,
+        s3_key_lowres: str,
+        s3_key_highres: str,
+        status: PublicationStatus,
+    ) -> None:
+        """Update the S3 object keys and status for a publication.
+
+        Args:
+            publication_id: Primary key of the publication to update.
+            s3_key_lowres: S3 key for the low-resolution preview.
+            s3_key_highres: S3 key for the high-resolution asset.
+            status: Status to update to.
+        """
+        stmt = (
+            update(Publication)
+            .where(Publication.id == publication_id)
+            .values(
+                s3_key_lowres=s3_key_lowres,
+                s3_key_highres=s3_key_highres,
+                status=status,
             )
         )
         await self._session.execute(stmt)
