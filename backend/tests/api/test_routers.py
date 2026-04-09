@@ -78,6 +78,9 @@ class _MockStorage(StorageInterface):
     async def generate_presigned_url(self, path: str, ttl: int = 3600) -> str:
         return f"file:///mock/{path}"
 
+    async def delete_object(self, key: str) -> None:
+        pass
+
 
 def _override_storage() -> StorageInterface:
     """Provide a mock storage instance."""
