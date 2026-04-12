@@ -35,7 +35,13 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
         title: const Text('Generating Graphic'),
       ),
       body: switch (state.phase) {
-        GenerationPhase.idle || GenerationPhase.submitting => const _SubmittingView(),
+        GenerationPhase.idle => Center(
+          child: Text(
+            'Submitting generation task...',
+            style: const TextStyle(color: AppTheme.textSecondary),
+          ),
+        ),
+        GenerationPhase.submitting => const _SubmittingView(),
         GenerationPhase.polling => _PollingView(
             attempt: state.pollAttempts,
             max: GenerationState.maxPollAttempts,
