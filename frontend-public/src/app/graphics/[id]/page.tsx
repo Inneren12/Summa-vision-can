@@ -1,23 +1,43 @@
 import { Metadata } from 'next';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
-import { fetchGraphic } from '@/lib/api';
+import { fetchGraphic } from '@/lib/api/server';
 import DownloadModal from '@/components/forms/DownloadModal';
 
+// Next.js 16 uses async params — params is a Promise that must be awaited.
+// See: https://nextjs.org/docs/app/building-your-application/upgrading/version-15#params--searchparams
 interface Props {
   params: Promise<{ id: string }>;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
+
+  let graphic;
   try {
-    const graphic = await fetchGraphic(id);
+    graphic = await fetchGraphic(id);
+  } catch {
+    // Server error (5xx) — return generic metadata
     return {
-      title: `${graphic.headline} | Summa Vision`,
+      title: 'Summa Vision',
+      description: 'Canadian macro-economic data visualizations.',
+    };
+  }
+
+  if (!graphic) {
+    return {
+      title: 'Graphic Not Found | Summa Vision',
+      description: 'The requested graphic could not be found.',
+    };
+  }
+
+  return {
+    title: `${graphic.headline} | Summa Vision`,
+    description: `Canadian macro-economic data visualization: ${graphic.headline}`,
+    openGraph: {
+      title: graphic.headline,
       description: `Canadian macro-economic data visualization: ${graphic.headline}`,
-      openGraph: {
-        title: graphic.headline,
-        description: `Canadian macro-economic data visualization: ${graphic.headline}`,
+      ...(graphic.cdn_url && {
         images: [
           {
             url: graphic.cdn_url,
@@ -26,33 +46,25 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             alt: graphic.headline,
           },
         ],
-        type: 'article',
-      },
-      twitter: {
-        card: 'summary_large_image',
-        title: graphic.headline,
-        images: [graphic.cdn_url],
-      },
-    };
-  } catch {
-    return {
-      title: 'Graphic Not Found | Summa Vision',
-      description: 'The requested graphic could not be found.',
-    };
-  }
+      }),
+      type: 'article',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: graphic.headline,
+      ...(graphic.cdn_url && { images: [graphic.cdn_url] }),
+    },
+  };
 }
 
 export default async function GraphicPage({ params }: Props) {
   const { id } = await params;
-  let graphic;
-  try {
-    graphic = await fetchGraphic(id);
-  } catch {
+  const graphic = await fetchGraphic(id);
+
+  if (!graphic) {
     notFound();
     return null; // Return null so TS knows we exit here during tests
   }
-
-  if (!graphic) return null;
 
   const timeStr = new Date(graphic.created_at).toLocaleDateString('en-US', {
     month: 'short',

@@ -84,6 +84,18 @@ describe('POST /api/revalidate', () => {
     expect(revalidatePath).toHaveBeenCalledTimes(2);
   });
 
+  it('rejects paths outside allowed prefixes', async () => {
+    const req = createMockRequest(
+      { secret: 'test-secret', paths: ['/admin/secret', '/graphics/1'] },
+    );
+    const res: any = await POST(req);
+
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.message).toContain('/admin/secret');
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed JSON request if header secret is also missing', async () => {
     const req = {
       json: jest.fn().mockRejectedValue(new Error('Invalid JSON')),

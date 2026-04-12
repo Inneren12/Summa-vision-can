@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 
+const ALLOWED_REVALIDATION_PREFIXES = ['/', '/graphics'];
+
 export async function POST(request: Request) {
   try {
     let secret;
@@ -22,11 +24,23 @@ export async function POST(request: Request) {
     }
 
     if (Array.isArray(paths) && paths.length > 0) {
-      paths.forEach((path) => {
+      // Validate all paths before revalidating any
+      const invalidPaths = paths.filter((p: string) =>
+        !ALLOWED_REVALIDATION_PREFIXES.some(prefix => p === prefix || p.startsWith(prefix + '/'))
+      );
+
+      if (invalidPaths.length > 0) {
+        return NextResponse.json(
+          { message: `Invalid paths: ${invalidPaths.join(', ')}. Allowed prefixes: ${ALLOWED_REVALIDATION_PREFIXES.join(', ')}` },
+          { status: 400 },
+        );
+      }
+
+      for (const path of paths) {
         if (typeof path === 'string') {
           revalidatePath(path);
         }
-      });
+      }
       return NextResponse.json({ revalidated: true, paths });
     }
 

@@ -1,10 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import GraphicPage, { generateMetadata } from '@/app/graphics/[id]/page';
-import { fetchGraphic } from '@/lib/api';
+import { fetchGraphic } from '@/lib/api/server';
 import { notFound } from 'next/navigation';
 
 // Mock the API and navigation modules
-jest.mock('@/lib/api', () => ({
+jest.mock('@/lib/api/server', () => ({
   fetchGraphic: jest.fn(),
 }));
 
@@ -75,8 +75,8 @@ describe('GraphicPage', () => {
       });
     });
 
-    it('returns fallback metadata when API fails', async () => {
-      (fetchGraphic as jest.Mock).mockRejectedValue(new Error('Not found'));
+    it('returns fallback metadata when graphic not found (404)', async () => {
+      (fetchGraphic as jest.Mock).mockResolvedValue(null);
 
       const params = Promise.resolve({ id: '999' });
       const metadata = await generateMetadata({ params });
@@ -84,6 +84,18 @@ describe('GraphicPage', () => {
       expect(metadata).toEqual({
         title: 'Graphic Not Found | Summa Vision',
         description: 'The requested graphic could not be found.',
+      });
+    });
+
+    it('returns generic metadata on server error (5xx)', async () => {
+      (fetchGraphic as jest.Mock).mockRejectedValue(new Error('Failed to fetch graphic 42: 500'));
+
+      const params = Promise.resolve({ id: '42' });
+      const metadata = await generateMetadata({ params });
+
+      expect(metadata).toEqual({
+        title: 'Summa Vision',
+        description: 'Canadian macro-economic data visualizations.',
       });
     });
   });
@@ -106,13 +118,21 @@ describe('GraphicPage', () => {
       expect(screen.getByTestId('download-modal')).toHaveTextContent('42');
     });
 
-    it('calls notFound when API fails', async () => {
-      (fetchGraphic as jest.Mock).mockRejectedValue(new Error('Not found'));
+    it('calls notFound when graphic not found (404)', async () => {
+      (fetchGraphic as jest.Mock).mockResolvedValue(null);
 
       const params = Promise.resolve({ id: '999' });
       await GraphicPage({ params });
 
       expect(notFound).toHaveBeenCalled();
+    });
+
+    it('throws on server error (5xx) so error boundary catches it', async () => {
+      (fetchGraphic as jest.Mock).mockRejectedValue(new Error('Failed to fetch graphic 42: 500'));
+
+      const params = Promise.resolve({ id: '42' });
+      await expect(GraphicPage({ params })).rejects.toThrow('Failed to fetch graphic 42: 500');
+      expect(notFound).not.toHaveBeenCalled();
     });
   });
 });

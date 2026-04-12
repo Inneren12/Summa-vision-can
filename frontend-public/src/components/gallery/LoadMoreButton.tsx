@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { fetchPublishedGraphics } from '@/lib/api';
-import type { PublicationResponse } from '@/lib/api';
+import { fetchMoreGraphics } from '@/lib/api/client';
+import type { PublicationResponse } from '@/lib/api/client';
 import { InfographicCard } from './InfographicCard';
 
 interface LoadMoreButtonProps {
@@ -21,7 +21,7 @@ export function LoadMoreButton({ initialOffset, limit, total }: LoadMoreButtonPr
     if (isLoading || !hasMore) return;
     setIsLoading(true);
     try {
-      const data = await fetchPublishedGraphics(limit, offset);
+      const data = await fetchMoreGraphics(limit, offset);
       setItems((prev) => [...prev, ...data.items]);
       setOffset(offset + limit);
       if (offset + limit >= data.total) {
