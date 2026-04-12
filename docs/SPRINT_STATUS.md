@@ -65,9 +65,12 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 | C-1 | Cube Search Screen | 🔄 | A-4, PR-20, PR-46 |
 | C-2 | Data Preview | 🔄 | C-1, A-5 |
 | C-3 | Chart Config + Generation Screen | 🔄 | C-2, B-4 |
+| C-4 | Jobs Dashboard Screen | 🔄 | C-3, 0-2, 0-3 |
 | C-5 | KPI Dashboard Screen | ✅ | C-3, 0-4 |
 
 **Étape C status:** All PRs complete. ✅
+
+**Étape C-4:** JobsDashboardScreen with filter bar (job type dropdown, status chips), summary stats bar (queued/running/success/failed/stale counts), scrollable job card list, job detail bottom sheet, retry button for retryable failed jobs, stale/zombie warning for jobs running >10 min, auto-refresh every 10s, MockInterceptor fixtures (8 sample jobs), freezed models, Riverpod providers, widget + model tests. Backend `POST /api/v1/admin/jobs/{job_id}/retry` endpoint with 404/409 handling.
 
 **Étape C-1:** CubeSearchScreen with debounced search, CubeSearchTile, CubeDetailScreen stub, MockInterceptor fixtures, AppDrawer navigation, GoRouter routes, freezed models, Riverpod providers, widget + model tests.
 
