@@ -70,6 +70,18 @@ Widget _buildScreen(
 }
 
 // ---------------------------------------------------------------------------
+// Helpers — pump utilities
+// ---------------------------------------------------------------------------
+
+/// Use instead of pumpAndSettle for screens with running-job animations
+/// (_PulsingWidget repeat animation + _ElapsedTimer periodic timer prevent
+/// pumpAndSettle from ever completing).
+Future<void> _pumpScreen(WidgetTester tester) async {
+  await tester.pump();                                     // first frame
+  await tester.pump(const Duration(milliseconds: 100));    // let FutureProvider resolve
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -84,7 +96,8 @@ void main() {
       final response = JobListResponse(items: jobs, total: 3);
 
       await tester.pumpWidget(_buildScreen(AsyncData(response)));
-      await tester.pumpAndSettle();
+      // Running job has _PulsingWidget + _ElapsedTimer → can't pumpAndSettle
+      await _pumpScreen(tester);
 
       // Should find 3 Card widgets for the jobs
       expect(find.text('Chart Generation'), findsNWidgets(3));
@@ -104,9 +117,10 @@ void main() {
       await tester.pumpWidget(_buildScreen(AsyncData(response)));
       await tester.pumpAndSettle();
 
-      expect(find.text('Success'), findsOneWidget);
-      expect(find.text('Failed'), findsWidgets); // also in filter chip
-      expect(find.text('Queued'), findsWidgets); // also in filter chip
+      // "Success" appears in both the badge and the filter chip row
+      expect(find.text('Success'), findsWidgets);
+      expect(find.text('Failed'), findsWidgets); // badge + filter chip
+      expect(find.text('Queued'), findsWidgets); // badge + filter chip
     });
   });
 
@@ -121,7 +135,7 @@ void main() {
       final response = JobListResponse(items: [staleJob], total: 1);
 
       await tester.pumpWidget(_buildScreen(AsyncData(response)));
-      await tester.pumpAndSettle();
+      await _pumpScreen(tester);
 
       expect(find.byIcon(Icons.warning_amber), findsOneWidget);
       expect(find.textContaining('may be stale'), findsOneWidget);
@@ -136,7 +150,7 @@ void main() {
       final response = JobListResponse(items: [recentJob], total: 1);
 
       await tester.pumpWidget(_buildScreen(AsyncData(response)));
-      await tester.pumpAndSettle();
+      await _pumpScreen(tester);
 
       expect(find.textContaining('may be stale'), findsNothing);
     });
@@ -184,14 +198,6 @@ void main() {
   group('JobsDashboardScreen — job detail sheet', () {
     testWidgets('tapping View Detail opens bottom sheet with payload',
         (tester) async {
-      final job = _makeJob(
-        id: 'j-detail',
-        status: 'success',
-        startedAt: DateTime.utc(2026, 4, 10, 14, 30, 0),
-        finishedAt: DateTime.utc(2026, 4, 10, 14, 30, 24),
-      );
-      job.copyWith(payloadJson: '{"key":"value"}');
-      // Use a job with payloadJson
       final jobWithPayload = Job(
         id: 'j-detail',
         jobType: 'graphics_generate',
@@ -214,7 +220,12 @@ void main() {
 
       // Bottom sheet should show "Job Detail" heading
       expect(find.text('Job Detail'), findsOneWidget);
-      // And the payload section
+      // Scroll down inside the sheet to find the Payload section
+      await tester.scrollUntilVisible(
+        find.text('Payload'),
+        200.0,
+        scrollable: find.byType(Scrollable).last,
+      );
       expect(find.text('Payload'), findsOneWidget);
     });
   });
@@ -236,7 +247,8 @@ void main() {
       final response = JobListResponse(items: jobs, total: 6);
 
       await tester.pumpWidget(_buildScreen(AsyncData(response)));
-      await tester.pumpAndSettle();
+      // Running job has animations → can't pumpAndSettle
+      await _pumpScreen(tester);
 
       // Stats bar should show counts
       // "Queued: 2"
