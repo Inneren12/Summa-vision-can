@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 from src.core.exceptions import ValidationError
-from src.services.ai.schemas import ChartType
+from src.services.graphics.schemas import ChartType
 from src.services.graphics.svg_generator import (
     NEON_PALETTE,
     SIZE_INSTAGRAM,

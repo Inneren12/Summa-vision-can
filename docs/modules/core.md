@@ -17,7 +17,6 @@ core/
 ├── security/
 │   ├── auth.py            ← AuthMiddleware (X-API-KEY)
 │   └── ip_rate_limiter.py ← InMemoryRateLimiter (per-IP sliding window)
-├── task_manager.py    ← In-memory task manager (legacy, being replaced by Job model)
 ├── scheduler.py       ← APScheduler CRON integration
 └── database.py        ← SQLAlchemy async engine + session factory
 
@@ -139,13 +138,6 @@ Filesystem backend saving to `./data/local_storage/`. Returns `file://` URIs for
 ### `get_storage_manager(settings)` (storage.py) — ✅ Complete
 Factory selecting implementation based on `settings.storage_backend`.
 
-### `TaskManager` (task_manager.py) — ✅ Complete
-In-memory async task engine for HTTP 202 pattern.
-- `submit_task(coro) -> str` — Wraps coroutine in `asyncio.create_task`, returns UUID.
-- `get_task_status(task_id) -> TaskStatusResponse` — Returns PENDING/RUNNING/COMPLETED/FAILED.
-- `TaskStatusResponse` — Pydantic model with `task_id`, `status`, `result_url`, `detail`.
-- Module-level singleton via `get_task_manager()`.
-
 ### `AsyncSession` / `get_db()` (database.py) — ✅ Complete
 SQLAlchemy 2.0 async engine and session factory.
 - `get_db()` — FastAPI dependency yielding `AsyncSession`.
@@ -167,7 +159,6 @@ Persistent job scheduler backed by APScheduler with SQLAlchemy job store.
 | `asyncio` | `services/statcan/client.py` |
 | `pydantic-settings` | `main.py` |
 | `structlog` | All modules |
-| `aiobotocore` | `services/cmhc/service.py` |
 | `sqlalchemy` + `alembic` | `repositories/*.py` |
 
 ---

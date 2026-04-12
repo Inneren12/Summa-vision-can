@@ -11,8 +11,6 @@ api/
 └── routers/
     ├── __init__.py
     ├── health.py               ← GET /api/health, GET /api/health/ready
-    ├── tasks.py                ← GET /api/v1/admin/tasks/{task_id}
-    ├── cmhc.py                 ← POST /api/v1/admin/cmhc/sync
     ├── admin_kpi.py            ← GET /api/v1/admin/kpi
     ├── admin_leads.py          ← POST /api/v1/admin/leads/resync (D-3)
     ├── public_graphics.py      ← GET /api/v1/public/graphics
@@ -75,27 +73,6 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 |--------|------|--------|-------------|
 | `GET` | `/api/health` | 200 | Liveness probe with timestamp |
 | `GET` | `/api/health/ready` | 200 / 503 | Readiness, checks DB + temp dir, returns 503 if not ready |
-
-### Task Polling Router (`routers/tasks.py`) — ✅ Complete
-
-| Method | Path | Status | Description |
-|--------|------|--------|-------------|
-| `GET` | `/api/v1/tasks/{task_id}` | 200 / 404 | Poll task status (PENDING → RUNNING → COMPLETED / FAILED) |
-
-- Returns `TaskStatusResponse` with `task_id`, `status`, `result_url`, `detail`.
-- Injects `TaskManager` via `Depends(get_task_manager)`.
-- Returns `HTTP 404` if `task_id` is unknown.
-
-### CMHC Router (`routers/cmhc.py`) — ✅ Complete
-
-| Method | Path | Status | Description |
-|--------|------|--------|-------------|
-| `POST` | `/api/v1/cmhc/sync` | 202 | Trigger CMHC extraction pipeline as background task |
-
-- Accepts `CMHCSyncRequest` body with `city: str`.
-- Submits `run_cmhc_extraction_pipeline` coroutine to `TaskManager`.
-- Returns `HTTP 202 Accepted` with `CMHCSyncResponse(task_id=...)` immediately.
-- Injects `TaskManager` and `StorageInterface` via `Depends`.
 
 ### Public Graphics Router (`routers/public_graphics.py`) — ✅ Complete
 
@@ -190,9 +167,6 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 
 | Schema | Module | Fields |
 |--------|--------|--------|
-| `CMHCSyncRequest` | `routers/cmhc.py` | `city: str` (min_length=1, strip whitespace) |
-| `CMHCSyncResponse` | `routers/cmhc.py` | `task_id: str` |
-| `TaskStatusResponse` | `core/task_manager.py` | `task_id`, `status` (enum), `result_url`, `detail` |
 | `PublicationResponse` | `routers/public_graphics.py` | `id: int`, `headline: str`, `chart_type: str`, `virality_score: float`, `preview_url: str`, `created_at: datetime` |
 | `PaginatedGraphicsResponse` | `routers/public_graphics.py` | `items: list[PublicationResponse]`, `limit: int`, `offset: int` |
 | `LeadCaptureRequest` | `schemas/public_leads.py` | `email: EmailStr`, `asset_id: int`, `turnstile_token: str` |
@@ -207,7 +181,7 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 ## Architectural Rules
 
 - **ARCH-DPEN-001**: Controllers receive services via `Depends`, never instantiate them.
-- **ARCH-TASK-001**: Long-running operations use TaskManager + HTTP 202.
+- **ARCH-TASK-001**: Long-running operations use persistent Job system + HTTP 202.
 - HTTP controllers must only handle Request/Response mapping.
 - No business logic in routing files.
 
@@ -216,7 +190,6 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 | This module uses | This module is used by |
 |------------------|----------------------|
 | `repositories.job_repository.JobRepository` (admin_jobs) | `main.py` (router registration) |
-| `core.task_manager.TaskManager` | `main.py` (router registration) |
 | `core.storage.StorageInterface` | — |
 | `core.security.ip_rate_limiter.InMemoryRateLimiter` | — |
 | `repositories.publication_repository.PublicationRepository` | — |
@@ -228,7 +201,6 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 | `services.crm.scoring.LeadScoringService` | — |
 | `services.notifications.slack.SlackNotifierService` | — |
 | `services.email.esp_client.ESPSubscriberInterface` | — |
-| `services.cmhc.service.run_cmhc_extraction_pipeline` | — |
 | `fastapi.Depends` | — |
 
 ---

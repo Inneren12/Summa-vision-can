@@ -5,11 +5,10 @@
 The current flow is:
 
 ```
-   Data Sources → ETL Pipeline → Cube Catalog (search) → Data Workbench → LLM Gate → Visual Engine → Publication
-                                                                              ↓                ↓
-                                                                     Human-in-the-Loop (Admin)
+   Data Sources → ETL Pipeline → Cube Catalog (search) → Data Workbench → Visual Engine → Publication
+                                                                                              ↓
+                                                                                     Human-in-the-Loop (Admin)
 ```
-*(Note: LLM Gate is backlogged, but the module architecture remains)*
 
 ### Download Flow (D-2)
 
@@ -64,7 +63,6 @@ Raw tokens never stored in DB (SHA-256 only). Tokens limited to 5 uses, 48h TTL.
 ## ETL Pipelines
 
 - **Track A (StatCan)**: Catalog Sync → Search → Fetch → Workbench → Chart.
-- **Track B (CMHC)**: Planned.
 
 ## Data Engine
 
@@ -98,45 +96,37 @@ Note template backgrounds instead of AI backgrounds for MVP.
    │   ├── rate_limit.py
    │   ├── storage.py
    │   ├── scheduler.py
-   │   ├── task_manager.py
    │   ├── exceptions.py
    │   ├── error_handler.py
    │   ├── logging.py
-   │   ├── prompt_loader.py
    │   └── security/
    │       ├── auth.py
    │       └── ip_rate_limiter.py
    ├── api/routers/
-   │   ├── health.py              ← NEW (0-1)
-   │   ├── admin_graphics.py      ← Updated (B-4: job-based generate + GET /jobs/{id})
-   │   ├── admin_leads.py         ← NEW (D-3: ESP resync with exponential backoff)
+   │   ├── health.py              ← (0-1)
+   │   ├── admin_graphics.py      ← (B-4: job-based generate + GET /jobs/{id})
+   │   ├── admin_leads.py         ← (D-3: ESP resync with exponential backoff)
    │   ├── public_graphics.py
-   │   ├── public_leads.py        ← Updated (D-3: scoring + Slack + ESP background tasks)
-   │   ├── public_download.py     ← NEW (D-2: token exchange → presigned URL)
-   │   ├── public_sponsorship.py  ← NEW (D-3: tiered sponsorship inquiry)
-   │   ├── cmhc.py
-   │   └── tasks.py
+   │   ├── public_leads.py        ← (D-3: scoring + Slack + ESP background tasks)
+   │   ├── public_download.py     ← (D-2: token exchange → presigned URL)
+   │   └── public_sponsorship.py  ← (D-3: tiered sponsorship inquiry)
    ├── models/
    │   ├── publication.py
    │   ├── lead.py
-   │   ├── download_token.py  ← NEW (D-0c: SHA-256 token model)
-   │   └── llm_request.py
+   │   └── download_token.py  ← (D-0c: SHA-256 token model)
    ├── repositories/
    │   ├── publication_repository.py
    │   ├── lead_repository.py
-   │   ├── download_token_repository.py  ← NEW (D-2: atomic activate)
-   │   └── llm_request_repository.py
+   │   └── download_token_repository.py  ← (D-2: atomic activate)
    └── services/
        ├── statcan/ (Complete: maintenance guard, HTTP client, schemas, ETL service)
-       ├── cmhc/ (Stub: browser, parser, service files exist but contain no implementation)
-       ├── ai/ (Stub: llm_interface, scoring, cache exist but are not connected to pipeline)
-       ├── graphics/ (svg_generator, backgrounds, compositor, pipeline exist with implementation)
+       ├── graphics/ (svg_generator, backgrounds, compositor, pipeline)
        ├── crm/
-       │   └── scoring.py         ← NEW (D-3: pure sync lead scoring — ARCH-PURA-001)
+       │   └── scoring.py         ← (D-3: pure sync lead scoring — ARCH-PURA-001)
        ├── notifications/
-       │   └── slack.py           ← NEW (D-3: Slack webhook alerts with dedupe)
+       │   └── slack.py           ← (D-3: Slack webhook alerts with dedupe)
        ├── email/
        │   ├── interface.py       ← (D-0a: EmailServiceInterface + ConsoleEmailService)
-       │   └── esp_client.py      ← NEW (D-3: Beehiiv ESP client with error classification)
+       │   └── esp_client.py      ← (D-3: Beehiiv ESP client with error classification)
        └── security/ (D-0b: TurnstileValidator)
 ```

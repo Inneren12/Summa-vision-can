@@ -26,7 +26,7 @@ Example
 ::
 
     import pandas as pd
-    from src.services.ai.schemas import ChartType
+    from src.services.graphics.schemas import ChartType
     from src.services.graphics.svg_generator import generate_chart_svg, SIZE_TWITTER
 
     df = pd.DataFrame({"Month": ["Jan", "Feb", "Mar"], "Sales": [100, 150, 200]})
@@ -41,7 +41,7 @@ import plotly.graph_objects as go
 import plotly.io as pio
 
 from src.core.exceptions import ValidationError
-from src.services.ai.schemas import ChartType
+from src.services.graphics.schemas import ChartType
 from src.services.graphics.schemas import ChartConfig
 
 # ---------------------------------------------------------------------------
