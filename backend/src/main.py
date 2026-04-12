@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routers.admin_cubes import router as admin_cubes_router
+from src.api.routers.admin_jobs import router as admin_jobs_router
 from src.api.routers.admin_data import router as admin_data_router
 from src.api.routers.admin_kpi import router as admin_kpi_router
 from src.api.routers.admin_graphics import router as admin_graphics_router
@@ -150,6 +151,7 @@ app.include_router(admin_graphics_router)
 app.include_router(admin_cubes_router)
 app.include_router(admin_data_router)
 app.include_router(admin_kpi_router)
+app.include_router(admin_jobs_router)
 
 # ---------------------------------------------------------------------------
 # Middlewares (registered AFTER routers — Starlette wraps the full app)

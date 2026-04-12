@@ -41,6 +41,12 @@ class AppDrawer extends StatelessWidget {
             selected: currentPath.startsWith('/cubes'),
           ),
           _NavTile(
+            icon: Icons.work_history,
+            label: 'Jobs',
+            route: AppRoutes.jobs,
+            selected: currentPath == AppRoutes.jobs,
+          ),
+          _NavTile(
             icon: Icons.bar_chart,
             label: 'KPI',
             route: AppRoutes.kpi,
