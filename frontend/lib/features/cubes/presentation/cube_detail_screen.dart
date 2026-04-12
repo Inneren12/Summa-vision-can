@@ -1,24 +1,134 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../data_preview/data/data_preview_repository.dart';
 import '../application/cube_providers.dart';
 
-/// Stub detail screen for a single cube.
+/// Detail screen for a single cube.
 ///
 /// Displays all metadata fields in a card layout.
-/// The "Fetch Data" button is disabled — it will be enabled in C-3.
-class CubeDetailScreen extends ConsumerWidget {
+/// "Fetch Data" triggers a fetch job, polls for completion, then
+/// navigates to the Data Preview screen.
+class CubeDetailScreen extends ConsumerStatefulWidget {
   const CubeDetailScreen({super.key, required this.productId});
 
   final String productId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final detailAsync = ref.watch(cubeDetailProvider(productId));
+  ConsumerState<CubeDetailScreen> createState() => _CubeDetailScreenState();
+}
+
+class _CubeDetailScreenState extends ConsumerState<CubeDetailScreen> {
+  bool _isFetching = false;
+  int _pollAttempts = 0;
+  static const int _maxPolls = 60;
+  static const Duration _pollInterval = Duration(seconds: 2);
+
+  Future<void> _onFetchData() async {
+    if (_isFetching) return;
+
+    setState(() {
+      _isFetching = true;
+      _pollAttempts = 0;
+    });
+
+    try {
+      final repo = ref.read(dataPreviewRepositoryProvider);
+
+      // 1. Trigger fetch
+      final jobId = await repo.triggerFetch(widget.productId);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fetching data... (Job: $jobId)'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+
+      // 2. Poll for completion
+      for (var i = 0; i < _maxPolls; i++) {
+        await Future.delayed(_pollInterval);
+        if (!mounted) return;
+
+        setState(() => _pollAttempts = i + 1);
+
+        final status = await repo.getJobStatus(jobId);
+        final jobStatus = (status['status'] as String?)?.toLowerCase() ?? '';
+
+        if (jobStatus == 'success' || jobStatus == 'completed') {
+          // Extract storage_key from result_json
+          String? storageKey;
+          final resultJson = status['result_json'];
+          if (resultJson is String) {
+            final parsed = json.decode(resultJson) as Map<String, dynamic>;
+            storageKey = parsed['storage_key'] as String?;
+          } else if (resultJson is Map) {
+            storageKey = resultJson['storage_key'] as String?;
+          }
+
+          if (!mounted) return;
+
+          if (storageKey != null) {
+            context.go(
+              '/data/preview?key=${Uri.encodeComponent(storageKey)}',
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Fetch completed but no storage key returned'),
+              ),
+            );
+          }
+
+          setState(() => _isFetching = false);
+          return;
+        }
+
+        if (jobStatus == 'failed') {
+          if (!mounted) return;
+          final errorMsg =
+              status['error']?.toString() ?? 'Data fetch failed on server';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(errorMsg)),
+          );
+          setState(() => _isFetching = false);
+          return;
+        }
+      }
+
+      // Timeout
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Data fetch timed out. Try again?'),
+          action: SnackBarAction(
+            label: 'Retry',
+            onPressed: _onFetchData,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fetch error: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isFetching = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final detailAsync = ref.watch(cubeDetailProvider(widget.productId));
 
     return Scaffold(
-      appBar: AppBar(title: Text('Cube $productId')),
+      appBar: AppBar(title: Text('Cube ${widget.productId}')),
       body: detailAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(
@@ -36,7 +146,7 @@ class CubeDetailScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () =>
-                    ref.invalidate(cubeDetailProvider(productId)),
+                    ref.invalidate(cubeDetailProvider(widget.productId)),
                 child: const Text('Retry'),
               ),
             ],
@@ -81,20 +191,30 @@ class CubeDetailScreen extends ConsumerWidget {
                   _DetailRow(
                     label: 'Date Range',
                     value:
-                        '${cube.startDate ?? '—'} to ${cube.endDate ?? '—'}',
+                        '${cube.startDate ?? '\u2014'} to ${cube.endDate ?? '\u2014'}',
                   ),
                   _DetailRow(
                     label: 'Archive Status',
                     value: cube.archiveStatus ? 'Archived' : 'Active',
                   ),
                   const SizedBox(height: 24),
-                  // Disabled Fetch Data button — placeholder for C-3
-                  Tooltip(
-                    message: 'Coming in C-3',
-                    child: ElevatedButton.icon(
-                      onPressed: null,
-                      icon: const Icon(Icons.download),
-                      label: const Text('Fetch Data'),
+                  // Fetch Data button — enabled, triggers fetch + polling
+                  ElevatedButton.icon(
+                    onPressed: _isFetching ? null : _onFetchData,
+                    icon: _isFetching
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppTheme.backgroundDark,
+                            ),
+                          )
+                        : const Icon(Icons.download),
+                    label: Text(
+                      _isFetching
+                          ? 'Fetching... ($_pollAttempts/$_maxPolls)'
+                          : 'Fetch Data',
                     ),
                   ),
                 ],

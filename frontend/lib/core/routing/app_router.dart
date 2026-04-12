@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/cubes/presentation/cube_detail_screen.dart';
 import '../../features/cubes/presentation/cube_search_screen.dart';
+import '../../features/data_preview/presentation/data_preview_screen.dart';
 import '../../features/editor/presentation/editor_screen.dart';
 import '../../features/graphics/presentation/preview_screen.dart';
 import '../../features/queue/presentation/queue_screen.dart';
@@ -14,8 +15,9 @@ class AppRoutes {
   static const queue       = '/queue';
   static const editor      = '/editor/:briefId';
   static const preview     = '/preview/:taskId';
-  static const cubeSearch  = '/cubes/search';
-  static const cubeDetail  = '/cubes/:productId';
+  static const cubeSearch   = '/cubes/search';
+  static const cubeDetail   = '/cubes/:productId';
+  static const dataPreview   = '/data/preview';
 }
 
 /// Riverpod provider for the [GoRouter] instance.
@@ -34,6 +36,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         '/editor/',
         '/preview/',
         '/cubes/',
+        '/data/',
       ];
       final path = state.matchedLocation;
 
@@ -63,6 +66,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final productId = state.pathParameters['productId'] ?? '';
           return CubeDetailScreen(productId: productId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.dataPreview,
+        name: 'dataPreview',
+        builder: (context, state) {
+          final key = state.uri.queryParameters['key'] ?? '';
+          return DataPreviewScreen(storageKey: key);
         },
       ),
       GoRoute(

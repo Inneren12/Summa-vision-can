@@ -15,6 +15,9 @@ class MockInterceptor extends Interceptor {
   /// Allows tests to disable the artificial delay.
   final bool enableDelay;
 
+  /// Tracks poll count for the mock fetch job to simulate running → success.
+  int _fetchJobPollCount = 0;
+
   MockInterceptor({this.enableDelay = true});
 
   static bool get isEnabled =>
@@ -37,6 +40,66 @@ class MockInterceptor extends Interceptor {
     }
 
     final path = options.path;
+
+    // Data preview: GET /admin/data/preview/*
+    if (path.contains('/admin/data/preview/') && options.method == 'GET') {
+      handler.resolve(
+        Response(
+          requestOptions: options,
+          statusCode: 200,
+          data: _dataPreviewFixture,
+        ),
+        true,
+      );
+      return;
+    }
+
+    // Fetch trigger: POST /admin/cubes/*/fetch
+    if (path.contains('/fetch') && options.method == 'POST') {
+      handler.resolve(
+        Response(
+          requestOptions: options,
+          statusCode: 202,
+          data: {'job_id': 456, 'status': 'queued', 'product_id': '13-10-0888-01'},
+        ),
+        true,
+      );
+      return;
+    }
+
+    // Job status: GET /admin/jobs/456
+    if (path.contains('/admin/jobs/456')) {
+      _fetchJobPollCount++;
+      if (_fetchJobPollCount <= 2) {
+        handler.resolve(
+          Response(
+            requestOptions: options,
+            statusCode: 200,
+            data: {
+              'job_id': '456',
+              'status': 'running',
+            },
+          ),
+          true,
+        );
+      } else {
+        handler.resolve(
+          Response(
+            requestOptions: options,
+            statusCode: 200,
+            data: {
+              'job_id': '456',
+              'status': 'success',
+              'result_json':
+                  '{"storage_key": "statcan/processed/13-10-0888-01/2024-12-15.parquet"}',
+            },
+          ),
+          true,
+        );
+        _fetchJobPollCount = 0; // reset for next fetch cycle
+      }
+      return;
+    }
 
     if (path.contains('/admin/cubes/sync') && options.method == 'POST') {
       handler.resolve(
@@ -196,6 +259,25 @@ class MockInterceptor extends Interceptor {
     'start_date': '1981-01-01',
     'end_date': '2024-12-01',
     'archive_status': false,
+  };
+
+  static const Map<String, dynamic> _dataPreviewFixture = {
+    'storage_key': 'statcan/processed/13-10-0888-01/2024-12-15.parquet',
+    'rows': 1500,
+    'columns': 5,
+    'column_names': ['REF_DATE', 'GEO', 'VALUE', 'SCALAR_ID', 'STATUS'],
+    'data': [
+      {'REF_DATE': '2024-01', 'GEO': 'Canada', 'VALUE': 156.2, 'SCALAR_ID': 0, 'STATUS': 'A'},
+      {'REF_DATE': '2024-01', 'GEO': 'Ontario', 'VALUE': 162.1, 'SCALAR_ID': 0, 'STATUS': 'A'},
+      {'REF_DATE': '2024-02', 'GEO': 'Canada', 'VALUE': 157.8, 'SCALAR_ID': 0, 'STATUS': 'A'},
+      {'REF_DATE': '2024-02', 'GEO': 'Ontario', 'VALUE': 163.5, 'SCALAR_ID': 0, 'STATUS': 'A'},
+      {'REF_DATE': '2024-03', 'GEO': 'Canada', 'VALUE': 159.1, 'SCALAR_ID': 0, 'STATUS': 'A'},
+      {'REF_DATE': '2024-03', 'GEO': 'Quebec', 'VALUE': 148.3, 'SCALAR_ID': 0, 'STATUS': 'A'},
+      {'REF_DATE': '2024-04', 'GEO': 'Canada', 'VALUE': null, 'SCALAR_ID': 0, 'STATUS': 'F'},
+      {'REF_DATE': '2024-04', 'GEO': 'Ontario', 'VALUE': 165.0, 'SCALAR_ID': 0, 'STATUS': 'A'},
+      {'REF_DATE': '2024-05', 'GEO': 'Canada', 'VALUE': 161.4, 'SCALAR_ID': 0, 'STATUS': 'A'},
+      {'REF_DATE': '2024-05', 'GEO': 'Quebec', 'VALUE': 150.7, 'SCALAR_ID': 1, 'STATUS': 'A'},
+    ],
   };
 
   static const List<Map<String, dynamic>> _queueFixture = [
