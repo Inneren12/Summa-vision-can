@@ -1,10 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import GraphicPage, { generateMetadata } from '@/app/graphics/[id]/page';
-import { fetchGraphic } from '@/lib/api';
+import { fetchGraphic } from '@/lib/api/server';
 import { notFound } from 'next/navigation';
 
 // Mock the API and navigation modules
-jest.mock('@/lib/api', () => ({
+jest.mock('@/lib/api/server', () => ({
   fetchGraphic: jest.fn(),
 }));
 
@@ -75,8 +75,8 @@ describe('GraphicPage', () => {
       });
     });
 
-    it('returns fallback metadata when API fails', async () => {
-      (fetchGraphic as jest.Mock).mockRejectedValue(new Error('Not found'));
+    it('returns fallback metadata when graphic not found', async () => {
+      (fetchGraphic as jest.Mock).mockResolvedValue(null);
 
       const params = Promise.resolve({ id: '999' });
       const metadata = await generateMetadata({ params });
@@ -106,8 +106,8 @@ describe('GraphicPage', () => {
       expect(screen.getByTestId('download-modal')).toHaveTextContent('42');
     });
 
-    it('calls notFound when API fails', async () => {
-      (fetchGraphic as jest.Mock).mockRejectedValue(new Error('Not found'));
+    it('calls notFound when graphic not found', async () => {
+      (fetchGraphic as jest.Mock).mockResolvedValue(null);
 
       const params = Promise.resolve({ id: '999' });
       await GraphicPage({ params });
