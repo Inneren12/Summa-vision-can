@@ -106,6 +106,12 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `api/schemas/public_leads.py` | >90% | ✅ 100% | `tests/api/test_lead_capture.py` |
 | `repositories/download_token_repository.py` | >90% | ✅ 100% | `tests/repositories/test_download_token_repository.py` |
 | `models/download_token.py` | >90% | ✅ 100% | `tests/repositories/test_download_token_repository.py` |
+| `services/crm/scoring.py` | >90% | ✅ 100% | `tests/services/crm/test_scoring.py` |
+| `services/notifications/slack.py` | >90% | ✅ 100% | `tests/services/notifications/test_slack.py` |
+| `services/email/esp_client.py` | >90% | ✅ 100% | `tests/services/email/test_esp_client.py` |
+| `api/routers/admin_leads.py` | >90% | ✅ 100% | `tests/api/test_resync.py` |
+| `api/routers/public_sponsorship.py` | >90% | ✅ 100% | `tests/api/test_sponsorship.py` |
+| `api/routers/public_leads.py` (D-3 integration) | >90% | ✅ 100% | `tests/api/test_lead_capture_scoring.py` |
 | `services/email/interface.py` | >90% | ✅ | (mocked in lead capture tests) |
 | `services/security/turnstile.py` | >90% | ✅ | (mocked in lead capture tests) |
 | `services/kpi/kpi_service.py` | >90% | ✅ | `tests/services/kpi/test_kpi_service.py` |
@@ -114,7 +120,7 @@ pytest tests/services/statcan/test_maintenance.py -v
 
 | `scripts/ops/generate_batch.py` | >90% | ✅ | `tests/scripts/ops/test_generate_batch.py` |
 
-**Overall:** 500+ tests, 96%+ total coverage (as of 2026-04-12).
+**Overall:** 560+ tests, 96%+ total coverage (as of 2026-04-12).
 
 ## Mocking Strategy
 
@@ -128,6 +134,9 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `structlog` | `unittest.mock.patch` on logger methods |
 | `google-genai` (Gemini SDK) | `unittest.mock.MagicMock` on `genai.Client.models.generate_content` |
 | `StorageInterface` | `LocalStorageManager` for integration tests, `unittest.mock.AsyncMock` for unit tests |
+| `SlackNotifierService` | `AsyncMock` injected via `Depends` override in lead capture + sponsorship tests |
+| `ESPSubscriberInterface` (BeehiivClient) | `AsyncMock` injected via `Depends` override; error classification tested with `httpx` mock |
+| `LeadScoringService` | Direct instantiation (pure sync, no mocking needed) |
 | `TaskManager` | In-memory instance with mock coroutines |
 | Job repository (in runner tests) | Direct SQLite-backed AsyncSession |
 | Database (AsyncSession) | In-memory `aiosqlite` via `create_async_engine("sqlite+aiosqlite://")` |

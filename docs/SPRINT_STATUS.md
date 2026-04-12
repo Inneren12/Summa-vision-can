@@ -96,4 +96,4 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 | D-0c | DownloadToken Model | ✅ | Étape 0 |
 | D-1 | Public Gallery + Individual Page | ✅ | B-4 |
 | D-2 | Lead Capture + Secure Download | ✅ | D-0a, D-0b, D-0c |
-| D-3 | B2B Scoring + Slack Notifications | ⬜ | D-2 |
+| D-3 | B2B Scoring + Slack Notifications | ✅ | D-2 |
