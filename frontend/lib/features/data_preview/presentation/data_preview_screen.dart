@@ -560,12 +560,13 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
           const Spacer(),
           ElevatedButton.icon(
             onPressed: () {
-              // Stub — navigates to placeholder until C-3 is implemented
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Chart configuration coming in C-3'),
-                  duration: Duration(seconds: 2),
-                ),
+              // Extract productId from storageKey if possible.
+              final parts = widget.storageKey.split('/');
+              final productId =
+                  parts.length >= 2 ? parts[parts.length - 2] : null;
+              context.go(
+                '/graphics/config?key=${Uri.encodeComponent(widget.storageKey)}'
+                '${productId != null ? '&productId=$productId' : ''}',
               );
             },
             icon: const Icon(Icons.bar_chart, size: 18),

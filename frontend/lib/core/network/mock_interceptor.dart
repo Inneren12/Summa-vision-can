@@ -18,6 +18,9 @@ class MockInterceptor extends Interceptor {
   /// Tracks poll count for the mock fetch job to simulate running → success.
   int _fetchJobPollCount = 0;
 
+  /// Tracks poll count per generation job_id for C-3 mock polling.
+  final Map<String, int> _genJobPollCounts = {};
+
   MockInterceptor({this.enableDelay = true});
 
   static bool get isEnabled =>
@@ -151,18 +154,21 @@ class MockInterceptor extends Interceptor {
       return;
     }
 
-    if (path.contains('/admin/graphics/generate')) {
+    // C-3: POST /admin/graphics/generate → 202 with job_id
+    if (path.contains('/admin/graphics/generate') &&
+        options.method == 'POST') {
       handler.resolve(
         Response(
           requestOptions: options,
           statusCode: 202,
-          data: {'task_id': 'mock-task-uuid-1234', 'message': 'Generation started'},
+          data: {'job_id': 'mock-gen-job-789', 'status': 'queued'},
         ),
         true,
       );
       return;
     }
 
+    // Legacy PR-24: GET /admin/tasks/* → immediate COMPLETED
     if (path.contains('/admin/tasks/')) {
       handler.resolve(
         Response(
@@ -176,6 +182,44 @@ class MockInterceptor extends Interceptor {
         ),
         true,
       );
+      return;
+    }
+
+    // C-3: GET /admin/jobs/mock-gen-job-789 → polling simulation
+    if (path.contains('/admin/jobs/mock-gen-job-789')) {
+      const jobId = 'mock-gen-job-789';
+      _genJobPollCounts[jobId] = (_genJobPollCounts[jobId] ?? 0) + 1;
+      final count = _genJobPollCounts[jobId]!;
+
+      if (count <= 3) {
+        handler.resolve(
+          Response(
+            requestOptions: options,
+            statusCode: 200,
+            data: {
+              'id': jobId,
+              'status': 'running',
+              'result_json': null,
+            },
+          ),
+          true,
+        );
+      } else {
+        _genJobPollCounts[jobId] = 0; // reset for next cycle
+        handler.resolve(
+          Response(
+            requestOptions: options,
+            statusCode: 200,
+            data: {
+              'id': jobId,
+              'status': 'success',
+              'result_json':
+                  '{"publication_id":1,"cdn_url_lowres":"https://placehold.co/1080x1080/141414/00E5FF?text=Mock+Chart","s3_key_highres":"publications/1/v1/abcd_highres.png","version":1}',
+            },
+          ),
+          true,
+        );
+      }
       return;
     }
 
