@@ -64,9 +64,11 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 |----|-------|--------|--------------|
 | C-1 | Cube Search Screen | 🔄 | A-4, PR-20, PR-46 |
 | C-2 | Data Preview | 🔄 | C-1, A-5 |
-| C-3 | Fetch Data Integration | ⬜ | C-1, A-5 |
+| C-3 | Chart Config + Generation Screen | 🔄 | C-2, B-4 |
 
 **Étape C-1:** CubeSearchScreen with debounced search, CubeSearchTile, CubeDetailScreen stub, MockInterceptor fixtures, AppDrawer navigation, GoRouter routes, freezed models, Riverpod providers, widget + model tests.
+
+**Étape C-3:** ChartConfigScreen with chart type / size preset / background category selectors, title field with validation, async generation flow (submit → poll → result), inline image preview with download button, MockInterceptor polling simulation, widget + model tests. Wires C-2 "Generate Chart" button to /graphics/config route.
 
 ## Étape B: Visual Engine
 

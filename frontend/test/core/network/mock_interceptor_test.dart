@@ -62,7 +62,10 @@ void main() {
     });
 
     test('returns 202 for /admin/graphics/generate', () async {
-      final options = RequestOptions(path: '/api/v1/admin/graphics/generate');
+      final options = RequestOptions(
+        path: '/api/v1/admin/graphics/generate',
+        method: 'POST',
+      );
       final completer = Completer<Response>();
 
       interceptor.onRequest(
@@ -74,7 +77,7 @@ void main() {
 
       final captured = await completer.future;
       expect(captured.statusCode, equals(202));
-      expect((captured.data as Map)['task_id'], isNotNull);
+      expect((captured.data as Map)['job_id'], isNotNull);
     });
 
     test('returns COMPLETED status for /admin/tasks/', () async {
