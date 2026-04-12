@@ -10,6 +10,7 @@ Covers:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -25,6 +26,7 @@ if str(_backend_dir) not in sys.path:
 from scripts.ops.generate_batch import (
     _build_parser,
     _parse_entries,
+    _run_batch,
     _validate_entry,
     main,
 )
@@ -257,3 +259,79 @@ class TestMainExecution:
             exit_code = main(["--manifest", str(manifest)])
 
         assert exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# Concurrency verification
+# ---------------------------------------------------------------------------
+
+
+class TestBatchConcurrency:
+    """Tests verifying real concurrent execution in _run_batch."""
+
+    @pytest.mark.asyncio()
+    async def test_batch_concurrency_is_real(self) -> None:
+        """Verify that batch processing runs items concurrently, not sequentially.
+
+        Setup: 4 items with concurrency=2, each taking 0.5s.
+        If sequential: 4 * 0.5s = 2.0s minimum.
+        If concurrent (2 at a time): 2 * 0.5s = 1.0s minimum.
+        """
+
+        async def mock_generate(**kwargs):
+            await asyncio.sleep(0.5)  # simulate 500ms work per item
+            result = MagicMock()
+            result.publication_id = 1
+            result.version = 1
+            result.model_dump.return_value = {"publication_id": 1, "version": 1}
+            return result
+
+        pipeline = MagicMock()
+        pipeline.generate = mock_generate
+
+        entries = [
+            {"data_key": f"key-{i}", "chart_type": "bar", "title": f"Title {i}", "category": "housing"}
+            for i in range(4)
+        ]
+
+        start = asyncio.get_event_loop().time()
+        results = await _run_batch(entries, pipeline, concurrency=2)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        ok_count = sum(1 for r in results if r["status"] == "ok")
+        assert ok_count == 4
+        # Concurrent: should complete in ~1.0s, not ~2.0s
+        assert elapsed < 1.5, f"Batch took {elapsed:.1f}s — expected <1.5s with concurrency=2"
+
+    @pytest.mark.asyncio()
+    async def test_batch_failure_does_not_stop_others(self) -> None:
+        """One failing item must not prevent other items from completing."""
+        call_count = 0
+
+        async def mock_generate(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if kwargs.get("data_key") == "key-fail":
+                raise RuntimeError("Simulated failure")
+            result = MagicMock()
+            result.publication_id = 1
+            result.version = 1
+            result.model_dump.return_value = {"publication_id": 1, "version": 1}
+            return result
+
+        pipeline = MagicMock()
+        pipeline.generate = mock_generate
+
+        entries = [
+            {"data_key": "key-ok-1", "chart_type": "bar", "title": "OK 1", "category": "housing"},
+            {"data_key": "key-fail", "chart_type": "bar", "title": "Fail", "category": "housing"},
+            {"data_key": "key-ok-2", "chart_type": "bar", "title": "OK 2", "category": "housing"},
+        ]
+
+        results = await _run_batch(entries, pipeline, concurrency=2)
+
+        assert call_count == 3  # all items were attempted
+        ok_count = sum(1 for r in results if r["status"] == "ok")
+        fail_count = sum(1 for r in results if r["status"] == "error")
+        assert ok_count == 2
+        assert fail_count == 1

@@ -154,9 +154,50 @@ def _validate_entry(entry: dict[str, Any], index: int) -> list[str]:
 
 async def _run_batch(
     entries: list[dict[str, Any]],
+    pipeline: Any,
     concurrency: int,
 ) -> list[dict[str, Any]]:
-    """Execute all generation entries through the pipeline."""
+    """Execute all generation entries concurrently through the pipeline.
+
+    Uses ``asyncio.Semaphore`` to bound the number of concurrent renders
+    to the value of *concurrency*.
+    """
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def _process_one(i: int, entry: dict[str, Any]) -> dict[str, Any]:
+        async with semaphore:
+            title = entry.get("title", "untitled")
+            print(f"[{i}/{len(entries)}] Generating: {title} ...")
+            try:
+                result = await pipeline.generate(
+                    data_key=entry["data_key"],
+                    chart_type=entry["chart_type"],
+                    title=entry["title"],
+                    size=tuple(entry.get("size", [1080, 1080])),
+                    category=entry.get("category", "housing"),
+                    source_product_id=entry.get("source_product_id"),
+                    render_sem=None,
+                    io_sem=None,
+                )
+                print(
+                    f"  OK  publication_id={result.publication_id} "
+                    f"version={result.version}"
+                )
+                return {"index": i, "status": "ok", "result": result.model_dump()}
+            except Exception as exc:
+                print(f"  FAIL  {exc}", file=sys.stderr)
+                return {"index": i, "status": "error", "error": str(exc)}
+
+    tasks = [_process_one(i, entry) for i, entry in enumerate(entries, 1)]
+    results = list(await asyncio.gather(*tasks))
+    return results
+
+
+async def _setup_and_run_batch(
+    entries: list[dict[str, Any]],
+    concurrency: int,
+) -> list[dict[str, Any]]:
+    """Create the pipeline, execute the batch, and dispose the engine."""
     from src.core.config import get_settings
     from src.core.database import get_engine, get_session_factory
     from src.core.storage import get_storage_manager
@@ -172,39 +213,10 @@ async def _run_batch(
         settings=settings,
     )
 
-    render_sem = asyncio.Semaphore(concurrency)
-    io_sem = asyncio.Semaphore(concurrency * 5)
-
-    results: list[dict[str, Any]] = []
-
-    for i, entry in enumerate(entries, 1):
-        title = entry.get("title", "untitled")
-        print(f"[{i}/{len(entries)}] Generating: {title} ...")
-
-        try:
-            result = await pipeline.generate(
-                data_key=entry["data_key"],
-                chart_type=entry["chart_type"],
-                title=entry["title"],
-                size=tuple(entry.get("size", [1080, 1080])),
-                category=entry.get("category", "housing"),
-                source_product_id=entry.get("source_product_id"),
-                render_sem=render_sem,
-                io_sem=io_sem,
-            )
-            results.append({"index": i, "status": "ok", "result": result.model_dump()})
-            print(
-                f"  OK  publication_id={result.publication_id} "
-                f"version={result.version}"
-            )
-        except Exception as exc:
-            results.append({"index": i, "status": "error", "error": str(exc)})
-            print(f"  FAIL  {exc}", file=sys.stderr)
-
-    # Dispose engine
-    await get_engine().dispose()
-
-    return results
+    try:
+        return await _run_batch(entries, pipeline, concurrency)
+    finally:
+        await get_engine().dispose()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -233,7 +245,11 @@ def main(argv: list[str] | None = None) -> int:
         print("Dry run complete — no jobs executed.")
         return 0
 
-    results = asyncio.run(_run_batch(entries, args.concurrency))
+    try:
+        results = asyncio.run(_setup_and_run_batch(entries, args.concurrency))
+    except KeyboardInterrupt:
+        print("\nInterrupted by user.")
+        return 130
 
     # Summary
     ok_count = sum(1 for r in results if r["status"] == "ok")

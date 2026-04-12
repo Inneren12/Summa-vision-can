@@ -10,9 +10,7 @@ Request and response models for:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
-
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 # ---------------------------------------------------------------------------
@@ -108,24 +106,3 @@ class JobStatusResponse(BaseModel):
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
-
-
-# ---------------------------------------------------------------------------
-# Legacy schemas (kept for backward compatibility of queue endpoint)
-# ---------------------------------------------------------------------------
-
-
-class GenerateRequest(BaseModel):
-    """Legacy request body — replaced by GraphicsGenerateRequest in B-4."""
-
-    brief_id: int
-    size_preset: Literal["instagram", "twitter", "reddit"] = "instagram"
-    dpi: int = Field(default=150, ge=72, le=300)
-    watermark: bool = True
-
-
-class GenerateResponse(BaseModel):
-    """Legacy response — replaced by GraphicsGenerateResponse in B-4."""
-
-    task_id: str
-    message: str = "Generation started"
