@@ -82,8 +82,7 @@ void main() {
       expect(status.status, 'success');
       expect(status.resultJson, isNotNull);
       expect(status.resultJson, contains('publication_id'));
-      expect(status.isSuccess, isTrue);
-      expect(status.isFailed, isFalse);
+      expect(status.status, 'success');
     });
 
     test('parses running status with null result_json', () {
@@ -95,8 +94,7 @@ void main() {
 
       final status = JobStatus.fromJson(json);
 
-      expect(status.isRunning, isTrue);
-      expect(status.isSuccess, isFalse);
+      expect(status.status, 'running');
       expect(status.resultJson, isNull);
     });
 
@@ -109,7 +107,7 @@ void main() {
 
       final status = JobStatus.fromJson(json);
 
-      expect(status.isFailed, isTrue);
+      expect(status.status, 'failed');
       expect(status.errorMessage, 'SVG render error');
     });
 
@@ -121,8 +119,7 @@ void main() {
 
       final status = JobStatus.fromJson(json);
 
-      expect(status.isQueued, isTrue);
-      expect(status.isRunning, isFalse);
+      expect(status.status, 'queued');
     });
   });
 

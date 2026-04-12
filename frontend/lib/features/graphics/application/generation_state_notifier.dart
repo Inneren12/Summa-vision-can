@@ -70,7 +70,7 @@ class ChartGenerationNotifier extends Notifier<ChartGenerationState> {
       final jobStatus = await repo.getJobStatus(jobId);
       state = state.copyWith(pollCount: attempt);
 
-      if (jobStatus.isSuccess && jobStatus.resultJson != null) {
+      if (jobStatus.status == 'success' && jobStatus.resultJson != null) {
         final resultMap =
             jsonDecode(jobStatus.resultJson!) as Map<String, dynamic>;
         final result = GenerationResult.fromJson(resultMap);
@@ -81,7 +81,7 @@ class ChartGenerationNotifier extends Notifier<ChartGenerationState> {
         return;
       }
 
-      if (jobStatus.isFailed) {
+      if (jobStatus.status == 'failed') {
         state = state.copyWith(
           phase: GenerationPhase.failed,
           errorMessage:

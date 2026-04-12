@@ -29,8 +29,11 @@ mixin _$JobStatus {
   @JsonKey(name: 'error_message')
   String? get errorMessage => throw _privateConstructorUsedError;
 
+  /// Serializes this JobStatus to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
 
+  /// Create a copy of JobStatus
+  /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
   $JobStatusCopyWith<JobStatus> get copyWith =>
       throw _privateConstructorUsedError;
@@ -56,9 +59,13 @@ class _$JobStatusCopyWithImpl<$Res, $Val extends JobStatus>
     implements $JobStatusCopyWith<$Res> {
   _$JobStatusCopyWithImpl(this._value, this._then);
 
+  // ignore: unused_field
   final $Val _value;
+  // ignore: unused_field
   final $Res Function($Val) _then;
 
+  /// Create a copy of JobStatus
+  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -69,15 +76,22 @@ class _$JobStatusCopyWithImpl<$Res, $Val extends JobStatus>
   }) {
     return _then(
       _value.copyWith(
-            jobId: null == jobId ? _value.jobId : jobId as String,
-            status:
-                null == status ? _value.status : status as String,
+            jobId: null == jobId
+                ? _value.jobId
+                : jobId // ignore: cast_nullable_to_non_nullable
+                      as String,
+            status: null == status
+                ? _value.status
+                : status // ignore: cast_nullable_to_non_nullable
+                      as String,
             resultJson: freezed == resultJson
                 ? _value.resultJson
-                : resultJson as String?,
+                : resultJson // ignore: cast_nullable_to_non_nullable
+                      as String?,
             errorMessage: freezed == errorMessage
                 ? _value.errorMessage
-                : errorMessage as String?,
+                : errorMessage // ignore: cast_nullable_to_non_nullable
+                      as String?,
           )
           as $Val,
     );
@@ -110,6 +124,8 @@ class __$$JobStatusImplCopyWithImpl<$Res>
     $Res Function(_$JobStatusImpl) _then,
   ) : super(_value, _then);
 
+  /// Create a copy of JobStatus
+  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -120,15 +136,22 @@ class __$$JobStatusImplCopyWithImpl<$Res>
   }) {
     return _then(
       _$JobStatusImpl(
-        jobId: null == jobId ? _value.jobId : jobId as String,
-        status:
-            null == status ? _value.status : status as String,
+        jobId: null == jobId
+            ? _value.jobId
+            : jobId // ignore: cast_nullable_to_non_nullable
+                  as String,
+        status: null == status
+            ? _value.status
+            : status // ignore: cast_nullable_to_non_nullable
+                  as String,
         resultJson: freezed == resultJson
             ? _value.resultJson
-            : resultJson as String?,
+            : resultJson // ignore: cast_nullable_to_non_nullable
+                  as String?,
         errorMessage: freezed == errorMessage
             ? _value.errorMessage
-            : errorMessage as String?,
+            : errorMessage // ignore: cast_nullable_to_non_nullable
+                  as String?,
       ),
     );
   }
@@ -136,13 +159,13 @@ class __$$JobStatusImplCopyWithImpl<$Res>
 
 /// @nodoc
 @JsonSerializable()
-class _$JobStatusImpl extends JobStatus {
+class _$JobStatusImpl implements _JobStatus {
   const _$JobStatusImpl({
     @JsonKey(name: 'job_id') required this.jobId,
     required this.status,
     @JsonKey(name: 'result_json') this.resultJson,
     @JsonKey(name: 'error_message') this.errorMessage,
-  }) : super._();
+  });
 
   factory _$JobStatusImpl.fromJson(Map<String, dynamic> json) =>
       _$$JobStatusImplFromJson(json);
@@ -182,6 +205,8 @@ class _$JobStatusImpl extends JobStatus {
   int get hashCode =>
       Object.hash(runtimeType, jobId, status, resultJson, errorMessage);
 
+  /// Create a copy of JobStatus
+  /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   @pragma('vm:prefer-inline')
@@ -194,14 +219,13 @@ class _$JobStatusImpl extends JobStatus {
   }
 }
 
-abstract class _JobStatus extends JobStatus {
+abstract class _JobStatus implements JobStatus {
   const factory _JobStatus({
     @JsonKey(name: 'job_id') required final String jobId,
     required final String status,
     @JsonKey(name: 'result_json') final String? resultJson,
     @JsonKey(name: 'error_message') final String? errorMessage,
   }) = _$JobStatusImpl;
-  const _JobStatus._() : super._();
 
   factory _JobStatus.fromJson(Map<String, dynamic> json) =
       _$JobStatusImpl.fromJson;
@@ -218,6 +242,8 @@ abstract class _JobStatus extends JobStatus {
   @JsonKey(name: 'error_message')
   String? get errorMessage;
 
+  /// Create a copy of JobStatus
+  /// with the given fields replaced by the non-null parameter values.
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$JobStatusImplCopyWith<_$JobStatusImpl> get copyWith =>
