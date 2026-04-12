@@ -125,6 +125,40 @@ async def scheduled_fetch_todays_releases() -> None:
         )
 
 
+async def scheduled_audit_cleanup() -> None:
+    """Wrapper executed by APScheduler to delete expired audit events.
+
+    Follows the same lazy-import + catch-all pattern used by
+    ``scheduled_fetch_todays_releases``.  Pulls ``session_factory`` via
+    ``get_session_factory()`` and ``retention_days`` from settings.
+    """
+    try:
+        logger.info("Scheduled job started: audit_cleanup")
+
+        from src.core.config import get_settings  # noqa: PLC0415
+        from src.core.database import get_session_factory  # noqa: PLC0415
+        from src.services.audit.cleanup import cleanup_old_audit_events  # noqa: PLC0415
+
+        settings = get_settings()
+        factory = get_session_factory()
+
+        deleted = await cleanup_old_audit_events(
+            session_factory=factory,
+            retention_days=settings.audit_retention_days,
+        )
+
+        logger.info(
+            "Scheduled job completed: audit_cleanup",
+            deleted=deleted,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Scheduled job failed: audit_cleanup",
+            error=str(exc),
+            exc_info=True,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Lifecycle management
 # ---------------------------------------------------------------------------
@@ -167,6 +201,17 @@ def start_scheduler(settings: Settings | None = None, app: object | None = None)
         timezone="US/Eastern",
         id="fetch_todays_releases",
         name="Fetch today's StatCan releases",
+        replace_existing=True,
+    )
+
+    # Register daily audit event cleanup (04:00 UTC).
+    _scheduler.add_job(
+        scheduled_audit_cleanup,
+        trigger="cron",
+        hour=4,
+        minute=0,
+        id="audit_cleanup",
+        name="Delete expired audit events",
         replace_existing=True,
     )
 

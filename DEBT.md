@@ -31,27 +31,7 @@ Rules:
 
 ## Active Debt
 
-### DEBT-010: No audit event retention cleanup
-- **Source:** PR #19 / Roadmap R18
-- **Added:** 2026-04-05
-- **Severity:** low
-- **Category:** ops
-- **Status:** accepted
-- **Description:** `AUDIT_RETENTION_DAYS=90` setting exists but no scheduled job or cron deletes old audit_events rows.
-- **Impact:** Table grows unbounded. Not a problem at low volume (pre-launch), becomes relevant after sustained traffic.
-- **Resolution:** Add a daily cleanup job: `DELETE FROM audit_events WHERE created_at < NOW() - INTERVAL '90 days'`
-- **Target:** After Étape D when real traffic generates events.
-
-### DEBT-015: GraphicPipeline generate() method is monolithic
-- **Source:** PR B-3 review
-- **Added:** 2026-04-09
-- **Severity:** low
-- **Category:** code-quality
-- **Status:** accepted
-- **Description:** `GraphicPipeline.generate()` contains the entire E2E process (11 stages) in a single ~120-line method with nested try/except blocks and inline async functions.
-- **Impact:** Harder to read and maintain. High cognitive load for future developers modifying individual stages.
-- **Resolution:** Refactor `generate()` into smaller private methods (e.g., `_load_data`, `_render_assets`, `_persist_to_db`) while preserving the semaphore boundary semantics.
-- **Target:** Future refactoring sprint or before Étape D.
+_No active debt._
 
 ---
 
@@ -59,6 +39,8 @@ Rules:
 
 | ID | Description | Resolved in | Date |
 |----|-------------|-------------|------|
+| DEBT-010 | No audit event retention cleanup | Final Debts | 2026-04-12 |
+| DEBT-015 | GraphicPipeline generate() method is monolithic | Final Debts | 2026-04-12 |
 | DEBT-001 | Cooldown query uses text match on JSON | Docs & Quality | 2026-04-12 |
 | DEBT-002 | Integration tests use metadata.create_all | Docs & Quality | 2026-04-12 |
 | DEBT-003 | Dockerfile doesn't run migrations on startup | Pre-deploy Hardening | 2026-04-12 |

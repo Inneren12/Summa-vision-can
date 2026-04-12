@@ -19,6 +19,7 @@ from src.core.config import Settings
 from src.core.scheduler import (
     _create_scheduler,
     get_scheduler,
+    scheduled_audit_cleanup,
     scheduled_fetch_todays_releases,
     shutdown_scheduler,
     start_scheduler,
@@ -84,7 +85,7 @@ class TestStartShutdown:
 
     @pytest.mark.asyncio
     async def test_start_registers_cron_job(self) -> None:
-        """Starting the scheduler should register the cron job."""
+        """Starting the scheduler should register the cron jobs."""
         settings = _make_settings()
         start_scheduler(settings)
 
@@ -93,34 +94,44 @@ class TestStartShutdown:
         assert scheduler.running
 
         jobs = scheduler.get_jobs()
-        assert len(jobs) == 1
+        assert len(jobs) == 2
 
-        job = jobs[0]
-        assert job.id == "fetch_todays_releases"
-        assert job.name == "Fetch today's StatCan releases"
+        job_ids = {j.id for j in jobs}
+        assert "fetch_todays_releases" in job_ids
+        assert "audit_cleanup" in job_ids
+
+        fetch_job = scheduler.get_job("fetch_todays_releases")
+        assert fetch_job is not None
+        assert fetch_job.name == "Fetch today's StatCan releases"
+
+        audit_job = scheduler.get_job("audit_cleanup")
+        assert audit_job is not None
+        assert audit_job.name == "Delete expired audit events"
 
     @pytest.mark.asyncio
     async def test_cron_job_timezone_is_eastern(self) -> None:
-        """The CRON trigger must use US/Eastern timezone."""
+        """The fetch CRON trigger must use US/Eastern timezone."""
         settings = _make_settings()
         start_scheduler(settings)
 
         scheduler = get_scheduler()
         assert scheduler is not None
-        job = scheduler.get_jobs()[0]
+        job = scheduler.get_job("fetch_todays_releases")
+        assert job is not None
         trigger = job.trigger
         tz = str(trigger.timezone)
         assert "Eastern" in tz or "US/Eastern" in tz
 
     @pytest.mark.asyncio
     async def test_cron_runs_on_weekdays_only(self) -> None:
-        """The job must be configured for Monday through Friday."""
+        """The fetch job must be configured for Monday through Friday."""
         settings = _make_settings()
         start_scheduler(settings)
 
         scheduler = get_scheduler()
         assert scheduler is not None
-        job = scheduler.get_jobs()[0]
+        job = scheduler.get_job("fetch_todays_releases")
+        assert job is not None
         trigger = job.trigger
 
         # APScheduler stores day_of_week fields — verify mon-fri (0-4)
@@ -168,7 +179,7 @@ class TestStartShutdown:
         scheduler = get_scheduler()
         assert scheduler is not None
         jobs = scheduler.get_jobs()
-        assert len(jobs) == 1
+        assert len(jobs) == 2  # fetch_todays_releases + audit_cleanup
 
 
 # ---------------------------------------------------------------------------
