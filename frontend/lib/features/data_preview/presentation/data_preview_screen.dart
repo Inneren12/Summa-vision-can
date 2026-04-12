@@ -65,7 +65,6 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
   void _onSort(String columnName) {
     final current = ref.read(previewSortColumnProvider);
     if (current == columnName) {
-      // Toggle direction
       final asc = ref.read(previewSortAscendingProvider);
       ref.read(previewSortAscendingProvider.notifier).state = !asc;
     } else {
@@ -75,15 +74,23 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
   }
 
   /// Extract a human-readable label from the storage key.
-  /// e.g. `statcan/processed/13-10-0888-01/2024-12-15.parquet` → `13-10-0888-01 / 2024-12-15`
   String _readableKey(String key) {
     final parts = key.split('/');
     if (parts.length >= 2) {
       final file = parts.last.replaceAll('.parquet', '');
-      final productId = parts.length >= 2 ? parts[parts.length - 2] : '';
+      final productId = parts[parts.length - 2];
       return '$productId / $file';
     }
     return key;
+  }
+
+  /// Infer a display dtype from a runtime value (used for schema chips
+  /// since the backend doesn't return dtype info in the preview endpoint).
+  String _inferDtype(dynamic value) {
+    if (value == null) return 'str';
+    if (value is int) return 'int64';
+    if (value is double) return 'float64';
+    return 'str';
   }
 
   @override
@@ -140,7 +147,7 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
               _buildInfoBar(preview),
 
               // B) Schema Inspector
-              _buildSchemaInspector(preview.columns),
+              _buildSchemaInspector(preview),
 
               // C) Filter Controls
               _buildFilterToolbar(preview),
@@ -148,10 +155,11 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
               // D) Data Table
               Expanded(
                 child: _buildDataTable(
-                  preview.columns,
+                  preview.columnNames,
                   filteredRows,
                   sortCol,
                   sortAsc,
+                  preview,
                 ),
               ),
 
@@ -176,6 +184,8 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
   }
 
   Widget _buildInfoBar(DataPreviewResponse preview) {
+    final returnedRows = preview.data.length;
+    final totalRows = preview.rows;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       color: AppTheme.surfaceDark,
@@ -183,7 +193,7 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _readableKey(widget.storageKey),
+            _readableKey(preview.storageKey),
             style: const TextStyle(
               color: AppTheme.neonBlue,
               fontSize: 14,
@@ -194,13 +204,13 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
           Row(
             children: [
               Text(
-                'Showing ${_formatInt(preview.returnedRows)} of ${_formatInt(preview.totalRows)} rows',
+                'Showing ${_formatInt(returnedRows)} of ${_formatInt(totalRows)} rows',
                 style: const TextStyle(
                   color: AppTheme.textPrimary,
                   fontSize: 13,
                 ),
               ),
-              if (preview.totalRows > preview.returnedRows) ...[
+              if (totalRows > returnedRows) ...[
                 const SizedBox(width: 8),
                 Container(
                   padding:
@@ -225,14 +235,18 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
     );
   }
 
-  Widget _buildSchemaInspector(List<ColumnSchema> columns) {
+  Widget _buildSchemaInspector(DataPreviewResponse preview) {
+    // Infer dtypes from the first data row if available
+    final firstRow =
+        preview.data.isNotEmpty ? preview.data.first : <String, dynamic>{};
+
     return ExpansionTile(
       key: ValueKey(_schemaExpanded),
       initiallyExpanded: _schemaExpanded,
       onExpansionChanged: (v) => setState(() => _schemaExpanded = v),
       tilePadding: const EdgeInsets.symmetric(horizontal: 16),
       title: Text(
-        'Column Schema (${columns.length} columns)',
+        'Column Schema (${preview.columnNames.length} columns)',
         style: const TextStyle(
           color: AppTheme.textPrimary,
           fontSize: 13,
@@ -247,10 +261,11 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
           child: Wrap(
             spacing: 8,
             runSpacing: 6,
-            children: columns.map((col) {
+            children: preview.columnNames.map((name) {
+              final dtype = _inferDtype(firstRow[name]);
               return Chip(
                 label: Text(
-                  '${col.name} (${col.dtype})',
+                  '$name ($dtype)',
                   style: const TextStyle(fontSize: 12),
                 ),
                 backgroundColor: AppTheme.surfaceDark,
@@ -267,9 +282,9 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
   }
 
   Widget _buildFilterToolbar(DataPreviewResponse preview) {
-    // Extract unique GEO values from the preview rows for the dropdown
+    // Extract unique GEO values from the preview data for the dropdown
     final geoValues = <String>{};
-    for (final row in preview.rows) {
+    for (final row in preview.data) {
       final geo = row['GEO'];
       if (geo != null) geoValues.add(geo.toString());
     }
@@ -289,11 +304,12 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          // GEO dropdown
-          SizedBox(
-            width: 200,
+          // GEO dropdown — wrapped in ConstrainedBox to prevent overflow
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 200),
             child: DropdownButtonFormField<String>(
               value: filter.geoFilter,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Geography',
                 labelStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
@@ -310,14 +326,18 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
               hint: const Text(
                 'All geographies',
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
               ),
               items: [
                 const DropdownMenuItem<String>(
                   value: null,
-                  child: Text('All geographies'),
+                  child: Text('All geographies', overflow: TextOverflow.ellipsis),
                 ),
                 ...sortedGeos.map(
-                  (g) => DropdownMenuItem(value: g, child: Text(g)),
+                  (g) => DropdownMenuItem(
+                    value: g,
+                    child: Text(g, overflow: TextOverflow.ellipsis),
+                  ),
                 ),
               ],
               onChanged: (value) {
@@ -420,18 +440,23 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
   }
 
   Widget _buildDataTable(
-    List<ColumnSchema> columns,
+    List<String> columnNames,
     List<Map<String, dynamic>> rows,
     String? sortCol,
     bool sortAsc,
+    DataPreviewResponse preview,
   ) {
+    // Infer dtypes from first row for numeric detection
+    final firstRow =
+        preview.data.isNotEmpty ? preview.data.first : <String, dynamic>{};
+
     return SingleChildScrollView(
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
           sortColumnIndex:
               sortCol != null
-                  ? columns.indexWhere((c) => c.name == sortCol)
+                  ? columnNames.indexOf(sortCol)
                   : null,
           sortAscending: sortAsc,
           headingRowColor: WidgetStateProperty.all(AppTheme.surfaceDark),
@@ -439,19 +464,19 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
             return null; // handled by row striping below
           }),
           columnSpacing: 24,
-          columns: columns.map((col) {
-            final isNumeric =
-                col.dtype.contains('float') || col.dtype.contains('int');
+          columns: columnNames.map((name) {
+            final sampleVal = firstRow[name];
+            final isNumeric = sampleVal is num;
             return DataColumn(
               label: Text(
-                col.name,
+                name,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
                 ),
               ),
               numeric: isNumeric,
-              onSort: (_, __) => _onSort(col.name),
+              onSort: (_, __) => _onSort(name),
             );
           }).toList(),
           rows: List.generate(rows.length, (index) {
@@ -463,9 +488,10 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
                     ? Colors.transparent
                     : AppTheme.surfaceDark.withOpacity(0.5),
               ),
-              cells: columns.map((col) {
-                final value = row[col.name];
-                return DataCell(_buildCell(value, col.dtype));
+              cells: columnNames.map((name) {
+                final value = row[name];
+                final isNumeric = firstRow[name] is num;
+                return DataCell(_buildCell(value, isNumeric));
               }).toList(),
             );
           }),
@@ -474,7 +500,7 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
     );
   }
 
-  Widget _buildCell(dynamic value, String dtype) {
+  Widget _buildCell(dynamic value, bool isNumeric) {
     if (value == null) {
       return const Text(
         '\u2014', // em dash
@@ -482,7 +508,6 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
       );
     }
 
-    final isNumeric = dtype.contains('float') || dtype.contains('int');
     final text = isNumeric ? _formatNumber(value) : value.toString();
 
     return Tooltip(
@@ -503,7 +528,6 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
       return _formatInt(value);
     }
     if (value is double) {
-      // Split into integer and decimal parts
       final parts = value.toStringAsFixed(2).split('.');
       final intPart = int.parse(parts[0].replaceFirst('-', ''));
       final decPart = parts[1].replaceAll(RegExp(r'0+$'), '');

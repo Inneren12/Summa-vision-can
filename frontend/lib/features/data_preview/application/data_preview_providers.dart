@@ -42,7 +42,7 @@ final filteredPreviewRowsProvider =
   final filter = ref.watch(previewFilterProvider);
   if (preview == null) return [];
 
-  var rows = preview.rows.where((row) {
+  var rows = preview.data.where((row) {
     // GEO filter
     if (filter.geoFilter != null && filter.geoFilter!.isNotEmpty) {
       final geo = row['GEO']?.toString() ?? '';

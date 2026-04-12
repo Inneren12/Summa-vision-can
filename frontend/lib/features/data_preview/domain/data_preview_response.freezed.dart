@@ -15,192 +15,19 @@ final _privateConstructorUsedError = UnsupportedError(
   'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
 );
 
-ColumnSchema _$ColumnSchemaFromJson(Map<String, dynamic> json) {
-  return _ColumnSchema.fromJson(json);
-}
-
-/// @nodoc
-mixin _$ColumnSchema {
-  String get name => throw _privateConstructorUsedError;
-  String get dtype => throw _privateConstructorUsedError;
-
-  /// Serializes this ColumnSchema to a JSON map.
-  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
-
-  /// Create a copy of ColumnSchema
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  $ColumnSchemaCopyWith<ColumnSchema> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-abstract class $ColumnSchemaCopyWith<$Res> {
-  factory $ColumnSchemaCopyWith(
-    ColumnSchema value,
-    $Res Function(ColumnSchema) then,
-  ) = _$ColumnSchemaCopyWithImpl<$Res, ColumnSchema>;
-  @useResult
-  $Res call({String name, String dtype});
-}
-
-/// @nodoc
-class _$ColumnSchemaCopyWithImpl<$Res, $Val extends ColumnSchema>
-    implements $ColumnSchemaCopyWith<$Res> {
-  _$ColumnSchemaCopyWithImpl(this._value, this._then);
-
-  // ignore: unused_field
-  final $Val _value;
-  // ignore: unused_field
-  final $Res Function($Val) _then;
-
-  /// Create a copy of ColumnSchema
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? name = null,
-    Object? dtype = null,
-  }) {
-    return _then(
-      _value.copyWith(
-            name: null == name
-                ? _value.name
-                : name // ignore: cast_nullable_to_non_nullable
-                      as String,
-            dtype: null == dtype
-                ? _value.dtype
-                : dtype // ignore: cast_nullable_to_non_nullable
-                      as String,
-          )
-          as $Val,
-    );
-  }
-}
-
-/// @nodoc
-abstract class _$$ColumnSchemaImplCopyWith<$Res>
-    implements $ColumnSchemaCopyWith<$Res> {
-  factory _$$ColumnSchemaImplCopyWith(
-    _$ColumnSchemaImpl value,
-    $Res Function(_$ColumnSchemaImpl) then,
-  ) = __$$ColumnSchemaImplCopyWithImpl<$Res>;
-  @override
-  @useResult
-  $Res call({String name, String dtype});
-}
-
-/// @nodoc
-class __$$ColumnSchemaImplCopyWithImpl<$Res>
-    extends _$ColumnSchemaCopyWithImpl<$Res, _$ColumnSchemaImpl>
-    implements _$$ColumnSchemaImplCopyWith<$Res> {
-  __$$ColumnSchemaImplCopyWithImpl(
-    _$ColumnSchemaImpl _value,
-    $Res Function(_$ColumnSchemaImpl) _then,
-  ) : super(_value, _then);
-
-  /// Create a copy of ColumnSchema
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? name = null,
-    Object? dtype = null,
-  }) {
-    return _then(
-      _$ColumnSchemaImpl(
-        name: null == name
-            ? _value.name
-            : name // ignore: cast_nullable_to_non_nullable
-                  as String,
-        dtype: null == dtype
-            ? _value.dtype
-            : dtype // ignore: cast_nullable_to_non_nullable
-                  as String,
-      ),
-    );
-  }
-}
-
-/// @nodoc
-@JsonSerializable()
-class _$ColumnSchemaImpl implements _ColumnSchema {
-  const _$ColumnSchemaImpl({required this.name, required this.dtype});
-
-  factory _$ColumnSchemaImpl.fromJson(Map<String, dynamic> json) =>
-      _$$ColumnSchemaImplFromJson(json);
-
-  @override
-  final String name;
-  @override
-  final String dtype;
-
-  @override
-  String toString() {
-    return 'ColumnSchema(name: $name, dtype: $dtype)';
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is _$ColumnSchemaImpl &&
-            (identical(other.name, name) || other.name == name) &&
-            (identical(other.dtype, dtype) || other.dtype == dtype));
-  }
-
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @override
-  int get hashCode => Object.hash(runtimeType, name, dtype);
-
-  /// Create a copy of ColumnSchema
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @override
-  @pragma('vm:prefer-inline')
-  _$$ColumnSchemaImplCopyWith<_$ColumnSchemaImpl> get copyWith =>
-      __$$ColumnSchemaImplCopyWithImpl<_$ColumnSchemaImpl>(this, _$identity);
-
-  @override
-  Map<String, dynamic> toJson() {
-    return _$$ColumnSchemaImplToJson(this);
-  }
-}
-
-abstract class _ColumnSchema implements ColumnSchema {
-  const factory _ColumnSchema({
-    required final String name,
-    required final String dtype,
-  }) = _$ColumnSchemaImpl;
-
-  factory _ColumnSchema.fromJson(Map<String, dynamic> json) =
-      _$ColumnSchemaImpl.fromJson;
-
-  @override
-  String get name;
-  @override
-  String get dtype;
-
-  /// Create a copy of ColumnSchema
-  /// with the given fields replaced by the non-null parameter values.
-  @override
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  _$$ColumnSchemaImplCopyWith<_$ColumnSchemaImpl> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
 DataPreviewResponse _$DataPreviewResponseFromJson(Map<String, dynamic> json) {
   return _DataPreviewResponse.fromJson(json);
 }
 
 /// @nodoc
 mixin _$DataPreviewResponse {
-  List<ColumnSchema> get columns => throw _privateConstructorUsedError;
-  List<Map<String, dynamic>> get rows => throw _privateConstructorUsedError;
-  @JsonKey(name: 'total_rows')
-  int get totalRows => throw _privateConstructorUsedError;
-  @JsonKey(name: 'returned_rows')
-  int get returnedRows => throw _privateConstructorUsedError;
+  @JsonKey(name: 'storage_key')
+  String get storageKey => throw _privateConstructorUsedError;
+  int get rows => throw _privateConstructorUsedError;
+  int get columns => throw _privateConstructorUsedError;
+  @JsonKey(name: 'column_names')
+  List<String> get columnNames => throw _privateConstructorUsedError;
+  List<Map<String, dynamic>> get data => throw _privateConstructorUsedError;
 
   /// Serializes this DataPreviewResponse to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -220,10 +47,11 @@ abstract class $DataPreviewResponseCopyWith<$Res> {
   ) = _$DataPreviewResponseCopyWithImpl<$Res, DataPreviewResponse>;
   @useResult
   $Res call({
-    List<ColumnSchema> columns,
-    List<Map<String, dynamic>> rows,
-    @JsonKey(name: 'total_rows') int totalRows,
-    @JsonKey(name: 'returned_rows') int returnedRows,
+    @JsonKey(name: 'storage_key') String storageKey,
+    int rows,
+    int columns,
+    @JsonKey(name: 'column_names') List<String> columnNames,
+    List<Map<String, dynamic>> data,
   });
 }
 
@@ -243,29 +71,34 @@ class _$DataPreviewResponseCopyWithImpl<$Res,
   @pragma('vm:prefer-inline')
   @override
   $Res call({
-    Object? columns = null,
+    Object? storageKey = null,
     Object? rows = null,
-    Object? totalRows = null,
-    Object? returnedRows = null,
+    Object? columns = null,
+    Object? columnNames = null,
+    Object? data = null,
   }) {
     return _then(
       _value.copyWith(
-            columns: null == columns
-                ? _value.columns
-                : columns // ignore: cast_nullable_to_non_nullable
-                      as List<ColumnSchema>,
+            storageKey: null == storageKey
+                ? _value.storageKey
+                : storageKey // ignore: cast_nullable_to_non_nullable
+                      as String,
             rows: null == rows
                 ? _value.rows
                 : rows // ignore: cast_nullable_to_non_nullable
+                      as int,
+            columns: null == columns
+                ? _value.columns
+                : columns // ignore: cast_nullable_to_non_nullable
+                      as int,
+            columnNames: null == columnNames
+                ? _value.columnNames
+                : columnNames // ignore: cast_nullable_to_non_nullable
+                      as List<String>,
+            data: null == data
+                ? _value.data
+                : data // ignore: cast_nullable_to_non_nullable
                       as List<Map<String, dynamic>>,
-            totalRows: null == totalRows
-                ? _value.totalRows
-                : totalRows // ignore: cast_nullable_to_non_nullable
-                      as int,
-            returnedRows: null == returnedRows
-                ? _value.returnedRows
-                : returnedRows // ignore: cast_nullable_to_non_nullable
-                      as int,
           )
           as $Val,
     );
@@ -282,10 +115,11 @@ abstract class _$$DataPreviewResponseImplCopyWith<$Res>
   @override
   @useResult
   $Res call({
-    List<ColumnSchema> columns,
-    List<Map<String, dynamic>> rows,
-    @JsonKey(name: 'total_rows') int totalRows,
-    @JsonKey(name: 'returned_rows') int returnedRows,
+    @JsonKey(name: 'storage_key') String storageKey,
+    int rows,
+    int columns,
+    @JsonKey(name: 'column_names') List<String> columnNames,
+    List<Map<String, dynamic>> data,
   });
 }
 
@@ -303,29 +137,34 @@ class __$$DataPreviewResponseImplCopyWithImpl<$Res>
   @pragma('vm:prefer-inline')
   @override
   $Res call({
-    Object? columns = null,
+    Object? storageKey = null,
     Object? rows = null,
-    Object? totalRows = null,
-    Object? returnedRows = null,
+    Object? columns = null,
+    Object? columnNames = null,
+    Object? data = null,
   }) {
     return _then(
       _$DataPreviewResponseImpl(
-        columns: null == columns
-            ? _value._columns
-            : columns // ignore: cast_nullable_to_non_nullable
-                  as List<ColumnSchema>,
+        storageKey: null == storageKey
+            ? _value.storageKey
+            : storageKey // ignore: cast_nullable_to_non_nullable
+                  as String,
         rows: null == rows
-            ? _value._rows
+            ? _value.rows
             : rows // ignore: cast_nullable_to_non_nullable
+                  as int,
+        columns: null == columns
+            ? _value.columns
+            : columns // ignore: cast_nullable_to_non_nullable
+                  as int,
+        columnNames: null == columnNames
+            ? _value._columnNames
+            : columnNames // ignore: cast_nullable_to_non_nullable
+                  as List<String>,
+        data: null == data
+            ? _value._data
+            : data // ignore: cast_nullable_to_non_nullable
                   as List<Map<String, dynamic>>,
-        totalRows: null == totalRows
-            ? _value.totalRows
-            : totalRows // ignore: cast_nullable_to_non_nullable
-                  as int,
-        returnedRows: null == returnedRows
-            ? _value.returnedRows
-            : returnedRows // ignore: cast_nullable_to_non_nullable
-                  as int,
       ),
     );
   }
@@ -335,42 +174,45 @@ class __$$DataPreviewResponseImplCopyWithImpl<$Res>
 @JsonSerializable()
 class _$DataPreviewResponseImpl implements _DataPreviewResponse {
   const _$DataPreviewResponseImpl({
-    required final List<ColumnSchema> columns,
-    required final List<Map<String, dynamic>> rows,
-    @JsonKey(name: 'total_rows') required this.totalRows,
-    @JsonKey(name: 'returned_rows') required this.returnedRows,
-  })  : _columns = columns,
-        _rows = rows;
+    @JsonKey(name: 'storage_key') required this.storageKey,
+    required this.rows,
+    required this.columns,
+    @JsonKey(name: 'column_names') required final List<String> columnNames,
+    required final List<Map<String, dynamic>> data,
+  })  : _columnNames = columnNames,
+        _data = data;
 
   factory _$DataPreviewResponseImpl.fromJson(Map<String, dynamic> json) =>
       _$$DataPreviewResponseImplFromJson(json);
 
-  final List<ColumnSchema> _columns;
   @override
-  List<ColumnSchema> get columns {
-    if (_columns is EqualUnmodifiableListView) return _columns;
+  @JsonKey(name: 'storage_key')
+  final String storageKey;
+  @override
+  final int rows;
+  @override
+  final int columns;
+
+  final List<String> _columnNames;
+  @override
+  @JsonKey(name: 'column_names')
+  List<String> get columnNames {
+    if (_columnNames is EqualUnmodifiableListView) return _columnNames;
     // ignore: implicit_dynamic_type
-    return EqualUnmodifiableListView(_columns);
+    return EqualUnmodifiableListView(_columnNames);
   }
 
-  final List<Map<String, dynamic>> _rows;
+  final List<Map<String, dynamic>> _data;
   @override
-  List<Map<String, dynamic>> get rows {
-    if (_rows is EqualUnmodifiableListView) return _rows;
+  List<Map<String, dynamic>> get data {
+    if (_data is EqualUnmodifiableListView) return _data;
     // ignore: implicit_dynamic_type
-    return EqualUnmodifiableListView(_rows);
+    return EqualUnmodifiableListView(_data);
   }
-
-  @override
-  @JsonKey(name: 'total_rows')
-  final int totalRows;
-  @override
-  @JsonKey(name: 'returned_rows')
-  final int returnedRows;
 
   @override
   String toString() {
-    return 'DataPreviewResponse(columns: $columns, rows: $rows, totalRows: $totalRows, returnedRows: $returnedRows)';
+    return 'DataPreviewResponse(storageKey: $storageKey, rows: $rows, columns: $columns, columnNames: $columnNames, data: $data)';
   }
 
   @override
@@ -378,22 +220,24 @@ class _$DataPreviewResponseImpl implements _DataPreviewResponse {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
             other is _$DataPreviewResponseImpl &&
-            const DeepCollectionEquality().equals(other._columns, _columns) &&
-            const DeepCollectionEquality().equals(other._rows, _rows) &&
-            (identical(other.totalRows, totalRows) ||
-                other.totalRows == totalRows) &&
-            (identical(other.returnedRows, returnedRows) ||
-                other.returnedRows == returnedRows));
+            (identical(other.storageKey, storageKey) ||
+                other.storageKey == storageKey) &&
+            (identical(other.rows, rows) || other.rows == rows) &&
+            (identical(other.columns, columns) || other.columns == columns) &&
+            const DeepCollectionEquality()
+                .equals(other._columnNames, _columnNames) &&
+            const DeepCollectionEquality().equals(other._data, _data));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(
     runtimeType,
-    const DeepCollectionEquality().hash(_columns),
-    const DeepCollectionEquality().hash(_rows),
-    totalRows,
-    returnedRows,
+    storageKey,
+    rows,
+    columns,
+    const DeepCollectionEquality().hash(_columnNames),
+    const DeepCollectionEquality().hash(_data),
   );
 
   /// Create a copy of DataPreviewResponse
@@ -415,25 +259,28 @@ class _$DataPreviewResponseImpl implements _DataPreviewResponse {
 
 abstract class _DataPreviewResponse implements DataPreviewResponse {
   const factory _DataPreviewResponse({
-    required final List<ColumnSchema> columns,
-    required final List<Map<String, dynamic>> rows,
-    @JsonKey(name: 'total_rows') required final int totalRows,
-    @JsonKey(name: 'returned_rows') required final int returnedRows,
+    @JsonKey(name: 'storage_key') required final String storageKey,
+    required final int rows,
+    required final int columns,
+    @JsonKey(name: 'column_names') required final List<String> columnNames,
+    required final List<Map<String, dynamic>> data,
   }) = _$DataPreviewResponseImpl;
 
   factory _DataPreviewResponse.fromJson(Map<String, dynamic> json) =
       _$DataPreviewResponseImpl.fromJson;
 
   @override
-  List<ColumnSchema> get columns;
+  @JsonKey(name: 'storage_key')
+  String get storageKey;
   @override
-  List<Map<String, dynamic>> get rows;
+  int get rows;
   @override
-  @JsonKey(name: 'total_rows')
-  int get totalRows;
+  int get columns;
   @override
-  @JsonKey(name: 'returned_rows')
-  int get returnedRows;
+  @JsonKey(name: 'column_names')
+  List<String> get columnNames;
+  @override
+  List<Map<String, dynamic>> get data;
 
   /// Create a copy of DataPreviewResponse
   /// with the given fields replaced by the non-null parameter values.

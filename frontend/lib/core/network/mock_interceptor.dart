@@ -60,15 +60,15 @@ class MockInterceptor extends Interceptor {
         Response(
           requestOptions: options,
           statusCode: 202,
-          data: {'job_id': 'mock-fetch-job-456'},
+          data: {'job_id': 456, 'status': 'queued', 'product_id': '13-10-0888-01'},
         ),
         true,
       );
       return;
     }
 
-    // Job status: GET /admin/jobs/mock-fetch-job-456
-    if (path.contains('/admin/jobs/mock-fetch-job-456')) {
+    // Job status: GET /admin/jobs/456
+    if (path.contains('/admin/jobs/456')) {
       _fetchJobPollCount++;
       if (_fetchJobPollCount <= 2) {
         handler.resolve(
@@ -76,7 +76,7 @@ class MockInterceptor extends Interceptor {
             requestOptions: options,
             statusCode: 200,
             data: {
-              'job_id': 'mock-fetch-job-456',
+              'job_id': '456',
               'status': 'running',
             },
           ),
@@ -88,7 +88,7 @@ class MockInterceptor extends Interceptor {
             requestOptions: options,
             statusCode: 200,
             data: {
-              'job_id': 'mock-fetch-job-456',
+              'job_id': '456',
               'status': 'success',
               'result_json':
                   '{"storage_key": "statcan/processed/13-10-0888-01/2024-12-15.parquet"}',
@@ -262,14 +262,11 @@ class MockInterceptor extends Interceptor {
   };
 
   static const Map<String, dynamic> _dataPreviewFixture = {
-    'columns': [
-      {'name': 'REF_DATE', 'dtype': 'str'},
-      {'name': 'GEO', 'dtype': 'str'},
-      {'name': 'VALUE', 'dtype': 'float64'},
-      {'name': 'SCALAR_ID', 'dtype': 'int64'},
-      {'name': 'STATUS', 'dtype': 'str'},
-    ],
-    'rows': [
+    'storage_key': 'statcan/processed/13-10-0888-01/2024-12-15.parquet',
+    'rows': 1500,
+    'columns': 5,
+    'column_names': ['REF_DATE', 'GEO', 'VALUE', 'SCALAR_ID', 'STATUS'],
+    'data': [
       {'REF_DATE': '2024-01', 'GEO': 'Canada', 'VALUE': 156.2, 'SCALAR_ID': 0, 'STATUS': 'A'},
       {'REF_DATE': '2024-01', 'GEO': 'Ontario', 'VALUE': 162.1, 'SCALAR_ID': 0, 'STATUS': 'A'},
       {'REF_DATE': '2024-02', 'GEO': 'Canada', 'VALUE': 157.8, 'SCALAR_ID': 0, 'STATUS': 'A'},
@@ -281,8 +278,6 @@ class MockInterceptor extends Interceptor {
       {'REF_DATE': '2024-05', 'GEO': 'Canada', 'VALUE': 161.4, 'SCALAR_ID': 0, 'STATUS': 'A'},
       {'REF_DATE': '2024-05', 'GEO': 'Quebec', 'VALUE': 150.7, 'SCALAR_ID': 1, 'STATUS': 'A'},
     ],
-    'total_rows': 1500,
-    'returned_rows': 10,
   };
 
   static const List<Map<String, dynamic>> _queueFixture = [

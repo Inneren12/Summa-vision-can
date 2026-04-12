@@ -33,7 +33,8 @@ class DataPreviewRepository {
   /// Dedupe: same product_id same day returns existing job.
   Future<String> triggerFetch(String productId) async {
     final response = await _dio.post('/api/v1/admin/cubes/$productId/fetch');
-    return (response.data as Map<String, dynamic>)['job_id'] as String;
+    final data = response.data as Map<String, dynamic>;
+    return data['job_id'].toString();
   }
 
   /// Poll job status via `GET /api/v1/admin/jobs/{jobId}`.

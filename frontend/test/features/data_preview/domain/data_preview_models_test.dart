@@ -3,34 +3,14 @@ import 'package:summa_vision_admin/features/data_preview/domain/data_preview_res
 import 'package:summa_vision_admin/features/data_preview/domain/preview_filter.dart';
 
 void main() {
-  group('ColumnSchema', () {
-    test('fromJson parses name and dtype', () {
-      final json = {'name': 'VALUE', 'dtype': 'float64'};
-      final col = ColumnSchema.fromJson(json);
-
-      expect(col.name, 'VALUE');
-      expect(col.dtype, 'float64');
-    });
-
-    test('toJson round-trips correctly', () {
-      final col = const ColumnSchema(name: 'GEO', dtype: 'str');
-      final json = col.toJson();
-
-      expect(json['name'], 'GEO');
-      expect(json['dtype'], 'str');
-    });
-  });
-
   group('DataPreviewResponse', () {
     test('fromJson parses full response with snake_case keys', () {
       final json = <String, dynamic>{
-        'columns': [
-          {'name': 'REF_DATE', 'dtype': 'str'},
-          {'name': 'GEO', 'dtype': 'str'},
-          {'name': 'VALUE', 'dtype': 'float64'},
-          {'name': 'SCALAR_ID', 'dtype': 'int64'},
-        ],
-        'rows': [
+        'storage_key': 'statcan/processed/13-10-0888-01/2024-12-15.parquet',
+        'rows': 48520,
+        'columns': 4,
+        'column_names': ['REF_DATE', 'GEO', 'VALUE', 'SCALAR_ID'],
+        'data': [
           {
             'REF_DATE': '2024-01',
             'GEO': 'Canada',
@@ -44,57 +24,56 @@ void main() {
             'SCALAR_ID': 0,
           },
         ],
-        'total_rows': 48520,
-        'returned_rows': 100,
       };
 
       final response = DataPreviewResponse.fromJson(json);
 
-      expect(response.columns.length, 4);
-      expect(response.columns[0].name, 'REF_DATE');
-      expect(response.columns[2].dtype, 'float64');
-      expect(response.rows.length, 2);
-      expect(response.rows[0]['GEO'], 'Canada');
-      expect(response.rows[1]['VALUE'], isNull);
-      expect(response.totalRows, 48520);
-      expect(response.returnedRows, 100);
+      expect(response.storageKey,
+          'statcan/processed/13-10-0888-01/2024-12-15.parquet');
+      expect(response.rows, 48520);
+      expect(response.columns, 4);
+      expect(response.columnNames, ['REF_DATE', 'GEO', 'VALUE', 'SCALAR_ID']);
+      expect(response.data.length, 2);
+      expect(response.data[0]['GEO'], 'Canada');
+      expect(response.data[1]['VALUE'], isNull);
     });
 
-    test('fromJson handles rows containing null values', () {
+    test('fromJson handles data rows containing null values', () {
       final json = <String, dynamic>{
-        'columns': [
-          {'name': 'VALUE', 'dtype': 'float64'},
-        ],
-        'rows': [
+        'storage_key': 'test/key.parquet',
+        'rows': 2,
+        'columns': 1,
+        'column_names': ['VALUE'],
+        'data': [
           {'VALUE': null},
           {'VALUE': 42.0},
         ],
-        'total_rows': 2,
-        'returned_rows': 2,
       };
 
       final response = DataPreviewResponse.fromJson(json);
 
-      expect(response.rows[0]['VALUE'], isNull);
-      expect(response.rows[1]['VALUE'], 42.0);
+      expect(response.data[0]['VALUE'], isNull);
+      expect(response.data[1]['VALUE'], 42.0);
     });
 
     test('toJson serializes to snake_case keys', () {
       const response = DataPreviewResponse(
-        columns: [ColumnSchema(name: 'A', dtype: 'str')],
-        rows: [
+        storageKey: 'test/key.parquet',
+        rows: 500,
+        columns: 1,
+        columnNames: ['A'],
+        data: [
           {'A': 'hello'}
         ],
-        totalRows: 500,
-        returnedRows: 100,
       );
 
       final json = response.toJson();
 
-      expect(json['total_rows'], 500);
-      expect(json['returned_rows'], 100);
-      expect(json['columns'], isList);
-      expect(json['rows'], isList);
+      expect(json['storage_key'], 'test/key.parquet');
+      expect(json['rows'], 500);
+      expect(json['columns'], 1);
+      expect(json['column_names'], ['A']);
+      expect(json['data'], isList);
     });
   });
 

@@ -16,17 +16,12 @@ import 'package:summa_vision_admin/features/data_preview/domain/data_preview_res
 import 'package:summa_vision_admin/features/data_preview/presentation/data_preview_screen.dart';
 
 // ---------------------------------------------------------------------------
-// Sample data
+// Sample data — matches real backend contract
 // ---------------------------------------------------------------------------
 
-const _sampleColumns = [
-  ColumnSchema(name: 'REF_DATE', dtype: 'str'),
-  ColumnSchema(name: 'GEO', dtype: 'str'),
-  ColumnSchema(name: 'VALUE', dtype: 'float64'),
-  ColumnSchema(name: 'STATUS', dtype: 'str'),
-];
+const _sampleColumnNames = ['REF_DATE', 'GEO', 'VALUE', 'STATUS'];
 
-const _sampleRows = <Map<String, dynamic>>[
+const _sampleData = <Map<String, dynamic>>[
   {'REF_DATE': '2024-01', 'GEO': 'Canada', 'VALUE': 156.2, 'STATUS': 'A'},
   {'REF_DATE': '2024-01', 'GEO': 'Ontario', 'VALUE': 162.1, 'STATUS': 'A'},
   {'REF_DATE': '2024-02', 'GEO': 'Canada', 'VALUE': 157.8, 'STATUS': 'A'},
@@ -35,35 +30,33 @@ const _sampleRows = <Map<String, dynamic>>[
 ];
 
 const _samplePreview = DataPreviewResponse(
-  columns: _sampleColumns,
-  rows: _sampleRows,
-  totalRows: 48520,
-  returnedRows: 100,
+  storageKey: 'statcan/processed/13-10-0888-01/2024-12-15.parquet',
+  rows: 48520,
+  columns: 4,
+  columnNames: _sampleColumnNames,
+  data: _sampleData,
 );
 
 const _smallPreview = DataPreviewResponse(
-  columns: [
-    ColumnSchema(name: 'REF_DATE', dtype: 'str'),
-    ColumnSchema(name: 'GEO', dtype: 'str'),
-    ColumnSchema(name: 'VALUE', dtype: 'float64'),
-    ColumnSchema(name: 'SCALAR_ID', dtype: 'int64'),
-    ColumnSchema(name: 'STATUS', dtype: 'str'),
-  ],
-  rows: [
+  storageKey: 'statcan/processed/13-10-0888-01/2024-12-15.parquet',
+  rows: 48520,
+  columns: 5,
+  columnNames: ['REF_DATE', 'GEO', 'VALUE', 'SCALAR_ID', 'STATUS'],
+  data: [
     {'REF_DATE': '2024-01', 'GEO': 'Canada', 'VALUE': 156.2, 'SCALAR_ID': 0, 'STATUS': 'A'},
     {'REF_DATE': '2024-01', 'GEO': 'Ontario', 'VALUE': 162.1, 'SCALAR_ID': 0, 'STATUS': 'A'},
     {'REF_DATE': '2024-02', 'GEO': 'Canada', 'VALUE': 157.8, 'SCALAR_ID': 0, 'STATUS': 'A'},
     {'REF_DATE': '2024-02', 'GEO': 'Ontario', 'VALUE': null, 'SCALAR_ID': 0, 'STATUS': 'F'},
     {'REF_DATE': '2024-03', 'GEO': 'Canada', 'VALUE': 159.1, 'SCALAR_ID': 0, 'STATUS': 'A'},
   ],
-  totalRows: 48520,
-  returnedRows: 100,
 );
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Wraps the preview screen in a MediaQuery with sufficient width
+/// to prevent DropdownButtonFormField overflow in test environment.
 Widget _buildPreviewScreen({
   required Override previewOverride,
   String storageKey = 'statcan/processed/13-10-0888-01/2024-12-15.parquet',
@@ -77,7 +70,10 @@ Widget _buildPreviewScreen({
     ],
     child: MaterialApp(
       theme: AppTheme.dark,
-      home: DataPreviewScreen(storageKey: storageKey),
+      home: MediaQuery(
+        data: const MediaQueryData(size: Size(1200, 800)),
+        child: DataPreviewScreen(storageKey: storageKey),
+      ),
     ),
   );
 }
@@ -173,7 +169,7 @@ void main() {
   });
 
   group('DataPreviewScreen — row count display', () {
-    testWidgets('shows "Showing 100 of 48,520 rows"', (tester) async {
+    testWidgets('shows "Showing 5 of 48,520 rows"', (tester) async {
       await tester.pumpWidget(
         _buildPreviewScreen(
           previewOverride: dataPreviewProvider.overrideWith(
@@ -184,7 +180,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.textContaining('Showing 100 of 48,520 rows'),
+        find.textContaining('Showing 5 of 48,520 rows'),
         findsOneWidget,
       );
     });
@@ -238,6 +234,7 @@ void main() {
       await tester.tap(find.textContaining('Column Schema'));
       await tester.pumpAndSettle();
 
+      // Schema chips show inferred dtypes from first data row
       expect(find.text('REF_DATE (str)'), findsOneWidget);
       expect(find.text('GEO (str)'), findsOneWidget);
       expect(find.text('VALUE (float64)'), findsOneWidget);
@@ -266,8 +263,7 @@ void main() {
       await tester.tap(find.text('Ontario').last);
       await tester.pumpAndSettle();
 
-      // Should only show Ontario rows (2 of them) — Canada rows gone
-      // Ontario appears as cell text, but Canada should be absent from data cells
+      // Should only show Ontario rows (2 of them)
       final dataTable = tester.widget<DataTable>(find.byType(DataTable));
       expect(dataTable.rows.length, 2);
     });
@@ -319,7 +315,6 @@ void main() {
       await tester.tap(find.text('GEO'));
       await tester.pumpAndSettle();
 
-      // After sorting by GEO ascending, first rows should be "Canada"
       final dataTable = tester.widget<DataTable>(find.byType(DataTable));
       expect(dataTable.sortColumnIndex, isNotNull);
     });
