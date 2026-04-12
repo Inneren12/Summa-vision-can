@@ -1,34 +1,266 @@
+/* ═══════════════════════════════════════════════════════════
+   SUMMA VISION — Design System v3.2 CSS Reference
+   4-Layer Token Architecture
+   ═══════════════════════════════════════════════════════════ */
+
 @import "tailwindcss";
+@config "../../tailwind.config.ts";
 
+/* ───────────────────────────────────────────────────────────
+   LAYER 1 — Raw Palette
+   Primitive color values. NEVER reference directly in components.
+   ─────────────────────────────────────────────────────────── */
 :root {
-  /* Summa Vision brand palette */
-  --background:      #141414;
-  --surface:         #1E1E1E;
-  --neon-green:      #00FF94;
-  --neon-blue:       #00D4FF;
-  --neon-pink:       #FF006E;
-  --neon-yellow:     #FFB700;
-  --text-primary:    #FFFFFF;
-  --text-secondary:  #B0B0B0;
-  --error-red:       #CF6679;
+  /* Slate scale (dark-first) */
+  --raw-slate-950: #0B0D11;
+  --raw-slate-900: #15181E;
+  --raw-slate-800: #1C1F26;
+  --raw-slate-700: #262A33;
+  --raw-slate-600: #3A3F4B;
+  --raw-slate-500: #6B7280;
+  --raw-slate-400: #9CA3AF;
+  --raw-slate-300: #D1D5DB;
+  --raw-slate-200: #E5E7EB;
+  --raw-slate-100: #F3F4F6;
+  --raw-slate-50:  #F9FAFB;
+
+  /* Amber accent */
+  --raw-amber-400: #FBBF24;
+  --raw-amber-500: #F59E0B;
+  --raw-amber-600: #D97706;
+
+  /* Red */
+  --raw-red-500: #E11D48;
+  --raw-red-400: #FB7185;
+
+  /* Blue */
+  --raw-blue-500: #3B82F6;
+  --raw-blue-400: #60A5FA;
+
+  /* Purple */
+  --raw-purple-400: #A78BFA;
+  --raw-purple-300: #C4B5FD;
+
+  /* Teal */
+  --raw-teal-400: #2DD4BF;
+  --raw-teal-300: #5EEAD4;
+
+  /* Orange */
+  --raw-orange-500: #F97316;
+  --raw-orange-400: #FB923C;
+
+  /* Emerald */
+  --raw-emerald-500: #10B981;
+  --raw-emerald-400: #34D399;
+
+  /* Yellow */
+  --raw-yellow-500: #EAB308;
+  --raw-yellow-400: #FACC15;
+
+  /* Cyan */
+  --raw-cyan-400: #22D3EE;
+
+  /* ───────────────────────────────────────────────────────────
+     LAYER 2 — Semantic Aliases
+     Map raw values to UI intent. Components reference this layer.
+     ─────────────────────────────────────────────────────────── */
+
+  /* Backgrounds */
+  --bg-app:            var(--raw-slate-950);
+  --bg-surface:        var(--raw-slate-900);
+  --bg-surface-hover:  var(--raw-slate-800);
+  --bg-surface-active: var(--raw-slate-700);
+
+  /* Borders */
+  --border-default:    var(--raw-slate-700);
+  --border-subtle:     var(--raw-slate-800);
+  --border-focus:      var(--raw-amber-400);
+
+  /* Text */
+  --text-primary:      var(--raw-slate-100);
+  --text-secondary:    var(--raw-slate-400);
+  --text-muted:        var(--raw-slate-500);
+  --text-inverse:      var(--raw-slate-950);
+
+  /* Accent */
+  --accent:            var(--raw-amber-400);
+  --accent-hover:      var(--raw-amber-500);
+  --accent-muted:      rgba(251, 191, 36, 0.15);
+
+  /* Destructive */
+  --destructive:       var(--raw-red-500);
+
+  /* ───────────────────────────────────────────────────────────
+     LAYER 3 — Component Tokens
+     Scoped to specific UI elements.
+     ─────────────────────────────────────────────────────────── */
+
+  /* Card */
+  --card-bg:           var(--raw-slate-900);
+  --card-border:       var(--raw-slate-700);
+
+  /* Tooltip */
+  --tooltip-bg:        var(--raw-slate-800);
+  --tooltip-text:      var(--raw-slate-100);
+
+  /* Button */
+  --btn-primary-bg:    var(--raw-amber-400);
+  --btn-primary-text:  var(--raw-slate-950);
+
+  /* ───────────────────────────────────────────────────────────
+     LAYER 4 — Data Semantic Tokens
+     Domain-specific meaning for data visualization.
+     ─────────────────────────────────────────────────────────── */
+  --data-gov:          var(--raw-blue-500);
+  --data-society:      var(--raw-purple-400);
+  --data-infra:        var(--raw-teal-400);
+  --data-monopoly:     var(--raw-orange-500);
+  --data-baseline:     var(--raw-slate-500);
+  --data-housing:      var(--raw-cyan-400);
+  --data-negative:     var(--raw-red-500);
+  --data-positive:     var(--raw-emerald-500);
+  --data-warning:      var(--raw-yellow-500);
+  --data-neutral:      var(--raw-slate-400);
+
+  /* ───────────────────────────────────────────────────────────
+     Typography
+     ─────────────────────────────────────────────────────────── */
+  --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-body:    'DM Sans', system-ui, sans-serif;
+  --font-data:    'JetBrains Mono', ui-monospace, monospace;
+
+  /* ───────────────────────────────────────────────────────────
+     Spacing
+     ─────────────────────────────────────────────────────────── */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* ───────────────────────────────────────────────────────────
+     Border Radius (max 12px per design system)
+     ─────────────────────────────────────────────────────────── */
+  --radius-admin:   6px;
+  --radius-public:  8px;
+  --radius-button:  8px;
+  --radius-tooltip: 6px;
+
+  /* ───────────────────────────────────────────────────────────
+     Shadows
+     ─────────────────────────────────────────────────────────── */
+  --shadow-card:     0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-tooltip:  0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-elevated: 0 10px 25px rgba(0, 0, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.3);
+
+  /* ───────────────────────────────────────────────────────────
+     Z-Index Scale
+     ─────────────────────────────────────────────────────────── */
+  --z-base:          0;
+  --z-sticky:        100;
+  --z-chart-overlay: 200;
+  --z-popover:       300;
+  --z-tooltip:       400;
+  --z-modal:         500;
+  --z-alert:         600;
+
+  /* ───────────────────────────────────────────────────────────
+     Motion (no bounce/elastic — design system constraint)
+     ─────────────────────────────────────────────────────────── */
+  --ease-out:        cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-micro:  100ms;
+  --duration-data:   300ms;
+  --duration-page:   500ms;
 }
 
-@theme inline {
-  --color-background:     var(--background);
-  --color-surface:        var(--surface);
-  --color-neon-green:     var(--neon-green);
-  --color-neon-blue:      var(--neon-blue);
-  --color-neon-pink:      var(--neon-pink);
-  --color-neon-yellow:    var(--neon-yellow);
-  --color-text-primary:   var(--text-primary);
-  --color-text-secondary: var(--text-secondary);
-  --color-error-red:      var(--error-red);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ───────────────────────────────────────────────────────────
+   Density Modes
+   ─────────────────────────────────────────────────────────── */
+body.density-compact {
+  --space-xs:  2px;
+  --space-sm:  4px;
+  --space-md:  8px;
+  --space-lg:  12px;
+  --space-xl:  16px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
 }
 
+body.density-dense {
+  --space-xs:  3px;
+  --space-sm:  6px;
+  --space-md:  12px;
+  --space-lg:  18px;
+  --space-xl:  24px;
+  --space-2xl: 36px;
+  --space-3xl: 48px;
+}
+
+/* ───────────────────────────────────────────────────────────
+   Light Theme Override
+   ─────────────────────────────────────────────────────────── */
+.theme-light {
+  --bg-app:            var(--raw-slate-50);
+  --bg-surface:        var(--raw-slate-100);
+  --bg-surface-hover:  var(--raw-slate-200);
+  --bg-surface-active: var(--raw-slate-300);
+  --border-default:    var(--raw-slate-300);
+  --border-subtle:     var(--raw-slate-200);
+  --text-primary:      var(--raw-slate-950);
+  --text-secondary:    var(--raw-slate-600);
+  --text-muted:        var(--raw-slate-500);
+  --text-inverse:      var(--raw-slate-50);
+  --accent-muted:      rgba(251, 191, 36, 0.1);
+  --card-bg:           var(--raw-slate-100);
+  --card-border:       var(--raw-slate-300);
+  --tooltip-bg:        var(--raw-slate-900);
+  --tooltip-text:      var(--raw-slate-100);
+  --shadow-card:       0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-tooltip:    0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-elevated:   0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 10px rgba(0, 0, 0, 0.06);
+}
+
+/* ───────────────────────────────────────────────────────────
+   Base Styles
+   ─────────────────────────────────────────────────────────── */
 body {
-  background-color: var(--background);
+  background-color: var(--bg-app);
   color: var(--text-primary);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-body);
+  font-feature-settings: "tnum";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ───────────────────────────────────────────────────────────
+   Focus
+   ─────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* ───────────────────────────────────────────────────────────
+   Responsive Spacing (mobile)
+   ─────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  :root {
+    --space-lg:  16px;
+    --space-xl:  24px;
+    --space-2xl: 32px;
+    --space-3xl: 48px;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────
+   Reduced Motion
+   ─────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-micro: 0ms;
+    --duration-data:  0ms;
+    --duration-page:  0ms;
+  }
 }
