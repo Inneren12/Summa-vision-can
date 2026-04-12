@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -58,6 +59,9 @@ async def lifespan(app: FastAPI):
     app.state.io_sem = asyncio.Semaphore(10)
     app.state.shutting_down = False
 
+    # Shared httpx client — reused across requests for connection pooling
+    app.state.http_client = httpx.AsyncClient()
+
     # Zombie reaper (R8) — runs once on startup
     from src.core.database import get_session_factory
     from src.repositories.job_repository import JobRepository
@@ -108,6 +112,9 @@ async def lifespan(app: FastAPI):
             await runner_task
         except asyncio.CancelledError:
             pass
+
+    # Close shared httpx client
+    await app.state.http_client.aclose()
 
     # Dispose DB engine
     from src.core.database import get_engine

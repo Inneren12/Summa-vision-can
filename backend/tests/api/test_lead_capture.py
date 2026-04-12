@@ -102,6 +102,7 @@ def mock_pub_repo() -> AsyncMock:
 def mock_lead_repo() -> AsyncMock:
     repo = AsyncMock()
     repo.create = AsyncMock(return_value=_make_lead())
+    repo.get_or_create = AsyncMock(return_value=(_make_lead(), True))
     repo.exists = AsyncMock(return_value=False)
     repo.get_by_email_and_asset = AsyncMock(return_value=None)
     return repo
@@ -184,8 +185,8 @@ class TestLeadCaptureHappyPath:
             "/api/v1/public/leads/capture",
             json={"email": "user@company.ca", "asset_id": 1, "turnstile_token": "valid-token"},
         )
-        mock_lead_repo.create.assert_awaited_once()
-        call_kwargs = mock_lead_repo.create.call_args.kwargs
+        mock_lead_repo.get_or_create.assert_awaited_once()
+        call_kwargs = mock_lead_repo.get_or_create.call_args.kwargs
         assert call_kwargs["email"] == "user@company.ca"
         assert call_kwargs["asset_id"] == "1"
 
@@ -307,6 +308,7 @@ class TestRateLimit:
         pub_repo.get_by_id = AsyncMock(return_value=_make_published_pub())
         lead_repo = AsyncMock()
         lead_repo.create = AsyncMock(return_value=_make_lead())
+        lead_repo.get_or_create = AsyncMock(return_value=(_make_lead(), True))
         lead_repo.get_by_email_and_asset = AsyncMock(return_value=None)
         token_repo = AsyncMock()
         token_repo.create = AsyncMock(return_value=_make_token())
@@ -413,7 +415,7 @@ class TestAssetValidation:
 # ---------------------------------------------------------------------------
 
 class TestResendFlow:
-    def test_resend_reuses_token_when_use_count_zero(
+    def test_resend_revokes_old_token_and_creates_new_when_use_count_zero(
         self,
         mock_turnstile: AsyncMock,
         mock_email_service: AsyncMock,
@@ -427,7 +429,7 @@ class TestResendFlow:
         existing_token = _make_token(use_count=0)
 
         lead_repo = AsyncMock()
-        lead_repo.get_by_email_and_asset = AsyncMock(return_value=existing_lead)
+        lead_repo.get_or_create = AsyncMock(return_value=(existing_lead, False))
 
         token_repo = AsyncMock()
         token_repo.get_by_lead_and_asset = AsyncMock(return_value=existing_token)
@@ -482,7 +484,7 @@ class TestResendFlow:
         existing_token = _make_token(use_count=2)
 
         lead_repo = AsyncMock()
-        lead_repo.get_by_email_and_asset = AsyncMock(return_value=existing_lead)
+        lead_repo.get_or_create = AsyncMock(return_value=(existing_lead, False))
 
         token_repo = AsyncMock()
         token_repo.get_by_lead_and_asset = AsyncMock(return_value=existing_token)
@@ -548,7 +550,7 @@ class TestResendRateLimit:
         existing_token = _make_token(use_count=0)
 
         lead_repo = AsyncMock()
-        lead_repo.get_by_email_and_asset = AsyncMock(return_value=existing_lead)
+        lead_repo.get_or_create = AsyncMock(return_value=(existing_lead, False))
 
         token_repo = AsyncMock()
         token_repo.get_by_lead_and_asset = AsyncMock(return_value=existing_token)

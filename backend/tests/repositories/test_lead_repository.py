@@ -292,3 +292,61 @@ class TestLeadRepository:
                 is_b2b=False,
             )
             await db_session.flush()
+
+    async def test_get_or_create_returns_new_lead(
+        self, db_session: AsyncSession,
+    ) -> None:
+        """get_or_create for a new email+asset should create and return created=True."""
+        repo = LeadRepository(db_session)
+        lead, created = await repo.get_or_create(
+            email="new@test.com",
+            ip_address="1.2.3.4",
+            asset_id="a1",
+        )
+        assert created is True
+        assert lead.id is not None
+        assert lead.email == "new@test.com"
+
+    async def test_get_or_create_race_safe(
+        self, db_session: AsyncSession,
+    ) -> None:
+        """Second get_or_create for same email+asset returns existing lead."""
+        repo = LeadRepository(db_session)
+
+        lead1, created1 = await repo.get_or_create(
+            email="race@test.com",
+            ip_address="1.2.3.4",
+            asset_id="a1",
+        )
+        await db_session.commit()
+        assert created1 is True
+
+        lead2, created2 = await repo.get_or_create(
+            email="race@test.com",
+            ip_address="5.6.7.8",
+            asset_id="a1",
+        )
+        assert created2 is False
+        assert lead2.id == lead1.id
+
+    async def test_get_or_create_different_asset_creates_new(
+        self, db_session: AsyncSession,
+    ) -> None:
+        """get_or_create with same email but different asset should create a new lead."""
+        repo = LeadRepository(db_session)
+
+        lead1, created1 = await repo.get_or_create(
+            email="multi@test.com",
+            ip_address="1.2.3.4",
+            asset_id="a1",
+        )
+        await db_session.commit()
+        assert created1 is True
+
+        lead2, created2 = await repo.get_or_create(
+            email="multi@test.com",
+            ip_address="1.2.3.4",
+            asset_id="a2",
+        )
+        assert created2 is True
+        assert lead2.id != lead1.id
