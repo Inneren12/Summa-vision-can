@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:summa_vision_admin/core/theme/app_theme.dart';
 
 void main() {
+  // Prevent google_fonts from making real HTTP requests in the test environment.
+  setUpAll(() {
+    GoogleFonts.config.allowRuntimeFetching = false;
+  });
+
   group('AppTheme', () {
     test('backgroundDark is #0B0D11 (Design System v3.2 raw-slate-950)', () {
       expect(AppTheme.backgroundDark.value, equals(const Color(0xFF0B0D11).value));
