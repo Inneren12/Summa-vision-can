@@ -197,7 +197,7 @@ class MockInterceptor extends Interceptor {
             requestOptions: options,
             statusCode: 200,
             data: {
-              'id': jobId,
+              'job_id': jobId,
               'status': 'running',
               'result_json': null,
             },
@@ -211,7 +211,7 @@ class MockInterceptor extends Interceptor {
             requestOptions: options,
             statusCode: 200,
             data: {
-              'id': jobId,
+              'job_id': jobId,
               'status': 'success',
               'result_json':
                   '{"publication_id":1,"cdn_url_lowres":"https://placehold.co/1080x1080/141414/00E5FF?text=Mock+Chart","s3_key_highres":"publications/1/v1/abcd_highres.png","version":1}',

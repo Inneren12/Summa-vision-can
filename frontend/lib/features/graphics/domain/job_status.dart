@@ -5,8 +5,10 @@ part 'job_status.g.dart';
 
 @freezed
 class JobStatus with _$JobStatus {
+  const JobStatus._();
+
   const factory JobStatus({
-    required String id,
+    @JsonKey(name: 'job_id') required String jobId,
     required String status,
     @JsonKey(name: 'result_json') String? resultJson,
     @JsonKey(name: 'error_message') String? errorMessage,
@@ -14,9 +16,7 @@ class JobStatus with _$JobStatus {
 
   factory JobStatus.fromJson(Map<String, dynamic> json) =>
       _$JobStatusFromJson(json);
-}
 
-extension JobStatusExt on JobStatus {
   bool get isSuccess => status.toLowerCase() == 'success';
   bool get isFailed  => status.toLowerCase() == 'failed';
   bool get isRunning => status.toLowerCase() == 'running';

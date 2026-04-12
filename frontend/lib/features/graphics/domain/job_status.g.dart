@@ -8,7 +8,7 @@ part of 'job_status.dart';
 
 _$JobStatusImpl _$$JobStatusImplFromJson(Map<String, dynamic> json) =>
     _$JobStatusImpl(
-      id: json['id'] as String,
+      jobId: json['job_id'] as String,
       status: json['status'] as String,
       resultJson: json['result_json'] as String?,
       errorMessage: json['error_message'] as String?,
@@ -16,7 +16,7 @@ _$JobStatusImpl _$$JobStatusImplFromJson(Map<String, dynamic> json) =>
 
 Map<String, dynamic> _$$JobStatusImplToJson(_$JobStatusImpl instance) =>
     <String, dynamic>{
-      'id': instance.id,
+      'job_id': instance.jobId,
       'status': instance.status,
       'result_json': instance.resultJson,
       'error_message': instance.errorMessage,

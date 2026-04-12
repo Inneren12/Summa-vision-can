@@ -8,8 +8,7 @@ enum ChartType {
   bar('bar', 'Bar Chart'),
   area('area', 'Area Chart'),
   scatter('scatter', 'Scatter Plot'),
-  stackedBar('stacked_bar', 'Stacked Bar'),
-  heatmap('heatmap', 'Heatmap');
+  stackedBar('stacked_bar', 'Stacked Bar');
 
   final String apiValue;
   final String displayName;

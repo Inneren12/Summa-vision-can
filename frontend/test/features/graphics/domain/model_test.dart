@@ -70,7 +70,7 @@ void main() {
   group('JobStatus — JSON deserialization', () {
     test('test_job_status_from_json_with_result', () {
       final json = {
-        'id': 'abc-123',
+        'job_id': 'abc-123',
         'status': 'success',
         'result_json':
             '{"publication_id":1,"cdn_url_lowres":"https://cdn.example.com/img.png","s3_key_highres":"pub/1/v1/img.png","version":1}',
@@ -78,7 +78,7 @@ void main() {
 
       final status = JobStatus.fromJson(json);
 
-      expect(status.id, 'abc-123');
+      expect(status.jobId, 'abc-123');
       expect(status.status, 'success');
       expect(status.resultJson, isNotNull);
       expect(status.resultJson, contains('publication_id'));
@@ -88,7 +88,7 @@ void main() {
 
     test('parses running status with null result_json', () {
       final json = {
-        'id': 'abc-123',
+        'job_id': 'abc-123',
         'status': 'running',
         'result_json': null,
       };
@@ -102,7 +102,7 @@ void main() {
 
     test('parses failed status with error_message', () {
       final json = {
-        'id': 'abc-123',
+        'job_id': 'abc-123',
         'status': 'failed',
         'error_message': 'SVG render error',
       };
@@ -115,7 +115,7 @@ void main() {
 
     test('parses queued status', () {
       final json = {
-        'id': 'abc-123',
+        'job_id': 'abc-123',
         'status': 'queued',
       };
 
@@ -133,7 +133,6 @@ void main() {
       expect(ChartType.area.apiValue, 'area');
       expect(ChartType.scatter.apiValue, 'scatter');
       expect(ChartType.stackedBar.apiValue, 'stacked_bar');
-      expect(ChartType.heatmap.apiValue, 'heatmap');
     });
 
     test('display names are human-readable', () {
@@ -142,8 +141,8 @@ void main() {
       expect(ChartType.stackedBar.displayName, 'Stacked Bar');
     });
 
-    test('has exactly 6 values', () {
-      expect(ChartType.values.length, 6);
+    test('has exactly 5 values', () {
+      expect(ChartType.values.length, 5);
     });
   });
 

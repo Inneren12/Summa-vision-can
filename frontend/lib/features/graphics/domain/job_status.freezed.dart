@@ -21,7 +21,8 @@ JobStatus _$JobStatusFromJson(Map<String, dynamic> json) {
 
 /// @nodoc
 mixin _$JobStatus {
-  String get id => throw _privateConstructorUsedError;
+  @JsonKey(name: 'job_id')
+  String get jobId => throw _privateConstructorUsedError;
   String get status => throw _privateConstructorUsedError;
   @JsonKey(name: 'result_json')
   String? get resultJson => throw _privateConstructorUsedError;
@@ -43,7 +44,7 @@ abstract class $JobStatusCopyWith<$Res> {
   ) = _$JobStatusCopyWithImpl<$Res, JobStatus>;
   @useResult
   $Res call({
-    String id,
+    @JsonKey(name: 'job_id') String jobId,
     String status,
     @JsonKey(name: 'result_json') String? resultJson,
     @JsonKey(name: 'error_message') String? errorMessage,
@@ -61,14 +62,14 @@ class _$JobStatusCopyWithImpl<$Res, $Val extends JobStatus>
   @pragma('vm:prefer-inline')
   @override
   $Res call({
-    Object? id = null,
+    Object? jobId = null,
     Object? status = null,
     Object? resultJson = freezed,
     Object? errorMessage = freezed,
   }) {
     return _then(
       _value.copyWith(
-            id: null == id ? _value.id : id as String,
+            jobId: null == jobId ? _value.jobId : jobId as String,
             status:
                 null == status ? _value.status : status as String,
             resultJson: freezed == resultJson
@@ -93,7 +94,7 @@ abstract class _$$JobStatusImplCopyWith<$Res>
   @override
   @useResult
   $Res call({
-    String id,
+    @JsonKey(name: 'job_id') String jobId,
     String status,
     @JsonKey(name: 'result_json') String? resultJson,
     @JsonKey(name: 'error_message') String? errorMessage,
@@ -112,14 +113,14 @@ class __$$JobStatusImplCopyWithImpl<$Res>
   @pragma('vm:prefer-inline')
   @override
   $Res call({
-    Object? id = null,
+    Object? jobId = null,
     Object? status = null,
     Object? resultJson = freezed,
     Object? errorMessage = freezed,
   }) {
     return _then(
       _$JobStatusImpl(
-        id: null == id ? _value.id : id as String,
+        jobId: null == jobId ? _value.jobId : jobId as String,
         status:
             null == status ? _value.status : status as String,
         resultJson: freezed == resultJson
@@ -135,19 +136,20 @@ class __$$JobStatusImplCopyWithImpl<$Res>
 
 /// @nodoc
 @JsonSerializable()
-class _$JobStatusImpl implements _JobStatus {
+class _$JobStatusImpl extends JobStatus {
   const _$JobStatusImpl({
-    required this.id,
+    @JsonKey(name: 'job_id') required this.jobId,
     required this.status,
     @JsonKey(name: 'result_json') this.resultJson,
     @JsonKey(name: 'error_message') this.errorMessage,
-  });
+  }) : super._();
 
   factory _$JobStatusImpl.fromJson(Map<String, dynamic> json) =>
       _$$JobStatusImplFromJson(json);
 
   @override
-  final String id;
+  @JsonKey(name: 'job_id')
+  final String jobId;
   @override
   final String status;
   @override
@@ -159,7 +161,7 @@ class _$JobStatusImpl implements _JobStatus {
 
   @override
   String toString() {
-    return 'JobStatus(id: $id, status: $status, resultJson: $resultJson, errorMessage: $errorMessage)';
+    return 'JobStatus(jobId: $jobId, status: $status, resultJson: $resultJson, errorMessage: $errorMessage)';
   }
 
   @override
@@ -167,7 +169,7 @@ class _$JobStatusImpl implements _JobStatus {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
             other is _$JobStatusImpl &&
-            (identical(other.id, id) || other.id == id) &&
+            (identical(other.jobId, jobId) || other.jobId == jobId) &&
             (identical(other.status, status) || other.status == status) &&
             (identical(other.resultJson, resultJson) ||
                 other.resultJson == resultJson) &&
@@ -178,7 +180,7 @@ class _$JobStatusImpl implements _JobStatus {
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode =>
-      Object.hash(runtimeType, id, status, resultJson, errorMessage);
+      Object.hash(runtimeType, jobId, status, resultJson, errorMessage);
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
@@ -192,19 +194,21 @@ class _$JobStatusImpl implements _JobStatus {
   }
 }
 
-abstract class _JobStatus implements JobStatus {
+abstract class _JobStatus extends JobStatus {
   const factory _JobStatus({
-    required final String id,
+    @JsonKey(name: 'job_id') required final String jobId,
     required final String status,
     @JsonKey(name: 'result_json') final String? resultJson,
     @JsonKey(name: 'error_message') final String? errorMessage,
   }) = _$JobStatusImpl;
+  const _JobStatus._() : super._();
 
   factory _JobStatus.fromJson(Map<String, dynamic> json) =
       _$JobStatusImpl.fromJson;
 
   @override
-  String get id;
+  @JsonKey(name: 'job_id')
+  String get jobId;
   @override
   String get status;
   @override
