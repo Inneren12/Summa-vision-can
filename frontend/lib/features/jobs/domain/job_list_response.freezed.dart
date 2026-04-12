@@ -1,0 +1,178 @@
+// coverage:ignore-file
+// GENERATED CODE - DO NOT MODIFY BY HAND
+// ignore_for_file: type=lint
+// ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
+
+part of 'job_list_response.dart';
+
+// **************************************************************************
+// FreezedGenerator
+// **************************************************************************
+
+T _$identity<T>(T value) => value;
+
+final _privateConstructorUsedError = UnsupportedError(
+  'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
+);
+
+JobListResponse _$JobListResponseFromJson(Map<String, dynamic> json) {
+  return _JobListResponse.fromJson(json);
+}
+
+/// @nodoc
+mixin _$JobListResponse {
+  List<Job> get items => throw _privateConstructorUsedError;
+  int get total => throw _privateConstructorUsedError;
+
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $JobListResponseCopyWith<JobListResponse> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $JobListResponseCopyWith<$Res> {
+  factory $JobListResponseCopyWith(
+    JobListResponse value,
+    $Res Function(JobListResponse) then,
+  ) = _$JobListResponseCopyWithImpl<$Res, JobListResponse>;
+  @useResult
+  $Res call({List<Job> items, int total});
+}
+
+/// @nodoc
+class _$JobListResponseCopyWithImpl<$Res, $Val extends JobListResponse>
+    implements $JobListResponseCopyWith<$Res> {
+  _$JobListResponseCopyWithImpl(this._value, this._then);
+
+  final $Val _value;
+  final $Res Function($Val) _then;
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? items = null,
+    Object? total = null,
+  }) {
+    return _then(
+      _value.copyWith(
+            items: null == items ? _value.items : items as List<Job>,
+            total: null == total ? _value.total : total as int,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$JobListResponseImplCopyWith<$Res>
+    implements $JobListResponseCopyWith<$Res> {
+  factory _$$JobListResponseImplCopyWith(
+    _$JobListResponseImpl value,
+    $Res Function(_$JobListResponseImpl) then,
+  ) = __$$JobListResponseImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({List<Job> items, int total});
+}
+
+/// @nodoc
+class __$$JobListResponseImplCopyWithImpl<$Res>
+    extends _$JobListResponseCopyWithImpl<$Res, _$JobListResponseImpl>
+    implements _$$JobListResponseImplCopyWith<$Res> {
+  __$$JobListResponseImplCopyWithImpl(
+    _$JobListResponseImpl _value,
+    $Res Function(_$JobListResponseImpl) _then,
+  ) : super(_value, _then);
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? items = null,
+    Object? total = null,
+  }) {
+    return _then(
+      _$JobListResponseImpl(
+        items: null == items ? _value._items : items as List<Job>,
+        total: null == total ? _value.total : total as int,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$JobListResponseImpl implements _JobListResponse {
+  const _$JobListResponseImpl({
+    required final List<Job> items,
+    required this.total,
+  }) : _items = items;
+
+  factory _$JobListResponseImpl.fromJson(Map<String, dynamic> json) =>
+      _$$JobListResponseImplFromJson(json);
+
+  final List<Job> _items;
+  @override
+  List<Job> get items {
+    if (_items is EqualUnmodifiableListView) return _items;
+    return EqualUnmodifiableListView(_items);
+  }
+
+  @override
+  final int total;
+
+  @override
+  String toString() {
+    return 'JobListResponse(items: $items, total: $total)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$JobListResponseImpl &&
+            const DeepCollectionEquality().equals(other._items, _items) &&
+            (identical(other.total, total) || other.total == total));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        const DeepCollectionEquality().hash(_items),
+        total,
+      );
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$JobListResponseImplCopyWith<_$JobListResponseImpl> get copyWith =>
+      __$$JobListResponseImplCopyWithImpl<_$JobListResponseImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$JobListResponseImplToJson(this);
+  }
+}
+
+abstract class _JobListResponse implements JobListResponse {
+  const factory _JobListResponse({
+    required final List<Job> items,
+    required final int total,
+  }) = _$JobListResponseImpl;
+
+  factory _JobListResponse.fromJson(Map<String, dynamic> json) =
+      _$JobListResponseImpl.fromJson;
+
+  @override
+  List<Job> get items;
+  @override
+  int get total;
+
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$JobListResponseImplCopyWith<_$JobListResponseImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}

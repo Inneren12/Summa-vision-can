@@ -19,9 +19,35 @@ api/
     ├── public_leads.py         ← POST /api/v1/public/leads/capture (D-2, D-3)
     ├── public_download.py      ← GET /api/v1/public/download
     └── public_sponsorship.py   ← POST /api/v1/public/sponsorship/inquire (D-3)
+    ├── health.py             ← GET /api/health, GET /api/health/ready
+    ├── tasks.py              ← GET /api/v1/admin/tasks/{task_id}
+    ├── cmhc.py               ← POST /api/v1/admin/cmhc/sync
+    ├── public_graphics.py    ← GET /api/v1/public/graphics
+    ├── public_leads.py       ← POST /api/v1/public/leads/capture
+    └── public_download.py    ← GET /api/v1/public/download
+    ├── admin_kpi.py          ← GET /api/v1/admin/kpi
+    ├── admin_jobs.py         ← GET /api/v1/admin/jobs, POST /api/v1/admin/jobs/{id}/retry
+    └── public_graphics.py    ← GET /api/v1/public/graphics
 ```
 
 ## Endpoints
+
+### Admin Jobs Router (`routers/admin_jobs.py`)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/api/v1/admin/jobs` | List jobs with optional filters | X-API-KEY |
+| POST | `/api/v1/admin/jobs/{job_id}/retry` | Retry a failed job | X-API-KEY |
+
+Query params for list: `job_type` (optional), `status` (optional, one of: queued/running/success/failed/cancelled), `limit` (default 50, max 200).
+
+List response: `{ items: [JobItemResponse], total: int }` — items include all job fields (id, job_type, status, payload_json, result_json, error_code, error_message, attempt_count, max_attempts, created_at, started_at, finished_at, created_by, dedupe_key).
+
+Retry logic:
+- Job not found → 404.
+- Job status != failed → 409 "Only failed jobs can be retried".
+- attempt_count >= max_attempts → 409 "Job has exhausted retry attempts".
+- Success → 202 Accepted with `{ job_id, status: "queued" }`.
 
 ### Admin Cubes Router (`routers/admin_cubes.py`)
 
@@ -183,6 +209,9 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 | `KPIResponse` | `schemas/kpi.py` | Aggregated metrics: publications, leads, download funnel, jobs, system health, period |
 | `SponsorshipInquiryRequest` | `routers/public_sponsorship.py` | `name: str`, `email: EmailStr`, `budget: str`, `message: str` |
 | `ResyncResult` | `routers/admin_leads.py` | `total: int`, `synced: int`, `failed_transient: int`, `failed_permanent: int` |
+| `JobItemResponse` | `routers/admin_jobs.py` | `id: str`, `job_type: str`, `status: str`, `payload_json`, `result_json`, `error_code`, `error_message`, `attempt_count: int`, `max_attempts: int`, `created_at`, `started_at`, `finished_at`, `created_by`, `dedupe_key` |
+| `JobListResponse` | `routers/admin_jobs.py` | `items: list[JobItemResponse]`, `total: int` |
+| `RetryJobResponse` | `routers/admin_jobs.py` | `job_id: str`, `status: str` |
 
 ## Architectural Rules
 
@@ -195,6 +224,7 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 
 | This module uses | This module is used by |
 |------------------|----------------------|
+| `repositories.job_repository.JobRepository` (admin_jobs) | `main.py` (router registration) |
 | `core.task_manager.TaskManager` | `main.py` (router registration) |
 | `core.storage.StorageInterface` | — |
 | `core.security.ip_rate_limiter.InMemoryRateLimiter` | — |

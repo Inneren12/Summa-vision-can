@@ -70,6 +70,36 @@ class MockInterceptor extends Interceptor {
       return;
     }
 
+    // C-4: GET /admin/jobs (list) — must match before individual job routes
+    if (path.contains('/admin/jobs') &&
+        !path.contains('/admin/jobs/') &&
+        options.method == 'GET') {
+      handler.resolve(
+        Response(
+          requestOptions: options,
+          statusCode: 200,
+          data: _jobsListFixture,
+        ),
+        true,
+      );
+      return;
+    }
+
+    // C-4: POST /admin/jobs/*/retry
+    if (path.contains('/retry') &&
+        path.contains('/admin/jobs/') &&
+        options.method == 'POST') {
+      handler.resolve(
+        Response(
+          requestOptions: options,
+          statusCode: 202,
+          data: {'job_id': 'mock-retry-job-001', 'status': 'queued'},
+        ),
+        true,
+      );
+      return;
+    }
+
     // Job status: GET /admin/jobs/456
     if (path.contains('/admin/jobs/456')) {
       _fetchJobPollCount++;
@@ -367,6 +397,177 @@ class MockInterceptor extends Interceptor {
     'period_start': '2026-03-13T00:00:00Z',
     'period_end': '2026-04-12T00:00:00Z',
   };
+
+  static Map<String, dynamic> get _jobsListFixture {
+    final now = DateTime.now().toUtc();
+    final twoMinAgo = now.subtract(const Duration(minutes: 2));
+    final fifteenMinAgo = now.subtract(const Duration(minutes: 15));
+
+    return {
+      'items': [
+        // 1. Queued — catalog_sync
+        {
+          'id': 'job-001',
+          'job_type': 'catalog_sync',
+          'status': 'queued',
+          'payload_json':
+              '{"schema_version":1,"date":"2026-04-12"}',
+          'result_json': null,
+          'error_code': null,
+          'error_message': null,
+          'attempt_count': 0,
+          'max_attempts': 3,
+          'created_at': now.subtract(const Duration(minutes: 5)).toIso8601String(),
+          'started_at': null,
+          'finished_at': null,
+          'created_by': 'scheduler',
+          'dedupe_key': 'catalog_sync:2026-04-12',
+        },
+        // 2. Queued — cube_fetch
+        {
+          'id': 'job-002',
+          'job_type': 'cube_fetch',
+          'status': 'queued',
+          'payload_json':
+              '{"schema_version":1,"product_id":"13-10-0888-01","ref_date":"2026-04-01"}',
+          'result_json': null,
+          'error_code': null,
+          'error_message': null,
+          'attempt_count': 0,
+          'max_attempts': 3,
+          'created_at': now.subtract(const Duration(minutes: 4)).toIso8601String(),
+          'started_at': null,
+          'finished_at': null,
+          'created_by': 'admin_api',
+          'dedupe_key': 'fetch:13-10-0888-01:2026-04-01',
+        },
+        // 3. Running — graphics_generate, started 2 min ago (NOT stale)
+        {
+          'id': 'job-003',
+          'job_type': 'graphics_generate',
+          'status': 'running',
+          'payload_json':
+              '{"schema_version":1,"data_key":"statcan/processed/13-10-0888-01/2024-12-15.parquet","chart_type":"line","title":"Housing Prices","size":[1080,1080],"category":"housing"}',
+          'result_json': null,
+          'error_code': null,
+          'error_message': null,
+          'attempt_count': 1,
+          'max_attempts': 3,
+          'created_at': now.subtract(const Duration(minutes: 3)).toIso8601String(),
+          'started_at': twoMinAgo.toIso8601String(),
+          'finished_at': null,
+          'created_by': 'admin_api',
+          'dedupe_key':
+              'graphics:13-10-0888-01:statcan/processed/13-10-0888-01/2024-12-15.parquet:abc123',
+        },
+        // 4. Running — cube_fetch, started 15 min ago (STALE/ZOMBIE)
+        {
+          'id': 'job-004',
+          'job_type': 'cube_fetch',
+          'status': 'running',
+          'payload_json':
+              '{"schema_version":1,"product_id":"18-10-0004-01","ref_date":"2026-04-01"}',
+          'result_json': null,
+          'error_code': null,
+          'error_message': null,
+          'attempt_count': 1,
+          'max_attempts': 3,
+          'created_at': now.subtract(const Duration(minutes: 20)).toIso8601String(),
+          'started_at': fifteenMinAgo.toIso8601String(),
+          'finished_at': null,
+          'created_by': 'scheduler',
+          'dedupe_key': 'fetch:18-10-0004-01:2026-04-01',
+        },
+        // 5. Success — graphics_generate with result_json
+        {
+          'id': 'job-005',
+          'job_type': 'graphics_generate',
+          'status': 'success',
+          'payload_json':
+              '{"schema_version":1,"data_key":"statcan/processed/13-10-0888-01/2024-12-15.parquet","chart_type":"bar","title":"Housing Index","size":[1080,1080],"category":"housing"}',
+          'result_json':
+              '{"publication_id":42,"cdn_url_lowres":"https://cdn.example.com/pub/42/v1/lowres.png","s3_key_highres":"publications/42/v1/highres.png","version":1}',
+          'error_code': null,
+          'error_message': null,
+          'attempt_count': 1,
+          'max_attempts': 3,
+          'created_at': now.subtract(const Duration(hours: 1)).toIso8601String(),
+          'started_at':
+              now.subtract(const Duration(hours: 1)).toIso8601String(),
+          'finished_at':
+              now.subtract(const Duration(minutes: 59, seconds: 36)).toIso8601String(),
+          'created_by': 'admin_api',
+          'dedupe_key':
+              'graphics:13-10-0888-01:statcan/processed/13-10-0888-01/2024-12-15.parquet:def456',
+        },
+        // 6. Success — graphics_generate with result_json (#2)
+        {
+          'id': 'job-006',
+          'job_type': 'graphics_generate',
+          'status': 'success',
+          'payload_json':
+              '{"schema_version":1,"data_key":"statcan/processed/14-10-0287-01/2026-03-01.parquet","chart_type":"line","title":"Labour Force","size":[1200,628],"category":"labour"}',
+          'result_json':
+              '{"publication_id":43,"cdn_url_lowres":"https://cdn.example.com/pub/43/v1/lowres.png","s3_key_highres":"publications/43/v1/highres.png","version":1}',
+          'error_code': null,
+          'error_message': null,
+          'attempt_count': 1,
+          'max_attempts': 3,
+          'created_at': now.subtract(const Duration(hours: 2)).toIso8601String(),
+          'started_at':
+              now.subtract(const Duration(hours: 2)).toIso8601String(),
+          'finished_at':
+              now.subtract(const Duration(hours: 1, minutes: 59, seconds: 35)).toIso8601String(),
+          'created_by': 'admin_api',
+          'dedupe_key': null,
+        },
+        // 7. Failed — retryable (STORAGE_ERROR, attempt 1/3)
+        {
+          'id': 'job-007',
+          'job_type': 'graphics_generate',
+          'status': 'failed',
+          'payload_json':
+              '{"schema_version":1,"data_key":"statcan/processed/36-10-0402-01/2026-01-01.parquet","chart_type":"area","title":"GDP by Industry","size":[1080,1080],"category":"economy"}',
+          'result_json': null,
+          'error_code': 'STORAGE_ERROR',
+          'error_message':
+              'S3 upload failed: NoSuchBucket — the specified bucket does not exist. Ensure the MinIO bucket "publications" has been created.',
+          'attempt_count': 1,
+          'max_attempts': 3,
+          'created_at': now.subtract(const Duration(hours: 3)).toIso8601String(),
+          'started_at':
+              now.subtract(const Duration(hours: 3)).toIso8601String(),
+          'finished_at':
+              now.subtract(const Duration(hours: 2, minutes: 59, seconds: 50)).toIso8601String(),
+          'created_by': 'admin_api',
+          'dedupe_key':
+              'graphics:36-10-0402-01:statcan/processed/36-10-0402-01/2026-01-01.parquet:ghi789',
+        },
+        // 8. Failed — non-retryable (DATA_CONTRACT_VIOLATION, attempt 3/3)
+        {
+          'id': 'job-008',
+          'job_type': 'cube_fetch',
+          'status': 'failed',
+          'payload_json':
+              '{"schema_version":1,"product_id":"34-10-0145-01","ref_date":"2026-03-01"}',
+          'result_json': null,
+          'error_code': 'DATA_CONTRACT_VIOLATION',
+          'error_message':
+              'Column REF_DATE missing from StatCan response. Expected columns: [REF_DATE, GEO, VALUE]. Got: [DATE, GEOGRAPHY, AMOUNT]. Data contract mismatch — manual intervention required.',
+          'attempt_count': 3,
+          'max_attempts': 3,
+          'created_at': now.subtract(const Duration(hours: 5)).toIso8601String(),
+          'started_at':
+              now.subtract(const Duration(hours: 5)).toIso8601String(),
+          'finished_at':
+              now.subtract(const Duration(hours: 4, minutes: 59, seconds: 55)).toIso8601String(),
+          'created_by': 'scheduler',
+          'dedupe_key': 'fetch:34-10-0145-01:2026-03-01',
+        },
+      ],
+      'total': 8,
+    };
+  }
 
   static const List<Map<String, dynamic>> _queueFixture = [
     {

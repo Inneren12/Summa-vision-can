@@ -7,6 +7,7 @@ import '../../features/data_preview/presentation/data_preview_screen.dart';
 import '../../features/editor/presentation/editor_screen.dart';
 import '../../features/graphics/presentation/chart_config_screen.dart';
 import '../../features/graphics/presentation/preview_screen.dart';
+import '../../features/jobs/presentation/jobs_dashboard_screen.dart';
 import '../../features/kpi/presentation/kpi_screen.dart';
 import '../../features/queue/presentation/queue_screen.dart';
 
@@ -22,6 +23,7 @@ class AppRoutes {
   static const dataPreview     = '/data/preview';
   static const graphicsConfig  = '/graphics/config';
   static const kpi             = '/kpi';
+  static const jobs            = '/jobs';
 }
 
 /// Riverpod provider for the [GoRouter] instance.
@@ -43,6 +45,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         '/data/',
         '/graphics/',
         '/kpi',
+        '/jobs',
       ];
       final path = state.matchedLocation;
 
@@ -98,6 +101,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.kpi,
         name: 'kpi',
         builder: (context, state) => const KPIScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.jobs,
+        name: 'jobs',
+        builder: (context, state) => const JobsDashboardScreen(),
       ),
       GoRoute(
         path: AppRoutes.editor,
