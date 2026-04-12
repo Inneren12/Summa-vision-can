@@ -10,14 +10,15 @@ api/
 ├── __init__.py
 └── routers/
     ├── __init__.py
-    ├── health.py             ← GET /api/health, GET /api/health/ready
-    ├── tasks.py              ← GET /api/v1/admin/tasks/{task_id}
-    ├── cmhc.py               ← POST /api/v1/admin/cmhc/sync
-    ├── public_graphics.py    ← GET /api/v1/public/graphics
-    ├── public_leads.py       ← POST /api/v1/public/leads/capture
-    └── public_download.py    ← GET /api/v1/public/download
-    ├── admin_kpi.py          ← GET /api/v1/admin/kpi
-    └── public_graphics.py    ← GET /api/v1/public/graphics
+    ├── health.py               ← GET /api/health, GET /api/health/ready
+    ├── tasks.py                ← GET /api/v1/admin/tasks/{task_id}
+    ├── cmhc.py                 ← POST /api/v1/admin/cmhc/sync
+    ├── admin_kpi.py            ← GET /api/v1/admin/kpi
+    ├── admin_leads.py          ← POST /api/v1/admin/leads/resync (D-3)
+    ├── public_graphics.py      ← GET /api/v1/public/graphics
+    ├── public_leads.py         ← POST /api/v1/public/leads/capture (D-2, D-3)
+    ├── public_download.py      ← GET /api/v1/public/download
+    └── public_sponsorship.py   ← POST /api/v1/public/sponsorship/inquire (D-3)
 ```
 
 ## Endpoints
@@ -122,6 +123,37 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 9. Write AuditEvents: `lead.captured`, `lead.email_sent`, `token.created`.
 10. Return `{"message": "Check your email for the download link"}`.
 
+### Admin Leads Router (`routers/admin_leads.py`) — ✅ New (D-3)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/api/v1/admin/leads/resync` | Retry ESP sync for unsynced leads | X-API-KEY |
+
+**Behaviour:**
+- Fetches all leads where `esp_synced=False` and `esp_sync_failed_permanent=False`.
+- For each lead, attempts ESP `add_subscriber` with exponential backoff (max 3 attempts, delays `2^attempt` seconds via `asyncio.sleep()`).
+- On `ESPPermanentError` (4xx) → marks lead as permanently failed.
+- On `ESPTransientError` (5xx/timeout) after 3 attempts → increments `failed_transient`, does not mark permanent.
+- Returns `ResyncResult` with `total`, `synced`, `failed_transient`, `failed_permanent` counts.
+
+### Sponsorship Inquiry Router (`routers/public_sponsorship.py`) — ✅ New (D-3)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/api/v1/public/sponsorship/inquire` | Submit B2B sponsorship inquiry | None (public) |
+
+**Request Body:** `SponsorshipInquiryRequest` — `name: str`, `email: EmailStr`, `budget: str`, `message: str`
+
+**Behaviour:**
+- Rate-limited to **1 request per 5 minutes per IP** via `InMemoryRateLimiter`.
+- Lead scored via `LeadScoringService`:
+  - **b2c** (free email) → 422 "Please use a corporate email address."
+  - **b2b** → Slack notification with `[B2B LEAD]` tag, saved to DB.
+  - **education** → Slack notification with `[EDUCATION]` tag, saved to DB.
+  - **isp** → Saved to DB only (no Slack notification).
+- Dedupe key: `inquiry:{email}`.
+- Returns `{"message": "Your inquiry has been received. ..."}`
+
 ### Download Router (`routers/public_download.py`) — ✅ New (D-2)
 
 | Method | Path | Status | Description |
@@ -149,6 +181,8 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 | `LeadCaptureRequest` | `schemas/public_leads.py` | `email: EmailStr`, `asset_id: int`, `turnstile_token: str` |
 | `LeadCaptureResponse` | `schemas/public_leads.py` | `message: str` |
 | `KPIResponse` | `schemas/kpi.py` | Aggregated metrics: publications, leads, download funnel, jobs, system health, period |
+| `SponsorshipInquiryRequest` | `routers/public_sponsorship.py` | `name: str`, `email: EmailStr`, `budget: str`, `message: str` |
+| `ResyncResult` | `routers/admin_leads.py` | `total: int`, `synced: int`, `failed_transient: int`, `failed_permanent: int` |
 
 ## Architectural Rules
 
@@ -170,6 +204,9 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 | `services.email.interface.EmailServiceInterface` | — |
 | `services.security.turnstile.TurnstileValidator` | — |
 | `services.audit.AuditWriter` | — |
+| `services.crm.scoring.LeadScoringService` | — |
+| `services.notifications.slack.SlackNotifierService` | — |
+| `services.email.esp_client.ESPSubscriberInterface` | — |
 | `services.cmhc.service.run_cmhc_extraction_pipeline` | — |
 | `fastapi.Depends` | — |
 

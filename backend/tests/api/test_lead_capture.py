@@ -134,14 +134,24 @@ def client(
     mock_audit: AsyncMock,
 ) -> TestClient:
     from src.core.database import get_db
-    from src.api.routers.public_leads import _get_turnstile_validator, _get_email_service
+    from src.api.routers.public_leads import (
+        _get_turnstile_validator,
+        _get_email_service,
+        _get_slack_notifier,
+        _get_esp_client,
+    )
 
     async def override_db():
-        yield MagicMock()
+        mock_db = MagicMock()
+        mock_db.flush = AsyncMock()
+        mock_db.commit = AsyncMock()
+        yield mock_db
 
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
     app.dependency_overrides[_get_email_service] = lambda: mock_email_service
+    app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()
+    app.dependency_overrides[_get_esp_client] = lambda: None
 
     with patch(
         "src.api.routers.public_leads.PublicationRepository",
@@ -257,16 +267,24 @@ class TestTurnstileValidation:
         mock_audit: AsyncMock,
     ) -> None:
         from src.core.database import get_db
-        from src.api.routers.public_leads import _get_turnstile_validator, _get_email_service
+        from src.api.routers.public_leads import (
+            _get_turnstile_validator, _get_email_service,
+            _get_slack_notifier, _get_esp_client,
+        )
 
         mock_turnstile.validate = AsyncMock(return_value=False)
 
         async def override_db():
-            yield MagicMock()
+            mock_db = MagicMock()
+            mock_db.flush = AsyncMock()
+            mock_db.commit = AsyncMock()
+            yield mock_db
 
         app.dependency_overrides[get_db] = override_db
         app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
         app.dependency_overrides[_get_email_service] = lambda: mock_email_service
+        app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()
+        app.dependency_overrides[_get_esp_client] = lambda: None
 
         with patch(
             "src.api.routers.public_leads.PublicationRepository",
@@ -299,7 +317,10 @@ class TestTurnstileValidation:
 class TestRateLimit:
     def test_rate_limit_returns_429(self) -> None:
         from src.core.database import get_db
-        from src.api.routers.public_leads import _get_turnstile_validator, _get_email_service
+        from src.api.routers.public_leads import (
+            _get_turnstile_validator, _get_email_service,
+            _get_slack_notifier, _get_esp_client,
+        )
 
         mock_turnstile = AsyncMock()
         mock_turnstile.validate = AsyncMock(return_value=True)
@@ -319,11 +340,16 @@ class TestRateLimit:
         tight_limiter = InMemoryRateLimiter(max_requests=3, window_seconds=60)
 
         async def override_db():
-            yield MagicMock()
+            mock_db = MagicMock()
+            mock_db.flush = AsyncMock()
+            mock_db.commit = AsyncMock()
+            yield mock_db
 
         app.dependency_overrides[get_db] = override_db
         app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
         app.dependency_overrides[_get_email_service] = lambda: mock_email_service
+        app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()
+        app.dependency_overrides[_get_esp_client] = lambda: None
 
         with patch(
             "src.api.routers.public_leads.PublicationRepository",
@@ -374,17 +400,25 @@ class TestAssetValidation:
         mock_audit: AsyncMock,
     ) -> None:
         from src.core.database import get_db
-        from src.api.routers.public_leads import _get_turnstile_validator, _get_email_service
+        from src.api.routers.public_leads import (
+            _get_turnstile_validator, _get_email_service,
+            _get_slack_notifier, _get_esp_client,
+        )
 
         pub_repo = AsyncMock()
         pub_repo.get_by_id = AsyncMock(return_value=None)
 
         async def override_db():
-            yield MagicMock()
+            mock_db = MagicMock()
+            mock_db.flush = AsyncMock()
+            mock_db.commit = AsyncMock()
+            yield mock_db
 
         app.dependency_overrides[get_db] = override_db
         app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
         app.dependency_overrides[_get_email_service] = lambda: mock_email_service
+        app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()
+        app.dependency_overrides[_get_esp_client] = lambda: None
 
         with patch(
             "src.api.routers.public_leads.PublicationRepository",
@@ -423,7 +457,10 @@ class TestResendFlow:
         mock_audit: AsyncMock,
     ) -> None:
         from src.core.database import get_db
-        from src.api.routers.public_leads import _get_turnstile_validator, _get_email_service
+        from src.api.routers.public_leads import (
+            _get_turnstile_validator, _get_email_service,
+            _get_slack_notifier, _get_esp_client,
+        )
 
         existing_lead = _make_lead()
         existing_token = _make_token(use_count=0)
@@ -437,11 +474,16 @@ class TestResendFlow:
         token_repo.create = AsyncMock(return_value=_make_token(token_id=2))
 
         async def override_db():
-            yield MagicMock()
+            mock_db = MagicMock()
+            mock_db.flush = AsyncMock()
+            mock_db.commit = AsyncMock()
+            yield mock_db
 
         app.dependency_overrides[get_db] = override_db
         app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
         app.dependency_overrides[_get_email_service] = lambda: mock_email_service
+        app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()
+        app.dependency_overrides[_get_esp_client] = lambda: None
 
         with patch(
             "src.api.routers.public_leads.PublicationRepository",
@@ -478,7 +520,10 @@ class TestResendFlow:
         mock_audit: AsyncMock,
     ) -> None:
         from src.core.database import get_db
-        from src.api.routers.public_leads import _get_turnstile_validator, _get_email_service
+        from src.api.routers.public_leads import (
+            _get_turnstile_validator, _get_email_service,
+            _get_slack_notifier, _get_esp_client,
+        )
 
         existing_lead = _make_lead()
         existing_token = _make_token(use_count=2)
@@ -492,11 +537,16 @@ class TestResendFlow:
         token_repo.create = AsyncMock(return_value=_make_token(token_id=2))
 
         async def override_db():
-            yield MagicMock()
+            mock_db = MagicMock()
+            mock_db.flush = AsyncMock()
+            mock_db.commit = AsyncMock()
+            yield mock_db
 
         app.dependency_overrides[get_db] = override_db
         app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
         app.dependency_overrides[_get_email_service] = lambda: mock_email_service
+        app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()
+        app.dependency_overrides[_get_esp_client] = lambda: None
 
         with patch(
             "src.api.routers.public_leads.PublicationRepository",
@@ -543,6 +593,8 @@ class TestResendRateLimit:
         from src.api.routers.public_leads import (
             _get_turnstile_validator,
             _get_email_service,
+            _get_slack_notifier,
+            _get_esp_client,
             _resend_rate_limiter,
         )
 
@@ -561,11 +613,16 @@ class TestResendRateLimit:
         tight_resend_limiter = InMemoryRateLimiter(max_requests=1, window_seconds=120)
 
         async def override_db():
-            yield MagicMock()
+            mock_db = MagicMock()
+            mock_db.flush = AsyncMock()
+            mock_db.commit = AsyncMock()
+            yield mock_db
 
         app.dependency_overrides[get_db] = override_db
         app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
         app.dependency_overrides[_get_email_service] = lambda: mock_email_service
+        app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()
+        app.dependency_overrides[_get_esp_client] = lambda: None
 
         with patch(
             "src.api.routers.public_leads.PublicationRepository",

@@ -138,3 +138,45 @@ class AuthError(SummaVisionError):
         context: dict[str, object] | None = None,
     ) -> None:
         super().__init__(message=message, error_code=error_code, context=context)
+
+
+class ESPPermanentError(SummaVisionError):
+    """Raised when the ESP (e.g. Beehiiv) returns a 4xx client error.
+
+    These errors indicate a permanent failure that should NOT be retried
+    (e.g. invalid email, duplicate subscriber rejection).
+    """
+
+    def __init__(
+        self,
+        status_code: int,
+        detail: str = "ESP permanent error",
+        context: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(
+            message=detail,
+            error_code="ESP_PERMANENT_ERROR",
+            context={"status_code": status_code, **(context or {})},
+        )
+        self.status_code = status_code
+
+
+class ESPTransientError(SummaVisionError):
+    """Raised when the ESP returns a 5xx server error or times out.
+
+    These errors are transient and the operation should be retried
+    with exponential backoff.
+    """
+
+    def __init__(
+        self,
+        status_code: int,
+        detail: str = "ESP transient error",
+        context: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(
+            message=detail,
+            error_code="ESP_TRANSIENT_ERROR",
+            context={"status_code": status_code, **(context or {})},
+        )
+        self.status_code = status_code

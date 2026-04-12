@@ -30,6 +30,26 @@ The current flow is:
 **Security constraints (R1, R17):** No presigned URLs in emails. No auto-downloads.
 Raw tokens never stored in DB (SHA-256 only). Tokens limited to 5 uses, 48h TTL.
 
+### Lead Scoring + Notifications Flow (D-3)
+
+```
+   Lead captured (POST /capture)
+           ↓ (background task)
+   LeadScoringService.score_lead(email)  ← pure sync, ARCH-PURA-001
+           ↓
+   Update lead: is_b2b, company_domain, category
+           ↓
+   ┌─ b2b/education → SlackNotifierService.notify_lead() (with dedupe)
+   └─ isp/b2c → skip Slack
+           ↓
+   ESPClient.add_subscriber(email)
+   ├─ Success → mark esp_synced=True
+   ├─ 4xx → mark esp_sync_failed_permanent=True
+   └─ 5xx/timeout → leave esp_synced=False (retried via /admin/leads/resync)
+```
+
+**Admin resync:** `POST /api/v1/admin/leads/resync` retries unsynced leads with exponential backoff (3 attempts, delays 1s/2s).
+
 ## Infrastructure Layer
 
 - **Docker:** Dockerfile + two compose files
@@ -87,11 +107,13 @@ Note template backgrounds instead of AI backgrounds for MVP.
    │       ├── auth.py
    │       └── ip_rate_limiter.py
    ├── api/routers/
-   │   ├── health.py          ← NEW (0-1)
-   │   ├── admin_graphics.py  ← Updated (B-4: job-based generate + GET /jobs/{id})
+   │   ├── health.py              ← NEW (0-1)
+   │   ├── admin_graphics.py      ← Updated (B-4: job-based generate + GET /jobs/{id})
+   │   ├── admin_leads.py         ← NEW (D-3: ESP resync with exponential backoff)
    │   ├── public_graphics.py
-   │   ├── public_leads.py    ← Updated (D-2: Turnstile + Magic Link email flow)
-   │   ├── public_download.py ← NEW (D-2: token exchange → presigned URL)
+   │   ├── public_leads.py        ← Updated (D-3: scoring + Slack + ESP background tasks)
+   │   ├── public_download.py     ← NEW (D-2: token exchange → presigned URL)
+   │   ├── public_sponsorship.py  ← NEW (D-3: tiered sponsorship inquiry)
    │   ├── cmhc.py
    │   └── tasks.py
    ├── models/
@@ -109,6 +131,12 @@ Note template backgrounds instead of AI backgrounds for MVP.
        ├── cmhc/ (Stub: browser, parser, service files exist but contain no implementation)
        ├── ai/ (Stub: llm_interface, scoring, cache exist but are not connected to pipeline)
        ├── graphics/ (svg_generator, backgrounds, compositor, pipeline exist with implementation)
-       ├── email/ (D-0a: EmailServiceInterface + ConsoleEmailService)
+       ├── crm/
+       │   └── scoring.py         ← NEW (D-3: pure sync lead scoring — ARCH-PURA-001)
+       ├── notifications/
+       │   └── slack.py           ← NEW (D-3: Slack webhook alerts with dedupe)
+       ├── email/
+       │   ├── interface.py       ← (D-0a: EmailServiceInterface + ConsoleEmailService)
+       │   └── esp_client.py      ← NEW (D-3: Beehiiv ESP client with error classification)
        └── security/ (D-0b: TurnstileValidator)
 ```

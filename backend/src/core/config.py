@@ -93,6 +93,13 @@ class Settings(BaseSettings):
     # --- Public Site ---
     public_site_url: str = "http://localhost:3000"  # Prod: https://summa.vision
 
+    # --- Slack ---
+    SLACK_WEBHOOK_URL: str = ""  # If empty → Slack notifications silently disabled
+
+    # --- ESP (Beehiiv) ---
+    BEEHIIV_API_KEY: str = ""  # If empty → ESP sync silently disabled
+    BEEHIIV_PUBLICATION_ID: str = ""
+
     # --- LLM / Gemini ---
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"

@@ -1,4 +1,4 @@
-"""Public lead capture endpoint (D-2, A1+A3).
+"""Public lead capture endpoint (D-2, A1+A3, D-3 scoring/notifications/ESP).
 
 Flow:
 1. Rate limit per IP (3 req/min).
@@ -11,6 +11,7 @@ Flow:
 8. Send email via BackgroundTasks.
 9. Write AuditEvents.
 10. Return 200 with message.
+11. Background: Score lead, notify Slack, sync ESP (D-3).
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.schemas.public_leads import LeadCaptureRequest, LeadCaptureResponse
 from src.core.config import Settings, get_settings
 from src.core.database import get_db
+from src.core.exceptions import ESPPermanentError, ESPTransientError
 from src.core.security.ip_rate_limiter import InMemoryRateLimiter
 from src.models.publication import PublicationStatus
 from src.repositories.download_token_repository import DownloadTokenRepository
@@ -33,7 +35,10 @@ from src.repositories.lead_repository import LeadRepository
 from src.repositories.publication_repository import PublicationRepository
 from src.schemas.events import EventType
 from src.services.audit import AuditWriter
+from src.services.crm.scoring import LeadScoringService
+from src.services.email.esp_client import ESPSubscriberInterface, BeehiivClient
 from src.services.email.interface import EmailServiceInterface, ConsoleEmailService
+from src.services.notifications.slack import SlackNotifierService
 from src.services.security.turnstile import TurnstileValidator
 
 logger = structlog.get_logger(module="public_leads")
@@ -50,9 +55,39 @@ _resend_rate_limiter = InMemoryRateLimiter(max_requests=1, window_seconds=120)
 _EMAIL_TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "templates" / "email" / "download_ready.html"
 
 
+_scoring_service = LeadScoringService()
+
+
 def _get_email_service() -> EmailServiceInterface:
     """Provide an EmailServiceInterface via dependency injection."""
     return ConsoleEmailService()
+
+
+def _get_slack_notifier(
+    request: Request,
+    settings: Settings = Depends(get_settings),
+) -> SlackNotifierService:
+    """Provide a SlackNotifierService via dependency injection."""
+    return SlackNotifierService(
+        http_client=request.app.state.http_client,
+        settings=settings,
+    )
+
+
+def _get_esp_client(
+    request: Request,
+    settings: Settings = Depends(get_settings),
+) -> ESPSubscriberInterface | None:
+    """Provide an ESP client via dependency injection.
+
+    Returns ``None`` when Beehiiv credentials are not configured.
+    """
+    if not settings.BEEHIIV_API_KEY or not settings.BEEHIIV_PUBLICATION_ID:
+        return None
+    return BeehiivClient.from_settings(
+        http_client=request.app.state.http_client,
+        settings=settings,
+    )
 
 
 def _get_turnstile_validator(
@@ -100,6 +135,75 @@ def _hash_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
+async def _score_notify_sync(
+    lead_id: int,
+    email: str,
+    db: AsyncSession,
+    slack: SlackNotifierService,
+    esp_client: ESPSubscriberInterface | None,
+) -> None:
+    """Background task: score lead, notify Slack, sync ESP (D-3).
+
+    Idempotent (R16): dedupe_key prevents duplicate Slack messages,
+    and ESP duplicate-subscriber rejection is handled gracefully.
+    """
+    lead_repo = LeadRepository(db)
+
+    # 1. Score the lead (pure function — no I/O)
+    score = _scoring_service.score_lead(email)
+
+    # 2. Update lead record with scoring data
+    lead = await lead_repo.get_by_id(lead_id)
+    if lead is None:
+        logger.warning("score_notify_sync_lead_not_found", lead_id=lead_id)
+        return
+
+    lead.is_b2b = score.is_b2b
+    lead.company_domain = score.company_domain
+    await db.flush()
+
+    # 3. Tiered Slack handling
+    if score.category == "b2b":
+        await slack.notify_lead(
+            email=email,
+            category=score.category,
+            company_domain=score.company_domain,
+            dedupe_key=f"capture:{email}",
+        )
+    elif score.category == "education":
+        await slack.notify_lead(
+            email=email,
+            category=score.category,
+            company_domain=score.company_domain,
+            dedupe_key=f"capture:{email}",
+        )
+    # isp → no Slack; b2c → no additional action
+
+    # 4. ESP sync
+    if esp_client is not None:
+        try:
+            await esp_client.add_subscriber(
+                email,
+                metadata={"category": score.category, "company_domain": score.company_domain or ""},
+            )
+            if score.category == "b2b":
+                await esp_client.add_tag(email, "b2b")
+            elif score.category == "education":
+                await esp_client.add_tag(email, "education")
+            lead.esp_synced = True
+            await db.flush()
+        except ESPPermanentError:
+            lead.esp_sync_failed_permanent = True
+            await db.flush()
+            logger.warning("esp_sync_permanent_failure", email=email, lead_id=lead_id)
+        except ESPTransientError:
+            lead.esp_synced = False
+            await db.flush()
+            logger.warning("esp_sync_transient_failure", email=email, lead_id=lead_id)
+
+    await db.commit()
+
+
 @router.post(
     "/capture",
     response_model=LeadCaptureResponse,
@@ -113,6 +217,8 @@ async def capture_lead(
     settings: Settings = Depends(get_settings),
     turnstile: TurnstileValidator = Depends(_get_turnstile_validator),
     email_service: EmailServiceInterface = Depends(_get_email_service),
+    slack_notifier: SlackNotifierService = Depends(_get_slack_notifier),
+    esp_client: ESPSubscriberInterface | None = Depends(_get_esp_client),
 ) -> LeadCaptureResponse:
     """Trade email for a Magic Link download email.
 
@@ -289,6 +395,16 @@ async def capture_lead(
         entity_type="download_token",
         entity_id=str(download_token.id),
         actor="system",
+    )
+
+    # 11. Background: score lead, notify Slack, sync ESP (D-3)
+    background_tasks.add_task(
+        _score_notify_sync,
+        lead_id=lead.id,
+        email=payload.email,
+        db=db,
+        slack=slack_notifier,
+        esp_client=esp_client,
     )
 
     # 10. Return success
