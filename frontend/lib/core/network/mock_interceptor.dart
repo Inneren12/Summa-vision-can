@@ -142,6 +142,19 @@ class MockInterceptor extends Interceptor {
       return;
     }
 
+    // C-5: GET /admin/kpi → KPI dashboard metrics
+    if (path.contains('/admin/kpi') && options.method == 'GET') {
+      handler.resolve(
+        Response(
+          requestOptions: options,
+          statusCode: 200,
+          data: _kpiFixture,
+        ),
+        true,
+      );
+      return;
+    }
+
     if (path.contains('/admin/queue')) {
       handler.resolve(
         Response(
@@ -322,6 +335,37 @@ class MockInterceptor extends Interceptor {
       {'REF_DATE': '2024-05', 'GEO': 'Canada', 'VALUE': 161.4, 'SCALAR_ID': 0, 'STATUS': 'A'},
       {'REF_DATE': '2024-05', 'GEO': 'Quebec', 'VALUE': 150.7, 'SCALAR_ID': 1, 'STATUS': 'A'},
     ],
+  };
+
+  static const Map<String, dynamic> _kpiFixture = {
+    'total_publications': 45,
+    'published_count': 42,
+    'draft_count': 3,
+    'total_leads': 156,
+    'b2b_leads': 38,
+    'education_leads': 12,
+    'isp_leads': 8,
+    'b2c_leads': 98,
+    'esp_synced_count': 140,
+    'esp_failed_permanent_count': 4,
+    'emails_sent': 120,
+    'tokens_created': 120,
+    'tokens_activated': 89,
+    'tokens_exhausted': 12,
+    'total_jobs': 156,
+    'jobs_succeeded': 142,
+    'jobs_failed': 8,
+    'jobs_queued': 3,
+    'jobs_running': 1,
+    'failed_by_type': {
+      'graphics_generate': 3,
+      'cube_fetch': 4,
+      'catalog_sync': 1,
+    },
+    'catalog_syncs': 28,
+    'data_contract_violations': 2,
+    'period_start': '2026-03-13T00:00:00Z',
+    'period_end': '2026-04-12T00:00:00Z',
   };
 
   static const List<Map<String, dynamic>> _queueFixture = [
