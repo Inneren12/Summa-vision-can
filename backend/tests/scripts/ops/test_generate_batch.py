@@ -81,6 +81,16 @@ class TestBuildParser:
         args = parser.parse_args(["--manifest", "m.json", "--dry-run"])
         assert args.dry_run is True
 
+    def test_parser_rejects_zero_concurrency(self) -> None:
+        parser = _build_parser()
+        with pytest.raises(SystemExit):
+            parser.parse_args(["--manifest", "m.json", "--concurrency", "0"])
+
+    def test_parser_rejects_negative_concurrency(self) -> None:
+        parser = _build_parser()
+        with pytest.raises(SystemExit):
+            parser.parse_args(["--manifest", "m.json", "--concurrency", "-1"])
+
 
 # ---------------------------------------------------------------------------
 # Entry validation

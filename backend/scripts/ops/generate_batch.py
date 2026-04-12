@@ -50,6 +50,14 @@ if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
 
 
+def _positive_int(value: str) -> int:
+    """Argparse type that enforces a positive integer (>= 1)."""
+    val = int(value)
+    if val < 1:
+        raise argparse.ArgumentTypeError(f"Must be >= 1, got {val}")
+    return val
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Batch graphic generation — ops CLI",
@@ -90,9 +98,9 @@ def _build_parser() -> argparse.ArgumentParser:
     # Execution options
     parser.add_argument(
         "--concurrency",
-        type=int,
+        type=_positive_int,
         default=2,
-        help="Max concurrent render operations (default: 2).",
+        help="Max concurrent render operations (default: 2). Must be >= 1.",
     )
     parser.add_argument(
         "--dry-run",
