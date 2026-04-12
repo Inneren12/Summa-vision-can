@@ -7,6 +7,7 @@ import '../../features/data_preview/presentation/data_preview_screen.dart';
 import '../../features/editor/presentation/editor_screen.dart';
 import '../../features/graphics/presentation/chart_config_screen.dart';
 import '../../features/graphics/presentation/preview_screen.dart';
+import '../../features/kpi/presentation/kpi_screen.dart';
 import '../../features/queue/presentation/queue_screen.dart';
 
 /// Route path constants — single source of truth.
@@ -20,6 +21,7 @@ class AppRoutes {
   static const cubeDetail   = '/cubes/:productId';
   static const dataPreview     = '/data/preview';
   static const graphicsConfig  = '/graphics/config';
+  static const kpi             = '/kpi';
 }
 
 /// Riverpod provider for the [GoRouter] instance.
@@ -40,6 +42,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         '/cubes/',
         '/data/',
         '/graphics/',
+        '/kpi',
       ];
       final path = state.matchedLocation;
 
@@ -90,6 +93,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             productId: productId,
           );
         },
+      ),
+      GoRoute(
+        path: AppRoutes.kpi,
+        name: 'kpi',
+        builder: (context, state) => const KPIScreen(),
       ),
       GoRoute(
         path: AppRoutes.editor,

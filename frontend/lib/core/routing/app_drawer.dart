@@ -40,6 +40,12 @@ class AppDrawer extends StatelessWidget {
             route: AppRoutes.cubeSearch,
             selected: currentPath.startsWith('/cubes'),
           ),
+          _NavTile(
+            icon: Icons.bar_chart,
+            label: 'KPI',
+            route: AppRoutes.kpi,
+            selected: currentPath == AppRoutes.kpi,
+          ),
         ],
       ),
     );

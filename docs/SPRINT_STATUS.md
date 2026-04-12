@@ -65,10 +65,15 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 | C-1 | Cube Search Screen | 🔄 | A-4, PR-20, PR-46 |
 | C-2 | Data Preview | 🔄 | C-1, A-5 |
 | C-3 | Chart Config + Generation Screen | 🔄 | C-2, B-4 |
+| C-5 | KPI Dashboard Screen | ✅ | C-3, 0-4 |
+
+**Étape C status:** All PRs complete. ✅
 
 **Étape C-1:** CubeSearchScreen with debounced search, CubeSearchTile, CubeDetailScreen stub, MockInterceptor fixtures, AppDrawer navigation, GoRouter routes, freezed models, Riverpod providers, widget + model tests.
 
 **Étape C-3:** ChartConfigScreen with chart type / size preset / background category selectors, title field with validation, async generation flow (submit → poll → result), inline image preview with download button, MockInterceptor polling simulation, widget + model tests. Wires C-2 "Generate Chart" button to /graphics/config route.
+
+**Étape C-5:** KPI Dashboard — backend `GET /api/v1/admin/kpi?days=30` aggregation endpoint (KPIService, KPIResponse schema). Flutter KPIScreen with period selector (7/30/90 days), summary cards (publications, leads, downloads, job success), download funnel visualization, lead breakdown by category, job failure chart, system health row, auto-refresh every 60s. MockInterceptor fixture, freezed model, Riverpod providers, widget + model tests.
 
 ## Étape B: Visual Engine
 

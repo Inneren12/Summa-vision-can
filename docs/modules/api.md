@@ -13,6 +13,7 @@ api/
     ├── health.py             ← GET /api/health, GET /api/health/ready
     ├── tasks.py              ← GET /api/v1/admin/tasks/{task_id}
     ├── cmhc.py               ← POST /api/v1/admin/cmhc/sync
+    ├── admin_kpi.py          ← GET /api/v1/admin/kpi
     └── public_graphics.py    ← GET /api/v1/public/graphics
 ```
 
@@ -28,6 +29,24 @@ api/
 
 Query params for search: `q` (required, min 1 char), `limit` (default 20, max 100).
 Sync uses dedupe_key `catalog_sync:{date}` — same-day requests return existing job.
+
+### Admin KPI Router (`routers/admin_kpi.py`)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/api/v1/admin/kpi` | Aggregated KPI dashboard metrics | X-API-KEY |
+
+Query params: `days` (default 30, min 1, max 365) — aggregation window in days.
+
+Returns `KPIResponse` with:
+- **Publications**: total, published, draft counts (all-time).
+- **Leads**: total, B2B, Education, ISP, B2C counts, ESP sync status (within period).
+- **Download funnel**: emails_sent, tokens_created/activated/exhausted (from AuditEvent within period).
+- **Jobs**: total, succeeded, failed, queued, running, failed_by_type breakdown (within period).
+- **System**: catalog_syncs, data_contract_violations (from AuditEvent within period).
+- **Period**: period_start, period_end timestamps.
+
+Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` for a short-lived read-only session.
 
 ### Health Check (`routers/health.py`)
 
@@ -89,6 +108,7 @@ Sync uses dedupe_key `catalog_sync:{date}` — same-day requests return existing
 | `TaskStatusResponse` | `core/task_manager.py` | `task_id`, `status` (enum), `result_url`, `detail` |
 | `PublicationResponse` | `routers/public_graphics.py` | `id: int`, `headline: str`, `chart_type: str`, `virality_score: float`, `preview_url: str`, `created_at: datetime` |
 | `PaginatedGraphicsResponse` | `routers/public_graphics.py` | `items: list[PublicationResponse]`, `limit: int`, `offset: int` |
+| `KPIResponse` | `schemas/kpi.py` | Aggregated metrics: publications, leads, download funnel, jobs, system health, period |
 
 ## Architectural Rules
 
