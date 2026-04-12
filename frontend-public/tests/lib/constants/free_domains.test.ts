@@ -9,8 +9,8 @@ describe('isBlockedEmailDomain', () => {
     expect(isBlockedEmailDomain('test@gmail.com')).toBe(true);
   });
 
-  it('blocks rogers.com (ISP)', () => {
-    expect(isBlockedEmailDomain('user@rogers.com')).toBe(true);
+  it('allows rogers.com (ISP — not blocked on form, backend scores as low-priority)', () => {
+    expect(isBlockedEmailDomain('user@rogers.com')).toBe(false);
   });
 
   it('allows tdbank.ca (corporate)', () => {
@@ -25,8 +25,8 @@ describe('isBlockedEmailDomain', () => {
     expect(isBlockedEmailDomain('user@yahoo.ca')).toBe(true);
   });
 
-  it('blocks shaw.ca (ISP)', () => {
-    expect(isBlockedEmailDomain('user@shaw.ca')).toBe(true);
+  it('allows shaw.ca (ISP — not blocked on form)', () => {
+    expect(isBlockedEmailDomain('user@shaw.ca')).toBe(false);
   });
 
   it('is case-insensitive on domain', () => {

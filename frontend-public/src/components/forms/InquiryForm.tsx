@@ -73,8 +73,9 @@ export default function InquiryForm() {
       }
 
       if (res.status === 422) {
+        const data = await res.json().catch(() => null);
         setServerError(
-          'Please use your corporate email address for sponsorship inquiries.',
+          data?.detail ?? 'Invalid submission. Please check your input.',
         );
       } else if (res.status === 429) {
         setServerError(
