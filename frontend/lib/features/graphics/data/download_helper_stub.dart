@@ -12,7 +12,8 @@ Future<String> downloadAndSaveImage(String imageUrl) async {
   );
   final bytes = Uint8List.fromList(response.data!);
 
-  final dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+  final dir =
+      await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
   final filename = 'summa_vision_${DateTime.now().millisecondsSinceEpoch}.png';
   final file = File('${dir.path}/$filename');
   await file.writeAsBytes(bytes);

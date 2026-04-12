@@ -43,7 +43,11 @@ class GenerationNotifier extends Notifier<GenerationState> {
   }
 
   Future<void> _poll(String taskId, GraphicRepository repo) async {
-    for (var attempt = 1; attempt <= GenerationState.maxPollAttempts; attempt++) {
+    for (
+      var attempt = 1;
+      attempt <= GenerationState.maxPollAttempts;
+      attempt++
+    ) {
       await Future.delayed(_pollInterval);
 
       final status = await repo.getTaskStatus(taskId);
@@ -78,6 +82,7 @@ class GenerationNotifier extends Notifier<GenerationState> {
 }
 
 /// Family provider keyed by briefId so each brief has its own cached state.
-final generationNotifierProvider = NotifierProvider<GenerationNotifier, GenerationState>(
-  () => GenerationNotifier(),
-);
+final generationNotifierProvider =
+    NotifierProvider<GenerationNotifier, GenerationState>(
+      () => GenerationNotifier(),
+    );

@@ -172,7 +172,7 @@ async def generate_graphic(
 
 
 @router.get(
-    "/jobs/{job_id}",
+    "/deprecated-jobs/{job_id}",
     response_model=JobStatusResponse,
     status_code=status.HTTP_200_OK,
     summary="Get job status",

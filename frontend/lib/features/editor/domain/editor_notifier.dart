@@ -15,11 +15,12 @@ class EditorNotifier extends Notifier<EditorState?> {
 
   /// Initialise from a [ContentBrief]. Called once when EditorScreen mounts.
   void initFromBrief(ContentBrief brief) {
-    if (state != null && state!.briefId == brief.id) return; // already initialised
+    if (state != null && state!.briefId == brief.id)
+      return; // already initialised
     state = EditorState(
       briefId: brief.id,
       headline: brief.headline,
-      bgPrompt: '',          // ContentBrief has no bgPrompt field yet — start empty
+      bgPrompt: '', // ContentBrief has no bgPrompt field yet — start empty
       chartType: ChartType.fromApiValue(brief.chartType),
     );
   }
@@ -53,5 +54,6 @@ class EditorNotifier extends Notifier<EditorState?> {
 }
 
 /// Provider for [EditorNotifier]. Scoped to the editor lifetime.
-final editorNotifierProvider =
-    NotifierProvider<EditorNotifier, EditorState?>(() => EditorNotifier());
+final editorNotifierProvider = NotifierProvider<EditorNotifier, EditorState?>(
+  () => EditorNotifier(),
+);

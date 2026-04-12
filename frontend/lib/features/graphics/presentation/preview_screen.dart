@@ -31,34 +31,33 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
     final state = ref.watch(generationNotifierProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Generating Graphic'),
-      ),
+      appBar: AppBar(title: const Text('Generating Graphic')),
       body: switch (state.phase) {
-        GenerationPhase.idle || GenerationPhase.submitting => const _SubmittingView(),
+        GenerationPhase.idle ||
+        GenerationPhase.submitting => const _SubmittingView(),
         GenerationPhase.polling => _PollingView(
-            attempt: state.pollAttempts,
-            max: GenerationState.maxPollAttempts,
-          ),
+          attempt: state.pollAttempts,
+          max: GenerationState.maxPollAttempts,
+        ),
         GenerationPhase.completed => _CompletedView(
-            resultUrl: state.resultUrl!,
-          ),
+          resultUrl: state.resultUrl!,
+        ),
         GenerationPhase.timeout => _ErrorView(
-            message: 'Generation timed out. Try again?',
-            onRetry: () {
-              ref.read(generationNotifierProvider.notifier).reset();
-              final briefId = int.tryParse(widget.taskId) ?? 0;
-              ref.read(generationNotifierProvider.notifier).generate(briefId);
-            },
-          ),
+          message: 'Generation timed out. Try again?',
+          onRetry: () {
+            ref.read(generationNotifierProvider.notifier).reset();
+            final briefId = int.tryParse(widget.taskId) ?? 0;
+            ref.read(generationNotifierProvider.notifier).generate(briefId);
+          },
+        ),
         GenerationPhase.failed => _ErrorView(
-            message: state.errorMessage ?? 'Generation failed.',
-            onRetry: () {
-              ref.read(generationNotifierProvider.notifier).reset();
-              final briefId = int.tryParse(widget.taskId) ?? 0;
-              ref.read(generationNotifierProvider.notifier).generate(briefId);
-            },
-          ),
+          message: state.errorMessage ?? 'Generation failed.',
+          onRetry: () {
+            ref.read(generationNotifierProvider.notifier).reset();
+            final briefId = int.tryParse(widget.taskId) ?? 0;
+            ref.read(generationNotifierProvider.notifier).generate(briefId);
+          },
+        ),
       },
     );
   }
@@ -106,10 +105,7 @@ class _PollingView extends StatelessWidget {
         const SizedBox(height: 8),
         const Text(
           'This may take up to 2 minutes.',
-          style: TextStyle(
-            color: AppTheme.textSecondary,
-            fontSize: 12,
-          ),
+          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
         ),
       ],
     ),
@@ -152,15 +148,15 @@ class _CompletedView extends StatelessWidget {
             try {
               final path = await downloadAndSaveImage(resultUrl);
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Saved: $path')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('Saved: $path')));
               }
             } catch (e) {
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Download failed: $e')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
               }
             }
           },

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-
 import '../../../core/theme/app_theme.dart';
 import '../data/queue_repository.dart';
 import '../domain/content_brief.dart';
@@ -31,7 +30,11 @@ class QueueScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: AppTheme.errorRed, size: 48),
+              const Icon(
+                Icons.error_outline,
+                color: AppTheme.errorRed,
+                size: 48,
+              ),
               const SizedBox(height: 16),
               Text(
                 'Failed to load queue\n$err',
@@ -54,9 +57,7 @@ class QueueScreen extends ConsumerWidget {
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) => _BriefCard(
                   brief: briefs[index],
-                  onApprove: () => context.go(
-                    '/editor/${briefs[index].id}',
-                  ),
+                  onApprove: () => context.go('/editor/${briefs[index].id}'),
                   onReject: () {
                     // Local optimistic removal — re-fetch on next refresh
                     ref.invalidate(queueProvider);
@@ -112,7 +113,10 @@ class _BriefCard extends StatelessWidget {
               children: [
                 // Virality score badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _scoreColour(brief.viralityScore).withOpacity(0.15),
                     borderRadius: BorderRadius.circular(6),
@@ -133,7 +137,10 @@ class _BriefCard extends StatelessWidget {
                 const SizedBox(width: 12),
                 // Chart type chip
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceDark,
                     borderRadius: BorderRadius.circular(6),

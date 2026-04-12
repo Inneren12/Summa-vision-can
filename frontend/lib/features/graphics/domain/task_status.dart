@@ -20,7 +20,7 @@ class TaskStatus with _$TaskStatus {
 
 extension TaskStatusExt on TaskStatus {
   bool get isCompleted => status.toUpperCase() == 'COMPLETED';
-  bool get isFailed    => status.toUpperCase() == 'FAILED';
-  bool get isPending   => status.toUpperCase() == 'PENDING';
-  bool get isRunning   => status.toUpperCase() == 'RUNNING';
+  bool get isFailed => status.toUpperCase() == 'FAILED';
+  bool get isPending => status.toUpperCase() == 'PENDING';
+  bool get isRunning => status.toUpperCase() == 'RUNNING';
 }

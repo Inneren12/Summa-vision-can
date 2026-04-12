@@ -66,3 +66,12 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 | B-2 | Template Backgrounds | 🔄 | — |
 | B-3 | End-to-End Pipeline | 🔄 | B-1, B-2 |
 | B-4 | Admin Graphics API + Batch CLI | ⬜ | B-3 |
+
+## Étape C: Admin Panel (Flutter)
+
+| PR | Title | Status | Dependencies |
+|----|-------|--------|--------------|
+| C-1 | Queue Screen | 🔄 | — |
+| C-2 | Data Preview + Workbench | 🔄 | — |
+| C-3 | Chart Config Screen | 🔄 | — |
+| C-4 | Jobs Dashboard | ✅ | 0-2 |

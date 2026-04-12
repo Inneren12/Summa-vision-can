@@ -21,10 +21,7 @@ Widget _buildScreen(AsyncValue<List<ContentBrief>> state) {
         };
       }),
     ],
-    child: MaterialApp(
-      theme: AppTheme.dark,
-      home: const QueueScreen(),
-    ),
+    child: MaterialApp(theme: AppTheme.dark, home: const QueueScreen()),
   );
 }
 
@@ -49,16 +46,14 @@ final _sampleBriefs = [
 
 void main() {
   group('QueueScreen — loading state', () {
-    testWidgets('shows CircularProgressIndicator while loading', (tester) async {
+    testWidgets('shows CircularProgressIndicator while loading', (
+      tester,
+    ) async {
       final completer = Completer<List<ContentBrief>>();
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            queueProvider.overrideWith(
-              (ref) => completer.future,
-            ),
-          ],
+          overrides: [queueProvider.overrideWith((ref) => completer.future)],
           child: MaterialApp(theme: AppTheme.dark, home: const QueueScreen()),
         ),
       );
@@ -92,7 +87,9 @@ void main() {
       expect(find.text('LINE'), findsOneWidget);
     });
 
-    testWidgets('shows Approve and Reject buttons for each card', (tester) async {
+    testWidgets('shows Approve and Reject buttons for each card', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildScreen(AsyncData([_sampleBriefs.first])));
       await tester.pumpAndSettle();
 
@@ -181,7 +178,9 @@ void main() {
             path: '/queue',
             builder: (_, __) => ProviderScope(
               overrides: [
-                queueProvider.overrideWith((ref) async => [_sampleBriefs.first]),
+                queueProvider.overrideWith(
+                  (ref) async => [_sampleBriefs.first],
+                ),
               ],
               child: const QueueScreen(),
             ),

@@ -5,11 +5,13 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 void main() {
   setUpAll(() async {
     // Load test env with USE_MOCK=true so no real network calls
-    dotenv.testLoad(mergeWith: {
-      'API_BASE_URL': 'http://localhost:8000',
-      'ADMIN_API_KEY': 'test-key-123',
-      'USE_MOCK': 'true',
-    });
+    dotenv.testLoad(
+      mergeWith: {
+        'API_BASE_URL': 'http://localhost:8000',
+        'ADMIN_API_KEY': 'test-key-123',
+        'USE_MOCK': 'true',
+      },
+    );
   });
 
   group('createDioClient', () {

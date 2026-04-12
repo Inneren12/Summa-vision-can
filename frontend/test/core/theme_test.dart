@@ -5,7 +5,10 @@ import 'package:summa_vision_admin/core/theme/app_theme.dart';
 void main() {
   group('AppTheme', () {
     test('backgroundDark is #141414', () {
-      expect(AppTheme.backgroundDark.value, equals(const Color(0xFF141414).value));
+      expect(
+        AppTheme.backgroundDark.value,
+        equals(const Color(0xFF141414).value),
+      );
     });
 
     test('neonGreen is #00FF94', () {
@@ -20,10 +23,7 @@ void main() {
     });
 
     test('dark theme primary colour is neonGreen', () {
-      expect(
-        AppTheme.dark.colorScheme.primary,
-        equals(AppTheme.neonGreen),
-      );
+      expect(AppTheme.dark.colorScheme.primary, equals(AppTheme.neonGreen));
     });
 
     testWidgets('MaterialApp boots with dark theme', (tester) async {
@@ -41,9 +41,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.dark,
-          home: const Scaffold(
-            body: Center(child: Text('Summa Vision')),
-          ),
+          home: const Scaffold(body: Center(child: Text('Summa Vision'))),
         ),
       );
       expect(find.text('Summa Vision'), findsOneWidget);

@@ -3,7 +3,7 @@
 Covers:
 * ``GET  /api/v1/admin/queue``                — draft publication listing
 * ``POST /api/v1/admin/graphics/generate``    — enqueue generation job (B-4)
-* ``GET  /api/v1/admin/jobs/{job_id}``        — job status lookup (B-4)
+* ``GET  /api/v1/admin/deprecated-jobs/{job_id}``        — job status lookup (B-4)
 """
 
 from __future__ import annotations
@@ -423,12 +423,12 @@ class TestGenerateGraphic:
 
 
 # ---------------------------------------------------------------------------
-# GET /api/v1/admin/jobs/{job_id}  (B-4)
+# GET /api/v1/admin/deprecated-jobs/{job_id}  (B-4)
 # ---------------------------------------------------------------------------
 
 
 class TestGetJobStatus:
-    """Tests for the GET /api/v1/admin/jobs/{job_id} endpoint."""
+    """Tests for the GET /api/v1/admin/deprecated-jobs/{job_id} endpoint."""
 
     @pytest.mark.asyncio()
     async def test_get_job_returns_status(
@@ -441,7 +441,7 @@ class TestGetJobStatus:
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/v1/admin/jobs/10")
+            resp = await client.get("/api/v1/admin/deprecated-jobs/10")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -459,7 +459,7 @@ class TestGetJobStatus:
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/v1/admin/jobs/999")
+            resp = await client.get("/api/v1/admin/deprecated-jobs/999")
 
         assert resp.status_code == 404
 
@@ -485,7 +485,7 @@ class TestGetJobStatus:
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/v1/admin/jobs/5")
+            resp = await client.get("/api/v1/admin/deprecated-jobs/5")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -511,7 +511,7 @@ class TestGetJobStatus:
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/v1/admin/jobs/6")
+            resp = await client.get("/api/v1/admin/deprecated-jobs/6")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -530,7 +530,7 @@ class TestGetJobStatus:
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/v1/admin/jobs/1")
+            resp = await client.get("/api/v1/admin/deprecated-jobs/1")
 
         data = resp.json()
         expected_keys = {

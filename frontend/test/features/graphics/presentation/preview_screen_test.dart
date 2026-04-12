@@ -38,9 +38,9 @@ class _MockGenerationNotifier extends GenerationNotifier {
 void main() {
   group('PreviewScreen — submitting state', () {
     testWidgets('shows submitting UI when phase is submitting', (tester) async {
-      await tester.pumpWidget(_buildScreen(
-        const GenerationState(phase: GenerationPhase.submitting),
-      ));
+      await tester.pumpWidget(
+        _buildScreen(const GenerationState(phase: GenerationPhase.submitting)),
+      );
       await tester.pump();
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -50,13 +50,15 @@ void main() {
 
   group('PreviewScreen — polling state', () {
     testWidgets('shows polling progress UI', (tester) async {
-      await tester.pumpWidget(_buildScreen(
-        const GenerationState(
-          phase: GenerationPhase.polling,
-          taskId: 'task-123',
-          pollAttempts: 15,
+      await tester.pumpWidget(
+        _buildScreen(
+          const GenerationState(
+            phase: GenerationPhase.polling,
+            taskId: 'task-123',
+            pollAttempts: 15,
+          ),
         ),
-      ));
+      );
       await tester.pump();
 
       expect(find.textContaining('Generating graphic'), findsOneWidget);
@@ -64,12 +66,14 @@ void main() {
     });
 
     testWidgets('shows max poll count as 60', (tester) async {
-      await tester.pumpWidget(_buildScreen(
-        const GenerationState(
-          phase: GenerationPhase.polling,
-          pollAttempts: 30,
+      await tester.pumpWidget(
+        _buildScreen(
+          const GenerationState(
+            phase: GenerationPhase.polling,
+            pollAttempts: 30,
+          ),
         ),
-      ));
+      );
       await tester.pump();
 
       expect(find.textContaining('30/60'), findsOneWidget);
@@ -77,13 +81,17 @@ void main() {
   });
 
   group('PreviewScreen — completed state', () {
-    testWidgets('shows image and download button when completed', (tester) async {
-      await tester.pumpWidget(_buildScreen(
-        const GenerationState(
-          phase: GenerationPhase.completed,
-          resultUrl: 'https://placehold.co/1200x628.png',
+    testWidgets('shows image and download button when completed', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _buildScreen(
+          const GenerationState(
+            phase: GenerationPhase.completed,
+            resultUrl: 'https://placehold.co/1200x628.png',
+          ),
         ),
-      ));
+      );
       await tester.pump();
 
       expect(find.byKey(const Key('download_btn')), findsOneWidget);
@@ -92,26 +100,25 @@ void main() {
 
   group('PreviewScreen — timeout state', () {
     testWidgets('shows timeout error message', (tester) async {
-      await tester.pumpWidget(_buildScreen(
-        const GenerationState(
-          phase: GenerationPhase.timeout,
-          errorMessage: 'Generation timed out. Try again?',
+      await tester.pumpWidget(
+        _buildScreen(
+          const GenerationState(
+            phase: GenerationPhase.timeout,
+            errorMessage: 'Generation timed out. Try again?',
+          ),
         ),
-      ));
+      );
       await tester.pump();
 
       expect(find.byKey(const Key('error_message')), findsOneWidget);
-      expect(
-        find.textContaining('Generation timed out'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('Generation timed out'), findsOneWidget);
       expect(find.byKey(const Key('retry_btn')), findsOneWidget);
     });
 
     testWidgets('retry button is present on timeout', (tester) async {
-      await tester.pumpWidget(_buildScreen(
-        const GenerationState(phase: GenerationPhase.timeout),
-      ));
+      await tester.pumpWidget(
+        _buildScreen(const GenerationState(phase: GenerationPhase.timeout)),
+      );
       await tester.pump();
 
       expect(find.byKey(const Key('retry_btn')), findsOneWidget);
@@ -120,12 +127,14 @@ void main() {
 
   group('PreviewScreen — failed state', () {
     testWidgets('shows error message on failure', (tester) async {
-      await tester.pumpWidget(_buildScreen(
-        const GenerationState(
-          phase: GenerationPhase.failed,
-          errorMessage: 'Server error',
+      await tester.pumpWidget(
+        _buildScreen(
+          const GenerationState(
+            phase: GenerationPhase.failed,
+            errorMessage: 'Server error',
+          ),
         ),
-      ));
+      );
       await tester.pump();
 
       expect(find.textContaining('Server error'), findsOneWidget);
@@ -160,20 +169,29 @@ void main() {
       expect(state.phase, equals(GenerationPhase.idle));
     });
 
-    test('completed state is cached — generate() is no-op if already completed', () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
+    test(
+      'completed state is cached — generate() is no-op if already completed',
+      () async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
 
-      // Manually force completed state via internal copyWith
-      // We verify the cache guard works by checking generate() is skipped
-      // This is tested indirectly: if phase == completed, generate() returns immediately
-      final notifier = container.read(generationNotifierProvider.notifier);
-      expect(container.read(generationNotifierProvider).phase, equals(GenerationPhase.idle));
+        // Manually force completed state via internal copyWith
+        // We verify the cache guard works by checking generate() is skipped
+        // This is tested indirectly: if phase == completed, generate() returns immediately
+        final notifier = container.read(generationNotifierProvider.notifier);
+        expect(
+          container.read(generationNotifierProvider).phase,
+          equals(GenerationPhase.idle),
+        );
 
-      // Reset doesn't break anything
-      notifier.reset();
-      expect(container.read(generationNotifierProvider).phase, equals(GenerationPhase.idle));
-    });
+        // Reset doesn't break anything
+        notifier.reset();
+        expect(
+          container.read(generationNotifierProvider).phase,
+          equals(GenerationPhase.idle),
+        );
+      },
+    );
   });
 
   group('GenerationState', () {

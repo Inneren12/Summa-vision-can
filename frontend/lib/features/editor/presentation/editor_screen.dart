@@ -49,9 +49,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     final queueAsync = ref.watch(queueProvider);
 
     return queueAsync.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, _) => Scaffold(
         appBar: AppBar(title: const Text('Editor')),
         body: Center(
@@ -219,20 +218,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   }
 
   InputDecoration _inputDecoration(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: AppTheme.textSecondary),
-        filled: true,
-        fillColor: AppTheme.surfaceDark,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppTheme.neonGreen),
-        ),
-        counterStyle: const TextStyle(color: AppTheme.textSecondary),
-      );
+    hintText: hint,
+    hintStyle: const TextStyle(color: AppTheme.textSecondary),
+    filled: true,
+    fillColor: AppTheme.surfaceDark,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide.none,
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: AppTheme.neonGreen),
+    ),
+    counterStyle: const TextStyle(color: AppTheme.textSecondary),
+  );
 }
 
 class _SectionLabel extends StatelessWidget {

@@ -22,9 +22,7 @@ Widget _buildScreen({
   List<ContentBrief> briefs = const [],
 }) {
   return ProviderScope(
-    overrides: [
-      queueProvider.overrideWith((ref) async => briefs),
-    ],
+    overrides: [queueProvider.overrideWith((ref) async => briefs)],
     child: MaterialApp(
       theme: AppTheme.dark,
       home: EditorScreen(briefId: briefId),
@@ -91,7 +89,9 @@ void main() {
       expect(find.byKey(const Key('generate_btn')), findsOneWidget);
     });
 
-    testWidgets('Preview Background button is present but disabled', (tester) async {
+    testWidgets('Preview Background button is present but disabled', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildScreen(briefs: [_sampleBrief]));
       await tester.pumpAndSettle();
 
@@ -103,7 +103,9 @@ void main() {
   });
 
   group('EditorScreen — form interactions', () {
-    testWidgets('editing headline updates EditorNotifier state', (tester) async {
+    testWidgets('editing headline updates EditorNotifier state', (
+      tester,
+    ) async {
       late ProviderContainer container;
 
       await tester.pumpWidget(
@@ -135,7 +137,9 @@ void main() {
       expect(state?.isDirty, isTrue);
     });
 
-    testWidgets('editing bg_prompt updates EditorNotifier state', (tester) async {
+    testWidgets('editing bg_prompt updates EditorNotifier state', (
+      tester,
+    ) async {
       late ProviderContainer container;
 
       await tester.pumpWidget(
@@ -201,10 +205,9 @@ void main() {
 
   group('EditorScreen — not found state', () {
     testWidgets('shows not found message for unknown briefId', (tester) async {
-      await tester.pumpWidget(_buildScreen(
-        briefId: '999',
-        briefs: [_sampleBrief],
-      ));
+      await tester.pumpWidget(
+        _buildScreen(briefId: '999', briefs: [_sampleBrief]),
+      );
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Brief not found'), findsOneWidget);

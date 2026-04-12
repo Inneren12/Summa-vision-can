@@ -29,6 +29,17 @@ api/
 Query params for search: `q` (required, min 1 char), `limit` (default 20, max 100).
 Sync uses dedupe_key `catalog_sync:{date}` — same-day requests return existing job.
 
+### Admin Jobs Router (`routers/admin_jobs.py`)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/api/v1/admin/jobs` | Paginated list of persistent jobs (with total count) | X-API-KEY |
+| GET | `/api/v1/admin/jobs/{job_id}` | Full metadata for a single job | X-API-KEY |
+| POST | `/api/v1/admin/jobs/{job_id}/retry` | Re-enqueue a retryable failed job (HTTP 202 / 409) | X-API-KEY |
+
+Query params for list: `job_type`, `status`, `limit` (default 50).
+Retry endpoint clears previous errors/timings and increments `attempt_count` during execution, emitting a `JOB_CREATED` audit event for the retry action.
+
 ### Health Check (`routers/health.py`)
 
 | Method | Path | Status | Description |

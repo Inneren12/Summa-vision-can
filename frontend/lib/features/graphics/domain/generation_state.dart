@@ -1,11 +1,11 @@
 /// Represents the full lifecycle of a graphic generation task.
 enum GenerationPhase {
-  idle,       // not started
+  idle, // not started
   submitting, // POSTing to /generate
-  polling,    // waiting for COMPLETED
-  completed,  // image ready
-  timeout,    // 60 polls exceeded
-  failed,     // backend returned FAILED
+  polling, // waiting for COMPLETED
+  completed, // image ready
+  timeout, // 60 polls exceeded
+  failed, // backend returned FAILED
 }
 
 class GenerationState {
@@ -31,12 +31,11 @@ class GenerationState {
     String? resultUrl,
     int? pollAttempts,
     String? errorMessage,
-  }) =>
-      GenerationState(
-        phase:        phase        ?? this.phase,
-        taskId:       taskId       ?? this.taskId,
-        resultUrl:    resultUrl    ?? this.resultUrl,
-        pollAttempts: pollAttempts ?? this.pollAttempts,
-        errorMessage: errorMessage ?? this.errorMessage,
-      );
+  }) => GenerationState(
+    phase: phase ?? this.phase,
+    taskId: taskId ?? this.taskId,
+    resultUrl: resultUrl ?? this.resultUrl,
+    pollAttempts: pollAttempts ?? this.pollAttempts,
+    errorMessage: errorMessage ?? this.errorMessage,
+  );
 }

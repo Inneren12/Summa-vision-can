@@ -102,7 +102,10 @@ class _CapturingHandler extends RequestInterceptorHandler {
   _CapturingHandler({required this.onResolve});
 
   @override
-  void resolve(Response response, [bool callFollowingResponseInterceptor = false]) {
+  void resolve(
+    Response response, [
+    bool callFollowingResponseInterceptor = false,
+  ]) {
     onResolve(response);
   }
 
