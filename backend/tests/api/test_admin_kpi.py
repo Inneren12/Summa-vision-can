@@ -143,12 +143,12 @@ class TestGetKPI:
         assert data["failed_by_type"] == {"graphics_generate": 3, "cube_fetch": 4}
 
     @pytest.mark.asyncio()
-    async def test_kpi_requires_auth(self) -> None:
-        """Without AuthMiddleware override, the endpoint is reachable.
+    async def test_kpi_endpoint_reachable(self) -> None:
+        """Verify the route is reachable and returns 200.
 
         Auth enforcement is tested at the middleware level (test_auth.py).
-        Here we verify the route itself works — auth is transparent in
-        unit tests because we don't add the middleware.
+        Unit tests do not mount AuthMiddleware, so this confirms the
+        route handler itself works independently.
         """
         mock_service = AsyncMock(spec=KPIService)
         mock_service.get_kpi.return_value = _make_kpi_response()

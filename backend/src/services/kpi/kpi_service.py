@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from src.models.audit_event import AuditEvent
@@ -92,36 +92,54 @@ class KPIService:
             )
             total_leads = (await session.scalar(lead_base)) or 0
 
+            # --------------------------------------------------
+            # Mutually exclusive lead classification (priority
+            # hierarchy): B2B → Education → ISP → B2C.
+            # Each bucket excludes leads already counted above.
+            # --------------------------------------------------
+
+            # 1. B2B: is_b2b flag is True
             b2b_leads = (
                 await session.scalar(
                     lead_base.where(Lead.is_b2b.is_(True))
                 )
             ) or 0
 
-            # Education: company_domain ends with .edu / .edu.ca / etc.
+            # 2. Education: NOT B2B, domain ends with .edu / .edu.ca / etc.
             edu_conditions = [
                 Lead.company_domain.ilike(f"%{suffix}")
                 for suffix in _EDU_SUFFIXES
             ]
-            from sqlalchemy import or_
-
             education_leads = (
                 await session.scalar(
-                    lead_base.where(or_(*edu_conditions))
-                )
-            ) or 0
-
-            # ISP: company_domain in known ISP list
-            isp_leads = (
-                await session.scalar(
                     lead_base.where(
-                        func.lower(Lead.company_domain).in_(_ISP_DOMAINS)
+                        and_(
+                            Lead.is_b2b.is_(False),
+                            or_(*edu_conditions),
+                        )
                     )
                 )
             ) or 0
 
-            # B2C: everything that's not B2B
-            b2c_leads = total_leads - b2b_leads
+            # 3. ISP: NOT B2B, NOT Education, domain in ISP list
+            isp_leads = (
+                await session.scalar(
+                    lead_base.where(
+                        and_(
+                            Lead.is_b2b.is_(False),
+                            ~or_(*edu_conditions),
+                            func.lower(Lead.company_domain).in_(
+                                _ISP_DOMAINS
+                            ),
+                        )
+                    )
+                )
+            ) or 0
+
+            # 4. B2C: remainder (total - b2b - education - isp)
+            b2c_leads = total_leads - b2b_leads - education_leads - isp_leads
+
+            assert b2b_leads + education_leads + isp_leads + b2c_leads == total_leads
 
             # ESP sync status (all-time)
             esp_synced_count = (

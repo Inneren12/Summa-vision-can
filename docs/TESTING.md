@@ -103,7 +103,7 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `core/security/auth.py` | >90% | ✅ 100% | `tests/core/security/test_auth.py` |
 | `api/routers/public_leads.py` | >90% | ✅ 100% | `tests/api/test_public_leads.py` |
 | `api/schemas/public_leads.py` | >90% | ✅ 100% | `tests/api/test_public_leads.py` |
-| `services/kpi/kpi_service.py` | >90% | ⬜ | `tests/api/test_admin_kpi.py` |
+| `services/kpi/kpi_service.py` | >90% | ✅ | `tests/services/kpi/test_kpi_service.py` |
 | `api/routers/admin_kpi.py` | >90% | ✅ | `tests/api/test_admin_kpi.py` |
 | `schemas/kpi.py` | >90% | ✅ | `tests/api/test_admin_kpi.py` |
 

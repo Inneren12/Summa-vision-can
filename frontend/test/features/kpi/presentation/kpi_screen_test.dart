@@ -75,6 +75,16 @@ Widget _buildScreen(AsyncValue<KPIData> state, {int days = 30}) {
   );
 }
 
+/// Scroll down until [finder] is visible in the first scrollable.
+Future<void> _scrollUntilVisible(WidgetTester tester, Finder finder) async {
+  await tester.scrollUntilVisible(
+    finder,
+    200.0,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
   group('KPIScreen — summary cards', () {
     testWidgets('renders 4 summary cards with correct numbers', (tester) async {
@@ -150,6 +160,7 @@ void main() {
       await tester.pumpWidget(_buildScreen(AsyncData(_sampleKPI())));
       await tester.pumpAndSettle();
 
+      await _scrollUntilVisible(tester, find.text('Leads Captured'));
       expect(find.text('Leads Captured'), findsOneWidget);
       expect(find.text('Emails Sent'), findsOneWidget);
       expect(find.text('Tokens Created'), findsOneWidget);
@@ -167,6 +178,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await _scrollUntilVisible(tester, find.text('B2B'));
       expect(find.text('B2B'), findsOneWidget);
       expect(find.text('Education'), findsOneWidget);
       expect(find.text('ISP'), findsOneWidget);
@@ -183,6 +195,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await _scrollUntilVisible(tester, find.text('Graphics Generate'));
       expect(find.text('Graphics Generate'), findsOneWidget);
       expect(find.text('3'), findsWidgets);
     });
@@ -195,6 +208,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await _scrollUntilVisible(tester, find.text('No job failures in this period'));
       expect(find.text('No job failures in this period'), findsOneWidget);
     });
   });
@@ -208,6 +222,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await _scrollUntilVisible(tester, find.byIcon(Icons.warning_amber_rounded));
       // Warning icon for violations
       expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
       expect(find.text('5'), findsWidgets);

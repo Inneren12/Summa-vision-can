@@ -36,7 +36,7 @@ Sync uses dedupe_key `catalog_sync:{date}` — same-day requests return existing
 |--------|------|-------------|------|
 | GET | `/api/v1/admin/kpi` | Aggregated KPI dashboard metrics | X-API-KEY |
 
-Query params: `days` (default 30, min 1, max 365) — aggregation window in days.
+Query params: `days` (default 30, min 1, max 365) — aggregation window in days. The API accepts any integer in the 1–365 range; the Flutter admin UI offers preset shortcuts (7, 30, 90 days).
 
 Returns `KPIResponse` with:
 - **Publications**: total, published, draft counts (all-time).
