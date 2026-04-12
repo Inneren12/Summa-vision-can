@@ -12,7 +12,17 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const graphic = await fetchGraphic(id);
+
+  let graphic;
+  try {
+    graphic = await fetchGraphic(id);
+  } catch {
+    // Server error (5xx) — return generic metadata
+    return {
+      title: 'Summa Vision',
+      description: 'Canadian macro-economic data visualizations.',
+    };
+  }
 
   if (!graphic) {
     return {

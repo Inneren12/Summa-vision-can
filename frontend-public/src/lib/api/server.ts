@@ -23,6 +23,7 @@ export async function fetchGraphic(id: number | string): Promise<PublicationResp
   const res = await fetch(`${API_URL}/api/v1/public/graphics/${id}`, {
     next: { revalidate: 3600 },
   });
-  if (!res.ok) return null;
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Failed to fetch graphic ${id}: ${res.status}`);
   return res.json();
 }
