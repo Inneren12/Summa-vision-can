@@ -40,6 +40,14 @@ class EventType(str, enum.Enum):
     PUBLICATION_GENERATED = "publication.generated"
     PUBLICATION_PUBLISHED = "publication.published"
 
+    # --- ESP Sync (added in D-3) ---
+    LEAD_ESP_SYNCED = "lead.esp_synced"
+    LEAD_ESP_FAILED = "lead.esp_failed"
+    LEAD_SCORED = "lead.scored"
+
+    # --- Sponsorship (added in D-3) ---
+    SPONSORSHIP_INQUIRY = "sponsorship.inquiry"
+
     # --- System ---
     CATALOG_SYNCED = "catalog.synced"
     DATA_CONTRACT_VIOLATION = "data.contract_violation"
