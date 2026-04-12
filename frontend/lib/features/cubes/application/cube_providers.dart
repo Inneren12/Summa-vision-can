@@ -1,10 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/cube_repository.dart';
 import '../domain/cube_catalog_entry.dart';
-import '../domain/cube_search_response.dart';
 
 /// Current search query entered by the user.
 final cubeSearchQueryProvider = StateProvider<String>((ref) => '');
@@ -12,29 +9,21 @@ final cubeSearchQueryProvider = StateProvider<String>((ref) => '');
 /// Debounced search results that react to [cubeSearchQueryProvider].
 ///
 /// Waits 300 ms after the last query change before firing the API call.
-/// If the query changes during the wait, the previous call is cancelled
-/// automatically by Riverpod's `autoDispose`.
+/// If the query changes during the wait, the previous provider instance is
+/// disposed automatically by Riverpod's `autoDispose`, abandoning the stale
+/// future — no explicit cancellation needed.
 final cubeSearchResultsProvider =
-    FutureProvider.autoDispose<CubeSearchResponse>((ref) async {
+    FutureProvider.autoDispose<List<CubeCatalogEntry>>((ref) async {
   final query = ref.watch(cubeSearchQueryProvider);
 
   if (query.trim().isEmpty) {
-    return const CubeSearchResponse(items: [], total: 0);
+    return [];
   }
 
-  // Debounce: wait 300 ms then check if we're still the active call.
-  final cancelled = Completer<void>();
-  ref.onDispose(() => cancelled.complete());
-
-  await Future.any([
-    Future.delayed(const Duration(milliseconds: 300)),
-    cancelled.future,
-  ]);
-
-  // If this provider was disposed during the delay, bail out.
-  if (cancelled.isCompleted) {
-    throw StateError('Cancelled');
-  }
+  // Debounce: wait 300 ms. If the user types another character during
+  // this window, autoDispose tears down this provider instance and
+  // creates a fresh one for the new query value.
+  await Future.delayed(const Duration(milliseconds: 300));
 
   final repo = ref.read(cubeRepositoryProvider);
   return repo.search(query);

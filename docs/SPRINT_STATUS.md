@@ -62,7 +62,7 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 
 | PR | Title | Status | Dependencies |
 |----|-------|--------|--------------|
-| C-1 | Cube Search Screen | ✅ | A-4, PR-20, PR-46 |
+| C-1 | Cube Search Screen | 🔄 | A-4, PR-20, PR-46 |
 | C-2 | Data Preview | ⬜ | C-1, A-5 |
 | C-3 | Fetch Data Integration | ⬜ | C-1, A-5 |
 

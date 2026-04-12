@@ -7,7 +7,7 @@ import 'core/theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: '.env');
+  await dotenv.load(fileName: '.env', isOptional: true);
   runApp(const ProviderScope(child: SummaVisionApp()));
 }
 

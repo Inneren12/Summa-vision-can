@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/dio_client.dart';
 import '../domain/cube_catalog_entry.dart';
-import '../domain/cube_search_response.dart';
 
 class CubeRepository {
   CubeRepository(this._dio);
@@ -11,14 +10,17 @@ class CubeRepository {
   final Dio _dio;
 
   /// Search cubes via [GET /api/v1/admin/cubes/search].
-  Future<CubeSearchResponse> search(String query, {int limit = 20}) async {
+  ///
+  /// The backend returns a plain JSON array (not a wrapped object).
+  Future<List<CubeCatalogEntry>> search(String query, {int limit = 20}) async {
     final response = await _dio.get(
       '/api/v1/admin/cubes/search',
       queryParameters: {'q': query, 'limit': limit},
     );
-    return CubeSearchResponse.fromJson(
-      response.data as Map<String, dynamic>,
-    );
+    final list = response.data as List<dynamic>;
+    return list
+        .map((item) => CubeCatalogEntry.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   /// Fetch a single cube by product ID via [GET /api/v1/admin/cubes/:id].

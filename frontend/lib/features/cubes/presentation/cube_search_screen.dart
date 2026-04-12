@@ -111,7 +111,7 @@ class _CubeSearchScreenState extends ConsumerState<CubeSearchScreen> {
                         ],
                       ),
                     ),
-                    data: (response) => response.items.isEmpty
+                    data: (cubes) => cubes.isEmpty
                         ? Center(
                             child: Text(
                               "No datasets found for '$query'. Try different keywords.",
@@ -123,11 +123,11 @@ class _CubeSearchScreenState extends ConsumerState<CubeSearchScreen> {
                           )
                         : ListView.separated(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: response.items.length,
+                            itemCount: cubes.length,
                             separatorBuilder: (_, __) =>
                                 const SizedBox(height: 8),
                             itemBuilder: (context, index) {
-                              final entry = response.items[index];
+                              final entry = cubes[index];
                               return CubeSearchTile(
                                 entry: entry,
                                 onTap: () => context

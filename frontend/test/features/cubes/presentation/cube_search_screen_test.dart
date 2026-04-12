@@ -9,7 +9,6 @@ import 'package:summa_vision_admin/core/theme/app_theme.dart';
 import 'package:summa_vision_admin/features/cubes/application/cube_providers.dart';
 import 'package:summa_vision_admin/features/cubes/data/cube_repository.dart';
 import 'package:summa_vision_admin/features/cubes/domain/cube_catalog_entry.dart';
-import 'package:summa_vision_admin/features/cubes/domain/cube_search_response.dart';
 import 'package:summa_vision_admin/features/cubes/presentation/cube_detail_screen.dart';
 import 'package:summa_vision_admin/features/cubes/presentation/cube_search_screen.dart';
 import 'package:summa_vision_admin/features/cubes/presentation/widgets/cube_search_tile.dart';
@@ -42,8 +41,6 @@ const _sampleCubes = [
   ),
 ];
 
-const _sampleResponse = CubeSearchResponse(items: _sampleCubes, total: 3);
-
 /// Builds CubeSearchScreen with an overridden search results provider.
 Widget _buildScreen({
   required Override resultsOverride,
@@ -75,8 +72,8 @@ class _FakeCubeRepository extends CubeRepository {
   }
 
   @override
-  Future<CubeSearchResponse> search(String query, {int limit = 20}) async {
-    return _sampleResponse;
+  Future<List<CubeCatalogEntry>> search(String query, {int limit = 20}) async {
+    return _sampleCubes;
   }
 
   @override
@@ -95,7 +92,7 @@ void main() {
       await tester.pumpWidget(
         _buildScreen(
           resultsOverride: cubeSearchResultsProvider.overrideWith(
-            (ref) async => const CubeSearchResponse(items: [], total: 0),
+            (ref) async => <CubeCatalogEntry>[],
           ),
         ),
       );
@@ -111,7 +108,7 @@ void main() {
 
   group('CubeSearchScreen — loading state', () {
     testWidgets('shows CircularProgressIndicator while loading', (tester) async {
-      final completer = Completer<CubeSearchResponse>();
+      final completer = Completer<List<CubeCatalogEntry>>();
 
       await tester.pumpWidget(
         ProviderScope(
@@ -139,7 +136,7 @@ void main() {
         _buildScreen(
           initialQuery: 'housing',
           resultsOverride: cubeSearchResultsProvider.overrideWith(
-            (ref) async => _sampleResponse,
+            (ref) async => _sampleCubes,
           ),
         ),
       );
@@ -158,7 +155,7 @@ void main() {
         _buildScreen(
           initialQuery: 'xyznonexistent',
           resultsOverride: cubeSearchResultsProvider.overrideWith(
-            (ref) async => const CubeSearchResponse(items: [], total: 0),
+            (ref) async => <CubeCatalogEntry>[],
           ),
         ),
       );
@@ -175,7 +172,7 @@ void main() {
           overrides: [
             cubeSearchQueryProvider.overrideWith((ref) => 'fail'),
             cubeSearchResultsProvider.overrideWith(
-              (ref) => Future<CubeSearchResponse>.error('Network error'),
+              (ref) => Future<List<CubeCatalogEntry>>.error('Network error'),
             ),
           ],
           child: MaterialApp(
@@ -204,10 +201,7 @@ void main() {
               overrides: [
                 cubeSearchQueryProvider.overrideWith((ref) => 'housing'),
                 cubeSearchResultsProvider.overrideWith(
-                  (ref) async => const CubeSearchResponse(
-                    items: [_sampleCubes[0]],
-                    total: 1,
-                  ),
+                  (ref) async => [_sampleCubes[0]],
                 ),
               ],
               child: const CubeSearchScreen(),
@@ -244,7 +238,7 @@ void main() {
           overrides: [
             cubeRepositoryProvider.overrideWithValue(fakeRepo),
             cubeSearchResultsProvider.overrideWith(
-              (ref) async => const CubeSearchResponse(items: [], total: 0),
+              (ref) async => <CubeCatalogEntry>[],
             ),
           ],
           child: MaterialApp(
@@ -316,10 +310,10 @@ void main() {
             cubeSearchResultsProvider.overrideWith((ref) async {
               final query = ref.watch(cubeSearchQueryProvider);
               if (query.trim().isEmpty) {
-                return const CubeSearchResponse(items: [], total: 0);
+                return <CubeCatalogEntry>[];
               }
               searchCallCount++;
-              return _sampleResponse;
+              return _sampleCubes;
             }),
           ],
           child: MaterialApp(

@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:summa_vision_admin/features/cubes/domain/cube_catalog_entry.dart';
-import 'package:summa_vision_admin/features/cubes/domain/cube_search_response.dart';
 
 void main() {
   group('CubeCatalogEntry', () {
@@ -65,45 +64,40 @@ void main() {
     });
   });
 
-  group('CubeSearchResponse', () {
-    test('fromJson parses full response with items array', () {
-      final json = <String, dynamic>{
-        'items': [
-          {
-            'product_id': '13-10-0888-01',
-            'title_en': 'Housing index',
-            'subject_code': '18',
-            'subject_en': 'Prices',
-            'frequency': 'Monthly',
-          },
-          {
-            'product_id': '14-10-0287-01',
-            'title_en': 'Labour force',
-            'subject_code': '14',
-            'subject_en': 'Labour',
-            'frequency': 'Monthly',
-          },
-        ],
-        'total': 42,
-      };
+  group('Search response (plain list)', () {
+    test('parses a JSON array of cubes', () {
+      final jsonList = <dynamic>[
+        {
+          'product_id': '13-10-0888-01',
+          'title_en': 'Housing index',
+          'subject_code': '18',
+          'subject_en': 'Prices',
+          'frequency': 'Monthly',
+        },
+        {
+          'product_id': '14-10-0287-01',
+          'title_en': 'Labour force',
+          'subject_code': '14',
+          'subject_en': 'Labour',
+          'frequency': 'Monthly',
+        },
+      ];
 
-      final response = CubeSearchResponse.fromJson(json);
+      final cubes = jsonList
+          .map((e) => CubeCatalogEntry.fromJson(e as Map<String, dynamic>))
+          .toList();
 
-      expect(response.items.length, 2);
-      expect(response.total, 42);
-      expect(response.items[0].productId, '13-10-0888-01');
-      expect(response.items[1].titleEn, 'Labour force');
+      expect(cubes.length, 2);
+      expect(cubes[0].productId, '13-10-0888-01');
+      expect(cubes[1].titleEn, 'Labour force');
     });
 
-    test('fromJson handles empty items list', () {
-      final json = <String, dynamic>{
-        'items': <dynamic>[],
-        'total': 0,
-      };
-
-      final response = CubeSearchResponse.fromJson(json);
-      expect(response.items, isEmpty);
-      expect(response.total, 0);
+    test('empty JSON array yields empty list', () {
+      final jsonList = <dynamic>[];
+      final cubes = jsonList
+          .map((e) => CubeCatalogEntry.fromJson(e as Map<String, dynamic>))
+          .toList();
+      expect(cubes, isEmpty);
     });
   });
 }
