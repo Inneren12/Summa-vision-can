@@ -343,6 +343,111 @@ void main() {
     });
   });
 
+  group('Dataset switching resets state', () {
+    test('switching dataset resets generation state', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      // 1. Simulate generation for dataset A → success
+      final genNotifier =
+          container.read(chartGenerationNotifierProvider.notifier);
+      final configNotifier =
+          container.read(chartConfigNotifierProvider.notifier);
+
+      configNotifier.setDataKey('datasetA/file.parquet', productId: 'A');
+      // Verify config is set for dataset A
+      expect(container.read(chartConfigNotifierProvider).dataKey,
+          'datasetA/file.parquet');
+
+      // 2. Navigate to dataset B (call reset with new storageKey)
+      configNotifier.reset('datasetB/file.parquet', sourceProductId: 'B');
+      genNotifier.reset();
+
+      // 3. Assert phase is idle, not success
+      final genState = container.read(chartGenerationNotifierProvider);
+      expect(genState.phase, GenerationPhase.idle);
+      expect(genState.result, isNull);
+
+      // 4. Assert config.dataKey is dataset B, not A
+      final configState = container.read(chartConfigNotifierProvider);
+      expect(configState.dataKey, 'datasetB/file.parquet');
+      expect(configState.sourceProductId, 'B');
+      // Defaults should be restored
+      expect(configState.chartType, ChartType.line);
+      expect(configState.title, '');
+    });
+
+    test('reset() clears customized config fields', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(chartConfigNotifierProvider.notifier);
+      // Customize everything
+      notifier.setDataKey('old/key.parquet');
+      notifier.setChartType(ChartType.scatter);
+      notifier.setSizePreset(SizePreset.reddit);
+      notifier.setCategory(BackgroundCategory.trade);
+      notifier.setTitle('Old Headline');
+
+      // Reset to a new dataset
+      notifier.reset('new/key.parquet', sourceProductId: 'NEW');
+
+      final state = container.read(chartConfigNotifierProvider);
+      expect(state.dataKey, 'new/key.parquet');
+      expect(state.sourceProductId, 'NEW');
+      expect(state.chartType, ChartType.line);
+      expect(state.sizePreset, SizePreset.instagram);
+      expect(state.category, BackgroundCategory.housing);
+      expect(state.title, '');
+    });
+
+    testWidgets('switching dataset clears title text field', (tester) async {
+      // Use a StatefulBuilder to allow rebuilding with a different storageKey
+      String storageKey = 'key-A';
+      late StateSetter outerSetState;
+
+      const configA = ChartConfig(dataKey: 'key-A', title: '');
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            chartConfigNotifierProvider.overrideWith(
+              () => _MockChartConfigNotifier(configA),
+            ),
+            chartGenerationNotifierProvider.overrideWith(
+              () => _MockGenerationNotifier(const ChartGenerationState()),
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.dark,
+            home: StatefulBuilder(
+              builder: (context, setState) {
+                outerSetState = setState;
+                return ChartConfigScreen(storageKey: storageKey);
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Type a title for dataset A
+      await tester.enterText(
+        find.byKey(const Key('title_field')),
+        'Housing Starts',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Housing Starts'), findsOneWidget);
+
+      // Switch to dataset B
+      outerSetState(() => storageKey = 'key-B');
+      await tester.pumpAndSettle();
+
+      // Title field should be cleared — old text must not persist
+      expect(find.text('Housing Starts'), findsNothing);
+    });
+  });
+
   group('ChartConfigNotifier unit tests', () {
     test('initial state has empty dataKey', () {
       final container = ProviderContainer();

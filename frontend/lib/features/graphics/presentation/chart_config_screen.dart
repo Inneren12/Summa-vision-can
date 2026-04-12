@@ -93,7 +93,27 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final config = ref.watch(chartConfigNotifierProvider);
     final genState = ref.watch(chartGenerationNotifierProvider);
+
+    // Reset state if we're viewing a different dataset
+    if (config.dataKey != widget.storageKey) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(chartConfigNotifierProvider.notifier).reset(
+              widget.storageKey,
+              sourceProductId: widget.productId,
+            );
+        ref.read(chartGenerationNotifierProvider.notifier).reset();
+
+        // Sync the text controller with the reset state
+        _titleController.clear();
+
+        // Re-populate title from cube metadata if productId is available
+        if (widget.productId != null) {
+          _prepopulateTitle();
+        }
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -577,7 +597,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
                 }
               },
               icon: const Icon(Icons.download),
-              label: const Text('Download High-Res'),
+              label: const Text('Download Preview'),
             ),
           ),
           const SizedBox(height: 12),
