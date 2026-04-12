@@ -183,3 +183,56 @@ async def handle_cube_fetch(
 
 
 register_handler("cube_fetch", handle_cube_fetch)
+
+
+# ---------------------------------------------------------------------------
+# Graphics generate handler (B-4)
+# ---------------------------------------------------------------------------
+
+async def handle_graphics_generate(
+    payload: BaseModel,
+    *,
+    app_state: Any,
+) -> dict[str, Any] | None:
+    """Execute graphics_generate job: run the end-to-end graphic pipeline.
+
+    Instantiates ``GraphicPipeline`` with injected dependencies (ARCH-DPEN-001)
+    and delegates to ``pipeline.generate()``.  The handler is idempotent (R16):
+    re-execution produces a new publication version rather than duplicating data.
+    """
+    from src.core.config import get_settings
+    from src.core.database import get_session_factory
+    from src.core.storage import get_storage_manager
+    from src.schemas.job_payloads import GraphicsGeneratePayload
+    from src.services.graphics.pipeline import GraphicPipeline
+
+    if isinstance(payload, GraphicsGeneratePayload):
+        typed = payload
+    else:
+        typed = GraphicsGeneratePayload.model_validate(payload.model_dump())
+
+    factory = get_session_factory()
+    storage = getattr(app_state, "storage", None) or get_storage_manager()
+    settings = get_settings()
+
+    pipeline = GraphicPipeline(
+        storage=storage,
+        session_factory=factory,
+        settings=settings,
+    )
+
+    result = await pipeline.generate(
+        data_key=typed.data_key,
+        chart_type=typed.chart_type,
+        title=typed.title,
+        size=tuple(typed.size),
+        category=typed.category,
+        source_product_id=typed.source_product_id,
+        render_sem=getattr(app_state, "render_sem", None),
+        io_sem=getattr(app_state, "io_sem", None),
+    )
+
+    return result.model_dump()
+
+
+register_handler("graphics_generate", handle_graphics_generate)

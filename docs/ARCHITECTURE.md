@@ -18,7 +18,8 @@ The current flow is:
 - **Resource semaphores:** data_sem(2), render_sem(2), io_sem(10)
 - **Database:** PostgreSQL-only runtime, pool_size=8
 - **Storage:** MinIO (dev) / S3 (prod)
-- **Background Jobs:** persistent job manager (coming in 0-2)
+- **Background Jobs:** persistent DB-backed job system (JobRunner + handler registry)
+  - Handlers: `catalog_sync` (A-3), `cube_fetch` (A-5), `graphics_generate` (B-4)
 
 ## ETL Pipelines
 
@@ -67,7 +68,7 @@ Note template backgrounds instead of AI backgrounds for MVP.
    │       └── ip_rate_limiter.py
    ├── api/routers/
    │   ├── health.py          ← NEW (0-1)
-   │   ├── admin_graphics.py
+   │   ├── admin_graphics.py  ← Updated (B-4: job-based generate + GET /jobs/{id})
    │   ├── public_graphics.py
    │   ├── public_leads.py
    │   ├── cmhc.py

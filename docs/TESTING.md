@@ -77,7 +77,7 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `repositories/job_repository.py` | >90% | ⬜ | |
 | `schemas/job_payloads.py` | >90% | ⬜ | |
 | `services/jobs/runner.py` | >90% | ⬜ | |
-| `services/jobs/handlers.py` | >90% | ⬜ | |
+| `services/jobs/handlers.py` | >90% | ✅ | `tests/services/jobs/test_handlers.py`, `tests/services/jobs/test_graphics_handler.py` |
 | `services/jobs/dedupe.py` | >90% | ⬜ | |
 | `services/statcan/catalog_sync.py` | >90% | ⬜ | |
 | `services/statcan/data_fetch.py` | >90% | ⬜ | |
@@ -104,7 +104,9 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `api/routers/public_leads.py` | >90% | ✅ 100% | `tests/api/test_public_leads.py` |
 | `api/schemas/public_leads.py` | >90% | ✅ 100% | `tests/api/test_public_leads.py` |
 
-**Overall:** 475+ tests, 96%+ total coverage (as of 2026-03-19).
+| `scripts/ops/generate_batch.py` | >90% | ✅ | `tests/scripts/ops/test_generate_batch.py` |
+
+**Overall:** 500+ tests, 96%+ total coverage (as of 2026-04-12).
 
 ## Mocking Strategy
 
@@ -123,6 +125,8 @@ pytest tests/services/statcan/test_maintenance.py -v
 | Database (AsyncSession) | In-memory `aiosqlite` via `create_async_engine("sqlite+aiosqlite://")` |
 | `InMemoryRateLimiter` | Injected via `Depends` override in public graphics tests |
 | `PublicationRepository` / `LeadRepository` | Direct in-memory SQLite integration tests |
+| `JobRepository` (in endpoint tests) | `AsyncMock` injected via `Depends` override |
+| `GraphicPipeline` (in handler tests) | `unittest.mock.patch` on class, `AsyncMock` on generate method |
 | `CairoSVG` (`_svg2png`) | `unittest.mock.patch` with synthetic PNG generator (native cairo not available on Windows) |
 
 ## Known Issues
