@@ -29,13 +29,10 @@ RUN mkdir -p src && touch src/__init__.py && \
 COPY . .
 RUN pip install --no-cache-dir .
 
-# TODO (0-2 or later): Add entrypoint script that runs
-# alembic upgrade head before starting uvicorn.
-# For now, run migrations manually after deploy:
-#   docker compose exec api alembic upgrade head
-
-# --- Single worker (R9) ---
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips=*"]
+# --- Entrypoint: migrations then uvicorn (DEBT-003) ---
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+CMD ["/app/entrypoint.sh"]
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD curl -f http://localhost:8000/api/health || exit 1

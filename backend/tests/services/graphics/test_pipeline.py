@@ -26,7 +26,7 @@ def mock_settings():
         database_url="sqlite+aiosqlite:///:memory:",
         admin_api_key="test",
         storage_backend="local",
-        s3_bucket="",
+        s3_bucket="test-bucket",
         cdn_base_url="http://cdn.test",
         max_zip_size_mb=1,
     )

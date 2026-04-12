@@ -20,6 +20,7 @@ def _make_settings(webhook_url: str = "https://hooks.slack.com/test") -> Setting
     return Settings(
         SLACK_WEBHOOK_URL=webhook_url,
         database_url="sqlite+aiosqlite:///:memory:",
+        admin_api_key="test-key",
     )
 
 

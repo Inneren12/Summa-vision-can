@@ -11,6 +11,12 @@ tests under ``tests/``.
 from __future__ import annotations
 
 import os
+
+# Ensure required secrets have test-safe defaults so that Settings
+# validation (DEBT-008) does not reject module-level get_settings()
+# calls during test collection.
+os.environ.setdefault("ADMIN_API_KEY", "test-key")
+
 import subprocess
 from collections.abc import AsyncGenerator
 

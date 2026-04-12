@@ -299,6 +299,7 @@ class TestGetStorageManager:
         settings = Settings(
             storage_backend="local",
             local_storage_dir=str(tmp_path),
+            admin_api_key="test-key",
         )
         mgr = get_storage_manager(settings=settings)
         assert isinstance(mgr, LocalStorageManager)
@@ -309,6 +310,7 @@ class TestGetStorageManager:
             storage_backend="s3",
             s3_bucket_name="my-bucket",
             s3_region="us-east-1",
+            admin_api_key="test-key",
         )
         mgr = get_storage_manager(settings=settings)
         assert isinstance(mgr, S3StorageManager)
@@ -318,6 +320,7 @@ class TestGetStorageManager:
         settings = Settings(
             storage_backend="local",
             local_storage_dir=str(tmp_path),
+            admin_api_key="test-key",
         )
         mgr = get_storage_manager(settings=settings)
         assert isinstance(mgr, StorageInterface)
@@ -327,6 +330,7 @@ class TestGetStorageManager:
         mock_settings = Settings(
             storage_backend="local",
             local_storage_dir=str(tmp_path),
+            admin_api_key="test-key",
         )
         with patch(
             "src.core.storage.get_settings", return_value=mock_settings
@@ -386,6 +390,7 @@ def _make_s3_manager(
         storage_backend="s3",
         s3_bucket="test-bucket",
         s3_region="us-east-1",
+        admin_api_key="test-key",
     )
     mock_session = MagicMock()
     mock_session.create_client.return_value = _FakeAsyncContextManager(
@@ -582,6 +587,7 @@ class TestS3StorageManagerClientKwargs:
             s3_endpoint_url="http://localhost:4566",
             s3_access_key_id="AKID",
             s3_secret_access_key="SECRET",
+            admin_api_key="test-key",
         )
         mgr = S3StorageManager(settings=settings)
         kwargs = mgr._client_kwargs()
@@ -599,6 +605,7 @@ class TestS3StorageManagerClientKwargs:
             s3_endpoint_url="",
             s3_access_key_id="",
             s3_secret_access_key="",
+            admin_api_key="test-key",
         )
         mgr = S3StorageManager(settings=settings)
         kwargs = mgr._client_kwargs()
