@@ -108,8 +108,6 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `models/download_token.py` | >90% | ✅ 100% | `tests/repositories/test_download_token_repository.py` |
 | `services/email/interface.py` | >90% | ✅ | (mocked in lead capture tests) |
 | `services/security/turnstile.py` | >90% | ✅ | (mocked in lead capture tests) |
-| `api/routers/public_leads.py` | >90% | ✅ 100% | `tests/api/test_public_leads.py` |
-| `api/schemas/public_leads.py` | >90% | ✅ 100% | `tests/api/test_public_leads.py` |
 | `services/kpi/kpi_service.py` | >90% | ✅ | `tests/services/kpi/test_kpi_service.py` |
 | `api/routers/admin_kpi.py` | >90% | ✅ | `tests/api/test_admin_kpi.py` |
 | `schemas/kpi.py` | >90% | ✅ | `tests/api/test_admin_kpi.py` |

@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.lead import Lead
@@ -67,6 +68,52 @@ class LeadRepository:
         await self._session.flush()
         await self._session.refresh(lead)
         return lead
+
+    async def get_or_create(
+        self,
+        *,
+        email: str,
+        ip_address: str,
+        asset_id: str,
+        is_b2b: bool = False,
+        company_domain: str | None = None,
+    ) -> tuple[Lead, bool]:
+        """Create a lead or return the existing one.  Race-safe.
+
+        Uses an optimistic insert guarded by the ``uq_lead_email_asset``
+        unique constraint.  If a concurrent request already inserted the
+        same (email, asset_id) pair, the :class:`IntegrityError` is caught,
+        the session is rolled back, and the existing row is fetched instead.
+
+        Args:
+            email: Lead's email address.
+            ip_address: IP address of the request.
+            asset_id: Identifier of the downloaded asset.
+            is_b2b: Whether this is a B2B lead.
+            company_domain: Extracted company domain (optional).
+
+        Returns:
+            A ``(lead, created)`` tuple where *created* is ``True`` when a
+            new row was inserted.
+        """
+        try:
+            lead = Lead(
+                email=email,
+                ip_address=ip_address,
+                asset_id=asset_id,
+                is_b2b=is_b2b,
+                company_domain=company_domain,
+            )
+            self._session.add(lead)
+            await self._session.flush()
+            await self._session.refresh(lead)
+            return lead, True
+        except IntegrityError:
+            await self._session.rollback()
+            existing = await self.get_by_email_and_asset(email, asset_id)
+            if existing is None:
+                raise  # something else went wrong
+            return existing, False
 
     async def exists(self, email: str, asset_id: str) -> bool:
         """Check whether a lead already exists for a given email + asset.

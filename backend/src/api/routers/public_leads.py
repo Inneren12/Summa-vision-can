@@ -56,14 +56,17 @@ def _get_email_service() -> EmailServiceInterface:
 
 
 def _get_turnstile_validator(
+    request: Request,
     settings: Settings = Depends(get_settings),
 ) -> TurnstileValidator:
-    """Provide a TurnstileValidator via dependency injection."""
-    import httpx
+    """Provide a TurnstileValidator via dependency injection.
 
+    Uses the app-scoped ``httpx.AsyncClient`` stored on ``app.state``
+    for connection reuse and proper lifecycle management.
+    """
     return TurnstileValidator(
         secret_key=settings.turnstile_secret_key,
-        http_client=httpx.AsyncClient(),
+        http_client=request.app.state.http_client,
     )
 
 
@@ -153,12 +156,29 @@ async def capture_lead(
             detail="Asset file not available yet",
         )
 
-    # 4. Check lead deduplication
-    existing_lead = await lead_repo.get_by_email_and_asset(
-        payload.email, str(payload.asset_id)
+    # 4. Race-safe lead get-or-create (handles concurrent requests for same
+    #    email+asset without hitting an unhandled IntegrityError).
+    is_b2b = not any(
+        payload.email.lower().endswith(f"@{d}")
+        for d in (
+            "gmail.com", "yahoo.com", "outlook.com", "hotmail.com",
+            "protonmail.com", "icloud.com",
+        )
+    )
+    company_domain = payload.email.split("@")[1] if "@" in payload.email else None
+
+    lead, is_new = await lead_repo.get_or_create(
+        email=payload.email,
+        ip_address=client_ip,
+        asset_id=str(payload.asset_id),
+        is_b2b=is_b2b,
+        company_domain=company_domain,
     )
 
-    if existing_lead is not None:
+    if not is_new:
+        # Resend flow: revoke old token, create fresh token, send new email.
+        # Raw token is not recoverable from hash, so we always create a new one.
+
         # Resend rate limit (A3): 1 resend per 2 min per IP
         if not _resend_rate_limiter.is_allowed(client_ip):
             raise HTTPException(
@@ -166,43 +186,19 @@ async def capture_lead(
                 detail="Too many requests. Please try again later.",
             )
 
-        existing_token = await token_repo.get_by_lead_and_asset(existing_lead.id)
+        existing_token = await token_repo.get_by_lead_and_asset(lead.id)
 
-        if existing_token is not None and existing_token.use_count == 0:
-            # Reuse existing token (R17 resend logic)
-            raw_token = secrets.token_urlsafe(32)
-            token_hash = _hash_token(raw_token)
+        if existing_token is not None:
+            await token_repo.revoke(existing_token.id)
 
-            # We can't recover the raw token from the hash, so we must
-            # revoke old and create new for the magic link
-            await token_repo.revoke(existing_token.id)
-            new_token = await token_repo.create(
-                lead_id=existing_lead.id,
-                token_hash=token_hash,
-                expires_at=datetime.now(timezone.utc) + timedelta(hours=settings.magic_token_ttl_hours),
-                max_uses=settings.max_token_uses,
-            )
-        elif existing_token is not None and existing_token.use_count > 0:
-            # Token already used — revoke and create new
-            await token_repo.revoke(existing_token.id)
-            raw_token = secrets.token_urlsafe(32)
-            token_hash = _hash_token(raw_token)
-            new_token = await token_repo.create(
-                lead_id=existing_lead.id,
-                token_hash=token_hash,
-                expires_at=datetime.now(timezone.utc) + timedelta(hours=settings.magic_token_ttl_hours),
-                max_uses=settings.max_token_uses,
-            )
-        else:
-            # No existing token — create new
-            raw_token = secrets.token_urlsafe(32)
-            token_hash = _hash_token(raw_token)
-            new_token = await token_repo.create(
-                lead_id=existing_lead.id,
-                token_hash=token_hash,
-                expires_at=datetime.now(timezone.utc) + timedelta(hours=settings.magic_token_ttl_hours),
-                max_uses=settings.max_token_uses,
-            )
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = _hash_token(raw_token)
+        new_token = await token_repo.create(
+            lead_id=lead.id,
+            token_hash=token_hash,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=settings.magic_token_ttl_hours),
+            max_uses=settings.max_token_uses,
+        )
 
         # Build and send Magic Link email
         magic_link = f"{settings.public_site_url}/downloading?token={raw_token}"
@@ -224,7 +220,7 @@ async def capture_lead(
         await audit.log_event(
             event_type=EventType.LEAD_EMAIL_SENT,
             entity_type="lead",
-            entity_id=str(existing_lead.id),
+            entity_id=str(lead.id),
             actor="system",
         )
         await audit.log_event(
@@ -236,23 +232,7 @@ async def capture_lead(
 
         return LeadCaptureResponse(message="Check your email for the download link")
 
-    # 5. Save lead to DB IMMEDIATELY
-    is_b2b = not any(
-        payload.email.lower().endswith(f"@{d}")
-        for d in (
-            "gmail.com", "yahoo.com", "outlook.com", "hotmail.com",
-            "protonmail.com", "icloud.com",
-        )
-    )
-    company_domain = payload.email.split("@")[1] if "@" in payload.email else None
-
-    lead = await lead_repo.create(
-        email=payload.email,
-        ip_address=client_ip,
-        asset_id=str(payload.asset_id),
-        is_b2b=is_b2b,
-        company_domain=company_domain,
-    )
+    # 5. New lead flow — generate download token, send email, audit events.
 
     # 6. Generate download token
     raw_token = secrets.token_urlsafe(32)
