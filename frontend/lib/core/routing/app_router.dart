@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/cubes/presentation/cube_detail_screen.dart';
+import '../../features/cubes/presentation/cube_search_screen.dart';
 import '../../features/editor/presentation/editor_screen.dart';
 import '../../features/graphics/presentation/preview_screen.dart';
 import '../../features/queue/presentation/queue_screen.dart';
@@ -9,9 +11,11 @@ import '../../features/queue/presentation/queue_screen.dart';
 class AppRoutes {
   AppRoutes._();
 
-  static const queue   = '/queue';
-  static const editor  = '/editor/:briefId';
-  static const preview = '/preview/:taskId';
+  static const queue       = '/queue';
+  static const editor      = '/editor/:briefId';
+  static const preview     = '/preview/:taskId';
+  static const cubeSearch  = '/cubes/search';
+  static const cubeDetail  = '/cubes/:productId';
 }
 
 /// Riverpod provider for the [GoRouter] instance.
@@ -25,8 +29,17 @@ final routerProvider = Provider<GoRouter>((ref) {
     debugLogDiagnostics: false,
     // Redirect unknown paths back to /queue
     redirect: (context, state) {
-      final knownPrefixes = ['/queue', '/editor/', '/preview/'];
+      final knownPrefixes = [
+        '/queue',
+        '/editor/',
+        '/preview/',
+        '/cubes/',
+      ];
       final path = state.matchedLocation;
+
+      // /cubes with no sub-path → redirect to /cubes/search
+      if (path == '/cubes') return AppRoutes.cubeSearch;
+
       final isKnown = knownPrefixes.any((p) => path.startsWith(p));
       if (!isKnown && path != AppRoutes.queue) {
         return AppRoutes.queue;
@@ -38,6 +51,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.queue,
         name: 'queue',
         builder: (context, state) => const QueueScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.cubeSearch,
+        name: 'cubeSearch',
+        builder: (context, state) => const CubeSearchScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.cubeDetail,
+        name: 'cubeDetail',
+        builder: (context, state) {
+          final productId = state.pathParameters['productId'] ?? '';
+          return CubeDetailScreen(productId: productId);
+        },
       ),
       GoRoute(
         path: AppRoutes.editor,

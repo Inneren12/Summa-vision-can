@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 
+import '../../../core/routing/app_drawer.dart';
 import '../../../core/theme/app_theme.dart';
 import '../data/queue_repository.dart';
 import '../domain/content_brief.dart';
@@ -15,6 +16,7 @@ class QueueScreen extends ConsumerWidget {
     final queueAsync = ref.watch(queueProvider);
 
     return Scaffold(
+      drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text('Brief Queue'),
         actions: [
