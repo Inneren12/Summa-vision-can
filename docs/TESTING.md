@@ -108,6 +108,11 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `models/download_token.py` | >90% | ✅ 100% | `tests/repositories/test_download_token_repository.py` |
 | `services/email/interface.py` | >90% | ✅ | (mocked in lead capture tests) |
 | `services/security/turnstile.py` | >90% | ✅ | (mocked in lead capture tests) |
+| `api/routers/public_leads.py` | >90% | ✅ 100% | `tests/api/test_public_leads.py` |
+| `api/schemas/public_leads.py` | >90% | ✅ 100% | `tests/api/test_public_leads.py` |
+| `services/kpi/kpi_service.py` | >90% | ✅ | `tests/services/kpi/test_kpi_service.py` |
+| `api/routers/admin_kpi.py` | >90% | ✅ | `tests/api/test_admin_kpi.py` |
+| `schemas/kpi.py` | >90% | ✅ | `tests/api/test_admin_kpi.py` |
 
 | `scripts/ops/generate_batch.py` | >90% | ✅ | `tests/scripts/ops/test_generate_batch.py` |
 
@@ -190,7 +195,9 @@ flutter test -v
 | `test/features/queue/domain/content_brief_schema_test.dart` | 6 | Schema drift detection against backend `publication_response.schema.json` |
 | `test/features/queue/presentation/queue_screen_test.dart` | 11 | Loading/data/empty/error states, virality score colours, refresh, Approve navigation |
 | `test/features/editor/presentation/editor_screen_test.dart` | 16 | EditorScreen rendering, form interactions, EditorNotifier state management, ChartType parsing |
-| **Total** | **48** | |
+| `test/features/kpi/presentation/kpi_screen_test.dart` | 13 | KPI summary cards, conversion rate, job success rate, division-by-zero, funnel steps, lead breakdown, job failures, data contract warning, period selector, loading/error states |
+| `test/features/kpi/domain/kpi_data_test.dart` | 3 | KPIData.fromJson full parsing, empty failedByType map, JSON round-trip |
+| **Total** | **64** | |
 
 ### Notes
 - Tests use `dotenv.testLoad(mergeWith: {...})` to inject env vars without reading `.env` from disk
