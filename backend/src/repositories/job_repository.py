@@ -14,11 +14,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Sequence
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
+from src.core.exceptions import ConflictError, NotFoundError
 from src.models.job import Job, JobStatus
 
 
@@ -220,6 +221,49 @@ class JobRepository:
             )
         )
         return result.rowcount  # type: ignore[return-value]
+
+    async def count_jobs(
+        self,
+        job_type: str | None = None,
+        status: JobStatus | None = None,
+    ) -> int:
+        """Count jobs matching the given filters."""
+        stmt = select(func.count(Job.id))
+        if job_type is not None:
+            stmt = stmt.where(Job.job_type == job_type)
+        if status is not None:
+            stmt = stmt.where(Job.status == status)
+        result = await self._session.scalar(stmt)
+        return result or 0
+
+    async def retry_failed_job(self, job_id: int) -> Job:
+        """Retry a failed job. Raises domain errors if not retryable or dedupe conflict."""
+        job = await self.get_job(job_id)
+        if job is None:
+            raise NotFoundError(f"Job {job_id} not found")
+
+        if job.status != JobStatus.FAILED:
+            raise ConflictError("Only failed jobs can be retried")
+
+        if job.attempt_count >= job.max_attempts:
+            raise ConflictError("Job has exhausted retry attempts")
+
+        # Check dedupe conflict: is there already an active job with the same dedupe_key?
+        if job.dedupe_key:
+            existing = await self._find_active_by_dedupe(job.dedupe_key)
+            if existing is not None and existing.id != job.id:
+                raise ConflictError(
+                    f"Another active job already exists with dedupe_key '{job.dedupe_key}'"
+                )
+
+        # Safe to retry
+        job.status = JobStatus.QUEUED
+        job.error_code = None
+        job.error_message = None
+        job.started_at = None
+        job.finished_at = None
+        await self._session.flush()
+        return job
 
     # ------------------------------------------------------------------
     # Private helpers

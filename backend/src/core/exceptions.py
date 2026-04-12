@@ -140,13 +140,36 @@ class AuthError(SummaVisionError):
         super().__init__(message=message, error_code=error_code, context=context)
 
 
+class NotFoundError(SummaVisionError):
+    """Raised when a requested entity does not exist."""
+    def __init__(
+        self,
+        message: str = "Not found",
+        error_code: str = "NOT_FOUND",
+        context: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(message=message, error_code=error_code, context=context)
+
+
+class ConflictError(SummaVisionError):
+    """Raised when an operation conflicts with current resource state.
+    Covers business-rule violations such as retrying a non-failed job
+    or violating a dedupe constraint.
+    """
+    def __init__(
+        self,
+        message: str = "Conflict",
+        error_code: str = "CONFLICT",
+        context: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(message=message, error_code=error_code, context=context)
+
+
 class ESPPermanentError(SummaVisionError):
     """Raised when the ESP (e.g. Beehiiv) returns a 4xx client error.
-
     These errors indicate a permanent failure that should NOT be retried
     (e.g. invalid email, duplicate subscriber rejection).
     """
-
     def __init__(
         self,
         status_code: int,
@@ -163,11 +186,9 @@ class ESPPermanentError(SummaVisionError):
 
 class ESPTransientError(SummaVisionError):
     """Raised when the ESP returns a 5xx server error or times out.
-
     These errors are transient and the operation should be retried
     with exponential backoff.
     """
-
     def __init__(
         self,
         status_code: int,

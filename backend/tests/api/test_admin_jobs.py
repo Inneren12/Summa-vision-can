@@ -2,6 +2,7 @@
 
 Covers:
 * ``GET  /api/v1/admin/jobs``                — list jobs with filters
+* ``GET  /api/v1/admin/jobs/{job_id}``       — get a single job by ID
 * ``POST /api/v1/admin/jobs/{job_id}/retry`` — retry a failed job
 """
 
@@ -15,6 +16,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from src.api.routers.admin_jobs import _get_job_repo, router
+from src.core.exceptions import ConflictError, NotFoundError
 from src.models.job import Job, JobStatus
 
 
@@ -89,6 +91,7 @@ class TestListJobs:
         job1 = _make_job(job_id=1)
         job2 = _make_job(job_id=2, job_type="cube_fetch")
         mock_job_repo.list_jobs.return_value = [job1, job2]
+        mock_job_repo.count_jobs.return_value = 2
 
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
@@ -108,6 +111,7 @@ class TestListJobs:
     ) -> None:
         """An empty job list should return 200 with empty items."""
         mock_job_repo.list_jobs.return_value = []
+        mock_job_repo.count_jobs.return_value = 0
 
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
@@ -127,6 +131,7 @@ class TestListJobs:
     ) -> None:
         """Filter params should be forwarded to the repository."""
         mock_job_repo.list_jobs.return_value = []
+        mock_job_repo.count_jobs.return_value = 0
 
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
@@ -142,6 +147,31 @@ class TestListJobs:
             status=JobStatus.FAILED,
             limit=10,
         )
+        mock_job_repo.count_jobs.assert_called_once_with(
+            job_type="cube_fetch",
+            status=JobStatus.FAILED,
+        )
+
+    @pytest.mark.asyncio()
+    async def test_list_jobs_total_reflects_full_count(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """total should reflect full DB count, not len(items)."""
+        job1 = _make_job(job_id=1)
+        mock_job_repo.list_jobs.return_value = [job1]
+        mock_job_repo.count_jobs.return_value = 300
+
+        app = _make_app(job_repo_override=mock_job_repo)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            resp = await client.get("/api/v1/admin/jobs?limit=1")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["items"]) == 1
+        assert data["total"] == 300
 
     @pytest.mark.asyncio()
     async def test_list_jobs_default_limit(
@@ -149,6 +179,7 @@ class TestListJobs:
     ) -> None:
         """Without limit param, default 50 should be used."""
         mock_job_repo.list_jobs.return_value = []
+        mock_job_repo.count_jobs.return_value = 0
 
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
@@ -186,6 +217,7 @@ class TestListJobs:
             error_message="S3 bucket not found",
         )
         mock_job_repo.list_jobs.return_value = [job]
+        mock_job_repo.count_jobs.return_value = 1
 
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
@@ -219,6 +251,64 @@ class TestListJobs:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# GET /api/v1/admin/jobs/{job_id}
+# ---------------------------------------------------------------------------
+
+
+class TestGetJob:
+    """Tests for the GET /api/v1/admin/jobs/{job_id} endpoint."""
+
+    @pytest.mark.asyncio()
+    async def test_get_job_returns_200(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """An existing job should be returned with correct fields."""
+        job = _make_job(
+            job_id=42,
+            job_type="catalog_sync",
+            status=JobStatus.QUEUED,
+            dedupe_key="sync:2026-04-12",
+        )
+        mock_job_repo.get_job.return_value = job
+
+        app = _make_app(job_repo_override=mock_job_repo)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            resp = await client.get("/api/v1/admin/jobs/42")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == "42"
+        assert data["job_type"] == "catalog_sync"
+        assert data["status"] == "queued"
+        assert data["dedupe_key"] == "sync:2026-04-12"
+        mock_job_repo.get_job.assert_called_once_with(42)
+
+    @pytest.mark.asyncio()
+    async def test_get_job_not_found_returns_404(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """Non-existent job should return 404."""
+        mock_job_repo.get_job.return_value = None
+
+        app = _make_app(job_repo_override=mock_job_repo)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            resp = await client.get("/api/v1/admin/jobs/999")
+
+        assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/admin/jobs/{job_id}/retry
+# ---------------------------------------------------------------------------
+
+
 class TestRetryJob:
     """Tests for the POST /api/v1/admin/jobs/{job_id}/retry endpoint."""
 
@@ -227,15 +317,15 @@ class TestRetryJob:
         self, mock_job_repo: AsyncMock
     ) -> None:
         """A failed job with remaining attempts should be retried (202)."""
-        job = _make_job(
+        retried_job = _make_job(
             job_id=7,
-            status=JobStatus.FAILED,
+            status=JobStatus.QUEUED,
             attempt_count=1,
             max_attempts=3,
-            error_code="STORAGE_ERROR",
-            error_message="S3 error",
+            error_code=None,
+            error_message=None,
         )
-        mock_job_repo.get_job.return_value = job
+        mock_job_repo.retry_failed_job.return_value = retried_job
 
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
@@ -248,13 +338,16 @@ class TestRetryJob:
         data = resp.json()
         assert data["job_id"] == "7"
         assert data["status"] == "queued"
+        mock_job_repo.retry_failed_job.assert_called_once_with(7)
 
     @pytest.mark.asyncio()
     async def test_retry_not_found_returns_404(
         self, mock_job_repo: AsyncMock
     ) -> None:
         """Non-existent job should return 404."""
-        mock_job_repo.get_job.return_value = None
+        mock_job_repo.retry_failed_job.side_effect = NotFoundError(
+            "Job 999 not found"
+        )
 
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
@@ -270,8 +363,9 @@ class TestRetryJob:
         self, mock_job_repo: AsyncMock
     ) -> None:
         """A successful job should not be retryable (409)."""
-        job = _make_job(job_id=5, status=JobStatus.SUCCESS)
-        mock_job_repo.get_job.return_value = job
+        mock_job_repo.retry_failed_job.side_effect = ConflictError(
+            "Only failed jobs can be retried"
+        )
 
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
@@ -288,13 +382,9 @@ class TestRetryJob:
         self, mock_job_repo: AsyncMock
     ) -> None:
         """A failed job with max attempts reached should return 409."""
-        job = _make_job(
-            job_id=8,
-            status=JobStatus.FAILED,
-            attempt_count=3,
-            max_attempts=3,
+        mock_job_repo.retry_failed_job.side_effect = ConflictError(
+            "Job has exhausted retry attempts"
         )
-        mock_job_repo.get_job.return_value = job
 
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
@@ -307,39 +397,13 @@ class TestRetryJob:
         assert "exhausted" in resp.json()["detail"]
 
     @pytest.mark.asyncio()
-    async def test_retry_clears_error_fields(
-        self, mock_job_repo: AsyncMock
-    ) -> None:
-        """After retry, error_code and error_message should be cleared."""
-        job = _make_job(
-            job_id=7,
-            status=JobStatus.FAILED,
-            attempt_count=1,
-            max_attempts=3,
-            error_code="STORAGE_ERROR",
-            error_message="S3 error",
-        )
-        mock_job_repo.get_job.return_value = job
-
-        app = _make_app(job_repo_override=mock_job_repo)
-        transport = ASGITransport(app=app)
-        async with AsyncClient(
-            transport=transport, base_url="http://test"
-        ) as client:
-            resp = await client.post("/api/v1/admin/jobs/7/retry")
-
-        assert resp.status_code == 202
-        # Verify error fields were cleared on the mock
-        assert job.error_code is None
-        assert job.error_message is None
-
-    @pytest.mark.asyncio()
     async def test_retry_running_job_returns_409(
         self, mock_job_repo: AsyncMock
     ) -> None:
         """A running job should not be retryable (409)."""
-        job = _make_job(job_id=3, status=JobStatus.RUNNING)
-        mock_job_repo.get_job.return_value = job
+        mock_job_repo.retry_failed_job.side_effect = ConflictError(
+            "Only failed jobs can be retried"
+        )
 
         app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
@@ -349,3 +413,22 @@ class TestRetryJob:
             resp = await client.post("/api/v1/admin/jobs/3/retry")
 
         assert resp.status_code == 409
+
+    @pytest.mark.asyncio()
+    async def test_retry_fails_when_active_dedupe_exists(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """Retry returns 409 if another queued/running job has the same dedupe_key."""
+        mock_job_repo.retry_failed_job.side_effect = ConflictError(
+            "Another active job already exists with dedupe_key 'test-key'"
+        )
+
+        app = _make_app(job_repo_override=mock_job_repo)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            resp = await client.post("/api/v1/admin/jobs/10/retry")
+
+        assert resp.status_code == 409
+        assert "dedupe_key" in resp.json()["detail"]
