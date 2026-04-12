@@ -100,12 +100,6 @@ class Settings(BaseSettings):
     BEEHIIV_API_KEY: str = ""  # If empty → ESP sync silently disabled
     BEEHIIV_PUBLICATION_ID: str = ""
 
-    # --- LLM / Gemini ---
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
-    daily_llm_budget: float = 5.00
-    llm_cache_ttl_seconds: int = 86400  # 24 hours
-
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 

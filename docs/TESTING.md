@@ -16,7 +16,6 @@
 - **Runner**: `pytest` with `pytest-asyncio`
 - **Async Mode**: `auto` (all async tests discovered automatically)
 - **HTTP Mocking**: `respx` for stubbing `httpx` network calls
-- **Browser Mocking**: Patched Playwright context for CMHC tests
 - **Coverage**: `pytest-cov` with `--cov-fail-under=85` enforced in CI
 
 ## Test Naming Convention
@@ -54,7 +53,6 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `core/config.py` | >90% | ✅ 100% | (tested inline via other modules) |
 | `core/rate_limit.py` | >90% | ✅ 100% | `tests/core/test_rate_limit.py` |
 | `core/storage.py` | >90% | ✅ 92% | `tests/core/test_storage.py` |
-| `core/task_manager.py` | >90% | ✅ 100% | `tests/core/test_task_manager.py` |
 | `core/database.py` | >90% | ⚠️ 61% | (tested via repository tests) |
 | `api/routers/health.py` | >90% | ✅ 100% | `tests/api/test_health.py` |
 | `services/statcan/maintenance.py` | >90% | ✅ 100% | `tests/services/statcan/test_maintenance.py` |
@@ -62,11 +60,6 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `services/statcan/schemas.py` | >90% | ✅ 100% | `tests/services/statcan/test_schemas.py` |
 | `services/statcan/service.py` | >90% | ✅ 100% | `tests/services/statcan/test_service.py` |
 | `services/statcan/validators.py` | >90% | ✅ 100% | `tests/services/statcan/test_service.py` |
-| `services/cmhc/browser.py` | >90% | ✅ 100% | `tests/services/cmhc/test_browser.py` |
-| `services/cmhc/parser.py` | >90% | ✅ 97% | `tests/services/cmhc/test_parser.py` |
-| `services/cmhc/service.py` | >90% | ✅ 100% | `tests/services/cmhc/test_service.py` |
-| `api/routers/tasks.py` | >90% | ✅ 100% | `tests/api/test_routers.py` |
-| `api/routers/cmhc.py` | >90% | ✅ 95% | `tests/api/test_routers.py` |
 | `models/*.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
 | `repositories/*.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
 | `api/routers/admin_cubes.py` | >90% | ⬜ | |
@@ -88,11 +81,6 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `services/audit.py` | >90% | ⬜ | |
 | `core/security/ip_rate_limiter.py` | >90% | ✅ 100% | `tests/api/test_public_graphics.py` |
 | `api/routers/public_graphics.py` | >90% | ✅ 96% | `tests/api/test_public_graphics.py` |
-| `services/ai/llm_interface.py` | >90% | ✅ 100% | `tests/services/ai/test_llm_interface.py` |
-| `services/ai/llm_cache.py` | >90% | ✅ 100% | `tests/services/ai/test_llm_cache.py` |
-| `services/ai/cost_tracker.py` | >90% | ✅ 100% | `tests/services/ai/test_cost_tracker.py` |
-| `services/ai/schemas.py` | >90% | ✅ 100% | `tests/services/ai/test_schemas.py` |
-| `core/prompt_loader.py` | >90% | ✅ 100% | `tests/core/test_prompt_loader.py` |
 | `services/graphics/svg_generator.py` | >90% | ⬜ | `tests/services/graphics/test_svg_generator.py` |
 | `services/graphics/backgrounds.py` | >90% | ✅ | `tests/services/graphics/test_backgrounds.py` |
 | `services/graphics/ai_image_client.py` | >90% | ✅ 100% | `tests/services/graphics/test_ai_image_client.py` |
@@ -129,15 +117,12 @@ pytest tests/services/statcan/test_maintenance.py -v
 | External HTTP (StatCan API) | `respx` route interception |
 | Time/datetime | Injected `datetime` parameter (no `datetime.now()` inside logic) |
 | `asyncio.sleep` | Patched to avoid real delays in token bucket tests |
-| Playwright browser | Mocked context returning static HTML |
 | Service layer (in router tests) | FastAPI `Depends` override with mock objects |
 | `structlog` | `unittest.mock.patch` on logger methods |
-| `google-genai` (Gemini SDK) | `unittest.mock.MagicMock` on `genai.Client.models.generate_content` |
 | `StorageInterface` | `LocalStorageManager` for integration tests, `unittest.mock.AsyncMock` for unit tests |
 | `SlackNotifierService` | `AsyncMock` injected via `Depends` override in lead capture + sponsorship tests |
 | `ESPSubscriberInterface` (BeehiivClient) | `AsyncMock` injected via `Depends` override; error classification tested with `httpx` mock |
 | `LeadScoringService` | Direct instantiation (pure sync, no mocking needed) |
-| `TaskManager` | In-memory instance with mock coroutines |
 | Job repository (in runner tests) | Direct SQLite-backed AsyncSession |
 | Database (AsyncSession) | In-memory `aiosqlite` via `create_async_engine("sqlite+aiosqlite://")` |
 | `InMemoryRateLimiter` | Injected via `Depends` override in public graphics tests |
@@ -153,7 +138,6 @@ pytest tests/services/statcan/test_maintenance.py -v
 
 ## Test Fixtures
 
-- CMHC tests use static HTML fixtures via `conftest.py` (`tests/services/cmhc/conftest.py`)
 - StatCan tests use inline JSON/CSV data within test functions
 - Repository tests use shared `conftest.py` with async SQLite engine fixture
 

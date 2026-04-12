@@ -65,39 +65,6 @@ JSON, but any serialization change would silently break the match.
 - **Resolution:** Create `entrypoint.sh` that runs `alembic upgrade head && exec uvicorn ...`. Or use init container.
 - **Target:** Pre-deploy hardening PR (before Étape D-5).
 
-### DEBT-004: Old in-memory TaskManager not yet removed
-- **Source:** Architecture (Sprint 1 → Étape 0 transition)
-- **Added:** 2026-04-05
-- **Severity:** low
-- **Category:** code-quality
-- **Status:** accepted
-- **Description:** `core/task_manager.py` (in-memory dict for async tasks) still exists. Persistent Job system (PR 0-2/0-3) replaces it.
-- **Impact:** Dead code. May confuse contributors about which task system to use.
-- **Resolution:** Delete TaskManager and update any remaining references (routers, tests) after all consumers use Job system.
-- **Target:** Cleanup PR after all consumers migrated to Job system.
-
-### DEBT-006: Dead code in services/cmhc/ directory
-- **Source:** Sprint 1 scope
-- **Added:** 2026-04-05
-- **Severity:** low
-- **Category:** architecture
-- **Status:** accepted
-- **Description:** `services/cmhc/` directory contains browser.py, parser.py, service.py with partial implementations from Sprint 1. Not used in the current pipeline — CMHC scraping is deferred.
-- **Impact:** Dead code. May confuse contributors.
-- **Resolution:** Delete or clearly mark as backlog feature stubs. Add `# BACKLOG: Not used in current pipeline` header to each file.
-- **Target:** Cleanup PR before Étape D.
-
-### DEBT-007: Dead code in services/ai/ directory
-- **Source:** Sprint 2 scope / architecture pivot
-- **Added:** 2026-04-05
-- **Severity:** low
-- **Category:** architecture
-- **Status:** accepted
-- **Description:** `services/ai/` directory contains llm_interface.py, scoring_service.py, llm_cache.py, cost_tracker.py, schemas.py from before the LLM-removal architecture pivot. Not used in the current pipeline — LLM is optional backlog feature.
-- **Impact:** Dead code. May confuse contributors.
-- **Resolution:** Delete or clearly mark as backlog feature stubs. Add `# BACKLOG: Not used in current pipeline` header to each file.
-- **Target:** Cleanup PR before Étape D.
-
 ### DEBT-008: No startup validation for required secrets
 - **Source:** Roadmap Secret Management Policy
 - **Added:** 2026-04-05
@@ -137,9 +104,10 @@ JSON, but any serialization change would silently break the match.
 - **Severity:** medium
 - **Category:** code-quality
 - **Status:** active
-- **Description:** `docs/architecture/ARCHITECTURE.md` (the original architecture document) still describes LLM Gate, Gemini Scoring, and AI Background Art as core active components (17+ references). The working `docs/ARCHITECTURE.md` also includes LLM Gate in the high-level flow diagram (lines 8, 12) though with a backlog note. Additionally, `docs/modules/api.md` (line 195) references `TaskStatusResponse` from dead `task_manager.py`, and `docs/ARCH_RULES.md` (line 13) lists `task_manager.py` in the ARCH-DPEN-001 scope.
-- **Impact:** New contributors will misunderstand the current system. The old architecture doc presents a fundamentally different system (Gemini scoring → AI Art) than the actual MVP (Polars → SVG + Pillow backgrounds → Pipeline → Gallery + Lead funnel). Stale doc references to dead modules waste investigation time.
-- **Resolution:** Rewrite `docs/architecture/ARCHITECTURE.md` to reflect actual MVP architecture, or delete it in favour of `docs/ARCHITECTURE.md`. Remove TaskManager references from `docs/modules/api.md` and `docs/ARCH_RULES.md`. Update flow diagram in `docs/ARCHITECTURE.md` to remove LLM Gate.
+- **Description:** `docs/architecture/ARCHITECTURE.md` (the original architecture document) still describes LLM Gate, Gemini Scoring, and AI Background Art as core active components (17+ references).
+- **Impact:** New contributors will misunderstand the current system. The old architecture doc presents a fundamentally different system (Gemini scoring → AI Art) than the actual MVP (Polars → SVG + Pillow backgrounds → Pipeline → Gallery + Lead funnel).
+- **Resolution:** Rewrite `docs/architecture/ARCHITECTURE.md` to reflect actual MVP architecture, or delete it in favour of `docs/ARCHITECTURE.md`.
+> Updated 2026-04-12: TaskManager references removed from `docs/modules/api.md`, `docs/ARCH_RULES.md`, `docs/modules/core.md`. LLM Gate removed from `docs/ARCHITECTURE.md` flow diagram. Remaining: old `docs/architecture/ARCHITECTURE.md` still has stale LLM references.
 - **Target:** Post-launch documentation sprint.
 
 ### DEBT-017: Job handlers violate ARCH-DPEN-001 with inline httpx client creation
@@ -159,32 +127,11 @@ JSON, but any serialization change would silently break the match.
 - **Severity:** low
 - **Category:** code-quality
 - **Status:** active
-- **Description:** `docs/TESTING.md` coverage table has multiple inaccuracies: (1) Shows ⬜ for modules that now have test files — `services/jobs/runner.py`, `services/statcan/catalog_sync.py`, `services/statcan/data_fetch.py`, `services/data/workbench.py` all have corresponding test files. (2) Lists dead code modules (`services/cmhc/*`, `services/ai/*`, `core/task_manager.py`) as actively tracked with 100% coverage. (3) Overall claim of "560+ tests, 96%+ total coverage" (line 123) has not been reverified after Étapes C and D.
+- **Description:** `docs/TESTING.md` coverage table has multiple inaccuracies: (1) Shows ⬜ for modules that now have test files — `services/jobs/runner.py`, `services/statcan/catalog_sync.py`, `services/statcan/data_fetch.py`, `services/data/workbench.py` all have corresponding test files. (2) Overall claim of "560+ tests, 96%+ total coverage" has not been reverified after Étapes C and D.
+> Updated 2026-04-12: Dead code module rows (`services/cmhc/*`, `services/ai/*`, `core/task_manager.py`, `core/prompt_loader.py`) removed from coverage table via Dead Code Cleanup. Remaining: stale ⬜ rows and unverified overall claim.
 - **Impact:** Misleading coverage picture. Contributors cannot tell which modules genuinely lack tests vs. which had tests added in later PRs. Dead code coverage inflates reported numbers.
 - **Resolution:** Run `pytest --cov=src --cov-report=term-missing`, update every row in the coverage table, remove or mark dead-code rows as `(dead code — see DEBT-006, DEBT-007)`.
 - **Target:** Next documentation update PR.
-
-### DEBT-019: Orphaned LLM infrastructure outside services/ai/
-- **Source:** Technical debt audit (2026-04-12)
-- **Added:** 2026-04-12
-- **Severity:** low
-- **Category:** code-quality
-- **Status:** active
-- **Description:** Multiple modules outside `services/ai/` exist solely to support the removed LLM feature and have no other consumers: (1) `core/config.py` lines 103–107 define `gemini_api_key`, `gemini_model`, `daily_llm_budget`, `llm_cache_ttl_seconds` — unused by any active code path. (2) `core/prompt_loader.py` is only imported by `services/ai/scoring_service.py` (dead code per DEBT-007). (3) `models/llm_request.py` and `repositories/llm_request_repository.py` are only used by dead AI code — the ORM model is still migrated and occupies DB schema space.
-- **Impact:** Confusing configuration surface — `gemini_api_key` appears required but is unused. Dead DB table (`llm_requests`) wastes schema space and migration history. `prompt_loader.py` appears to be active infrastructure but has no live consumers.
-- **Resolution:** Delete `gemini_*` and `daily_llm_budget` and `llm_cache_ttl_seconds` from Settings. Delete or clearly mark `prompt_loader.py`, `llm_request.py`, and `llm_request_repository.py` as backlog stubs. Create migration to drop `llm_requests` table if it exists.
-- **Target:** Same cleanup PR as DEBT-007.
-
-### DEBT-020: CMHC and Tasks routers still mounted for deferred features
-- **Source:** Technical debt audit (2026-04-12)
-- **Added:** 2026-04-12
-- **Severity:** medium
-- **Category:** architecture
-- **Status:** active
-- **Description:** `main.py` lines 147–148 mount `tasks_router` and `cmhc_router`. The CMHC router (`api/routers/cmhc.py`) imports `TaskManager` and `run_cmhc_extraction_pipeline` — both from dead/deferred modules (DEBT-004, DEBT-006). The tasks router (`api/routers/tasks.py`) imports `TaskManager` for polling. These are live API endpoints (`POST /api/v1/admin/cmhc/sync`, `GET /api/v1/admin/tasks/{task_id}`) backed by non-functional code.
-- **Impact:** API surface exposes endpoints that appear functional but use the deprecated in-memory TaskManager (state lost on restart) and a CMHC pipeline that is not implemented. Consumers calling these endpoints get silently broken behavior. The endpoints also show up in OpenAPI docs, misleading API consumers.
-- **Resolution:** Remove `cmhc_router` and `tasks_router` from `main.py`. Delete `routers/cmhc.py` and `routers/tasks.py`, or gate them behind a feature flag. This also removes the last consumers of `TaskManager` (enabling DEBT-004 resolution).
-- **Target:** Same cleanup PR as DEBT-004 and DEBT-006.
 
 ---
 
@@ -193,6 +140,11 @@ JSON, but any serialization change would silently break the match.
 | ID | Description | Resolved in | Date |
 |----|-------------|-------------|------|
 | DEBT-014 | database.py creates engine at module level | PR A-1 fix | 2026-04-06 |
+| DEBT-004 | Old in-memory TaskManager not yet removed | Dead Code Cleanup | 2026-04-12 |
 | DEBT-005 | StorageInterface upload_bytes/download_bytes | PR B-3 | 2026-04-09 |
+| DEBT-006 | Dead code in services/cmhc/ directory | Dead Code Cleanup | 2026-04-12 |
+| DEBT-007 | Dead code in services/ai/ directory | Dead Code Cleanup | 2026-04-12 |
 | DEBT-012 | Admin graphics API uses placeholder data | PR B-3 | 2026-04-09 |
 | DEBT-013 | Admin graphics uploads same file for high-res variant | PR B-3 | 2026-04-09 |
+| DEBT-019 | Orphaned LLM infrastructure outside services/ai/ | Dead Code Cleanup | 2026-04-12 |
+| DEBT-020 | CMHC and Tasks routers still mounted for deferred features | Dead Code Cleanup | 2026-04-12 |

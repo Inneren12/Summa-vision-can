@@ -1,8 +1,32 @@
-"""Chart configuration for SVG generation."""
+"""Chart configuration and enums for SVG generation."""
 
 from __future__ import annotations
 
+from enum import Enum
+
 from pydantic import BaseModel, Field
+
+
+class ChartType(str, Enum):
+    """Supported chart types for infographic generation.
+
+    Each value maps to a Plotly trace type used by the Visual Engine
+    (PR-17, PR-17b).
+    """
+
+    LINE = "LINE"
+    BAR = "BAR"
+    SCATTER = "SCATTER"
+    AREA = "AREA"
+    STACKED_BAR = "STACKED_BAR"
+    HEATMAP = "HEATMAP"
+    CANDLESTICK = "CANDLESTICK"
+    PIE = "PIE"
+    DONUT = "DONUT"
+    WATERFALL = "WATERFALL"
+    TREEMAP = "TREEMAP"
+    BUBBLE = "BUBBLE"
+    CHOROPLETH = "CHOROPLETH"
 
 
 class ChartConfig(BaseModel):

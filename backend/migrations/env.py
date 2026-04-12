@@ -26,7 +26,7 @@ from alembic import context
 # Import our models so that Base.metadata is fully populated
 # ---------------------------------------------------------------------------
 from src.core.database import Base  # noqa: F401
-from src.models import Lead, LLMRequest, Publication  # noqa: F401
+from src.models import Lead, Publication  # noqa: F401
 from src.core.config import get_settings
 
 # ---------------------------------------------------------------------------
