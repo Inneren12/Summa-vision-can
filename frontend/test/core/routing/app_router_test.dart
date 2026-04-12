@@ -7,8 +7,38 @@ import 'package:summa_vision_admin/features/editor/presentation/editor_screen.da
 import 'package:summa_vision_admin/features/graphics/domain/generation_notifier.dart';
 import 'package:summa_vision_admin/features/graphics/domain/generation_state.dart';
 import 'package:summa_vision_admin/features/graphics/presentation/preview_screen.dart';
+import 'package:summa_vision_admin/features/queue/data/queue_repository.dart';
+import 'package:summa_vision_admin/features/queue/domain/content_brief.dart';
 import 'package:summa_vision_admin/features/queue/presentation/queue_screen.dart';
 import 'package:summa_vision_admin/core/theme/app_theme.dart';
+
+/// Sample briefs so EditorScreen can render without a real backend.
+final _mockBriefs = [
+  const ContentBrief(
+    id: 42,
+    headline: 'Housing prices surge 12%',
+    chartType: 'BAR',
+    viralityScore: 9.1,
+    status: 'DRAFT',
+    createdAt: '2026-03-17T10:00:00Z',
+  ),
+  const ContentBrief(
+    id: 99,
+    headline: 'CPI hits record high',
+    chartType: 'LINE',
+    viralityScore: 8.7,
+    status: 'DRAFT',
+    createdAt: '2026-03-17T09:30:00Z',
+  ),
+  const ContentBrief(
+    id: 7,
+    headline: 'Bank of Canada holds rates',
+    chartType: 'AREA',
+    viralityScore: 7.2,
+    status: 'DRAFT',
+    createdAt: '2026-03-17T09:00:00Z',
+  ),
+];
 
 /// No-op notifier so PreviewScreen renders without calling real Dio.
 class _NoOpGenerationNotifier extends GenerationNotifier {
@@ -25,6 +55,7 @@ Widget _buildApp(GoRouter router) {
     overrides: [
       routerProvider.overrideWithValue(router),
       generationNotifierProvider.overrideWith(() => _NoOpGenerationNotifier()),
+      queueProvider.overrideWith((ref) async => _mockBriefs),
     ],
     child: MaterialApp.router(
       theme: AppTheme.dark,
