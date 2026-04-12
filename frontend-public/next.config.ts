@@ -11,6 +11,15 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
+        hostname: "cdn.summa.vision",
+      },
+      {
+        protocol: "http",
+        hostname: "localhost",
+        port: "9000",
+      },
+      {
+        protocol: "https",
         hostname: "**.amazonaws.com",
       },
       {

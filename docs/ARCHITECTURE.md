@@ -18,6 +18,7 @@ The current flow is:
 - **Resource semaphores:** data_sem(2), render_sem(2), io_sem(10)
 - **Database:** PostgreSQL-only runtime, pool_size=8
 - **Storage:** MinIO (dev) / S3 (prod)
+  - *Note:* Public gallery API returns `cdn_url` (e.g. `https://cdn.summa.vision/publications/...`) directly from the CDN base URL config rather than generating presigned URLs (per R1).
 - **Background Jobs:** persistent DB-backed job system (JobRunner + handler registry)
   - Handlers: `catalog_sync` (A-3), `cube_fetch` (A-5), `graphics_generate` (B-4)
 

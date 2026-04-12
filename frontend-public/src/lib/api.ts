@@ -1,14 +1,8 @@
+import type { PaginatedResponse, PublicationResponse } from './types/publication';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
-export interface Publication {
-  id: number;
-  headline: string;
-  chart_type: string;
-  virality_score: number;
-  status: string;
-  preview_url: string | null;
-  created_at: string;
-}
+export type { PublicationResponse, PaginatedResponse };
 
 export interface LeadCaptureResponse {
   download_url: string;
@@ -16,14 +10,27 @@ export interface LeadCaptureResponse {
 }
 
 export async function fetchPublishedGraphics(
-  limit = 12,
+  limit = 24,
   offset = 0,
-): Promise<Publication[]> {
+): Promise<PaginatedResponse> {
   const res = await fetch(
     `${API_URL}/api/v1/public/graphics?limit=${limit}&offset=${offset}&sort=newest`,
     { next: { revalidate: 3600 } },
   );
   if (!res.ok) throw new Error('Failed to fetch graphics');
+  return res.json();
+}
+
+export async function fetchGraphic(id: number | string): Promise<PublicationResponse> {
+  const res = await fetch(`${API_URL}/api/v1/public/graphics/${id}`, {
+    next: { revalidate: 3600 },
+  });
+  if (!res.ok) {
+    if (res.status === 404) {
+      throw new Error('Graphic not found');
+    }
+    throw new Error('Failed to fetch graphic');
+  }
   return res.json();
 }
 
