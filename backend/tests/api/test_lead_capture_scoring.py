@@ -6,6 +6,7 @@ scores leads, triggers Slack notifications, and syncs to ESP.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -110,7 +111,7 @@ def _build_client(
     mock_esp: AsyncMock | None,
 ) -> TestClient:
     """Build a TestClient with all dependencies mocked."""
-    from src.core.database import get_db
+    from src.core.database import get_db, get_session_factory
     from src.api.routers.public_leads import (
         _get_turnstile_validator,
         _get_email_service,
@@ -132,10 +133,27 @@ def _build_client(
     mock_db.flush = AsyncMock()
     mock_db.commit = AsyncMock()
 
+    # Extract the lead from mock_lead_repo so background task session.get()
+    # returns the same object the test asserts against.
+    lead_from_repo = mock_lead_repo.get_or_create.return_value[0]
+
+    def _mock_session_factory():
+        mock_session = MagicMock()
+        mock_session.get = AsyncMock(return_value=lead_from_repo)
+        mock_session.flush = AsyncMock()
+        mock_session.commit = AsyncMock()
+
+        @asynccontextmanager
+        async def _ctx():
+            yield mock_session
+
+        return MagicMock(side_effect=lambda: _ctx())
+
     async def override_db():
         yield mock_db
 
     app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_session_factory] = _mock_session_factory
     app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
     app.dependency_overrides[_get_email_service] = lambda: mock_email_service
     app.dependency_overrides[_get_slack_notifier] = lambda: mock_slack
@@ -175,8 +193,12 @@ class TestBackgroundTaskScoring:
             )
             assert resp.status_code == 200
 
-        # The background task should have called get_by_id to update the lead
-        mock_lead_repo.get_by_id.assert_awaited()
+        # The background task uses session.get() via session_factory
+        # (not lead_repo.get_by_id) — verify the response succeeded and
+        # the lead was scored by checking the lead object state.
+        lead = mock_lead_repo.get_or_create.return_value[0]
+        assert lead.is_b2b is True
+        assert lead.category == "b2b"
         app.dependency_overrides.clear()
 
     def test_b2b_lead_triggers_slack(
@@ -253,8 +275,7 @@ class TestBackgroundTaskScoring:
             side_effect=ESPTransientError(status_code=500, detail="Server Error"),
         )
 
-        lead = _make_lead(email="ceo@tdbank.ca")
-        mock_lead_repo.get_by_id = AsyncMock(return_value=lead)
+        lead = mock_lead_repo.get_or_create.return_value[0]
 
         with patch(
             "src.api.routers.public_leads.PublicationRepository",
@@ -290,8 +311,7 @@ class TestBackgroundTaskScoring:
             side_effect=ESPPermanentError(status_code=400, detail="Bad Request"),
         )
 
-        lead = _make_lead(email="ceo@tdbank.ca")
-        mock_lead_repo.get_by_id = AsyncMock(return_value=lead)
+        lead = mock_lead_repo.get_or_create.return_value[0]
 
         with patch(
             "src.api.routers.public_leads.PublicationRepository",
@@ -322,8 +342,7 @@ class TestBackgroundTaskScoring:
         mock_slack: AsyncMock,
         mock_esp: AsyncMock,
     ) -> None:
-        lead = _make_lead(email="ceo@tdbank.ca")
-        mock_lead_repo.get_by_id = AsyncMock(return_value=lead)
+        lead = mock_lead_repo.get_or_create.return_value[0]
 
         with patch(
             "src.api.routers.public_leads.PublicationRepository",

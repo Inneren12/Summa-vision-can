@@ -26,6 +26,7 @@ class Lead(Base):
         asset_id: Identifier of the asset that triggered the capture.
         is_b2b: Whether this lead is classified as business-to-business.
         company_domain: Extracted domain of the lead's company (nullable).
+        category: Lead category from scoring: "b2b", "education", "isp", or "b2c".
         esp_synced: Whether this lead has been synced to the ESP (Beehiiv).
         esp_sync_failed_permanent: Whether ESP returned 4xx (never retry).
         created_at: UTC timestamp of record creation.
@@ -48,6 +49,7 @@ class Lead(Base):
     asset_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     is_b2b: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     company_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     esp_synced: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )

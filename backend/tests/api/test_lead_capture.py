@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from contextlib import asynccontextmanager
+
 from src.core.security.ip_rate_limiter import InMemoryRateLimiter
 from src.main import app
 from src.models.download_token import DownloadToken
@@ -22,6 +24,25 @@ from src.models.publication import Publication, PublicationStatus
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _mock_session_factory():
+    """Return a callable that produces async context managers yielding a mock session.
+
+    Used to override ``get_session_factory`` so that background tasks
+    don't attempt real database connections in unit tests.
+    """
+    mock_session = MagicMock()
+    mock_session.get = AsyncMock(return_value=_make_lead())
+    mock_session.flush = AsyncMock()
+    mock_session.commit = AsyncMock()
+
+    @asynccontextmanager
+    async def _ctx():
+        yield mock_session
+
+    factory = MagicMock(side_effect=lambda: _ctx())
+    return factory
+
 
 def _make_published_pub(asset_id: int = 1) -> Publication:
     pub = Publication(
@@ -133,7 +154,7 @@ def client(
     mock_token_repo: AsyncMock,
     mock_audit: AsyncMock,
 ) -> TestClient:
-    from src.core.database import get_db
+    from src.core.database import get_db, get_session_factory
     from src.api.routers.public_leads import (
         _get_turnstile_validator,
         _get_email_service,
@@ -148,6 +169,7 @@ def client(
         yield mock_db
 
     app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_session_factory] = _mock_session_factory
     app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
     app.dependency_overrides[_get_email_service] = lambda: mock_email_service
     app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()
@@ -243,13 +265,15 @@ class TestLeadCaptureHappyPath:
             "/api/v1/public/leads/capture",
             json={"email": "user@company.ca", "asset_id": 1, "turnstile_token": "valid-token"},
         )
-        # Should write 3 audit events: lead.captured, lead.email_sent, token.created
-        assert mock_audit.log_event.await_count == 3
+        # Should write 4 audit events: lead.captured, lead.email_sent,
+        # token.created (request), and lead.scored (background task).
+        assert mock_audit.log_event.await_count == 4
         event_types = [call.kwargs["event_type"] for call in mock_audit.log_event.call_args_list]
         from src.schemas.events import EventType
         assert EventType.LEAD_CAPTURED in event_types
         assert EventType.LEAD_EMAIL_SENT in event_types
         assert EventType.TOKEN_CREATED in event_types
+        assert EventType.LEAD_SCORED in event_types
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +290,7 @@ class TestTurnstileValidation:
         mock_token_repo: AsyncMock,
         mock_audit: AsyncMock,
     ) -> None:
-        from src.core.database import get_db
+        from src.core.database import get_db, get_session_factory
         from src.api.routers.public_leads import (
             _get_turnstile_validator, _get_email_service,
             _get_slack_notifier, _get_esp_client,
@@ -281,6 +305,7 @@ class TestTurnstileValidation:
             yield mock_db
 
         app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[get_session_factory] = _mock_session_factory
         app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
         app.dependency_overrides[_get_email_service] = lambda: mock_email_service
         app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()
@@ -316,7 +341,7 @@ class TestTurnstileValidation:
 
 class TestRateLimit:
     def test_rate_limit_returns_429(self) -> None:
-        from src.core.database import get_db
+        from src.core.database import get_db, get_session_factory
         from src.api.routers.public_leads import (
             _get_turnstile_validator, _get_email_service,
             _get_slack_notifier, _get_esp_client,
@@ -346,6 +371,7 @@ class TestRateLimit:
             yield mock_db
 
         app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[get_session_factory] = _mock_session_factory
         app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
         app.dependency_overrides[_get_email_service] = lambda: mock_email_service
         app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()
@@ -399,7 +425,7 @@ class TestAssetValidation:
         mock_token_repo: AsyncMock,
         mock_audit: AsyncMock,
     ) -> None:
-        from src.core.database import get_db
+        from src.core.database import get_db, get_session_factory
         from src.api.routers.public_leads import (
             _get_turnstile_validator, _get_email_service,
             _get_slack_notifier, _get_esp_client,
@@ -415,6 +441,7 @@ class TestAssetValidation:
             yield mock_db
 
         app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[get_session_factory] = _mock_session_factory
         app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
         app.dependency_overrides[_get_email_service] = lambda: mock_email_service
         app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()
@@ -456,7 +483,7 @@ class TestResendFlow:
         mock_pub_repo: AsyncMock,
         mock_audit: AsyncMock,
     ) -> None:
-        from src.core.database import get_db
+        from src.core.database import get_db, get_session_factory
         from src.api.routers.public_leads import (
             _get_turnstile_validator, _get_email_service,
             _get_slack_notifier, _get_esp_client,
@@ -480,6 +507,7 @@ class TestResendFlow:
             yield mock_db
 
         app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[get_session_factory] = _mock_session_factory
         app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
         app.dependency_overrides[_get_email_service] = lambda: mock_email_service
         app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()
@@ -519,7 +547,7 @@ class TestResendFlow:
         mock_pub_repo: AsyncMock,
         mock_audit: AsyncMock,
     ) -> None:
-        from src.core.database import get_db
+        from src.core.database import get_db, get_session_factory
         from src.api.routers.public_leads import (
             _get_turnstile_validator, _get_email_service,
             _get_slack_notifier, _get_esp_client,
@@ -543,6 +571,7 @@ class TestResendFlow:
             yield mock_db
 
         app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[get_session_factory] = _mock_session_factory
         app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
         app.dependency_overrides[_get_email_service] = lambda: mock_email_service
         app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()
@@ -589,7 +618,7 @@ class TestResendRateLimit:
         mock_pub_repo: AsyncMock,
         mock_audit: AsyncMock,
     ) -> None:
-        from src.core.database import get_db
+        from src.core.database import get_db, get_session_factory
         from src.api.routers.public_leads import (
             _get_turnstile_validator,
             _get_email_service,
@@ -619,6 +648,7 @@ class TestResendRateLimit:
             yield mock_db
 
         app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[get_session_factory] = _mock_session_factory
         app.dependency_overrides[_get_turnstile_validator] = lambda: mock_turnstile
         app.dependency_overrides[_get_email_service] = lambda: mock_email_service
         app.dependency_overrides[_get_slack_notifier] = lambda: AsyncMock()

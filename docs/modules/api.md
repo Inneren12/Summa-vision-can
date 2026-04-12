@@ -19,15 +19,6 @@ api/
     ├── public_leads.py         ← POST /api/v1/public/leads/capture (D-2, D-3)
     ├── public_download.py      ← GET /api/v1/public/download
     └── public_sponsorship.py   ← POST /api/v1/public/sponsorship/inquire (D-3)
-    ├── health.py             ← GET /api/health, GET /api/health/ready
-    ├── tasks.py              ← GET /api/v1/admin/tasks/{task_id}
-    ├── cmhc.py               ← POST /api/v1/admin/cmhc/sync
-    ├── public_graphics.py    ← GET /api/v1/public/graphics
-    ├── public_leads.py       ← POST /api/v1/public/leads/capture
-    └── public_download.py    ← GET /api/v1/public/download
-    ├── admin_kpi.py          ← GET /api/v1/admin/kpi
-    ├── admin_jobs.py         ← GET /api/v1/admin/jobs, POST /api/v1/admin/jobs/{id}/retry
-    └── public_graphics.py    ← GET /api/v1/public/graphics
 ```
 
 ## Endpoints
