@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.lead import Lead
@@ -88,6 +88,57 @@ class LeadRepository:
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none() is not None
+
+    async def get_by_id(self, lead_id: int) -> Lead | None:
+        """Retrieve a lead by primary key.
+
+        Args:
+            lead_id: Primary key of the lead.
+
+        Returns:
+            The ``Lead`` instance, or ``None`` if not found.
+        """
+        stmt = select(Lead).where(Lead.id == lead_id)
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_by_email_and_asset(self, email: str, asset_id: str) -> Lead | None:
+        """Retrieve an existing lead for a given email + asset.
+
+        Args:
+            email: Email address to look up.
+            asset_id: Asset identifier.
+
+        Returns:
+            The matching ``Lead`` instance, or ``None``.
+        """
+        stmt = (
+            select(Lead)
+            .where(Lead.email == email, Lead.asset_id == asset_id)
+            .limit(1)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_resend_count(self, email: str, asset_id: str) -> int:
+        """Count how many times a lead has been sent for email+asset.
+
+        This is used to enforce the 3-resend limit.
+
+        Args:
+            email: Email address.
+            asset_id: Asset identifier.
+
+        Returns:
+            The number of existing leads (always 0 or 1 due to unique constraint).
+        """
+        stmt = (
+            select(func.count())
+            .select_from(Lead)
+            .where(Lead.email == email, Lead.asset_id == asset_id)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
 
     async def get_unsynced(self, limit: int = 100) -> Sequence[Lead]:
         """Retrieve leads that have not yet been successfully synced to the ESP

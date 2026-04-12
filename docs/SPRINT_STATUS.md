@@ -78,3 +78,14 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 | B-2 | Template Backgrounds | 🔄 | — |
 | B-3 | End-to-End Pipeline | 🔄 | B-1, B-2 |
 | B-4 | Admin Graphics API + Batch CLI | ⬜ | B-3 |
+
+## Étape D: Lead Capture & Download
+
+| PR | Title | Status | Dependencies |
+|----|-------|--------|--------------|
+| D-0a | EmailService Interface | ✅ | — |
+| D-0b | TurnstileValidator | ✅ | — |
+| D-0c | DownloadToken Model | ✅ | Étape 0 |
+| D-1 | Public Gallery + Individual Page | ✅ | B-4 |
+| D-2 | Lead Capture + Secure Download | ✅ | D-0a, D-0b, D-0c |
+| D-3 | B2B Scoring + Slack Notifications | ⬜ | D-2 |

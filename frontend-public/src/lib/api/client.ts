@@ -8,7 +8,6 @@ export type { PaginatedResponse, PublicationResponse };
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 export interface LeadCaptureResponse {
-  download_url: string;
   message: string;
 }
 
@@ -26,15 +25,24 @@ export async function fetchMoreGraphics(
 export async function captureLeadForDownload(
   email: string,
   assetId: number,
+  turnstileToken: string,
 ): Promise<LeadCaptureResponse> {
   const res = await fetch(`${API_URL}/api/v1/public/leads/capture`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, asset_id: assetId }),
+    body: JSON.stringify({
+      email,
+      asset_id: assetId,
+      turnstile_token: turnstileToken,
+    }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail ?? 'Request failed');
   }
   return res.json();
+}
+
+export function getDownloadUrl(token: string): string {
+  return `${API_URL}/api/v1/public/download?token=${encodeURIComponent(token)}`;
 }

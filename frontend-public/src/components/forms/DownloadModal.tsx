@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { captureLeadForDownload } from '@/lib/api/client';
 import { emailSchema, type EmailFormValues } from '@/lib/schemas';
+import TurnstileWidget from '@/components/forms/TurnstileWidget';
 
 interface DownloadModalProps {
   assetId: number;
@@ -15,8 +16,10 @@ type ModalState = 'idle' | 'submitting' | 'success' | 'error';
 export default function DownloadModal({ assetId }: DownloadModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [modalState, setModalState] = useState<ModalState>('idle');
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [submittedEmail, setSubmittedEmail] = useState<string>('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<{ reset: () => void } | null>(null);
 
   const {
     register,
@@ -30,8 +33,9 @@ export default function DownloadModal({ assetId }: DownloadModalProps) {
   function openModal() {
     setIsOpen(true);
     setModalState('idle');
-    setDownloadUrl(null);
     setServerError(null);
+    setSubmittedEmail('');
+    setTurnstileToken(null);
     reset();
   }
 
@@ -39,17 +43,41 @@ export default function DownloadModal({ assetId }: DownloadModalProps) {
     setIsOpen(false);
   }
 
+  const handleTurnstileSuccess = useCallback((token: string) => {
+    setTurnstileToken(token);
+  }, []);
+
+  const handleTurnstileError = useCallback(() => {
+    setTurnstileToken(null);
+  }, []);
+
   async function onSubmit(values: EmailFormValues) {
+    if (!turnstileToken) {
+      setServerError('Please complete the verification challenge.');
+      setModalState('error');
+      return;
+    }
+
     setModalState('submitting');
     setServerError(null);
     try {
-      const res = await captureLeadForDownload(values.email, assetId);
-      setDownloadUrl(res.download_url);
+      await captureLeadForDownload(values.email, assetId, turnstileToken);
+      setSubmittedEmail(values.email);
       setModalState('success');
     } catch (err) {
-      setServerError(
-        err instanceof Error ? err.message : 'Something went wrong.',
-      );
+      const message = err instanceof Error ? err.message : 'Something went wrong.';
+
+      if (message.includes('CAPTCHA')) {
+        setServerError('Verification failed. Please try again.');
+        turnstileRef.current?.reset();
+        setTurnstileToken(null);
+      } else if (message.includes('Too many')) {
+        setServerError('Too many requests. Please wait a moment.');
+      } else if (message.includes('not found') || message.includes('not yet published')) {
+        setServerError('This graphic is no longer available.');
+      } else {
+        setServerError(message);
+      }
       setModalState('error');
     }
   }
@@ -83,26 +111,26 @@ export default function DownloadModal({ assetId }: DownloadModalProps) {
                 aria-label="Close modal"
                 className="text-text-secondary hover:text-text-primary transition-colors text-2xl leading-none"
               >
-                ×
+                &times;
               </button>
             </div>
 
-            {modalState === 'success' && downloadUrl ? (
-              /* Success state — show Download Now button, never auto-open */
+            {modalState === 'success' ? (
+              /* Success state — email sent */
               <div className="text-center space-y-4">
-                <p className="text-text-secondary text-sm">
-                  Your download is ready. Click below to save the file.
+                <div className="text-4xl mb-2" aria-hidden="true">
+                  &#9993;
+                </div>
+                <p className="text-text-primary font-semibold">
+                  Check your email!
                 </p>
-                <a
-                  href={downloadUrl}
-                  download
-                  className="inline-block w-full py-3 px-6 rounded-lg bg-neon-green text-background font-bold text-center hover:opacity-90 transition-opacity"
-                  data-testid="download-now-btn"
-                >
-                  Download Now
-                </a>
+                <p className="text-text-secondary text-sm">
+                  We&apos;ve sent a download link to{' '}
+                  <strong className="text-text-primary">{submittedEmail}</strong>.
+                </p>
                 <p className="text-text-secondary text-xs">
-                  Link expires in 15 minutes.
+                  The link expires in 48 hours. Check your spam folder if you
+                  don&apos;t see it.
                 </p>
               </div>
             ) : (
@@ -145,6 +173,13 @@ export default function DownloadModal({ assetId }: DownloadModalProps) {
                     </p>
                   )}
                 </div>
+
+                {/* Turnstile CAPTCHA widget */}
+                <TurnstileWidget
+                  ref={turnstileRef}
+                  onSuccess={handleTurnstileSuccess}
+                  onError={handleTurnstileError}
+                />
 
                 {serverError && (
                   <p
