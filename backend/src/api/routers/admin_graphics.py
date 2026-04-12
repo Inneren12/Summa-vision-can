@@ -185,10 +185,10 @@ async def get_job_status(
     job_id: int,
     job_repo: JobRepository = Depends(_get_job_repo),
 ) -> JobStatusResponse:
-    """Return the full status of a persistent job.
+    """Get the status and result of a specific job by ID.
 
-    When the job has completed successfully, ``result_json`` contains
-    the serialized ``GenerationResult`` fields.
+    Used for polling after submitting a generation request.
+    Returns the full job record including result_json when complete.
     """
     job = await job_repo.get_job(job_id)
     if job is None:
