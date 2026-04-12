@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import InfographicFeed from '@/components/gallery/InfographicFeed';
-import { fetchPublishedGraphics } from '@/lib/api';
+import { fetchPublishedGraphics } from '@/lib/api/server';
 
 // Mock the API module
-jest.mock('@/lib/api', () => ({
+jest.mock('@/lib/api/server', () => ({
   fetchPublishedGraphics: jest.fn(),
 }));
 

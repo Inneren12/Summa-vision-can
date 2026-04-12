@@ -1,10 +1,11 @@
 import { Metadata } from 'next';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
-import { fetchGraphic } from '@/lib/api';
+import { fetchGraphic } from '@/lib/api/server';
 import DownloadModal from '@/components/forms/DownloadModal';
 
 interface Props {
+  // In Next.js 15+ async route segments, params is a Promise
   params: Promise<{ id: string }>;
 }
 
@@ -12,26 +13,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   try {
     const graphic = await fetchGraphic(id);
+    if (!graphic) throw new Error('Not found');
     return {
       title: `${graphic.headline} | Summa Vision`,
       description: `Canadian macro-economic data visualization: ${graphic.headline}`,
       openGraph: {
         title: graphic.headline,
         description: `Canadian macro-economic data visualization: ${graphic.headline}`,
-        images: [
+        images: graphic.cdn_url ? [
           {
             url: graphic.cdn_url,
             width: 1200,
             height: 630,
             alt: graphic.headline,
           },
-        ],
+        ] : [],
         type: 'article',
       },
       twitter: {
         card: 'summary_large_image',
         title: graphic.headline,
-        images: [graphic.cdn_url],
+        images: graphic.cdn_url ? [graphic.cdn_url] : [],
       },
     };
   } catch {

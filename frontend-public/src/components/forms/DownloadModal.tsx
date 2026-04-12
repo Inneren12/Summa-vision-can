@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { captureLeadForDownload } from '@/lib/api';
+import { captureLeadForDownload } from '@/lib/api/client';
 import { emailSchema, type EmailFormValues } from '@/lib/schemas';
 
 interface DownloadModalProps {

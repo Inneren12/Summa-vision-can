@@ -1,6 +1,5 @@
 import { POST } from '@/app/api/revalidate/route';
 import { revalidatePath } from 'next/cache';
-import { NextResponse } from 'next/server';
 
 jest.mock('next/cache', () => ({
   revalidatePath: jest.fn(),
@@ -29,7 +28,7 @@ describe('POST /api/revalidate', () => {
     process.env = originalEnv;
   });
 
-  function createMockRequest(body: any, headers: Record<string, string> = {}) {
+  function createMockRequest(body: unknown, headers: Record<string, string> = {}) {
     return {
       json: jest.fn().mockResolvedValue(body),
       headers: {
@@ -40,7 +39,7 @@ describe('POST /api/revalidate', () => {
 
   it('rejects missing secret', async () => {
     const req = createMockRequest({});
-    const res: any = await POST(req);
+    const res = await POST(req) as Response;
 
     expect(res.status).toBe(401);
     const data = await res.json();
@@ -50,7 +49,7 @@ describe('POST /api/revalidate', () => {
 
   it('rejects invalid secret', async () => {
     const req = createMockRequest({ secret: 'wrong-secret' });
-    const res: any = await POST(req);
+    const res = await POST(req) as Response;
 
     expect(res.status).toBe(401);
     expect(revalidatePath).not.toHaveBeenCalled();
@@ -58,7 +57,7 @@ describe('POST /api/revalidate', () => {
 
   it('accepts valid secret in body and revalidates default path', async () => {
     const req = createMockRequest({ secret: 'test-secret' });
-    const res: any = await POST(req);
+    const res = await POST(req) as Response;
 
     expect(res.status).toBe(200);
     const data = await res.json();
@@ -72,7 +71,7 @@ describe('POST /api/revalidate', () => {
       { paths: ['/graphics/1', '/graphics/2'] },
       { Authorization: 'Bearer test-secret' }
     );
-    const res: any = await POST(req);
+    const res = await POST(req) as Response;
 
     expect(res.status).toBe(200);
     const data = await res.json();
@@ -84,13 +83,26 @@ describe('POST /api/revalidate', () => {
     expect(revalidatePath).toHaveBeenCalledTimes(2);
   });
 
+  it('rejects invalid paths', async () => {
+    const req = createMockRequest(
+      { paths: ['/secret-admin-panel', '/graphics/1'] },
+      { Authorization: 'Bearer test-secret' }
+    );
+    const res = await POST(req) as Response;
+
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.message).toContain('Invalid paths: /secret-admin-panel');
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed JSON request if header secret is also missing', async () => {
     const req = {
       json: jest.fn().mockRejectedValue(new Error('Invalid JSON')),
       headers: { get: jest.fn().mockReturnValue(null) }
     } as unknown as Request;
 
-    const res: any = await POST(req);
+    const res = await POST(req) as Response;
     expect(res.status).toBe(401);
     const data = await res.json();
     expect(data.message).toBe('Invalid secret');
@@ -102,7 +114,7 @@ describe('POST /api/revalidate', () => {
       headers: { get: jest.fn().mockReturnValue('Bearer test-secret') }
     } as unknown as Request;
 
-    const res: any = await POST(req);
+    const res = await POST(req) as Response;
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.revalidated).toBe(true);

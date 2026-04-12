@@ -1,5 +1,5 @@
-import { fetchPublishedGraphics } from '@/lib/api';
-import type { PaginatedResponse } from '@/lib/api';
+import { fetchPublishedGraphics } from '@/lib/api/server';
+import type { PaginatedResponse } from '@/lib/types/publication';
 import { InfographicCard } from './InfographicCard';
 import { LoadMoreButton } from './LoadMoreButton';
 import { TryAgainButton } from './TryAgainButton';

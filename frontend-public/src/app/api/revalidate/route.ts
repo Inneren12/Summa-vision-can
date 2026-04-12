@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 
+const ALLOWED_REVALIDATION_PREFIXES = ['/', '/graphics'];
+
 export async function POST(request: Request) {
   try {
     let secret;
@@ -21,18 +23,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Invalid secret' }, { status: 401 });
     }
 
+    let pathsToRevalidate = ['/'];
     if (Array.isArray(paths) && paths.length > 0) {
-      paths.forEach((path) => {
-        if (typeof path === 'string') {
-          revalidatePath(path);
-        }
-      });
-      return NextResponse.json({ revalidated: true, paths });
+      pathsToRevalidate = paths.filter((p) => typeof p === 'string');
     }
 
-    // Default to revalidating the home page gallery
-    revalidatePath('/');
-    return NextResponse.json({ revalidated: true, paths: ['/'] });
+    // Validate all paths before revalidating any
+    const invalidPaths = pathsToRevalidate.filter((p: string) =>
+      !ALLOWED_REVALIDATION_PREFIXES.some(prefix => p === prefix || p.startsWith(prefix + '/'))
+    );
+
+    if (invalidPaths.length > 0) {
+      return NextResponse.json(
+        { message: `Invalid paths: ${invalidPaths.join(', ')}. Allowed prefixes: ${ALLOWED_REVALIDATION_PREFIXES.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    for (const path of pathsToRevalidate) {
+      revalidatePath(path);
+    }
+
+    return NextResponse.json({ revalidated: true, paths: pathsToRevalidate });
 
   } catch {
     return NextResponse.json({ message: 'Error processing request' }, { status: 400 });

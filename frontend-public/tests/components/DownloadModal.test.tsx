@@ -1,9 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DownloadModal from '@/components/forms/DownloadModal';
-import * as api from '@/lib/api';
+import * as api from '@/lib/api/client';
 
-jest.mock('@/lib/api');
+jest.mock('@/lib/api/client');
 const mockCaptureLeadForDownload = api.captureLeadForDownload as jest.MockedFunction<
   typeof api.captureLeadForDownload
 >;

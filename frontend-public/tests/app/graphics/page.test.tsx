@@ -1,10 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import GraphicPage, { generateMetadata } from '@/app/graphics/[id]/page';
-import { fetchGraphic } from '@/lib/api';
+import { fetchGraphic } from '@/lib/api/server';
 import { notFound } from 'next/navigation';
 
 // Mock the API and navigation modules
-jest.mock('@/lib/api', () => ({
+jest.mock('@/lib/api/server', () => ({
   fetchGraphic: jest.fn(),
 }));
 
