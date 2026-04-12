@@ -9,7 +9,6 @@ const config: Config = {
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
-    "next/font/google": "<rootDir>/__mocks__/next/font/google.js",
   },
 };
 

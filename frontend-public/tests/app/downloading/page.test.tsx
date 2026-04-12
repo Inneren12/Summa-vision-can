@@ -23,17 +23,19 @@ jest.mock('@/lib/api/client', () => ({
 import DownloadingPage from '@/app/downloading/page';
 
 describe('/downloading page', () => {
-  let assignSpy: jest.SpyInstance;
+  const originalAssign = Location.prototype.assign;
 
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(window.history, 'replaceState').mockImplementation(() => {});
 
-    // JSDOM does not support real navigation — spy on window.location.assign
-    assignSpy = jest.spyOn(window.location, 'assign').mockImplementation(() => {});
+    // JSDOM does not implement navigation — override assign on the
+    // Location prototype (the only level that isn't locked down).
+    Location.prototype.assign = jest.fn();
   });
 
   afterEach(() => {
+    Location.prototype.assign = originalAssign;
     jest.restoreAllMocks();
   });
 
