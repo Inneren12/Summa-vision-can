@@ -74,6 +74,7 @@ class GraphicsGeneratePayload(BaseModel):
     title: str
     size: tuple[int, int] = (1200, 900)
     category: str = "housing"
+    source_product_id: str | None = None
 
 
 # ---------------------------------------------------------------------------

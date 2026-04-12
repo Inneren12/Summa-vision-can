@@ -1,29 +1,30 @@
-"""Tests for admin graphics endpoints and generation pipeline.
+"""Tests for admin graphics endpoints.
 
 Covers:
-* ``GET  /api/v1/admin/queue``
-* ``POST /api/v1/admin/graphics/generate``
-* ``_run_generation_pipeline`` (integration-style, all externals mocked)
+* ``GET  /api/v1/admin/queue``                — draft publication listing
+* ``POST /api/v1/admin/graphics/generate``    — enqueue generation job (B-4)
+* ``GET  /api/v1/admin/jobs/{job_id}``        — job status lookup (B-4)
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from src.api.routers.admin_graphics import (
-    SIZE_PRESETS,
+    _get_job_repo,
     _get_repo,
-    _get_storage,
-    _run_generation_pipeline,
     router,
 )
-from src.core.task_manager import TaskManager, get_task_manager
+from src.models.job import Job, JobStatus
 from src.models.publication import Publication, PublicationStatus
+from src.repositories.job_repository import EnqueueResult
 
 
 # ---------------------------------------------------------------------------
@@ -33,8 +34,7 @@ from src.models.publication import Publication, PublicationStatus
 
 def _make_app(
     repo_override: object | None = None,
-    storage_override: object | None = None,
-    tm_override: object | None = None,
+    job_repo_override: object | None = None,
 ) -> FastAPI:
     """Create a minimal test FastAPI app with dependency overrides."""
     app = FastAPI()
@@ -42,10 +42,8 @@ def _make_app(
 
     if repo_override is not None:
         app.dependency_overrides[_get_repo] = lambda: repo_override
-    if storage_override is not None:
-        app.dependency_overrides[_get_storage] = lambda: storage_override
-    if tm_override is not None:
-        app.dependency_overrides[get_task_manager] = lambda: tm_override
+    if job_repo_override is not None:
+        app.dependency_overrides[_get_job_repo] = lambda: job_repo_override
 
     return app
 
@@ -71,39 +69,42 @@ def _make_publication(
     return pub
 
 
+def _make_job(
+    *,
+    job_id: int = 1,
+    job_type: str = "graphics_generate",
+    status: JobStatus = JobStatus.QUEUED,
+    payload_json: str = '{"schema_version":1}',
+    result_json: str | None = None,
+    error_code: str | None = None,
+    error_message: str | None = None,
+) -> Job:
+    """Create a mock Job instance."""
+    job = MagicMock(spec=Job)
+    job.id = job_id
+    job.job_type = job_type
+    job.status = status
+    job.payload_json = payload_json
+    job.result_json = result_json
+    job.error_code = error_code
+    job.error_message = error_message
+    job.created_at = datetime(2026, 4, 12, 10, 0, 0, tzinfo=timezone.utc)
+    job.started_at = None
+    job.finished_at = None
+    job.dedupe_key = None
+    return job
+
+
 @pytest.fixture()
 def mock_repo() -> AsyncMock:
     """Return a mocked PublicationRepository."""
-    repo = AsyncMock()
-    return repo
+    return AsyncMock()
 
 
 @pytest.fixture()
-def mock_storage() -> AsyncMock:
-    """Return a mocked StorageInterface."""
-    storage = AsyncMock()
-    return storage
-
-
-@pytest.fixture()
-def mock_task_manager() -> MagicMock:
-    """Return a mocked TaskManager.
-
-    The ``submit_task`` mock uses a *side_effect* that closes the received
-    coroutine so that no ``RuntimeWarning: coroutine was never awaited``
-    is emitted during garbage collection.
-    """
-    tm = MagicMock(spec=TaskManager)
-
-    def _close_and_return(coro: object) -> str:  # noqa: ANN001
-        import asyncio
-
-        if asyncio.iscoroutine(coro):
-            coro.close()
-        return "test-task-uuid"
-
-    tm.submit_task.side_effect = _close_and_return
-    return tm
+def mock_job_repo() -> AsyncMock:
+    """Return a mocked JobRepository."""
+    return AsyncMock()
 
 
 # ---------------------------------------------------------------------------
@@ -196,402 +197,345 @@ class TestGetQueue:
 
 
 # ---------------------------------------------------------------------------
-# POST /api/v1/admin/graphics/generate
+# POST /api/v1/admin/graphics/generate  (B-4)
 # ---------------------------------------------------------------------------
 
 
 class TestGenerateGraphic:
     """Tests for the POST /api/v1/admin/graphics/generate endpoint."""
 
-    @pytest.mark.asyncio()
-    async def test_generate_returns_202_with_task_id(
-        self,
-        mock_repo: AsyncMock,
-        mock_storage: AsyncMock,
-        mock_task_manager: MagicMock,
-    ) -> None:
-        """A valid DRAFT publication should return 202 with a task_id."""
-        mock_repo.get_by_id.return_value = _make_publication()
+    _VALID_BODY = {
+        "data_key": "data/housing.parquet",
+        "chart_type": "bar",
+        "title": "Housing Starts",
+        "category": "housing",
+    }
 
-        app = _make_app(
-            repo_override=mock_repo,
-            storage_override=mock_storage,
-            tm_override=mock_task_manager,
-        )
+    @pytest.mark.asyncio()
+    async def test_generate_returns_202_with_job_id(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """A valid request should return HTTP 202 with job_id and status."""
+        job = _make_job(job_id=7, status=JobStatus.QUEUED)
+        mock_job_repo.enqueue.return_value = EnqueueResult(job=job, created=True)
+
+        app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/api/v1/admin/graphics/generate",
-                json={"brief_id": 1},
+                json=self._VALID_BODY,
             )
 
         assert resp.status_code == 202
         data = resp.json()
-        assert "task_id" in data
-        assert isinstance(data["task_id"], str)
-        assert data["task_id"] == "test-task-uuid"
-        assert data["message"] == "Generation started"
+        assert data["job_id"] == "7"
+        assert data["status"] == "queued"
 
     @pytest.mark.asyncio()
-    async def test_generate_404_if_publication_not_found(
-        self,
-        mock_repo: AsyncMock,
-        mock_storage: AsyncMock,
-        mock_task_manager: MagicMock,
+    async def test_generate_enqueues_with_correct_job_type(
+        self, mock_job_repo: AsyncMock
     ) -> None:
-        """When ``get_by_id`` returns None, the response should be 404."""
-        mock_repo.get_by_id.return_value = None
+        """Enqueue must be called with job_type='graphics_generate'."""
+        job = _make_job()
+        mock_job_repo.enqueue.return_value = EnqueueResult(job=job, created=True)
 
-        app = _make_app(
-            repo_override=mock_repo,
-            storage_override=mock_storage,
-            tm_override=mock_task_manager,
-        )
+        app = _make_app(job_repo_override=mock_job_repo)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await client.post(
+                "/api/v1/admin/graphics/generate",
+                json=self._VALID_BODY,
+            )
+
+        call_kwargs = mock_job_repo.enqueue.call_args[1]
+        assert call_kwargs["job_type"] == "graphics_generate"
+        assert call_kwargs["created_by"] == "admin_api"
+
+    @pytest.mark.asyncio()
+    async def test_generate_dedupe_returns_existing_job(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """If dedupe finds an existing running job, return it without error."""
+        existing_job = _make_job(job_id=42, status=JobStatus.RUNNING)
+        mock_job_repo.enqueue.return_value = EnqueueResult(job=existing_job, created=False)
+
+        app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/api/v1/admin/graphics/generate",
-                json={"brief_id": 999},
+                json=self._VALID_BODY,
             )
+
+        assert resp.status_code == 202
+        data = resp.json()
+        assert data["job_id"] == "42"
+        assert data["status"] == "running"
+
+    @pytest.mark.asyncio()
+    async def test_generate_does_not_block_on_pipeline(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """Endpoint must only enqueue and return, not execute the pipeline."""
+        job = _make_job()
+        mock_job_repo.enqueue.return_value = EnqueueResult(job=job, created=True)
+
+        app = _make_app(job_repo_override=mock_job_repo)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(
+                "/api/v1/admin/graphics/generate",
+                json=self._VALID_BODY,
+            )
+
+        # Endpoint should return 202 — enqueue was called exactly once
+        assert resp.status_code == 202
+        mock_job_repo.enqueue.assert_called_once()
+
+    @pytest.mark.asyncio()
+    async def test_generate_computes_correct_dedupe_key(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """dedupe_key must follow the spec: graphics:{product_id}:{data_key}:{config_hash}."""
+        job = _make_job()
+        mock_job_repo.enqueue.return_value = EnqueueResult(job=job, created=True)
+
+        body = {
+            "data_key": "data/test.parquet",
+            "chart_type": "line",
+            "title": "My Chart",
+            "size": [1080, 1080],
+            "category": "housing",
+            "source_product_id": "14-10-0127",
+        }
+
+        # Compute expected config hash
+        config_dict = {
+            "chart_type": "line",
+            "size": [1080, 1080],
+            "title": "My Chart",
+        }
+        expected_hash = hashlib.sha256(
+            json.dumps(config_dict, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:16]
+        expected_dedupe = f"graphics:14-10-0127:data/test.parquet:{expected_hash}"
+
+        app = _make_app(job_repo_override=mock_job_repo)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await client.post(
+                "/api/v1/admin/graphics/generate",
+                json=body,
+            )
+
+        call_kwargs = mock_job_repo.enqueue.call_args[1]
+        assert call_kwargs["dedupe_key"] == expected_dedupe
+
+    @pytest.mark.asyncio()
+    async def test_generate_dedupe_key_uses_manual_when_no_product_id(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """Without source_product_id, dedupe key uses 'manual' placeholder."""
+        job = _make_job()
+        mock_job_repo.enqueue.return_value = EnqueueResult(job=job, created=True)
+
+        app = _make_app(job_repo_override=mock_job_repo)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await client.post(
+                "/api/v1/admin/graphics/generate",
+                json=self._VALID_BODY,
+            )
+
+        call_kwargs = mock_job_repo.enqueue.call_args[1]
+        assert call_kwargs["dedupe_key"].startswith("graphics:manual:")
+
+    @pytest.mark.asyncio()
+    async def test_generate_payload_json_contains_all_fields(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """The payload_json passed to enqueue must contain all request fields."""
+        job = _make_job()
+        mock_job_repo.enqueue.return_value = EnqueueResult(job=job, created=True)
+
+        body = {
+            "data_key": "data/test.parquet",
+            "chart_type": "bar",
+            "title": "Test",
+            "size": [1200, 900],
+            "category": "housing",
+            "source_product_id": "14-10-0127",
+        }
+
+        app = _make_app(job_repo_override=mock_job_repo)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await client.post(
+                "/api/v1/admin/graphics/generate",
+                json=body,
+            )
+
+        call_kwargs = mock_job_repo.enqueue.call_args[1]
+        payload = json.loads(call_kwargs["payload_json"])
+        assert payload["data_key"] == "data/test.parquet"
+        assert payload["chart_type"] == "bar"
+        assert payload["title"] == "Test"
+        assert payload["size"] == [1200, 900]
+        assert payload["category"] == "housing"
+        assert payload["source_product_id"] == "14-10-0127"
+        assert payload["schema_version"] == 1
+
+    @pytest.mark.asyncio()
+    async def test_generate_returns_422_on_missing_required_fields(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """Missing required fields in request body must return 422."""
+        app = _make_app(job_repo_override=mock_job_repo)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(
+                "/api/v1/admin/graphics/generate",
+                json={"data_key": "test.parquet"},  # missing chart_type, title, category
+            )
+
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio()
+    async def test_generate_default_size(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """Default size should be (1080, 1080)."""
+        job = _make_job()
+        mock_job_repo.enqueue.return_value = EnqueueResult(job=job, created=True)
+
+        app = _make_app(job_repo_override=mock_job_repo)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await client.post(
+                "/api/v1/admin/graphics/generate",
+                json=self._VALID_BODY,
+            )
+
+        call_kwargs = mock_job_repo.enqueue.call_args[1]
+        payload = json.loads(call_kwargs["payload_json"])
+        assert payload["size"] == [1080, 1080]
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/admin/jobs/{job_id}  (B-4)
+# ---------------------------------------------------------------------------
+
+
+class TestGetJobStatus:
+    """Tests for the GET /api/v1/admin/jobs/{job_id} endpoint."""
+
+    @pytest.mark.asyncio()
+    async def test_get_job_returns_status(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """Existing job should return full status object."""
+        job = _make_job(job_id=10, job_type="graphics_generate", status=JobStatus.QUEUED)
+        mock_job_repo.get_job.return_value = job
+
+        app = _make_app(job_repo_override=mock_job_repo)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/v1/admin/jobs/10")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["job_id"] == "10"
+        assert data["job_type"] == "graphics_generate"
+        assert data["status"] == "queued"
+
+    @pytest.mark.asyncio()
+    async def test_get_job_404_when_not_found(
+        self, mock_job_repo: AsyncMock
+    ) -> None:
+        """Non-existent job ID should return 404."""
+        mock_job_repo.get_job.return_value = None
+
+        app = _make_app(job_repo_override=mock_job_repo)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/v1/admin/jobs/999")
 
         assert resp.status_code == 404
 
     @pytest.mark.asyncio()
-    async def test_generate_409_if_not_draft(
-        self,
-        mock_repo: AsyncMock,
-        mock_storage: AsyncMock,
-        mock_task_manager: MagicMock,
+    async def test_get_job_includes_result_json_on_success(
+        self, mock_job_repo: AsyncMock
     ) -> None:
-        """A PUBLISHED publication should result in 409 Conflict."""
-        mock_repo.get_by_id.return_value = _make_publication(
-            status=PublicationStatus.PUBLISHED,
+        """Completed job should include result_json in response."""
+        result_data = json.dumps({
+            "publication_id": 42,
+            "cdn_url_lowres": "http://cdn/pub/42/v1/lowres.png",
+            "s3_key_highres": "publications/42/v1/highres.png",
+            "version": 1,
+        })
+        job = _make_job(
+            job_id=5,
+            status=JobStatus.SUCCESS,
+            result_json=result_data,
         )
+        job.finished_at = datetime(2026, 4, 12, 10, 5, 0, tzinfo=timezone.utc)
+        mock_job_repo.get_job.return_value = job
 
-        app = _make_app(
-            repo_override=mock_repo,
-            storage_override=mock_storage,
-            tm_override=mock_task_manager,
-        )
+        app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.post(
-                "/api/v1/admin/graphics/generate",
-                json={"brief_id": 1},
-            )
+            resp = await client.get("/api/v1/admin/jobs/5")
 
-        assert resp.status_code == 409
-        assert "not in DRAFT status" in resp.json()["detail"]
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "success"
+        assert data["result_json"] is not None
+        parsed_result = json.loads(data["result_json"])
+        assert parsed_result["publication_id"] == 42
 
     @pytest.mark.asyncio()
-    async def test_generate_does_not_block_response(
-        self,
-        mock_repo: AsyncMock,
-        mock_storage: AsyncMock,
-        mock_task_manager: MagicMock,
+    async def test_get_job_includes_error_on_failure(
+        self, mock_job_repo: AsyncMock
     ) -> None:
-        """``submit_task`` should be called (not awaited), and return immediately."""
-        mock_repo.get_by_id.return_value = _make_publication()
-
-        app = _make_app(
-            repo_override=mock_repo,
-            storage_override=mock_storage,
-            tm_override=mock_task_manager,
+        """Failed job should include error_code and error_message."""
+        job = _make_job(
+            job_id=6,
+            status=JobStatus.FAILED,
+            error_code="STORAGE_ERROR",
+            error_message="S3 bucket not found",
         )
+        job.finished_at = datetime(2026, 4, 12, 10, 5, 0, tzinfo=timezone.utc)
+        mock_job_repo.get_job.return_value = job
+
+        app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.post(
-                "/api/v1/admin/graphics/generate",
-                json={"brief_id": 1},
-            )
+            resp = await client.get("/api/v1/admin/jobs/6")
 
-        assert resp.status_code == 202
-        # submit_task was called exactly once with a coroutine
-        mock_task_manager.submit_task.assert_called_once()
-        coro_arg = mock_task_manager.submit_task.call_args[0][0]
-        # The argument should be a coroutine (fixture closes it automatically)
-        import asyncio
-
-        assert asyncio.iscoroutine(coro_arg)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "failed"
+        assert data["error_code"] == "STORAGE_ERROR"
+        assert data["error_message"] == "S3 bucket not found"
 
     @pytest.mark.asyncio()
-    async def test_generate_size_preset_mapping(
-        self,
-        mock_repo: AsyncMock,
-        mock_storage: AsyncMock,
-        mock_task_manager: MagicMock,
+    async def test_get_job_response_schema(
+        self, mock_job_repo: AsyncMock
     ) -> None:
-        """Requesting ``size_preset=twitter`` should pass SIZE_TWITTER to the pipeline."""
-        mock_repo.get_by_id.return_value = _make_publication()
+        """Response must contain all expected fields."""
+        job = _make_job(job_id=1)
+        mock_job_repo.get_job.return_value = job
 
-        app = _make_app(
-            repo_override=mock_repo,
-            storage_override=mock_storage,
-            tm_override=mock_task_manager,
-        )
+        app = _make_app(job_repo_override=mock_job_repo)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.post(
-                "/api/v1/admin/graphics/generate",
-                json={"brief_id": 1, "size_preset": "twitter"},
-            )
+            resp = await client.get("/api/v1/admin/jobs/1")
 
-        assert resp.status_code == 202
-        # The coroutine was submitted; spot-check that SIZE_PRESETS maps correctly
-        assert SIZE_PRESETS["twitter"] == (1200, 628)
-
-    @pytest.mark.asyncio()
-    async def test_generate_default_values(
-        self,
-        mock_repo: AsyncMock,
-        mock_storage: AsyncMock,
-        mock_task_manager: MagicMock,
-    ) -> None:
-        """Defaults: size_preset=instagram, dpi=150, watermark=True."""
-        mock_repo.get_by_id.return_value = _make_publication()
-
-        app = _make_app(
-            repo_override=mock_repo,
-            storage_override=mock_storage,
-            tm_override=mock_task_manager,
-        )
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.post(
-                "/api/v1/admin/graphics/generate",
-                json={"brief_id": 1},
-            )
-
-        assert resp.status_code == 202
-
-
-# ---------------------------------------------------------------------------
-# _run_generation_pipeline (integration test)
-# ---------------------------------------------------------------------------
-
-
-class TestGenerationPipeline:
-    """Tests for the private ``_run_generation_pipeline`` function."""
-
-    @pytest.mark.asyncio()
-    async def test_pipeline_updates_publication_to_published(self) -> None:
-        """After successful execution, the publication should be PUBLISHED with S3 keys."""
-        pub = _make_publication(pub_id=42)
-
-        mock_repo = AsyncMock()
-        mock_storage = AsyncMock()
-        mock_session = AsyncMock()
-
-        # Fake PNG bytes (1x1 transparent pixel)
-        fake_png = (
-            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
-            b"\x00\x00\x00\x01\x00\x00\x00\x01"
-            b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
-            b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"
-            b"\r\n\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
-        )
-
-        with (
-            patch(
-                "src.api.routers.admin_graphics.generate_chart_svg",
-                return_value=b"<svg></svg>",
-            ),
-            patch(
-                "src.api.routers.admin_graphics.AIImageClient"
-            ) as mock_ai_cls,
-            patch(
-                "src.api.routers.admin_graphics.composite_image",
-                return_value=fake_png,
-            ),
-        ):
-            mock_ai_instance = AsyncMock()
-            mock_ai_instance.generate_background.return_value = fake_png
-            mock_ai_cls.return_value = mock_ai_instance
-
-            result = await _run_generation_pipeline(
-                publication=pub,
-                size=(1080, 1080),
-                dpi=150,
-                watermark=True,
-                pub_repo=mock_repo,
-                storage=mock_storage,
-                session=mock_session,
-            )
-
-        # Assert status updated to PUBLISHED
-        mock_repo.update_status.assert_called_once_with(
-            42, PublicationStatus.PUBLISHED
-        )
-
-        # Assert S3 keys saved
-        mock_repo.update_s3_keys.assert_called_once_with(
-            42,
-            s3_key_lowres="graphics/42/lowres.png",
-            s3_key_highres="graphics/42/highres.png",
-        )
-
-        # Assert upload called for both keys
-        assert mock_storage.upload_raw.call_count == 2
-
-        # Assert session committed
-        mock_session.commit.assert_called_once()
-
-        # Assert return value
-        assert result == {
-            "s3_key_lowres": "graphics/42/lowres.png",
-            "s3_key_highres": "graphics/42/highres.png",
+        data = resp.json()
+        expected_keys = {
+            "job_id", "job_type", "status", "result_json",
+            "error_code", "error_message", "created_at",
+            "started_at", "finished_at",
         }
-
-    @pytest.mark.asyncio()
-    async def test_pipeline_logs_and_reraises_on_failure(self) -> None:
-        """If any step fails, the exception should be logged and re-raised."""
-        pub = _make_publication(pub_id=7)
-
-        mock_repo = AsyncMock()
-        mock_storage = AsyncMock()
-        mock_session = AsyncMock()
-
-        with patch(
-            "src.api.routers.admin_graphics.generate_chart_svg",
-            side_effect=RuntimeError("SVG generation exploded"),
-        ):
-            with pytest.raises(RuntimeError, match="SVG generation exploded"):
-                await _run_generation_pipeline(
-                    publication=pub,
-                    size=(1080, 1080),
-                    dpi=150,
-                    watermark=True,
-                    pub_repo=mock_repo,
-                    storage=mock_storage,
-                    session=mock_session,
-                )
-
-        # Status should NOT have been updated (pipeline failed before that step)
-        mock_repo.update_status.assert_not_called()
-
-    @pytest.mark.asyncio()
-    async def test_pipeline_calls_composite_in_thread(self) -> None:
-        """``composite_image`` (sync) should be called via ``asyncio.to_thread``."""
-        pub = _make_publication(pub_id=1)
-
-        mock_repo = AsyncMock()
-        mock_storage = AsyncMock()
-        mock_session = AsyncMock()
-
-        fake_png = (
-            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
-            b"\x00\x00\x00\x01\x00\x00\x00\x01"
-            b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
-            b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"
-            b"\r\n\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
-        )
-
-        with (
-            patch(
-                "src.api.routers.admin_graphics.generate_chart_svg",
-                return_value=b"<svg></svg>",
-            ),
-            patch(
-                "src.api.routers.admin_graphics.AIImageClient"
-            ) as mock_ai_cls,
-            patch(
-                "src.api.routers.admin_graphics.composite_image",
-                return_value=fake_png,
-            ) as mock_composite,
-            patch(
-                "src.api.routers.admin_graphics.asyncio.to_thread",
-                new_callable=AsyncMock,
-                return_value=fake_png,
-            ) as mock_to_thread,
-        ):
-            mock_ai_instance = AsyncMock()
-            mock_ai_instance.generate_background.return_value = fake_png
-            mock_ai_cls.return_value = mock_ai_instance
-
-            await _run_generation_pipeline(
-                publication=pub,
-                size=(1080, 1080),
-                dpi=150,
-                watermark=True,
-                pub_repo=mock_repo,
-                storage=mock_storage,
-                session=mock_session,
-            )
-
-        # composite_image should have been called via asyncio.to_thread
-        mock_to_thread.assert_called_once_with(
-            mock_composite,
-            fake_png,
-            b"<svg></svg>",
-            dpi=150,
-            watermark=True,
-        )
-
-    @pytest.mark.asyncio()
-    async def test_pipeline_uses_correct_chart_type(self) -> None:
-        """The pipeline should parse ``publication.chart_type`` into ``ChartType``."""
-        pub = _make_publication(chart_type="LINE")
-
-        mock_repo = AsyncMock()
-        mock_storage = AsyncMock()
-        mock_session = AsyncMock()
-
-        fake_png = (
-            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
-            b"\x00\x00\x00\x01\x00\x00\x00\x01"
-            b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
-            b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"
-            b"\r\n\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
-        )
-
-        from src.services.ai.schemas import ChartType
-
-        with (
-            patch(
-                "src.api.routers.admin_graphics.generate_chart_svg",
-                return_value=b"<svg></svg>",
-            ) as mock_gen_svg,
-            patch(
-                "src.api.routers.admin_graphics.AIImageClient"
-            ) as mock_ai_cls,
-            patch(
-                "src.api.routers.admin_graphics.composite_image",
-                return_value=fake_png,
-            ),
-        ):
-            mock_ai_instance = AsyncMock()
-            mock_ai_instance.generate_background.return_value = fake_png
-            mock_ai_cls.return_value = mock_ai_instance
-
-            await _run_generation_pipeline(
-                publication=pub,
-                size=(1200, 628),
-                dpi=150,
-                watermark=True,
-                pub_repo=mock_repo,
-                storage=mock_storage,
-                session=mock_session,
-            )
-
-        # Should have called generate_chart_svg with ChartType.LINE
-        call_args = mock_gen_svg.call_args
-        assert call_args[0][1] == ChartType.LINE
-        assert call_args[1]["size"] == (1200, 628)
-
-
-# ---------------------------------------------------------------------------
-# Size presets mapping
-# ---------------------------------------------------------------------------
-
-
-class TestSizePresets:
-    """Ensure SIZE_PRESETS map to the correct constants."""
-
-    def test_instagram_size(self) -> None:
-        assert SIZE_PRESETS["instagram"] == (1080, 1080)
-
-    def test_twitter_size(self) -> None:
-        assert SIZE_PRESETS["twitter"] == (1200, 628)
-
-    def test_reddit_size(self) -> None:
-        assert SIZE_PRESETS["reddit"] == (1200, 900)
+        assert expected_keys == set(data.keys())

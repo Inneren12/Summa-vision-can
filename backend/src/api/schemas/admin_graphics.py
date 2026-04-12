@@ -2,8 +2,9 @@
 
 Request and response models for:
 
-* ``GET /api/v1/admin/queue``  — draft publication listing
-* ``POST /api/v1/admin/graphics/generate`` — generation trigger
+* ``GET  /api/v1/admin/queue``                — draft publication listing
+* ``POST /api/v1/admin/graphics/generate``    — enqueue generation job (B-4)
+* ``GET  /api/v1/admin/jobs/{job_id}``        — job status lookup (B-4)
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---------------------------------------------------------------------------
-# Shared response schema
+# Shared response schema (queue endpoint)
 # ---------------------------------------------------------------------------
 
 
@@ -42,19 +43,80 @@ class PublicationResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# POST /generate
+# POST /graphics/generate  (B-4 — persistent job)
+# ---------------------------------------------------------------------------
+
+
+class GraphicsGenerateRequest(BaseModel):
+    """Request body for enqueuing a graphic generation job.
+
+    Attributes:
+        data_key: S3 key to source Parquet file.
+        chart_type: Chart variant (``"line"``, ``"bar"``, ``"area"``, etc.).
+        title: Chart headline text.
+        size: Output pixel dimensions ``(width, height)``.
+        category: Background template category.
+        source_product_id: Optional StatCan product ID for versioning lineage.
+    """
+
+    data_key: str
+    chart_type: str
+    title: str
+    size: tuple[int, int] = (1080, 1080)
+    category: str
+    source_product_id: str | None = None
+
+
+class GraphicsGenerateResponse(BaseModel):
+    """Immediate response when a generation job is enqueued (HTTP 202).
+
+    Attributes:
+        job_id: Persistent job primary key (as string).
+        status: Job status at time of response (``"queued"`` or ``"running"``).
+    """
+
+    job_id: str
+    status: str
+
+
+# ---------------------------------------------------------------------------
+# GET /jobs/{job_id}  (B-4 — job status)
+# ---------------------------------------------------------------------------
+
+
+class JobStatusResponse(BaseModel):
+    """Full job status representation for the admin panel.
+
+    Attributes:
+        job_id: Job primary key.
+        job_type: Job type identifier.
+        status: Current lifecycle status.
+        result_json: JSON result on success (contains GenerationResult fields).
+        error_code: Machine-readable error code on failure.
+        error_message: Human-readable error description on failure.
+        created_at: When the job was enqueued.
+        started_at: When the job was last claimed by a runner.
+        finished_at: When the job reached a terminal state.
+    """
+
+    job_id: str
+    job_type: str
+    status: str
+    result_json: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+# ---------------------------------------------------------------------------
+# Legacy schemas (kept for backward compatibility of queue endpoint)
 # ---------------------------------------------------------------------------
 
 
 class GenerateRequest(BaseModel):
-    """Request body for triggering graphic generation.
-
-    Attributes:
-        brief_id: Primary key of the ``Publication`` (DRAFT) to generate.
-        size_preset: Target social-media platform size.
-        dpi: Rendering DPI for SVG rasterisation (72–300).
-        watermark: Whether to apply a semi-transparent watermark.
-    """
+    """Legacy request body — replaced by GraphicsGenerateRequest in B-4."""
 
     brief_id: int
     size_preset: Literal["instagram", "twitter", "reddit"] = "instagram"
@@ -63,12 +125,7 @@ class GenerateRequest(BaseModel):
 
 
 class GenerateResponse(BaseModel):
-    """Immediate response returned when generation is submitted (HTTP 202).
-
-    Attributes:
-        task_id: UUID string for polling via ``GET /tasks/{task_id}``.
-        message: Human-readable confirmation.
-    """
+    """Legacy response — replaced by GraphicsGenerateResponse in B-4."""
 
     task_id: str
     message: str = "Generation started"
