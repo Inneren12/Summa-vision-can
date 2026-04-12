@@ -19,7 +19,7 @@ class SummaVisionApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
     return MaterialApp.router(
       title: 'Summa Vision Admin',
-      theme: AppTheme.dark,
+      theme: buildSummaTheme(),
       debugShowCheckedModeBanner: false,
       routerConfig: router,
     );

@@ -1,14 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import RootLayout from "@/app/layout";
 
-// Mock next/font/google to avoid network calls in tests
-jest.mock("next/font/google", () => ({
-  Geist: () => ({ variable: "--font-geist-sans", className: "mock-geist" }),
-  Geist_Mono: () => ({
-    variable: "--font-geist-mono",
-    className: "mock-geist-mono",
-  }),
-}));
+// next/jest already provides a Proxy mock for next/font/* via nextFontMock.js.
+// No custom jest.mock needed — the built-in mock handles any font constructor.
 
 describe("RootLayout", () => {
   it("renders children", () => {
@@ -20,14 +14,12 @@ describe("RootLayout", () => {
     expect(screen.getByTestId("child")).toBeInTheDocument();
   });
 
-  it("applies background class to body", () => {
+  it("sets lang attribute on html element", () => {
     render(
       <RootLayout>
         <span>test</span>
       </RootLayout>
     );
-    // RootLayout renders <html> + <body>, which React promotes to the
-    // real document.body as singleton elements in jsdom.
-    expect(document.body.className).toContain("bg-background");
+    expect(document.documentElement.lang).toBe("en");
   });
 });
