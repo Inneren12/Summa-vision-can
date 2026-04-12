@@ -187,8 +187,12 @@ class TestScheduledFetchTodaysReleases:
 
         mock_http_client = AsyncMock()
 
+        # Provide app reference with http_client (ARCH-DPEN-001)
+        mock_app = MagicMock()
+        mock_app.state.http_client = mock_http_client
+
         with (
-            patch("httpx.AsyncClient") as mock_async_client,
+            patch("src.core.scheduler._app_ref", mock_app),
             patch(
                 "src.services.statcan.service.StatCanETLService",
                 return_value=mock_service_instance,
@@ -197,14 +201,6 @@ class TestScheduledFetchTodaysReleases:
             patch("src.services.statcan.maintenance.StatCanMaintenanceGuard"),
             patch("src.core.rate_limit.AsyncTokenBucket"),
         ):
-            # Set up the async context manager mock
-            mock_async_client.return_value.__aenter__ = AsyncMock(
-                return_value=mock_http_client,
-            )
-            mock_async_client.return_value.__aexit__ = AsyncMock(
-                return_value=False,
-            )
-
             await scheduled_fetch_todays_releases()
 
             mock_service_instance.fetch_todays_releases.assert_awaited_once()

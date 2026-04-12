@@ -75,22 +75,20 @@ async def handle_catalog_sync(
     async with factory() as session:
         repo = CubeCatalogRepository(session)
 
-        # Use StatCanClient from app_state if available,
-        # otherwise create a simple httpx client
+        # ARCH-DPEN-001: require app_state to provide the HTTP client
         http_client = getattr(app_state, "statcan_client", None)
         if http_client is None:
-            import httpx
-            http_client = httpx.AsyncClient(timeout=60.0)
+            http_client = getattr(app_state, "http_client", None)
+        if http_client is None:
+            raise RuntimeError(
+                "app_state must provide 'statcan_client' or 'http_client' "
+                "(ARCH-DPEN-001: no inline httpx client creation)"
+            )
 
         service = CatalogSyncService(http_client, repo)
 
-        try:
-            report = await service.sync_full_catalog()
-            await session.commit()
-        finally:
-            # Clean up httpx client if we created it
-            if not hasattr(app_state, "statcan_client"):
-                await http_client.aclose()
+        report = await service.sync_full_catalog()
+        await session.commit()
 
     return {
         "total": report.total,
@@ -147,39 +145,38 @@ async def handle_cube_fetch(
 
     # Stage 2: Heavy pipeline — no DB session held
     storage = getattr(app_state, "storage", None)
+
+    # ARCH-DPEN-001: require app_state to provide the HTTP client
     http_client = getattr(app_state, "statcan_client", None)
-    created_client = False
-
     if http_client is None:
-        import httpx
-        http_client = httpx.AsyncClient(timeout=120.0)
-        created_client = True
+        http_client = getattr(app_state, "http_client", None)
+    if http_client is None:
+        raise RuntimeError(
+            "app_state must provide 'statcan_client' or 'http_client' "
+            "(ARCH-DPEN-001: no inline httpx client creation)"
+        )
 
-    try:
-        service = DataFetchService(
-            http_client=http_client,
-            storage=storage,
-        )
-        result = await service.fetch_cube_data(
-            product_id=product_id,
-            periods=periods,
-            frequency=frequency,
-        )
-        return {
-            "product_id": result.product_id,
-            "rows": result.rows,
-            "columns": result.columns,
-            "storage_key": result.storage_key,
-            "quality": {
-                "total_rows": result.quality.total_rows,
-                "valid_rows": result.quality.valid_rows,
-                "null_rows": result.quality.null_rows,
-                "null_percentage": result.quality.null_percentage,
-            },
-        }
-    finally:
-        if created_client:
-            await http_client.aclose()
+    service = DataFetchService(
+        http_client=http_client,
+        storage=storage,
+    )
+    result = await service.fetch_cube_data(
+        product_id=product_id,
+        periods=periods,
+        frequency=frequency,
+    )
+    return {
+        "product_id": result.product_id,
+        "rows": result.rows,
+        "columns": result.columns,
+        "storage_key": result.storage_key,
+        "quality": {
+            "total_rows": result.quality.total_rows,
+            "valid_rows": result.quality.valid_rows,
+            "null_rows": result.quality.null_rows,
+            "null_percentage": result.quality.null_percentage,
+        },
+    }
 
 
 register_handler("cube_fetch", handle_cube_fetch)

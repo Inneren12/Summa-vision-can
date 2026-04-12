@@ -112,6 +112,9 @@ class Job(Base):
     dedupe_key: Mapped[str | None] = mapped_column(
         String(255), nullable=True, index=True
     )
+    subject_key: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
 
     def __repr__(self) -> str:  # pragma: no cover
         return (

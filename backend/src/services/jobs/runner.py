@@ -307,34 +307,27 @@ class JobRunner:
             await session.commit()
 
     async def _is_cooled_down(self, job: Job) -> bool:
-        """Check if this cube has too many recent DATA_CONTRACT_VIOLATION failures.
+        """Check if this subject has too many recent DATA_CONTRACT_VIOLATION failures.
 
-        Only applies to cube_fetch jobs. Looks at the last N jobs
-        for the same product_id that failed with DATA_CONTRACT_VIOLATION
-        within the cool-down window.
+        Only applies to cube_fetch jobs. Uses the indexed ``subject_key``
+        column for an efficient, serialization-independent lookup.
         """
         if job.job_type != "cube_fetch":
             return False
 
-        try:
-            payload_data = json.loads(job.payload_json)
-            product_id = payload_data.get("product_id")
-        except (json.JSONDecodeError, AttributeError):
-            return False
+        subject_key = job.subject_key
+        if not subject_key:
+            # Fallback: derive from payload for jobs enqueued before migration
+            try:
+                payload_data = json.loads(job.payload_json)
+                subject_key = payload_data.get("product_id")
+            except (json.JSONDecodeError, AttributeError):
+                return False
 
-        if not product_id:
+        if not subject_key:
             return False
 
         cutoff = datetime.now(timezone.utc) - self._cool_down_window
-
-        # Use exact JSON key match instead of raw substring
-        # Pattern: "product_id":"14-10-0127-01" (with quotes)
-        # TODO: This text-based JSON match is fragile — depends on exact
-        # serialization without spaces. When payload is stored as JSONB
-        # (future), replace with proper JSON path query. For now, the
-        # exact pattern f'"product_id":"{product_id}"' is sufficient
-        # because Pydantic's model_dump_json() produces compact JSON.
-        exact_pattern = f'"product_id":"{product_id}"'
 
         async with self._session_factory() as session:
             from sqlalchemy import select, func, and_
@@ -344,10 +337,9 @@ class JobRunner:
             count = await session.scalar(
                 select(func.count(JobModel.id)).where(
                     and_(
-                        JobModel.job_type == "cube_fetch",
+                        JobModel.subject_key == subject_key,
                         JobModel.status == JobStatus.FAILED,
                         JobModel.error_code == "DATA_CONTRACT_VIOLATION",
-                        JobModel.payload_json.contains(exact_pattern),
                         JobModel.finished_at >= cutoff,
                     )
                 )

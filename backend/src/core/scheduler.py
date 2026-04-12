@@ -36,6 +36,7 @@ logger: structlog.stdlib.BoundLogger = get_logger(module="scheduler")
 # ---------------------------------------------------------------------------
 
 _scheduler: AsyncIOScheduler | None = None
+_app_ref: object | None = None  # FastAPI app reference for DI
 
 
 def _create_scheduler(settings: Settings) -> AsyncIOScheduler:
@@ -74,6 +75,9 @@ async def scheduled_fetch_todays_releases() -> None:
     that importing ``scheduler.py`` itself remains lightweight.  All
     exceptions are caught and logged — a failing job **must not** crash the
     scheduler.
+
+    Uses the app-scoped ``http_client`` from ``app.state`` (ARCH-DPEN-001)
+    instead of creating an inline ``httpx.AsyncClient()``.
     """
     try:
         logger.info("Scheduled job started: fetch_todays_releases")
@@ -82,23 +86,32 @@ async def scheduled_fetch_todays_releases() -> None:
         from src.services.statcan.client import StatCanClient  # noqa: PLC0415
         from src.services.statcan.service import StatCanETLService  # noqa: PLC0415
 
-        import httpx  # noqa: PLC0415
-
         from src.core.rate_limit import AsyncTokenBucket  # noqa: PLC0415
         from src.services.statcan.maintenance import (  # noqa: PLC0415
             StatCanMaintenanceGuard,
         )
 
-        async with httpx.AsyncClient() as http_client:
-            guard = StatCanMaintenanceGuard()
-            bucket = AsyncTokenBucket()
-            client = StatCanClient(
-                client=http_client,
-                guard=guard,
-                bucket=bucket,
+        # ARCH-DPEN-001: use app-scoped http_client, not inline creation
+        if _app_ref is None or not hasattr(_app_ref, "state"):
+            raise RuntimeError(
+                "Scheduler requires app reference for http_client "
+                "(ARCH-DPEN-001: no inline httpx client creation)"
             )
-            service = StatCanETLService(client=client)
-            releases = await service.fetch_todays_releases()
+        http_client = getattr(_app_ref.state, "http_client", None)
+        if http_client is None:
+            raise RuntimeError(
+                "app.state.http_client not set — ensure lifespan initializes it"
+            )
+
+        guard = StatCanMaintenanceGuard()
+        bucket = AsyncTokenBucket()
+        client = StatCanClient(
+            client=http_client,
+            guard=guard,
+            bucket=bucket,
+        )
+        service = StatCanETLService(client=client)
+        releases = await service.fetch_todays_releases()
 
         logger.info(
             "Scheduled job completed: fetch_todays_releases",
@@ -117,7 +130,7 @@ async def scheduled_fetch_todays_releases() -> None:
 # ---------------------------------------------------------------------------
 
 
-def start_scheduler(settings: Settings | None = None) -> None:
+def start_scheduler(settings: Settings | None = None, app: object | None = None) -> None:
     """Create, configure, and start the scheduler.
 
     If ``settings.scheduler_enabled`` is ``False`` (e.g. during tests) the
@@ -127,8 +140,13 @@ def start_scheduler(settings: Settings | None = None) -> None:
     ----------
     settings:
         Application settings.  Defaults to ``get_settings()`` if omitted.
+    app:
+        FastAPI app instance — provides ``app.state.http_client`` to
+        scheduled jobs (ARCH-DPEN-001).
     """
-    global _scheduler  # noqa: PLW0603
+    global _scheduler, _app_ref  # noqa: PLW0603
+
+    _app_ref = app
 
     if settings is None:
         settings = get_settings()

@@ -11,6 +11,7 @@ Commit semantics: repositories flush/refresh but do NOT commit.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Sequence
 
@@ -44,12 +45,18 @@ class JobRepository:
         dedupe_key: str | None = None,
         created_by: str | None = None,
         max_attempts: int = 3,
+        subject_key: str | None = None,
     ) -> EnqueueResult:
         """Create a new job or return existing if dedupe_key matches.
 
         If ``dedupe_key`` is provided and a job with the same key already
         exists in ``queued`` or ``running`` status, the existing job is
         returned instead of creating a duplicate.
+
+        If ``subject_key`` is not provided, it is derived from the payload:
+        - cube_fetch: ``product_id``
+        - graphics_generate: ``source_product_id`` or ``data_key``
+        - catalog_sync: ``None`` (singleton)
 
         Returns:
             EnqueueResult with the job and a created boolean flag.
@@ -59,12 +66,16 @@ class JobRepository:
             if existing is not None:
                 return EnqueueResult(job=existing, created=False)
 
+        if subject_key is None:
+            subject_key = self._derive_subject_key(job_type, payload_json)
+
         job = Job(
             job_type=job_type,
             payload_json=payload_json,
             dedupe_key=dedupe_key,
             created_by=created_by,
             max_attempts=max_attempts,
+            subject_key=subject_key,
         )
         self._session.add(job)
 
@@ -283,3 +294,22 @@ class JobRepository:
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    @staticmethod
+    def _derive_subject_key(job_type: str, payload_json: str) -> str | None:
+        """Derive subject_key from job type and payload.
+
+        Returns:
+            A string key identifying the subject of this job, or None.
+        """
+        try:
+            data = json.loads(payload_json)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+        if job_type == "cube_fetch":
+            return data.get("product_id")
+        if job_type == "graphics_generate":
+            return data.get("source_product_id") or data.get("data_key")
+        # catalog_sync and others: singleton, no subject key
+        return None
