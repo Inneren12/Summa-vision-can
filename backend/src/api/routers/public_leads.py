@@ -22,13 +22,14 @@ from pathlib import Path
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.api.schemas.public_leads import LeadCaptureRequest, LeadCaptureResponse
 from src.core.config import Settings, get_settings
-from src.core.database import get_db
+from src.core.database import get_db, get_session_factory
 from src.core.exceptions import ESPPermanentError, ESPTransientError
 from src.core.security.ip_rate_limiter import InMemoryRateLimiter
+from src.models.lead import Lead
 from src.models.publication import PublicationStatus
 from src.repositories.download_token_repository import DownloadTokenRepository
 from src.repositories.lead_repository import LeadRepository
@@ -138,39 +139,46 @@ def _hash_token(raw_token: str) -> str:
 async def _score_notify_sync(
     lead_id: int,
     email: str,
-    db: AsyncSession,
+    session_factory: async_sessionmaker,
     slack: SlackNotifierService,
     esp_client: ESPSubscriberInterface | None,
 ) -> None:
     """Background task: score lead, notify Slack, sync ESP (D-3).
 
+    Creates its own database sessions via *session_factory* so that it
+    is fully decoupled from the request-scoped session lifecycle.
+
     Idempotent (R16): dedupe_key prevents duplicate Slack messages,
     and ESP duplicate-subscriber rejection is handled gracefully.
     """
-    lead_repo = LeadRepository(db)
-
     # 1. Score the lead (pure function — no I/O)
     score = _scoring_service.score_lead(email)
 
-    # 2. Update lead record with scoring data
-    lead = await lead_repo.get_by_id(lead_id)
-    if lead is None:
-        logger.warning("score_notify_sync_lead_not_found", lead_id=lead_id)
-        return
+    # 2. Update lead record with scoring data (own session)
+    async with session_factory() as session:
+        lead = await session.get(Lead, lead_id)
+        if lead is None:
+            logger.warning("score_notify_sync_lead_not_found", lead_id=lead_id)
+            return
 
-    lead.is_b2b = score.is_b2b
-    lead.company_domain = score.company_domain
-    await db.flush()
+        lead.is_b2b = score.is_b2b
+        lead.company_domain = score.company_domain
+        lead.category = score.category
 
-    # 3. Tiered Slack handling
-    if score.category == "b2b":
-        await slack.notify_lead(
-            email=email,
-            category=score.category,
-            company_domain=score.company_domain,
-            dedupe_key=f"capture:{email}",
+        # Audit: lead scored
+        audit = AuditWriter(session)
+        await audit.log_event(
+            event_type=EventType.LEAD_SCORED,
+            entity_type="lead",
+            entity_id=str(lead_id),
+            metadata={"category": score.category, "is_b2b": score.is_b2b},
+            actor="system",
         )
-    elif score.category == "education":
+
+        await session.commit()
+
+    # 3. Tiered Slack handling (no session needed)
+    if score.category in ("b2b", "education"):
         await slack.notify_lead(
             email=email,
             category=score.category,
@@ -179,29 +187,48 @@ async def _score_notify_sync(
         )
     # isp → no Slack; b2c → no additional action
 
-    # 4. ESP sync
+    # 4. ESP sync (own session for status update)
     if esp_client is not None:
-        try:
-            await esp_client.add_subscriber(
-                email,
-                metadata={"category": score.category, "company_domain": score.company_domain or ""},
-            )
-            if score.category == "b2b":
-                await esp_client.add_tag(email, "b2b")
-            elif score.category == "education":
-                await esp_client.add_tag(email, "education")
-            lead.esp_synced = True
-            await db.flush()
-        except ESPPermanentError:
-            lead.esp_sync_failed_permanent = True
-            await db.flush()
-            logger.warning("esp_sync_permanent_failure", email=email, lead_id=lead_id)
-        except ESPTransientError:
-            lead.esp_synced = False
-            await db.flush()
-            logger.warning("esp_sync_transient_failure", email=email, lead_id=lead_id)
+        async with session_factory() as session:
+            lead = await session.get(Lead, lead_id)
+            if lead is None:
+                logger.warning("esp_sync_lead_not_found", lead_id=lead_id)
+                return
 
-    await db.commit()
+            audit = AuditWriter(session)
+            try:
+                await esp_client.add_subscriber(
+                    email,
+                    metadata={"category": score.category, "company_domain": score.company_domain or ""},
+                )
+                if score.category == "b2b":
+                    await esp_client.add_tag(email, "b2b")
+                elif score.category == "education":
+                    await esp_client.add_tag(email, "education")
+                lead.esp_synced = True
+
+                await audit.log_event(
+                    event_type=EventType.LEAD_ESP_SYNCED,
+                    entity_type="lead",
+                    entity_id=str(lead_id),
+                    actor="system",
+                )
+            except ESPPermanentError as exc:
+                lead.esp_sync_failed_permanent = True
+                logger.warning("esp_sync_permanent_failure", email=email, lead_id=lead_id)
+
+                await audit.log_event(
+                    event_type=EventType.LEAD_ESP_FAILED,
+                    entity_type="lead",
+                    entity_id=str(lead_id),
+                    metadata={"error": str(exc), "permanent": True},
+                    actor="system",
+                )
+            except ESPTransientError:
+                lead.esp_synced = False
+                logger.warning("esp_sync_transient_failure", email=email, lead_id=lead_id)
+
+            await session.commit()
 
 
 @router.post(
@@ -214,6 +241,7 @@ async def capture_lead(
     request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    session_factory: async_sessionmaker = Depends(get_session_factory),
     settings: Settings = Depends(get_settings),
     turnstile: TurnstileValidator = Depends(_get_turnstile_validator),
     email_service: EmailServiceInterface = Depends(_get_email_service),
@@ -402,7 +430,7 @@ async def capture_lead(
         _score_notify_sync,
         lead_id=lead.id,
         email=payload.email,
-        db=db,
+        session_factory=session_factory,
         slack=slack_notifier,
         esp_client=esp_client,
     )

@@ -84,7 +84,7 @@ async def resync_leads(
             try:
                 await esp_client.add_subscriber(
                     lead.email,
-                    metadata={"category": "b2b" if lead.is_b2b else "other"},
+                    metadata={"category": lead.category or ("b2b" if lead.is_b2b else "other")},
                 )
                 await lead_repo.mark_synced(lead.id)
                 result.synced += 1
