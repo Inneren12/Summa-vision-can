@@ -131,6 +131,61 @@ JSON, but any serialization change would silently break the match.
 - **Resolution:** Refactor `generate()` into smaller private methods (e.g., `_load_data`, `_render_assets`, `_persist_to_db`) while preserving the semaphore boundary semantics.
 - **Target:** Future refactoring sprint or before Étape D.
 
+### DEBT-016: docs/architecture/ARCHITECTURE.md references removed MVP features
+- **Source:** Technical debt audit (2026-04-12)
+- **Added:** 2026-04-12
+- **Severity:** medium
+- **Category:** code-quality
+- **Status:** active
+- **Description:** `docs/architecture/ARCHITECTURE.md` (the original architecture document) still describes LLM Gate, Gemini Scoring, and AI Background Art as core active components (17+ references). The working `docs/ARCHITECTURE.md` also includes LLM Gate in the high-level flow diagram (lines 8, 12) though with a backlog note. Additionally, `docs/modules/api.md` (line 195) references `TaskStatusResponse` from dead `task_manager.py`, and `docs/ARCH_RULES.md` (line 13) lists `task_manager.py` in the ARCH-DPEN-001 scope.
+- **Impact:** New contributors will misunderstand the current system. The old architecture doc presents a fundamentally different system (Gemini scoring → AI Art) than the actual MVP (Polars → SVG + Pillow backgrounds → Pipeline → Gallery + Lead funnel). Stale doc references to dead modules waste investigation time.
+- **Resolution:** Rewrite `docs/architecture/ARCHITECTURE.md` to reflect actual MVP architecture, or delete it in favour of `docs/ARCHITECTURE.md`. Remove TaskManager references from `docs/modules/api.md` and `docs/ARCH_RULES.md`. Update flow diagram in `docs/ARCHITECTURE.md` to remove LLM Gate.
+- **Target:** Post-launch documentation sprint.
+
+### DEBT-017: Job handlers violate ARCH-DPEN-001 with inline httpx client creation
+- **Source:** Technical debt audit (2026-04-12)
+- **Added:** 2026-04-12
+- **Severity:** medium
+- **Category:** architecture
+- **Status:** active
+- **Description:** `services/jobs/handlers.py` creates fallback `httpx.AsyncClient()` instances inline at lines 83 and 155 when `app_state` does not provide a pre-configured client. `core/scheduler.py` (line 92) also creates `httpx.AsyncClient()` inline. This violates ARCH-DPEN-001 (classes/handlers cannot instantiate their own heavy dependencies) and the forbidden pattern `self.client = httpx.AsyncClient()` documented in `docs/ARCH_RULES.md`.
+- **Impact:** These inline clients bypass the app-scoped client lifecycle (no shared connection pooling, no coordinated shutdown). Harder to mock in tests — handler tests must patch internal imports rather than injecting via DI.
+- **Resolution:** Require `app_state` to always provide `http_client` and `statcan_client`. Remove the `if http_client is None` fallback branches. Ensure `main.py` lifespan sets these on `app.state` unconditionally.
+- **Target:** Next handler refactoring PR.
+
+### DEBT-018: TESTING.md coverage table is stale
+- **Source:** Technical debt audit (2026-04-12)
+- **Added:** 2026-04-12
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** active
+- **Description:** `docs/TESTING.md` coverage table has multiple inaccuracies: (1) Shows ⬜ for modules that now have test files — `services/jobs/runner.py`, `services/statcan/catalog_sync.py`, `services/statcan/data_fetch.py`, `services/data/workbench.py` all have corresponding test files. (2) Lists dead code modules (`services/cmhc/*`, `services/ai/*`, `core/task_manager.py`) as actively tracked with 100% coverage. (3) Overall claim of "560+ tests, 96%+ total coverage" (line 123) has not been reverified after Étapes C and D.
+- **Impact:** Misleading coverage picture. Contributors cannot tell which modules genuinely lack tests vs. which had tests added in later PRs. Dead code coverage inflates reported numbers.
+- **Resolution:** Run `pytest --cov=src --cov-report=term-missing`, update every row in the coverage table, remove or mark dead-code rows as `(dead code — see DEBT-006, DEBT-007)`.
+- **Target:** Next documentation update PR.
+
+### DEBT-019: Orphaned LLM infrastructure outside services/ai/
+- **Source:** Technical debt audit (2026-04-12)
+- **Added:** 2026-04-12
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** active
+- **Description:** Multiple modules outside `services/ai/` exist solely to support the removed LLM feature and have no other consumers: (1) `core/config.py` lines 103–107 define `gemini_api_key`, `gemini_model`, `daily_llm_budget`, `llm_cache_ttl_seconds` — unused by any active code path. (2) `core/prompt_loader.py` is only imported by `services/ai/scoring_service.py` (dead code per DEBT-007). (3) `models/llm_request.py` and `repositories/llm_request_repository.py` are only used by dead AI code — the ORM model is still migrated and occupies DB schema space.
+- **Impact:** Confusing configuration surface — `gemini_api_key` appears required but is unused. Dead DB table (`llm_requests`) wastes schema space and migration history. `prompt_loader.py` appears to be active infrastructure but has no live consumers.
+- **Resolution:** Delete `gemini_*` and `daily_llm_budget` and `llm_cache_ttl_seconds` from Settings. Delete or clearly mark `prompt_loader.py`, `llm_request.py`, and `llm_request_repository.py` as backlog stubs. Create migration to drop `llm_requests` table if it exists.
+- **Target:** Same cleanup PR as DEBT-007.
+
+### DEBT-020: CMHC and Tasks routers still mounted for deferred features
+- **Source:** Technical debt audit (2026-04-12)
+- **Added:** 2026-04-12
+- **Severity:** medium
+- **Category:** architecture
+- **Status:** active
+- **Description:** `main.py` lines 147–148 mount `tasks_router` and `cmhc_router`. The CMHC router (`api/routers/cmhc.py`) imports `TaskManager` and `run_cmhc_extraction_pipeline` — both from dead/deferred modules (DEBT-004, DEBT-006). The tasks router (`api/routers/tasks.py`) imports `TaskManager` for polling. These are live API endpoints (`POST /api/v1/admin/cmhc/sync`, `GET /api/v1/admin/tasks/{task_id}`) backed by non-functional code.
+- **Impact:** API surface exposes endpoints that appear functional but use the deprecated in-memory TaskManager (state lost on restart) and a CMHC pipeline that is not implemented. Consumers calling these endpoints get silently broken behavior. The endpoints also show up in OpenAPI docs, misleading API consumers.
+- **Resolution:** Remove `cmhc_router` and `tasks_router` from `main.py`. Delete `routers/cmhc.py` and `routers/tasks.py`, or gate them behind a feature flag. This also removes the last consumers of `TaskManager` (enabling DEBT-004 resolution).
+- **Target:** Same cleanup PR as DEBT-004 and DEBT-006.
+
 ---
 
 ## Resolved
