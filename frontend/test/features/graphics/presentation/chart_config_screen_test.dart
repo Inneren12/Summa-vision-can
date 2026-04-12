@@ -400,6 +400,52 @@ void main() {
       expect(state.category, BackgroundCategory.housing);
       expect(state.title, '');
     });
+
+    testWidgets('switching dataset clears title text field', (tester) async {
+      // Use a StatefulBuilder to allow rebuilding with a different storageKey
+      String storageKey = 'key-A';
+      late StateSetter outerSetState;
+
+      const configA = ChartConfig(dataKey: 'key-A', title: '');
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            chartConfigNotifierProvider.overrideWith(
+              () => _MockChartConfigNotifier(configA),
+            ),
+            chartGenerationNotifierProvider.overrideWith(
+              () => _MockGenerationNotifier(const ChartGenerationState()),
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.dark,
+            home: StatefulBuilder(
+              builder: (context, setState) {
+                outerSetState = setState;
+                return ChartConfigScreen(storageKey: storageKey);
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Type a title for dataset A
+      await tester.enterText(
+        find.byKey(const Key('title_field')),
+        'Housing Starts',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Housing Starts'), findsOneWidget);
+
+      // Switch to dataset B
+      outerSetState(() => storageKey = 'key-B');
+      await tester.pumpAndSettle();
+
+      // Title field should be cleared — old text must not persist
+      expect(find.text('Housing Starts'), findsNothing);
+    });
   });
 
   group('ChartConfigNotifier unit tests', () {

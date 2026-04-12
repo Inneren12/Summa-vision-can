@@ -104,6 +104,14 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
               sourceProductId: widget.productId,
             );
         ref.read(chartGenerationNotifierProvider.notifier).reset();
+
+        // Sync the text controller with the reset state
+        _titleController.clear();
+
+        // Re-populate title from cube metadata if productId is available
+        if (widget.productId != null) {
+          _prepopulateTitle();
+        }
       });
     }
 
