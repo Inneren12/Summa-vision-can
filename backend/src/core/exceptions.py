@@ -138,3 +138,31 @@ class AuthError(SummaVisionError):
         context: dict[str, object] | None = None,
     ) -> None:
         super().__init__(message=message, error_code=error_code, context=context)
+
+
+class NotFoundError(SummaVisionError):
+    """Raised when a requested entity does not exist."""
+
+    def __init__(
+        self,
+        message: str = "Not found",
+        error_code: str = "NOT_FOUND",
+        context: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(message=message, error_code=error_code, context=context)
+
+
+class ConflictError(SummaVisionError):
+    """Raised when an operation conflicts with current resource state.
+
+    Covers business-rule violations such as retrying a non-failed job
+    or violating a dedupe constraint.
+    """
+
+    def __init__(
+        self,
+        message: str = "Conflict",
+        error_code: str = "CONFLICT",
+        context: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(message=message, error_code=error_code, context=context)

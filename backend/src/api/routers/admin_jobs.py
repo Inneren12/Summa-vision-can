@@ -1,8 +1,9 @@
 """Admin endpoints for the Jobs Dashboard (C-4).
 
-Provides two endpoints:
+Provides three endpoints:
 
 * ``GET  /api/v1/admin/jobs``                — list jobs with filters
+* ``GET  /api/v1/admin/jobs/{job_id}``       — get a single job by ID
 * ``POST /api/v1/admin/jobs/{job_id}/retry`` — retry a failed job
 
 Architecture:
@@ -19,6 +20,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db
+from src.core.exceptions import ConflictError, NotFoundError
 from src.core.logging import get_logger
 from src.models.job import Job, JobStatus
 from src.repositories.job_repository import JobRepository
@@ -115,6 +117,11 @@ async def list_jobs(
                 detail=f"Invalid status: {status_filter}",
             )
 
+    total = await job_repo.count_jobs(
+        job_type=job_type,
+        status=parsed_status,
+    )
+
     jobs = await job_repo.list_jobs(
         job_type=job_type,
         status=parsed_status,
@@ -141,7 +148,52 @@ async def list_jobs(
         for job in jobs
     ]
 
-    return JobListResponse(items=items, total=len(items))
+    return JobListResponse(items=items, total=total)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/admin/jobs/{job_id}
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/jobs/{job_id}",
+    response_model=JobItemResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get a single job by ID",
+    responses={
+        200: {"description": "Job details."},
+        404: {"description": "Job not found."},
+    },
+)
+async def get_job(
+    job_id: int,
+    job_repo: JobRepository = Depends(_get_job_repo),
+) -> JobItemResponse:
+    """Return a single job by its primary key."""
+    job = await job_repo.get_job(job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found",
+        )
+
+    return JobItemResponse(
+        id=str(job.id),
+        job_type=job.job_type,
+        status=job.status.value,
+        payload_json=job.payload_json,
+        result_json=job.result_json,
+        error_code=job.error_code,
+        error_message=job.error_message,
+        attempt_count=job.attempt_count,
+        max_attempts=job.max_attempts,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        created_by=job.created_by,
+        dedupe_key=job.dedupe_key,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -166,41 +218,22 @@ async def retry_job(
 ) -> RetryJobResponse:
     """Re-enqueue a failed job if it has remaining retry attempts.
 
-    Logic:
-        1. Fetch job by ID.
-        2. If not found → 404.
-        3. If status != 'failed' → 409 Conflict.
-        4. If attempt_count >= max_attempts → 409 Conflict.
-        5. Re-enqueue: set status = 'queued', clear error fields.
-        6. Return 202 Accepted with job_id.
+    Delegates all validation and state mutation to
+    ``JobRepository.retry_failed_job`` to keep the router thin
+    and preserve the dedupe invariant.
     """
-    job = await job_repo.get_job(job_id)
-    if job is None:
+    try:
+        job = await job_repo.retry_failed_job(job_id)
+    except NotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Job not found",
         )
-
-    if job.status != JobStatus.FAILED:
+    except ConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Only failed jobs can be retried",
+            detail=str(exc),
         )
-
-    if job.attempt_count >= job.max_attempts:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Job has exhausted retry attempts",
-        )
-
-    # Re-enqueue the job
-    job.status = JobStatus.QUEUED
-    job.error_code = None
-    job.error_message = None
-    job.started_at = None
-    job.finished_at = None
-
-    await job_repo._session.flush()
 
     logger.info(
         "job_retried",
