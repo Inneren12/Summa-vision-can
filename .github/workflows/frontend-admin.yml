@@ -32,5 +32,8 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Create dummy .env file
+        run: touch .env
+
       - name: Run tests
         run: flutter test
