@@ -38,6 +38,7 @@ def _make_settings(**overrides: object) -> Settings:
     defaults = {
         "scheduler_db_url": "sqlite://",  # in-memory
         "scheduler_enabled": True,
+        "admin_api_key": "test-key",
     }
     defaults.update(overrides)
     return Settings(**defaults)  # type: ignore[arg-type]

@@ -54,28 +54,6 @@ JSON, but any serialization change would silently break the match.
 - **Resolution:** Add integration test path that runs `alembic upgrade head` instead of `create_all()`, at least for the dedupe test.
 - **Target:** Before first production deploy.
 
-### DEBT-003: Dockerfile doesn't run migrations on startup
-- **Source:** PR #11 review
-- **Added:** 2026-04-05
-- **Severity:** high
-- **Category:** ops
-- **Status:** active
-- **Description:** Dockerfile CMD starts uvicorn directly. Migrations must be run manually via `docker compose exec api alembic upgrade head`. A TODO comment exists but no entrypoint script implements it.
-- **Impact:** Forgotten manual migration → app starts with stale schema.
-- **Resolution:** Create `entrypoint.sh` that runs `alembic upgrade head && exec uvicorn ...`. Or use init container.
-- **Target:** Pre-deploy hardening PR (before Étape D-5).
-
-### DEBT-008: No startup validation for required secrets
-- **Source:** Roadmap Secret Management Policy
-- **Added:** 2026-04-05
-- **Severity:** high
-- **Category:** security
-- **Status:** active
-- **Description:** Settings class does not validate that required secrets (e.g. DATABASE_URL, ADMIN_API_KEY) are non-empty at startup. Missing secret → runtime error on first request, not startup failure.
-- **Impact:** App appears healthy but fails on first real operation.
-- **Resolution:** Add `@model_validator(mode="after")` to Settings that checks required fields. Different fields required per stage (Étape 0 vs D).
-- **Target:** Pre-deploy hardening PR (before Étape D-5).
-
 ### DEBT-010: No audit event retention cleanup
 - **Source:** PR #19 / Roadmap R18
 - **Added:** 2026-04-05
@@ -139,6 +117,8 @@ JSON, but any serialization change would silently break the match.
 
 | ID | Description | Resolved in | Date |
 |----|-------------|-------------|------|
+| DEBT-003 | Dockerfile doesn't run migrations on startup | Pre-deploy Hardening | 2026-04-12 |
+| DEBT-008 | No startup validation for required secrets | Pre-deploy Hardening | 2026-04-12 |
 | DEBT-014 | database.py creates engine at module level | PR A-1 fix | 2026-04-06 |
 | DEBT-004 | Old in-memory TaskManager not yet removed | Dead Code Cleanup | 2026-04-12 |
 | DEBT-005 | StorageInterface upload_bytes/download_bytes | PR B-3 | 2026-04-09 |

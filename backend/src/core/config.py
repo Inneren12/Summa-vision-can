@@ -8,6 +8,7 @@ the parsed, validated configuration — never import a global instance.
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -36,6 +37,7 @@ class Settings(BaseSettings):
     app_name: str = "Summa Vision API"
     debug: bool = False
     cors_origins: str = "*"
+    environment: str = "development"
 
     # --- Application ---
     log_format: str = "console"  # "console" for dev, "json" for production
@@ -99,6 +101,36 @@ class Settings(BaseSettings):
     # --- ESP (Beehiiv) ---
     BEEHIIV_API_KEY: str = ""  # If empty → ESP sync silently disabled
     BEEHIIV_PUBLICATION_ID: str = ""
+
+    @model_validator(mode="after")
+    def validate_required_secrets(self) -> "Settings":
+        """Fail fast at startup if critical secrets are missing."""
+        errors: list[str] = []
+
+        # Always required
+        if not self.database_url:
+            errors.append("DATABASE_URL is required")
+        if not self.admin_api_key:
+            errors.append("ADMIN_API_KEY is required")
+        if not self.s3_bucket:
+            errors.append("S3_BUCKET is required")
+
+        # Required for public site features (Étape D)
+        # These can be empty during dev but must be set in production
+        if self.environment == "production":
+            if not self.cdn_base_url:
+                errors.append("CDN_BASE_URL is required in production")
+            if not self.public_site_url:
+                errors.append("PUBLIC_SITE_URL is required in production")
+            if not self.turnstile_secret_key:
+                errors.append("TURNSTILE_SECRET_KEY is required in production")
+
+        if errors:
+            raise ValueError(
+                "Missing required configuration:\n"
+                + "\n".join(f"  - {e}" for e in errors)
+            )
+        return self
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
