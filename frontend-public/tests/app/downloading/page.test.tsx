@@ -23,25 +23,18 @@ jest.mock('@/lib/api/client', () => ({
 import DownloadingPage from '@/app/downloading/page';
 
 describe('/downloading page', () => {
-  const originalLocation = window.location;
+  let assignSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(window.history, 'replaceState').mockImplementation(() => {});
 
-    // JSDOM does not support real navigation — stub window.location.assign
-    Object.defineProperty(window, 'location', {
-      value: { ...originalLocation, assign: jest.fn() },
-      writable: true,
-    });
+    // JSDOM does not support real navigation — spy on window.location.assign
+    assignSpy = jest.spyOn(window.location, 'assign').mockImplementation(() => {});
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
-    Object.defineProperty(window, 'location', {
-      value: originalLocation,
-      writable: true,
-    });
   });
 
   it('shows error message when token is missing from URL', () => {

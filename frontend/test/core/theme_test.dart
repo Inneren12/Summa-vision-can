@@ -4,9 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:summa_vision_admin/core/theme/app_theme.dart';
 
 void main() {
-  // Prevent google_fonts from making real HTTP requests in the test environment.
+  // Allow google_fonts to resolve font families at runtime.
+  // Fonts gracefully fall back when network is unavailable in CI.
   setUpAll(() {
-    GoogleFonts.config.allowRuntimeFetching = false;
+    GoogleFonts.config.allowRuntimeFetching = true;
   });
 
   group('AppTheme', () {
