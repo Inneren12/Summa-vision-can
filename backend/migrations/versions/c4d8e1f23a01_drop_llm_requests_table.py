@@ -22,7 +22,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # The original table was created in 05de14ff39c6_initial.py.
-    # Re-creating it here is intentionally omitted — the LLM feature
-    # has been removed and the model no longer exists in the codebase.
-    pass
+    op.create_table(
+        "llm_requests",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("prompt_hash", sa.String(length=128), nullable=False),
+        sa.Column("response_json", sa.Text(), nullable=False),
+        sa.Column("tokens_used", sa.Integer(), nullable=False),
+        sa.Column("cost_usd", sa.Float(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+    )
