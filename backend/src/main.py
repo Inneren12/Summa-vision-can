@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
     """Manage startup/shutdown lifecycle events."""
     import src.services.jobs.handlers  # noqa: F401
 
-    start_scheduler()
+    start_scheduler(app=app)
 
     # --- Startup ---
     # Resource semaphores (R2)

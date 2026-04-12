@@ -342,7 +342,7 @@ async def test_runner_skips_cooled_down_cube(
     product_id = "14-10-0127"
     payload = CubeFetchPayload(product_id=product_id)
 
-    # Create 3 failed jobs with DATA_CONTRACT_VIOLATION
+    # Create 3 failed jobs with DATA_CONTRACT_VIOLATION and subject_key
     for i in range(3):
         j = Job(
             job_type="cube_fetch",
@@ -350,6 +350,7 @@ async def test_runner_skips_cooled_down_cube(
             status=JobStatus.FAILED,
             error_code="DATA_CONTRACT_VIOLATION",
             finished_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            subject_key=product_id,
         )
         db_session.add(j)
     await db_session.flush()
@@ -387,6 +388,60 @@ async def test_runner_skips_cooled_down_cube(
     )
     cool_down_jobs = [j for j in failed if j.error_code == "COOL_DOWN_ACTIVE"]
     assert len(cool_down_jobs) >= 1
+
+
+async def test_cooldown_uses_subject_key_not_json_match(
+    db_session: AsyncSession,
+    app_state: SimpleNamespace,
+) -> None:
+    """Cooldown triggers via subject_key column, not JSON text match.
+
+    Proves DEBT-001 is resolved: subject_key column is used for
+    cooldown queries instead of fragile payload_json.contains().
+    """
+    repo = JobRepository(db_session)
+    product_id = "14-10-0127"
+
+    # Create 3 failed jobs with subject_key set but payload JSON
+    # that uses a different serialization (spaces after colons)
+    spaced_payload = json.dumps({"schema_version": 1, "product_id": product_id})
+
+    for _ in range(3):
+        j = Job(
+            job_type="cube_fetch",
+            payload_json=spaced_payload,
+            status=JobStatus.FAILED,
+            error_code="DATA_CONTRACT_VIOLATION",
+            finished_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            subject_key=product_id,
+        )
+        db_session.add(j)
+    await db_session.flush()
+
+    # Enqueue a new job (compact JSON from Pydantic)
+    payload = CubeFetchPayload(product_id=product_id)
+    result = await repo.enqueue("cube_fetch", payload.model_dump_json())
+    await db_session.commit()
+
+    handler_called = False
+
+    async def should_not_run(payload, *, app_state):
+        nonlocal handler_called
+        handler_called = True
+        return {}
+
+    register_handler("cube_fetch", should_not_run)
+
+    runner = JobRunner(
+        _make_test_session_factory(db_session),
+        app_state,
+        cool_down_threshold=3,
+        cool_down_window_hours=24,
+    )
+    await runner.execute_once()
+
+    # Cooldown should trigger even though payload JSON format differs
+    assert handler_called is False
 
 
 # ---- Dedupe key helpers ----

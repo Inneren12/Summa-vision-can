@@ -280,6 +280,48 @@ async def test_requeue_stale_running_jobs(
     assert requeued_count == 1
 
 
+# ---- subject_key derivation ----
+
+async def test_enqueue_derives_subject_key_for_cube_fetch(
+    db_session: AsyncSession,
+) -> None:
+    """enqueue auto-populates subject_key from cube_fetch product_id."""
+    repo = JobRepository(db_session)
+    result = await repo.enqueue(
+        "cube_fetch",
+        CubeFetchPayload(product_id="14-10-0127").model_dump_json(),
+    )
+    await db_session.commit()
+    assert result.job.subject_key == "14-10-0127"
+
+
+async def test_enqueue_derives_subject_key_for_catalog_sync(
+    db_session: AsyncSession,
+) -> None:
+    """catalog_sync jobs have subject_key=None (singleton)."""
+    repo = JobRepository(db_session)
+    result = await repo.enqueue(
+        "catalog_sync",
+        CatalogSyncPayload().model_dump_json(),
+    )
+    await db_session.commit()
+    assert result.job.subject_key is None
+
+
+async def test_enqueue_explicit_subject_key_not_overridden(
+    db_session: AsyncSession,
+) -> None:
+    """Explicit subject_key is not overridden by derivation."""
+    repo = JobRepository(db_session)
+    result = await repo.enqueue(
+        "cube_fetch",
+        CubeFetchPayload(product_id="14-10-0127").model_dump_json(),
+        subject_key="custom-key",
+    )
+    await db_session.commit()
+    assert result.job.subject_key == "custom-key"
+
+
 # ---- List / filter ----
 
 async def test_list_jobs_with_filters(

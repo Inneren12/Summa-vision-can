@@ -45,70 +45,73 @@ pytest tests/services/statcan/test_maintenance.py -v
 
 ## Coverage Thresholds
 
-| Module | Minimum Coverage | Current | Tests |
-|--------|-----------------|---------|-------|
+> Last measured: 2026-04-12 — 701 tests passed, 3 failed (plotly/kaleido choropleth), 13 skipped (integration), 90% total coverage.
+
+| Module | Minimum | Current | Tests |
+|--------|---------|---------|-------|
 | `core/exceptions.py` | >90% | ✅ 100% | `tests/core/test_exceptions.py` |
 | `core/logging.py` | >90% | ✅ 100% | `tests/core/test_logging.py` |
 | `core/error_handler.py` | >90% | ✅ 100% | `tests/core/test_exceptions.py` |
-| `core/config.py` | >90% | ✅ 100% | (tested inline via other modules) |
+| `core/config.py` | >90% | ✅ 93% | (tested inline via other modules) |
 | `core/rate_limit.py` | >90% | ✅ 100% | `tests/core/test_rate_limit.py` |
 | `core/storage.py` | >90% | ✅ 92% | `tests/core/test_storage.py` |
-| `core/database.py` | >90% | ⚠️ 61% | (tested via repository tests) |
+| `core/database.py` | >90% | ⚠️ 52% | (tested via repository tests) |
+| `core/scheduler.py` | >90% | ✅ 98% | `tests/core/test_scheduler.py` |
+| `core/security/auth.py` | >90% | ✅ 93% | `tests/core/security/test_auth.py` |
+| `core/security/ip_rate_limiter.py` | >90% | ✅ 100% | `tests/api/test_public_graphics.py` |
 | `api/routers/health.py` | >90% | ✅ 100% | `tests/api/test_health.py` |
+| `api/routers/admin_cubes.py` | >90% | ✅ 92% | `tests/api/test_admin_cubes.py` |
+| `api/routers/admin_data.py` | >90% | ✅ 90% | `tests/api/test_admin_data.py` |
+| `api/routers/admin_graphics.py` | >90% | ✅ 97% | `tests/api/test_admin_graphics.py` |
+| `api/routers/admin_jobs.py` | >90% | ✅ 100% | `tests/api/test_admin_jobs.py` |
+| `api/routers/admin_kpi.py` | >90% | ✅ 100% | `tests/api/test_admin_kpi.py` |
+| `api/routers/admin_leads.py` | >90% | ✅ 100% | `tests/api/test_resync.py` |
+| `api/routers/public_graphics.py` | >90% | ✅ 96% | `tests/api/test_public_graphics.py` |
+| `api/routers/public_leads.py` | >90% | ✅ 100% | `tests/api/test_lead_capture.py`, `tests/api/test_lead_capture_scoring.py` |
+| `api/routers/public_download.py` | >90% | ✅ 100% | `tests/api/test_download.py` |
+| `api/routers/public_sponsorship.py` | >90% | ✅ 100% | `tests/api/test_sponsorship.py` |
+| `api/schemas/admin_graphics.py` | >90% | ✅ 100% | `tests/api/test_admin_graphics.py` |
+| `api/schemas/public_leads.py` | >90% | ✅ 100% | `tests/api/test_lead_capture.py` |
+| `models/job.py` | >90% | ✅ 100% | `tests/repositories/test_job_repository.py` |
+| `models/audit_event.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
+| `models/cube_catalog.py` | >90% | ✅ 100% | `tests/models/test_cube_catalog_fts.py` |
+| `models/download_token.py` | >90% | ✅ 100% | `tests/repositories/test_download_token_repository.py` |
+| `models/lead.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
+| `models/publication.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
+| `repositories/job_repository.py` | >90% | ⚠️ 69% | `tests/repositories/test_job_repository.py` |
+| `repositories/cube_catalog_repository.py` | >90% | ⚠️ 75% | (tested via service tests) |
+| `repositories/download_token_repository.py` | >90% | ✅ 98% | `tests/repositories/test_download_token_repository.py` |
+| `repositories/lead_repository.py` | >90% | ✅ 87% | `tests/repositories/test_lead_repository.py` |
+| `repositories/publication_repository.py` | >90% | ⚠️ 67% | `tests/repositories/test_publication_repository.py` |
+| `schemas/job_payloads.py` | >90% | ✅ 100% | `tests/repositories/test_job_repository.py` |
+| `schemas/events.py` | >90% | ✅ 100% | (tested inline via audit tests) |
+| `schemas/kpi.py` | >90% | ✅ 100% | `tests/api/test_admin_kpi.py` |
+| `services/audit.py` | >90% | ✅ 100% | (tested inline via runner/repository tests) |
+| `services/jobs/runner.py` | >90% | ✅ 90% | `tests/services/jobs/test_runner.py` |
+| `services/jobs/handlers.py` | >90% | ⚠️ 85% | `tests/services/jobs/test_handlers.py`, `tests/services/jobs/test_graphics_handler.py` |
+| `services/jobs/dedupe.py` | >90% | ✅ 100% | `tests/services/jobs/test_runner.py` |
 | `services/statcan/maintenance.py` | >90% | ✅ 100% | `tests/services/statcan/test_maintenance.py` |
 | `services/statcan/client.py` | >90% | ✅ 100% | `tests/services/statcan/test_client.py` |
 | `services/statcan/schemas.py` | >90% | ✅ 100% | `tests/services/statcan/test_schemas.py` |
 | `services/statcan/service.py` | >90% | ✅ 100% | `tests/services/statcan/test_service.py` |
 | `services/statcan/validators.py` | >90% | ✅ 100% | `tests/services/statcan/test_service.py` |
-| `models/*.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
-| `repositories/*.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
-| `api/routers/admin_cubes.py` | >90% | ⬜ | |
-| `api/routers/admin_data.py` | >90% | 🔄 (in progress) | `tests/api/test_admin_data.py` |
-| `repositories/cube_catalog_repository.py` | >90% | ⬜ | |
-| `core/scheduler.py` | >90% | ✅ 98% | `tests/core/test_scheduler.py` |
-| `models/job.py` | >90% | ⬜ | |
-| `repositories/job_repository.py` | >90% | ⬜ | |
-| `schemas/job_payloads.py` | >90% | ⬜ | |
-| `services/jobs/runner.py` | >90% | ⬜ | |
-| `services/jobs/handlers.py` | >90% | ✅ | `tests/services/jobs/test_handlers.py`, `tests/services/jobs/test_graphics_handler.py` |
-| `services/jobs/dedupe.py` | >90% | ⬜ | |
-| `services/statcan/catalog_sync.py` | >90% | ⬜ | |
-| `services/statcan/data_fetch.py` | >90% | ⬜ | |
-| services/data/workbench.py | >90% | ⬜ |
-| `models/audit_event.py` | >90% | ⬜ | |
-| `models/cube_catalog.py` | >90% | ⬜ | |
-| `schemas/events.py` | >90% | ⬜ | |
-| `services/audit.py` | >90% | ⬜ | |
-| `core/security/ip_rate_limiter.py` | >90% | ✅ 100% | `tests/api/test_public_graphics.py` |
-| `api/routers/public_graphics.py` | >90% | ✅ 96% | `tests/api/test_public_graphics.py` |
-| `services/graphics/svg_generator.py` | >90% | ⬜ | `tests/services/graphics/test_svg_generator.py` |
-| `services/graphics/backgrounds.py` | >90% | ✅ | `tests/services/graphics/test_backgrounds.py` |
+| `services/statcan/catalog_sync.py` | >90% | ✅ 90% | `tests/services/statcan/test_catalog_sync.py` |
+| `services/statcan/data_fetch.py` | >90% | ⚠️ 85% | `tests/services/statcan/test_data_fetch.py` |
+| `services/data/workbench.py` | >90% | ⚠️ 88% | `tests/services/data/test_workbench.py` |
+| `services/graphics/svg_generator.py` | >90% | ✅ 91% | `tests/services/graphics/test_svg_generator.py` |
+| `services/graphics/backgrounds.py` | >90% | ✅ 100% | `tests/services/graphics/test_backgrounds.py` |
 | `services/graphics/ai_image_client.py` | >90% | ✅ 100% | `tests/services/graphics/test_ai_image_client.py` |
-| `services/graphics/compositor.py` | >90% | ✅ 86% | `tests/services/graphics/test_compositor.py` |
-| `services/graphics/pipeline.py` | >90% | ✅ | `tests/services/graphics/test_pipeline.py` |
-| `api/routers/admin_graphics.py` | >90% | ✅ 97% | `tests/api/test_admin_graphics.py` |
-| `api/schemas/admin_graphics.py` | >90% | ✅ 100% | `tests/api/test_admin_graphics.py` |
-| `core/security/auth.py` | >90% | ✅ 100% | `tests/core/security/test_auth.py` |
-| `api/routers/public_leads.py` | >90% | ✅ 100% | `tests/api/test_lead_capture.py` |
-| `api/routers/public_download.py` | >90% | ✅ 100% | `tests/api/test_download.py` |
-| `api/schemas/public_leads.py` | >90% | ✅ 100% | `tests/api/test_lead_capture.py` |
-| `repositories/download_token_repository.py` | >90% | ✅ 100% | `tests/repositories/test_download_token_repository.py` |
-| `models/download_token.py` | >90% | ✅ 100% | `tests/repositories/test_download_token_repository.py` |
+| `services/graphics/compositor.py` | >90% | ⚠️ 86% | `tests/services/graphics/test_compositor.py` |
+| `services/graphics/pipeline.py` | >90% | ✅ 92% | `tests/services/graphics/test_pipeline.py` |
 | `services/crm/scoring.py` | >90% | ✅ 100% | `tests/services/crm/test_scoring.py` |
-| `services/notifications/slack.py` | >90% | ✅ 100% | `tests/services/notifications/test_slack.py` |
-| `services/email/esp_client.py` | >90% | ✅ 100% | `tests/services/email/test_esp_client.py` |
-| `api/routers/admin_leads.py` | >90% | ✅ 100% | `tests/api/test_resync.py` |
-| `api/routers/public_sponsorship.py` | >90% | ✅ 100% | `tests/api/test_sponsorship.py` |
-| `api/routers/public_leads.py` (D-3 integration) | >90% | ✅ 100% | `tests/api/test_lead_capture_scoring.py` |
-| `services/email/interface.py` | >90% | ✅ | (mocked in lead capture tests) |
-| `services/security/turnstile.py` | >90% | ✅ | (mocked in lead capture tests) |
-| `services/kpi/kpi_service.py` | >90% | ✅ | `tests/services/kpi/test_kpi_service.py` |
-| `api/routers/admin_kpi.py` | >90% | ✅ | `tests/api/test_admin_kpi.py` |
-| `schemas/kpi.py` | >90% | ✅ | `tests/api/test_admin_kpi.py` |
-
+| `services/notifications/slack.py` | >90% | ✅ 98% | `tests/services/notifications/test_slack.py` |
+| `services/email/esp_client.py` | >90% | ✅ 98% | `tests/services/email/test_esp_client.py` |
+| `services/email/interface.py` | >90% | ⚠️ 70% | (mocked in lead capture tests) |
+| `services/security/turnstile.py` | >90% | ⚠️ 35% | (mocked in lead capture tests) |
+| `services/kpi/kpi_service.py` | >90% | ✅ 100% | `tests/services/kpi/test_kpi_service.py` |
 | `scripts/ops/generate_batch.py` | >90% | ✅ | `tests/scripts/ops/test_generate_batch.py` |
 
-**Overall:** 560+ tests, 96%+ total coverage (as of 2026-04-12).
+**Overall:** 701 passed, 3 failed, 13 skipped. 90% total coverage (3464 statements, 353 missed). Measured 2026-04-12.
 
 ## Mocking Strategy
 
