@@ -25,8 +25,8 @@ class ChartGenerationState with _$ChartGenerationState {
 
 /// Manages submit → poll → result for C-3 chart generation.
 ///
-/// State is cached in Riverpod — navigating away and back does NOT
-/// restart generation if [phase] is already [GenerationPhase.success].
+/// State is reset when the operator navigates to a different dataset.
+/// Re-generation is only blocked while a job is actively submitting or polling.
 class ChartGenerationNotifier extends Notifier<ChartGenerationState> {
   static const _pollInterval = Duration(seconds: 2);
   static const int maxPolls = 60;
@@ -34,9 +34,10 @@ class ChartGenerationNotifier extends Notifier<ChartGenerationState> {
   @override
   ChartGenerationState build() => const ChartGenerationState();
 
-  /// Kick off a generation job. No-op if already succeeded (cache hit).
+  /// Kick off a generation job. No-op if already submitting or polling.
   Future<void> generate(GraphicsGenerateRequest request) async {
-    if (state.phase == GenerationPhase.success) return;
+    if (state.phase == GenerationPhase.submitting ||
+        state.phase == GenerationPhase.polling) return;
 
     final repo = ref.read(graphicGenerationRepositoryProvider);
 

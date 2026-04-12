@@ -24,6 +24,14 @@ class ChartConfigNotifier extends Notifier<ChartConfig> {
   void setDataKey(String key, {String? productId}) =>
       state = state.copyWith(dataKey: key, sourceProductId: productId);
 
+  /// Full reset — used when the operator navigates to a different dataset.
+  void reset(String dataKey, {String? sourceProductId}) {
+    state = ChartConfig(
+      dataKey: dataKey,
+      sourceProductId: sourceProductId,
+    );
+  }
+
   void setChartType(ChartType type) =>
       state = state.copyWith(chartType: type);
 
