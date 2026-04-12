@@ -640,3 +640,40 @@ ThemeData buildSummaTheme({
 double? lerpDouble(double a, double b, double t) {
   return a + (b - a) * t;
 }
+
+// ═══════════════════════════════════════════════════════════
+// Backward-compatible AppTheme shim
+//
+// Provides static const Color fields so existing component code
+// continues to compile. Migrate to
+//   Theme.of(context).extension<SummaTheme>()!
+// in Batch 2.
+// ═══════════════════════════════════════════════════════════
+
+/// Legacy colour constants — kept for backward compatibility.
+///
+/// All colours use Design System v3.2 values.
+/// Prefer [SummaTheme] via `Theme.of(context).extension<SummaTheme>()!`.
+class AppTheme {
+  AppTheme._();
+
+  // Background / Surface (updated to v3.2 palette)
+  static const Color backgroundDark = Color(0xFF0B0D11);
+  static const Color surfaceDark    = Color(0xFF15181E);
+
+  // Neon accents (legacy brand palette, kept until Batch 2 migration)
+  static const Color neonGreen      = Color(0xFF00FF94);
+  static const Color neonBlue       = Color(0xFF00D4FF);
+  static const Color neonPink       = Color(0xFFFF006E);
+  static const Color neonYellow     = Color(0xFFFFB700);
+
+  // Text
+  static const Color textPrimary    = Color(0xFFF3F4F6);
+  static const Color textSecondary  = Color(0xFF9CA3AF);
+
+  // Status
+  static const Color errorRed       = Color(0xFFE11D48);
+
+  /// Full dark [ThemeData] backed by [buildSummaTheme].
+  static ThemeData get dark => buildSummaTheme();
+}
