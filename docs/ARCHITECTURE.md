@@ -11,6 +11,25 @@ The current flow is:
 ```
 *(Note: LLM Gate is backlogged, but the module architecture remains)*
 
+### Download Flow (D-2)
+
+```
+   User clicks "Download High-Res" → DownloadModal (Turnstile + email)
+           ↓
+   POST /api/v1/public/leads/capture
+           ↓
+   Lead saved → Token (SHA-256) stored → Magic Link email sent
+           ↓
+   User clicks email link → /downloading page (token in URL, cleared immediately)
+           ↓
+   User clicks "Verify and Download" → GET /api/v1/public/download?token=...
+           ↓
+   Atomic token activation → 307 redirect to presigned S3 URL → file downloads
+```
+
+**Security constraints (R1, R17):** No presigned URLs in emails. No auto-downloads.
+Raw tokens never stored in DB (SHA-256 only). Tokens limited to 5 uses, 48h TTL.
+
 ## Infrastructure Layer
 
 - **Docker:** Dockerfile + two compose files
@@ -71,20 +90,25 @@ Note template backgrounds instead of AI backgrounds for MVP.
    │   ├── health.py          ← NEW (0-1)
    │   ├── admin_graphics.py  ← Updated (B-4: job-based generate + GET /jobs/{id})
    │   ├── public_graphics.py
-   │   ├── public_leads.py
+   │   ├── public_leads.py    ← Updated (D-2: Turnstile + Magic Link email flow)
+   │   ├── public_download.py ← NEW (D-2: token exchange → presigned URL)
    │   ├── cmhc.py
    │   └── tasks.py
    ├── models/
    │   ├── publication.py
    │   ├── lead.py
+   │   ├── download_token.py  ← NEW (D-0c: SHA-256 token model)
    │   └── llm_request.py
    ├── repositories/
    │   ├── publication_repository.py
    │   ├── lead_repository.py
+   │   ├── download_token_repository.py  ← NEW (D-2: atomic activate)
    │   └── llm_request_repository.py
    └── services/
        ├── statcan/ (Complete: maintenance guard, HTTP client, schemas, ETL service)
        ├── cmhc/ (Stub: browser, parser, service files exist but contain no implementation)
        ├── ai/ (Stub: llm_interface, scoring, cache exist but are not connected to pipeline)
-       └── graphics/ (svg_generator, backgrounds, compositor, pipeline exist with implementation)
+       ├── graphics/ (svg_generator, backgrounds, compositor, pipeline exist with implementation)
+       ├── email/ (D-0a: EmailServiceInterface + ConsoleEmailService)
+       └── security/ (D-0b: TurnstileValidator)
 ```

@@ -101,6 +101,13 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `api/routers/admin_graphics.py` | >90% | ✅ 97% | `tests/api/test_admin_graphics.py` |
 | `api/schemas/admin_graphics.py` | >90% | ✅ 100% | `tests/api/test_admin_graphics.py` |
 | `core/security/auth.py` | >90% | ✅ 100% | `tests/core/security/test_auth.py` |
+| `api/routers/public_leads.py` | >90% | ✅ 100% | `tests/api/test_lead_capture.py` |
+| `api/routers/public_download.py` | >90% | ✅ 100% | `tests/api/test_download.py` |
+| `api/schemas/public_leads.py` | >90% | ✅ 100% | `tests/api/test_lead_capture.py` |
+| `repositories/download_token_repository.py` | >90% | ✅ 100% | `tests/repositories/test_download_token_repository.py` |
+| `models/download_token.py` | >90% | ✅ 100% | `tests/repositories/test_download_token_repository.py` |
+| `services/email/interface.py` | >90% | ✅ | (mocked in lead capture tests) |
+| `services/security/turnstile.py` | >90% | ✅ | (mocked in lead capture tests) |
 | `api/routers/public_leads.py` | >90% | ✅ 100% | `tests/api/test_public_leads.py` |
 | `api/schemas/public_leads.py` | >90% | ✅ 100% | `tests/api/test_public_leads.py` |
 | `services/kpi/kpi_service.py` | >90% | ✅ | `tests/services/kpi/test_kpi_service.py` |
@@ -230,15 +237,18 @@ npm run test:coverage
 | Test File | Tests | Covers |
 |-----------|------:|--------|
 | `tests/components/layout.test.tsx` | 2 | `RootLayout` children rendering, `bg-background` body class |
-| `tests/components/DownloadModal.test.tsx` | 8 | Trigger button, modal open/close, email validation, successful download, no auto-open, server error |
-| **Total** | **10** | |
+| `tests/components/DownloadModal.test.tsx` | 12 | Trigger button, modal open/close, Turnstile widget, email validation, success state ("Check your email"), error states (403/429/404), no auto-open |
+| `tests/app/downloading/page.test.tsx` | 5 | Missing token error, "Verify and Download" button (no auto-download), URL token clearing, download trigger, branding |
+| **Total** | **19** | |
 
 ### Notes
 - `next/font/google` is mocked to avoid network calls — returns stub CSS variable names
 - React 19 promotes `<html>` and `<body>` as singleton elements to `document.body`, so body class assertions use `document.body.className`
 - Tailwind v4 `@theme inline` lint warnings in IDE are false positives — the CSS is valid at build time
-- `DownloadModal` tests mock `@/lib/api` via `jest.mock()` and use `@testing-library/user-event` for realistic interactions
+- `DownloadModal` tests mock `@/lib/api/client` via `jest.mock()` and use `@testing-library/user-event` for realistic interactions
+- `TurnstileWidget` is mocked with a button that triggers `onSuccess` on click
 - Zod validation: empty email triggers `min(1)` ("Email is required"); invalid format triggers `.email()` ("Please enter a valid email address")
+- `/downloading` page tests verify NO auto-download on mount (R17) and that token is cleared from URL (R1)
 
 ---
 

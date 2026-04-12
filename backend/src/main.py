@@ -13,6 +13,7 @@ from src.api.routers.admin_kpi import router as admin_kpi_router
 from src.api.routers.admin_graphics import router as admin_graphics_router
 from src.api.routers.cmhc import router as cmhc_router
 from src.api.routers.public_graphics import router as public_graphics_router
+from src.api.routers.public_download import router as public_download_router
 from src.api.routers.public_leads import router as public_leads_router
 from src.api.routers.tasks import router as tasks_router
 from src.api.routers.health import router as health_router
@@ -137,6 +138,7 @@ app.include_router(tasks_router)
 app.include_router(cmhc_router)
 app.include_router(public_graphics_router)
 app.include_router(public_leads_router)
+app.include_router(public_download_router)
 app.include_router(admin_graphics_router)
 app.include_router(admin_cubes_router)
 app.include_router(admin_data_router)

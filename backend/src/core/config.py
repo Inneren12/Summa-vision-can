@@ -88,6 +88,10 @@ class Settings(BaseSettings):
 
     # --- Security ---
     admin_api_key: str = ""  # Set via ADMIN_API_KEY env var
+    turnstile_secret_key: str = ""  # Set via TURNSTILE_SECRET_KEY env var
+
+    # --- Public Site ---
+    public_site_url: str = "http://localhost:3000"  # Prod: https://summa.vision
 
     # --- LLM / Gemini ---
     gemini_api_key: str = ""
