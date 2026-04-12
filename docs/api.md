@@ -179,7 +179,7 @@ Trigger CMHC data extraction (background task).
 
 ### `GET /api/v1/public/graphics`
 
-Paginated list of published infographics with presigned preview URLs.
+Paginated list of published infographics with public CDN URLs for previews.
 
 | Property | Value |
 |----------|-------|
@@ -203,7 +203,8 @@ Paginated list of published infographics with presigned preview URLs.
       "headline": "Example Headline",
       "chart_type": "BAR",
       "virality_score": 8.5,
-      "preview_url": "https://s3.amazonaws.com/...",
+      "cdn_url": "https://cdn.summa.vision/...",
+      "version": 1,
       "created_at": "2026-03-17T03:00:00+00:00"
     }
   ],
@@ -216,6 +217,43 @@ Paginated list of published infographics with presigned preview URLs.
 
 | Status | Condition |
 |--------|-----------|
+| 429 | Rate limit exceeded |
+
+---
+
+### `GET /api/v1/public/graphics/{id}`
+
+Returns a single published infographic by its ID.
+
+| Property | Value |
+|----------|-------|
+| Auth | None (public) |
+| Rate Limit | 30 req/min per IP |
+
+**Path Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `id` | `int` | Publication ID |
+
+**Response (200):**
+```json
+{
+  "id": 1,
+  "headline": "Example Headline",
+  "chart_type": "BAR",
+  "virality_score": 8.5,
+  "cdn_url": "https://cdn.summa.vision/...",
+  "version": 1,
+  "created_at": "2026-03-17T03:00:00+00:00"
+}
+```
+
+**Errors:**
+
+| Status | Condition |
+|--------|-----------|
+| 404 | Unknown `id` or not published |
 | 429 | Rate limit exceeded |
 
 ---
