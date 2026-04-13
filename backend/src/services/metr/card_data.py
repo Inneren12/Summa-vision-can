@@ -30,13 +30,15 @@ def generate_card_1_hero_kpi() -> dict:
     """
     curve = generate_curve(Province.ON, FamilyType.SINGLE_PARENT, 2, 2, step=5000)
     peak = max(curve, key=lambda p: p.metr)
+    keep_cents = round((1 - peak.metr / 100) * 100)
 
     return {
         "card_type": "hero_kpi",
         "eyebrow": "TAXATION",
-        "headline": "Earn $1 More. Keep 22\u00a2.",
+        "headline": f"Earn $1 More. Keep {keep_cents}\u00a2.",
         "subheadline": "Ontario single parent, 2 children under 6",
         "hero_kpi": {"value": f"{peak.metr}%", "label": "Peak Marginal Tax Rate"},
+        "peak_income": peak.gross,
         "mini_chart": [{"gross": p.gross, "metr": p.metr} for p in curve],
         "source": "Summa Vision calculation from CRA formulas, 2025 tax year",
         "size": [1200, 900],

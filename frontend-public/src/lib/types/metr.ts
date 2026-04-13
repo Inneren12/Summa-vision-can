@@ -71,7 +71,7 @@ export interface METRCompareResponse {
 
 export type Province = 'ON' | 'BC' | 'AB' | 'QC';
 
-export type FamilyType = 'single' | 'single_parent' | 'couple' | 'couple_children';
+export type FamilyType = 'single' | 'single_parent' | 'couple';
 
 export interface METRCalculateParams {
   income: number;

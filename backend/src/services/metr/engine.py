@@ -41,6 +41,15 @@ class METRInput:
     n_children: int = 0
     children_under_6: int = 0
 
+    def __post_init__(self) -> None:
+        if self.children_under_6 > self.n_children:
+            raise ValueError(
+                f"children_under_6 ({self.children_under_6}) cannot exceed "
+                f"n_children ({self.n_children})"
+            )
+        if self.n_children > 0 and self.family_type == FamilyType.SINGLE:
+            object.__setattr__(self, "family_type", FamilyType.SINGLE_PARENT)
+
     @property
     def children_6_to_17(self) -> int:
         return self.n_children - self.children_under_6
@@ -87,6 +96,7 @@ class DeadZone:
 
 # ---------------------------------------------------------------------------
 # 2025 Federal Tax Parameters
+# Source: https://www.canada.ca/en/revenue-agency/services/tax/individuals/frequently-asked-questions-individuals/canadian-income-tax-rates-individuals-current-previous-years.html
 # ---------------------------------------------------------------------------
 
 # Federal tax brackets (2025)
@@ -101,22 +111,26 @@ _FED_BRACKETS: list[tuple[float, float]] = [
 _FED_BASIC_PERSONAL = 16_129
 
 # CPP 2025
+# Source: https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/payroll/payroll-deductions-contributions/canada-pension-plan-cpp/cpp-contribution-rates-maximums-exemptions.html
 _CPP_RATE = 0.0595
 _CPP_EXEMPTION = 3_500
 _CPP_MAX_PENSIONABLE = 71_300
 _CPP_MAX_CONTRIBUTION = (_CPP_MAX_PENSIONABLE - _CPP_EXEMPTION) * _CPP_RATE  # ~4,034.10
 
 # CPP2 2025 (second ceiling)
+# Source: https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/payroll/payroll-deductions-contributions/canada-pension-plan-cpp/cpp2-additional-contribution-rates-maximums.html
 _CPP2_RATE = 0.04
 _CPP2_CEILING = 81_200
 _CPP2_MAX_CONTRIBUTION = (_CPP2_CEILING - _CPP_MAX_PENSIONABLE) * _CPP2_RATE  # ~396.00
 
 # EI 2025
+# Source: https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/payroll/payroll-deductions-contributions/employment-insurance-premiums/ei-premium-rates-maximums.html
 _EI_RATE = 0.0166
 _EI_MAX_INSURABLE = 65_700
 _EI_MAX_CONTRIBUTION = _EI_MAX_INSURABLE * _EI_RATE  # ~1,090.62
 
-# CCB 2025 (Canada Child Benefit)
+# CCB 2025-26 (Canada Child Benefit)
+# Source: https://www.canada.ca/en/revenue-agency/services/child-family-benefits/canada-child-benefit-overview/canada-child-benefit-we-calculate-your-ccb.html
 _CCB_MAX_UNDER_6 = 7_787
 _CCB_MAX_6_TO_17 = 6_570
 _CCB_CLAWBACK_THRESHOLD = 36_502
@@ -125,13 +139,15 @@ _CCB_CLAWBACK_RATE_2_PLUS = 0.135  # for the under-6 portion
 _CCB_CLAWBACK_RATE_2_PLUS_6_17 = 0.057  # additional rate for 6-17 portion
 
 # GST/HST Credit 2025
+# Source: https://www.canada.ca/en/revenue-agency/services/child-family-benefits/goods-services-tax-harmonized-sales-tax-gst-hst-credit.html
 _GST_CREDIT_BASE = 340  # per adult
 _GST_CREDIT_SPOUSE = 340
 _GST_CREDIT_CHILD = 179
 _GST_THRESHOLD = 44_530
 _GST_CLAWBACK_RATE = 0.05
 
-# Canada Workers Benefit (CWB) 2025 — single
+# Canada Workers Benefit (CWB) 2025
+# Source: https://www.canada.ca/en/revenue-agency/services/child-family-benefits/canada-workers-benefit.html
 _CWB_SINGLE_RATE = 0.27
 _CWB_SINGLE_THRESHOLD = 3_000
 _CWB_SINGLE_MAX = 1_590
@@ -151,6 +167,7 @@ _CWB_FAMILY_CLAWBACK_RATE = 0.15
 # ---------------------------------------------------------------------------
 
 # Ontario brackets
+# Source: https://www.ontario.ca/page/ontario-tax-credits-and-benefits
 _ON_BRACKETS: list[tuple[float, float]] = [
     (52_886, 0.0505),
     (52_878, 0.0915),   # 52,886 to 105,764
@@ -179,6 +196,7 @@ _OHP_BRACKETS: list[tuple[float, float, float, float]] = [
 ]
 
 # BC brackets
+# Source: https://www2.gov.bc.ca/gov/content/taxes/income-taxes/personal/tax-rates
 _BC_BRACKETS: list[tuple[float, float]] = [
     (47_937, 0.0506),
     (47_938, 0.0770),   # 47,937 to 95,875
@@ -191,10 +209,12 @@ _BC_BRACKETS: list[tuple[float, float]] = [
 _BC_BASIC_PERSONAL = 12_580
 
 # Alberta — flat 10%
+# Source: https://www.alberta.ca/personal-income-tax-rates-credits
 _AB_RATE = 0.10
 _AB_BASIC_PERSONAL = 21_885
 
 # Quebec brackets (simplified — separate filing not modelled)
+# Source: https://www.revenuquebec.ca/en/citizens/income-tax-return/completing-your-income-tax-return/income-tax-rates/
 _QC_BRACKETS: list[tuple[float, float]] = [
     (51_780, 0.14),
     (51_780, 0.19),    # 51,780 to 103,560

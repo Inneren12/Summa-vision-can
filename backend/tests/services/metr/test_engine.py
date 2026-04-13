@@ -449,6 +449,14 @@ class TestDataClasses:
         with pytest.raises(AttributeError):
             inp.gross_income = 60_000  # type: ignore[misc]
 
+    def test_engine_rejects_invalid_children(self) -> None:
+        with pytest.raises(ValueError, match="cannot exceed"):
+            METRInput(50_000, Province.ON, FamilyType.SINGLE_PARENT, n_children=1, children_under_6=3)
+
+    def test_single_with_children_becomes_single_parent(self) -> None:
+        inp = METRInput(50_000, Province.ON, FamilyType.SINGLE, n_children=2, children_under_6=1)
+        assert inp.family_type == FamilyType.SINGLE_PARENT
+
     def test_metr_components_frozen(self) -> None:
         comp = METRComponents(
             federal_tax=100, provincial_tax=50, cpp=30, cpp2=10,
