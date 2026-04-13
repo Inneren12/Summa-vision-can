@@ -79,7 +79,7 @@
   /* Text */
   --text-primary:      var(--raw-slate-100);
   --text-secondary:    #8B949E;
-  --text-muted:        var(--raw-slate-500);
+  --text-muted:        var(--raw-slate-600);
   --text-inverse:      var(--raw-slate-950);
 
   /* Accent */
@@ -119,8 +119,8 @@
   --data-housing:      var(--raw-cyan-400);
   --data-negative:     var(--raw-red-500);
   --data-positive:     #0D9488;
-  --data-warning:      var(--raw-yellow-500);
-  --data-neutral:      var(--raw-slate-400);
+  --data-warning:      #F97316;
+  --data-neutral:      #262A33;
 
   /* ───────────────────────────────────────────────────────────
      Typography
