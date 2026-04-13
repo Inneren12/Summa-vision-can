@@ -12,7 +12,7 @@ import 'widgets/job_failure_chart.dart';
 import 'widgets/kpi_summary_cards.dart';
 import 'widgets/lead_breakdown.dart';
 
-/// KPI dashboard screen — single-page view of all key business metrics.
+/// KPI dashboard screen -- single-page view of all key business metrics.
 ///
 /// Route: `/kpi`.
 /// Auto-refreshes every 60 seconds.
@@ -25,6 +25,8 @@ class KPIScreen extends ConsumerStatefulWidget {
 
 class _KPIScreenState extends ConsumerState<KPIScreen> {
   Timer? _refreshTimer;
+
+  SummaTheme get _theme => Theme.of(context).extension<SummaTheme>()!;
 
   @override
   void initState() {
@@ -64,13 +66,13 @@ class _KPIScreenState extends ConsumerState<KPIScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  color: AppTheme.errorRed, size: 48),
+              Icon(Icons.error_outline,
+                  color: _theme.destructive, size: 48),
               const SizedBox(height: 16),
               Text(
                 'Failed to load KPIs\n$err',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppTheme.textSecondary),
+                style: TextStyle(color: _theme.textSecondary),
               ),
               const SizedBox(height: 16),
               ElevatedButton(
@@ -141,7 +143,7 @@ class _KPIBody extends StatelessWidget {
   }
 }
 
-/// Period selector — 7, 30, or 90 days.
+/// Period selector -- 7, 30, or 90 days.
 class _PeriodSelector extends StatelessWidget {
   const _PeriodSelector({
     required this.selectedDays,
@@ -173,6 +175,7 @@ class _SystemHealthRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     final hasViolations = data.dataContractViolations > 0;
     final hasPermanentFailures = data.espFailedPermanentCount > 0;
 
@@ -182,10 +185,10 @@ class _SystemHealthRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'System Health',
               style: TextStyle(
-                color: AppTheme.textPrimary,
+                color: theme.textPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
@@ -199,7 +202,7 @@ class _SystemHealthRow extends StatelessWidget {
                   icon: Icons.sync,
                   label: 'Catalog Syncs',
                   value: '${data.catalogSyncs}',
-                  color: AppTheme.neonBlue,
+                  color: theme.dataGov,
                 ),
                 _HealthChip(
                   icon: hasViolations
@@ -207,7 +210,7 @@ class _SystemHealthRow extends StatelessWidget {
                       : Icons.check_circle_outline,
                   label: 'Contract Violations',
                   value: '${data.dataContractViolations}',
-                  color: hasViolations ? AppTheme.errorRed : AppTheme.neonGreen,
+                  color: hasViolations ? theme.destructive : theme.dataPositive,
                 ),
                 _HealthChip(
                   icon: Icons.email_outlined,
@@ -215,8 +218,8 @@ class _SystemHealthRow extends StatelessWidget {
                   value:
                       '${data.espSyncedCount} synced, ${data.espFailedPermanentCount} failed',
                   color: hasPermanentFailures
-                      ? AppTheme.neonYellow
-                      : AppTheme.neonGreen,
+                      ? theme.dataWarning
+                      : theme.dataPositive,
                 ),
               ],
             ),
@@ -242,6 +245,7 @@ class _HealthChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -252,8 +256,8 @@ class _HealthChip extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
+              style: TextStyle(
+                color: theme.textSecondary,
                 fontSize: 11,
               ),
             ),
@@ -279,6 +283,7 @@ class _Footer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     final formatted =
         '${periodEnd.year}-${periodEnd.month.toString().padLeft(2, '0')}-'
         '${periodEnd.day.toString().padLeft(2, '0')} '
@@ -290,8 +295,8 @@ class _Footer extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text(
           'Last updated: $formatted  \u2022  Auto-refresh: 60s',
-          style: const TextStyle(
-            color: AppTheme.textSecondary,
+          style: TextStyle(
+            color: theme.textSecondary,
             fontSize: 11,
           ),
         ),

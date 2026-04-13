@@ -13,11 +13,12 @@ class LeadBreakdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     final segments = [
-      _Segment('B2B', data.b2bLeads, AppTheme.neonGreen),
-      _Segment('Education', data.educationLeads, AppTheme.neonBlue),
-      _Segment('ISP', data.ispLeads, AppTheme.neonYellow),
-      _Segment('B2C', data.b2cLeads, AppTheme.neonPink),
+      _Segment('B2B', data.b2bLeads, theme.dataGov),
+      _Segment('Education', data.educationLeads, theme.dataSociety),
+      _Segment('ISP', data.ispLeads, theme.dataBaseline),
+      _Segment('B2C', data.b2cLeads, theme.textMuted),
     ];
 
     final total = data.totalLeads.clamp(1, 1 << 30);
@@ -28,10 +29,10 @@ class LeadBreakdown extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Lead Breakdown',
               style: TextStyle(
-                color: AppTheme.textPrimary,
+                color: theme.textPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
@@ -88,6 +89,7 @@ class _LegendRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     final pct = (segment.count / total * 100).toStringAsFixed(1);
     return Row(
       children: [
@@ -104,8 +106,8 @@ class _LegendRow extends StatelessWidget {
           segment.label,
           style: TextStyle(
             color: segment.label == 'B2B'
-                ? AppTheme.textPrimary
-                : AppTheme.textSecondary,
+                ? theme.textPrimary
+                : theme.textSecondary,
             fontWeight:
                 segment.label == 'B2B' ? FontWeight.bold : FontWeight.normal,
             fontSize: 13,
@@ -123,8 +125,8 @@ class _LegendRow extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           '$pct%',
-          style: const TextStyle(
-            color: AppTheme.textSecondary,
+          style: TextStyle(
+            color: theme.textSecondary,
             fontSize: 12,
           ),
         ),

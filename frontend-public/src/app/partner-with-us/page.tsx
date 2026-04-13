@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 function CheckIcon() {
   return (
     <svg
-      className="mt-0.5 h-5 w-5 shrink-0 text-neon-green"
+      className="mt-0.5 h-5 w-5 shrink-0 text-accent"
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -31,12 +31,12 @@ function CheckIcon() {
 
 export default function PartnerPage() {
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-bg-app">
       {/* ── Hero ──────────────────────────────────────────────── */}
       <section className="px-4 pb-16 pt-20 text-center sm:px-6 lg:px-8">
-        <h1 className="mx-auto max-w-3xl text-4xl font-extrabold tracking-tight text-text-primary sm:text-5xl lg:text-6xl">
+        <h1 className="mx-auto max-w-3xl text-4xl font-extrabold font-display tracking-tight text-text-primary sm:text-5xl lg:text-6xl">
           Partner with{' '}
-          <span className="text-neon-green">Summa Vision</span>
+          <span className="text-accent">Summa Vision</span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-text-secondary">
           Reach engaged Canadian professionals through branded data
@@ -56,24 +56,24 @@ export default function PartnerPage() {
 
           {/* Stat cards row */}
           <div className="mb-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-surface p-8 text-center">
-              <p className="text-4xl font-extrabold text-neon-green">
+            <div className="rounded-public bg-card-bg shadow-card p-8 text-center">
+              <p className="text-4xl font-extrabold font-display text-text-primary">
                 {AUDIENCE_METRICS.monthlyViews}
               </p>
               <p className="mt-2 text-sm text-text-secondary">
                 Monthly Views
               </p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-surface p-8 text-center">
-              <p className="text-4xl font-extrabold text-neon-blue">
+            <div className="rounded-public bg-card-bg shadow-card p-8 text-center">
+              <p className="text-4xl font-extrabold font-display text-text-primary">
                 {AUDIENCE_METRICS.avgEngagementRate}
               </p>
               <p className="mt-2 text-sm text-text-secondary">
                 Avg. Engagement Rate
               </p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-surface p-8 text-center sm:col-span-2 lg:col-span-1">
-              <p className="text-4xl font-extrabold text-neon-yellow">
+            <div className="rounded-public bg-card-bg shadow-card p-8 text-center sm:col-span-2 lg:col-span-1">
+              <p className="text-4xl font-extrabold font-display text-text-primary">
                 {AUDIENCE_METRICS.primaryPlatforms.length}
               </p>
               <p className="mt-2 text-sm text-text-secondary">
@@ -84,8 +84,8 @@ export default function PartnerPage() {
 
           {/* Detail cards */}
           <div className="grid gap-6 md:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-surface p-6">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-neon-green">
+            <div className="rounded-public bg-card-bg shadow-card p-6">
+              <h3 className="mb-3 text-sm font-semibold font-data uppercase tracking-wider text-data-positive">
                 Top Communities
               </h3>
               <ul className="space-y-2">
@@ -99,8 +99,8 @@ export default function PartnerPage() {
                 ))}
               </ul>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-surface p-6">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-neon-blue">
+            <div className="rounded-public bg-card-bg shadow-card p-6">
+              <h3 className="mb-3 text-sm font-semibold font-data uppercase tracking-wider text-data-gov">
                 Platforms
               </h3>
               <ul className="space-y-2">
@@ -114,8 +114,8 @@ export default function PartnerPage() {
                 ))}
               </ul>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-surface p-6">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-neon-yellow">
+            <div className="rounded-public bg-card-bg shadow-card p-6">
+              <h3 className="mb-3 text-sm font-semibold font-data uppercase tracking-wider text-data-warning">
                 Demographics
               </h3>
               <p className="text-sm text-text-secondary">
@@ -148,14 +148,14 @@ export default function PartnerPage() {
               <div
                 key={tier.name}
                 data-testid="tier-card"
-                className={`relative flex flex-col rounded-2xl border p-8 transition-transform hover:scale-[1.02] ${
+                className={`relative flex flex-col rounded-public border p-8 transition-transform hover:scale-[1.02] ${
                   tier.highlighted
-                    ? 'border-neon-green/50 bg-surface shadow-[0_0_30px_rgba(0,255,148,0.1)]'
-                    : 'border-white/10 bg-surface'
+                    ? 'border-accent bg-card-bg shadow-[0_0_30px_var(--accent-muted)]'
+                    : 'border-border-default bg-card-bg'
                 }`}
               >
                 {tier.highlighted && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-neon-green px-4 py-1 text-xs font-bold text-background">
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-4 py-1 text-xs font-bold text-text-inverse">
                     Most Popular
                   </span>
                 )}
@@ -163,7 +163,7 @@ export default function PartnerPage() {
                 <h3 className="text-xl font-bold text-text-primary">
                   {tier.name}
                 </h3>
-                <p className="mt-2 text-3xl font-extrabold text-neon-green">
+                <p className="mt-2 text-3xl font-extrabold font-display text-accent">
                   {tier.price}
                 </p>
                 <p className="mt-3 text-sm text-text-secondary">
@@ -181,10 +181,10 @@ export default function PartnerPage() {
 
                 <a
                   href="#inquiry"
-                  className={`mt-8 block rounded-lg py-3 text-center font-semibold transition-opacity hover:opacity-90 ${
+                  className={`mt-8 block rounded-button py-3 text-center font-semibold transition-opacity hover:opacity-90 ${
                     tier.highlighted
-                      ? 'bg-neon-green text-background'
-                      : 'border border-neon-green/50 text-neon-green'
+                      ? 'bg-accent text-text-inverse hover:bg-accent-hover'
+                      : 'border border-accent/50 text-accent'
                   }`}
                 >
                   {tier.cta}
@@ -214,7 +214,7 @@ export default function PartnerPage() {
             sponsorship package.
           </p>
 
-          <div className="rounded-2xl border border-white/10 bg-surface p-8">
+          <div className="rounded-public border border-border-default bg-bg-surface p-8">
             <InquiryForm />
           </div>
         </div>

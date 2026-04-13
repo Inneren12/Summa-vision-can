@@ -87,7 +87,7 @@ export default function DownloadModal({ assetId }: DownloadModalProps) {
       {/* Trigger button */}
       <button
         onClick={openModal}
-        className="w-full py-2 px-4 rounded-lg bg-neon-green text-background font-semibold text-sm hover:opacity-90 transition-opacity"
+        className="w-full py-2 px-4 rounded-button bg-btn-primary-bg text-btn-primary-text font-semibold text-sm hover:opacity-90 transition-opacity"
         aria-label={`Download infographic ${assetId}`}
       >
         Download High-Res
@@ -96,12 +96,12 @@ export default function DownloadModal({ assetId }: DownloadModalProps) {
       {/* Modal overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+          className="fixed inset-0 z-modal flex items-center justify-center bg-bg-app/80"
           role="dialog"
           aria-modal="true"
           aria-label="Download infographic"
         >
-          <div className="bg-surface rounded-2xl p-8 w-full max-w-md mx-4 shadow-2xl border border-white/10">
+          <div className="bg-bg-surface rounded-public p-8 w-full max-w-md mx-4 shadow-elevated border border-border-default">
             <div className="flex justify-between items-start mb-6">
               <h2 className="text-text-primary text-xl font-bold">
                 Get the High-Res Version
@@ -156,16 +156,16 @@ export default function DownloadModal({ assetId }: DownloadModalProps) {
                     type="email"
                     autoComplete="email"
                     placeholder="you@company.com"
-                    className={`w-full px-4 py-2 rounded-lg bg-background border text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-neon-green ${
+                    className={`w-full px-4 py-2 rounded-public bg-bg-app border text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-accent ${
                       errors.email
-                        ? 'border-error-red'
-                        : 'border-white/10'
+                        ? 'border-destructive'
+                        : 'border-border-default'
                     }`}
                     {...register('email')}
                   />
                   {errors.email && (
                     <p
-                      className="mt-1 text-xs text-error-red"
+                      className="mt-1 text-xs text-destructive"
                       role="alert"
                       data-testid="email-error"
                     >
@@ -183,7 +183,7 @@ export default function DownloadModal({ assetId }: DownloadModalProps) {
 
                 {serverError && (
                   <p
-                    className="text-xs text-error-red"
+                    className="text-xs text-destructive"
                     role="alert"
                     data-testid="server-error"
                   >
@@ -194,7 +194,7 @@ export default function DownloadModal({ assetId }: DownloadModalProps) {
                 <button
                   type="submit"
                   disabled={modalState === 'submitting'}
-                  className="w-full py-2 px-4 rounded-lg bg-neon-green text-background font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-2 px-4 rounded-button bg-btn-primary-bg text-btn-primary-text font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {modalState === 'submitting' ? 'Sending...' : 'Get Download Link'}
                 </button>

@@ -28,6 +28,7 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     final state = ref.watch(generationNotifierProvider);
 
     return Scaffold(
@@ -38,10 +39,10 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
         GenerationPhase.idle => Center(
           child: Text(
             'Submitting generation task...',
-            style: const TextStyle(color: AppTheme.textSecondary),
+            style: TextStyle(color: theme.textSecondary),
           ),
         ),
-        GenerationPhase.submitting => const _SubmittingView(),
+        GenerationPhase.submitting => _SubmittingView(),
         GenerationPhase.polling => _PollingView(
             attempt: state.pollAttempts,
             max: GenerationState.maxPollAttempts,
@@ -71,22 +72,23 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
 }
 
 class _SubmittingView extends StatelessWidget {
-  const _SubmittingView();
-
   @override
-  Widget build(BuildContext context) => const Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircularProgressIndicator(),
-        SizedBox(height: 16),
-        Text(
-          'Submitting generation task...',
-          style: TextStyle(color: AppTheme.textSecondary),
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 16),
+          Text(
+            'Submitting generation task...',
+            style: TextStyle(color: theme.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _PollingView extends StatelessWidget {
@@ -96,30 +98,33 @@ class _PollingView extends StatelessWidget {
   const _PollingView({required this.attempt, required this.max});
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircularProgressIndicator(
-          value: attempt / max,
-          color: AppTheme.neonGreen,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Generating graphic... ($attempt/$max)',
-          style: const TextStyle(color: AppTheme.textSecondary),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'This may take up to 2 minutes.',
-          style: TextStyle(
-            color: AppTheme.textSecondary,
-            fontSize: 12,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(
+            value: attempt / max,
+            color: theme.accent,
           ),
-        ),
-      ],
-    ),
-  );
+          const SizedBox(height: 16),
+          Text(
+            'Generating graphic... ($attempt/$max)',
+            style: TextStyle(color: theme.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'This may take up to 2 minutes.',
+            style: TextStyle(
+              color: theme.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CompletedView extends StatelessWidget {
@@ -128,54 +133,57 @@ class _CompletedView extends StatelessWidget {
   const _CompletedView({required this.resultUrl});
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    padding: const EdgeInsets.all(24),
-    child: Column(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.network(
-            resultUrl,
-            fit: BoxFit.contain,
-            loadingBuilder: (_, child, progress) {
-              if (progress == null) return child;
-              return const SizedBox(
-                height: 200,
-                child: Center(child: CircularProgressIndicator()),
-              );
-            },
-            errorBuilder: (_, __, ___) => const Icon(
-              Icons.broken_image,
-              color: AppTheme.errorRed,
-              size: 64,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              resultUrl,
+              fit: BoxFit.contain,
+              loadingBuilder: (_, child, progress) {
+                if (progress == null) return child;
+                return const SizedBox(
+                  height: 200,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              },
+              errorBuilder: (_, __, ___) => Icon(
+                Icons.broken_image,
+                color: theme.destructive,
+                size: 64,
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 24),
-        ElevatedButton.icon(
-          key: const Key('download_btn'),
-          onPressed: () async {
-            try {
-              final path = await downloadAndSaveImage(resultUrl);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Saved: $path')),
-                );
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            key: const Key('download_btn'),
+            onPressed: () async {
+              try {
+                final path = await downloadAndSaveImage(resultUrl);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Saved: $path')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Download failed: $e')),
+                  );
+                }
               }
-            } catch (e) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Download failed: $e')),
-                );
-              }
-            }
-          },
-          icon: const Icon(Icons.download),
-          label: const Text('Download'),
-        ),
-      ],
-    ),
-  );
+            },
+            icon: const Icon(Icons.download),
+            label: const Text('Download'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ErrorView extends StatelessWidget {
@@ -185,25 +193,28 @@ class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.message, required this.onRetry});
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Icon(Icons.error_outline, color: AppTheme.errorRed, size: 48),
-        const SizedBox(height: 16),
-        Text(
-          message,
-          key: const Key('error_message'),
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: AppTheme.textSecondary),
-        ),
-        const SizedBox(height: 24),
-        ElevatedButton(
-          key: const Key('retry_btn'),
-          onPressed: onRetry,
-          child: const Text('Retry'),
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline, color: theme.destructive, size: 48),
+          const SizedBox(height: 16),
+          Text(
+            message,
+            key: const Key('error_message'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: theme.textSecondary),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            key: const Key('retry_btn'),
+            onPressed: onRetry,
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -13,6 +13,7 @@ class QueueScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     final queueAsync = ref.watch(queueProvider);
 
     return Scaffold(
@@ -33,12 +34,12 @@ class QueueScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: AppTheme.errorRed, size: 48),
+              Icon(Icons.error_outline, color: theme.destructive, size: 48),
               const SizedBox(height: 16),
               Text(
                 'Failed to load queue\n$err',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppTheme.textSecondary),
+                style: TextStyle(color: theme.textSecondary),
               ),
               const SizedBox(height: 16),
               ElevatedButton(
@@ -60,7 +61,6 @@ class QueueScreen extends ConsumerWidget {
                     '/editor/${briefs[index].id}',
                   ),
                   onReject: () {
-                    // Local optimistic removal — re-fetch on next refresh
                     ref.invalidate(queueProvider);
                   },
                 ),
@@ -75,11 +75,12 @@ class _EmptyQueueView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final theme = Theme.of(context).extension<SummaTheme>()!;
+    return Center(
       child: Text(
         'No briefs in queue.\nTap refresh to fetch new ones.',
         textAlign: TextAlign.center,
-        style: TextStyle(color: AppTheme.textSecondary),
+        style: TextStyle(color: theme.textSecondary),
       ),
     );
   }
@@ -96,14 +97,18 @@ class _BriefCard extends StatelessWidget {
   final VoidCallback onApprove;
   final VoidCallback onReject;
 
-  Color _scoreColour(double score) {
-    if (score > 8) return AppTheme.neonGreen;
-    if (score >= 7) return AppTheme.neonYellow;
-    return AppTheme.neonPink;
-  }
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
+
+    Color scoreColour(double score) {
+      if (score > 8) return theme.dataPositive;
+      if (score >= 7) return theme.dataWarning;
+      return theme.destructive;
+    }
+
+    final viralityColor = scoreColour(brief.viralityScore);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -116,17 +121,17 @@ class _BriefCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _scoreColour(brief.viralityScore).withOpacity(0.15),
+                    color: viralityColor.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
-                      color: _scoreColour(brief.viralityScore),
+                      color: viralityColor,
                       width: 1,
                     ),
                   ),
                   child: Text(
                     brief.viralityScore.toStringAsFixed(1),
                     style: TextStyle(
-                      color: _scoreColour(brief.viralityScore),
+                      color: viralityColor,
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
                     ),
@@ -137,13 +142,13 @@ class _BriefCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppTheme.surfaceDark,
+                    color: theme.bgSurface,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     brief.chartType,
-                    style: const TextStyle(
-                      color: AppTheme.neonBlue,
+                    style: TextStyle(
+                      color: theme.dataGov,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -155,8 +160,8 @@ class _BriefCard extends StatelessWidget {
             // Headline
             Text(
               brief.headline,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
+              style: TextStyle(
+                color: theme.textPrimary,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -169,8 +174,8 @@ class _BriefCard extends StatelessWidget {
                 OutlinedButton(
                   onPressed: onReject,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.neonPink,
-                    side: const BorderSide(color: AppTheme.neonPink),
+                    foregroundColor: theme.destructive,
+                    side: BorderSide(color: theme.destructive),
                   ),
                   child: const Text('Reject'),
                 ),

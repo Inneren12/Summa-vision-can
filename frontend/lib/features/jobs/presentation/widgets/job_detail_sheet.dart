@@ -7,10 +7,11 @@ import '../../domain/job.dart';
 
 /// Shows full job detail in a bottom sheet.
 void showJobDetailSheet(BuildContext context, Job job) {
+  final theme = Theme.of(context).extension<SummaTheme>()!;
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: AppTheme.surfaceDark,
+    backgroundColor: theme.bgSurface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
@@ -23,7 +24,7 @@ class JobDetailSheet extends StatelessWidget {
   final Job job;
 
   String _formatIso(DateTime? dt) =>
-      dt?.toIso8601String() ?? '—';
+      dt?.toIso8601String() ?? '\u2014';
 
   String? _prettyJson(String? raw) {
     if (raw == null) return null;
@@ -37,6 +38,7 @@ class JobDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     final resultJson = _prettyJson(job.resultJson);
     final payloadJson = _prettyJson(job.payloadJson);
 
@@ -66,7 +68,7 @@ class JobDetailSheet extends StatelessWidget {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: AppTheme.textSecondary.withOpacity(0.4),
+                  color: theme.textSecondary.withOpacity(0.4),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -74,8 +76,8 @@ class JobDetailSheet extends StatelessWidget {
 
             Text(
               'Job Detail',
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
+              style: TextStyle(
+                color: theme.textPrimary,
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
               ),
@@ -89,17 +91,17 @@ class JobDetailSheet extends StatelessWidget {
             _DetailRow('Created At', _formatIso(job.createdAt)),
             _DetailRow('Started At', _formatIso(job.startedAt)),
             _DetailRow('Finished At', _formatIso(job.finishedAt)),
-            _DetailRow('Created By', job.createdBy ?? '—'),
-            _DetailRow('Dedupe Key', job.dedupeKey ?? '—'),
+            _DetailRow('Created By', job.createdBy ?? '\u2014'),
+            _DetailRow('Dedupe Key', job.dedupeKey ?? '\u2014'),
 
             if (job.errorCode != null)
               _DetailRow('Error Code', job.errorCode!),
             if (job.errorMessage != null) ...[
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'Error Message',
                 style: TextStyle(
-                  color: AppTheme.textSecondary,
+                  color: theme.textSecondary,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -109,13 +111,13 @@ class JobDetailSheet extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.errorRed.withOpacity(0.1),
+                  color: theme.destructive.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   job.errorMessage!,
                   style: TextStyle(
-                    color: AppTheme.errorRed,
+                    color: theme.destructive,
                     fontSize: 13,
                     fontFamily: 'monospace',
                   ),
@@ -125,10 +127,10 @@ class JobDetailSheet extends StatelessWidget {
 
             if (payloadJson != null) ...[
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Payload',
                 style: TextStyle(
-                  color: AppTheme.textSecondary,
+                  color: theme.textSecondary,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -138,13 +140,13 @@ class JobDetailSheet extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.backgroundDark,
+                  color: theme.bgApp,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: SelectableText(
                   payloadJson,
-                  style: const TextStyle(
-                    color: AppTheme.neonGreen,
+                  style: TextStyle(
+                    color: theme.dataPositive,
                     fontSize: 12,
                     fontFamily: 'monospace',
                   ),
@@ -154,10 +156,10 @@ class JobDetailSheet extends StatelessWidget {
 
             if (resultJson != null) ...[
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Result',
                 style: TextStyle(
-                  color: AppTheme.textSecondary,
+                  color: theme.textSecondary,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -167,13 +169,13 @@ class JobDetailSheet extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.backgroundDark,
+                  color: theme.bgApp,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: SelectableText(
                   resultJson,
-                  style: const TextStyle(
-                    color: AppTheme.neonBlue,
+                  style: TextStyle(
+                    color: theme.dataGov,
                     fontSize: 12,
                     fontFamily: 'monospace',
                   ),
@@ -185,7 +187,6 @@ class JobDetailSheet extends StatelessWidget {
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () {
-                  // In a real app, this would navigate to the CDN URL
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('CDN URL: $cdnUrl')),
                   );
@@ -210,6 +211,7 @@ class _DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -219,8 +221,8 @@ class _DetailRow extends StatelessWidget {
             width: 100,
             child: Text(
               label,
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
+              style: TextStyle(
+                color: theme.textSecondary,
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
@@ -229,8 +231,8 @@ class _DetailRow extends StatelessWidget {
           Expanded(
             child: SelectableText(
               value,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
+              style: TextStyle(
+                color: theme.textPrimary,
                 fontSize: 13,
               ),
             ),

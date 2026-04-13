@@ -33,6 +33,8 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _initialized = false;
 
+  SummaTheme get _theme => Theme.of(context).extension<SummaTheme>()!;
+
   @override
   void initState() {
     super.initState();
@@ -54,7 +56,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
           _titleController.text = cube.titleEn;
         }
       } catch (_) {
-        // Cube lookup failed — leave title empty for manual entry.
+        // Cube lookup failed -- leave title empty for manual entry.
       }
     }
     if (mounted) setState(() => _initialized = true);
@@ -81,14 +83,14 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     ref.read(chartGenerationNotifierProvider.notifier).generate(request);
   }
 
-  /// Neon colour swatch for each background category (from B-2 palette).
+  /// Design system colour swatch for each background category.
   Color _categoryColor(BackgroundCategory cat) => switch (cat) {
-        BackgroundCategory.housing => const Color(0xFF00E5FF), // cyan
-        BackgroundCategory.inflation => const Color(0xFFFF6E40), // red-orange
-        BackgroundCategory.employment => AppTheme.neonGreen,
-        BackgroundCategory.trade => const Color(0xFFBB86FC), // purple
-        BackgroundCategory.energy => AppTheme.neonYellow,
-        BackgroundCategory.demographics => AppTheme.neonBlue,
+        BackgroundCategory.housing => _theme.dataHousing,
+        BackgroundCategory.inflation => _theme.dataMonopoly,
+        BackgroundCategory.employment => _theme.dataPositive,
+        BackgroundCategory.trade => _theme.dataSociety,
+        BackgroundCategory.energy => _theme.dataWarning,
+        BackgroundCategory.demographics => _theme.dataGov,
       };
 
   @override
@@ -105,10 +107,8 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
             );
         ref.read(chartGenerationNotifierProvider.notifier).reset();
 
-        // Sync the text controller with the reset state
         _titleController.clear();
 
-        // Re-populate title from cube metadata if productId is available
         if (widget.productId != null) {
           _prepopulateTitle();
         }
@@ -140,7 +140,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     );
   }
 
-  // ─── Config Form ─────────────────────────────────────────────────
+  // --- Config Form ---
 
   Widget _buildConfigForm() {
     final config = ref.watch(chartConfigNotifierProvider);
@@ -156,27 +156,16 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // A) Dataset info (read-only)
             _buildDatasetHeader(config),
             const SizedBox(height: 24),
-
-            // B) Chart type selector
             _buildChartTypeSelector(config),
             const SizedBox(height: 24),
-
-            // C) Size preset selector
             _buildSizePresetSelector(config),
             const SizedBox(height: 24),
-
-            // D) Background category selector
             _buildCategorySelector(config),
             const SizedBox(height: 24),
-
-            // E) Title input
             _buildTitleField(config),
             const SizedBox(height: 32),
-
-            // F) Generate button
             _buildGenerateButton(config),
           ],
         ),
@@ -199,10 +188,10 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Dataset',
               style: TextStyle(
-                color: AppTheme.textSecondary,
+                color: _theme.textSecondary,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -210,8 +199,8 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
             const SizedBox(height: 4),
             Text(
               label,
-              style: const TextStyle(
-                color: AppTheme.neonBlue,
+              style: TextStyle(
+                color: _theme.dataGov,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
@@ -220,8 +209,8 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
               const SizedBox(height: 2),
               Text(
                 'Product ID: ${config.sourceProductId}',
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
+                style: TextStyle(
+                  color: _theme.textSecondary,
                   fontSize: 12,
                 ),
               ),
@@ -236,10 +225,10 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Chart Type',
           style: TextStyle(
-            color: AppTheme.textPrimary,
+            color: _theme.textPrimary,
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -249,15 +238,15 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
           key: const Key('chart_type_selector'),
           value: config.chartType,
           isExpanded: true,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
             enabledBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: AppTheme.textSecondary),
+              borderSide: BorderSide(color: _theme.textSecondary),
             ),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
-          dropdownColor: AppTheme.surfaceDark,
-          style: const TextStyle(color: AppTheme.textPrimary),
+          dropdownColor: _theme.bgSurface,
+          style: TextStyle(color: _theme.textPrimary),
           items: ChartType.values
               .map(
                 (t) => DropdownMenuItem(
@@ -280,10 +269,10 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Size Preset',
           style: TextStyle(
-            color: AppTheme.textPrimary,
+            color: _theme.textPrimary,
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -311,15 +300,15 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
           style: ButtonStyle(
             foregroundColor: WidgetStateProperty.resolveWith((states) {
               if (states.contains(WidgetState.selected)) {
-                return AppTheme.backgroundDark;
+                return _theme.bgApp;
               }
-              return AppTheme.textPrimary;
+              return _theme.textPrimary;
             }),
             backgroundColor: WidgetStateProperty.resolveWith((states) {
               if (states.contains(WidgetState.selected)) {
-                return AppTheme.neonGreen;
+                return _theme.accent;
               }
-              return AppTheme.surfaceDark;
+              return _theme.bgSurface;
             }),
           ),
         ),
@@ -331,10 +320,10 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Background Category',
           style: TextStyle(
-            color: AppTheme.textPrimary,
+            color: _theme.textPrimary,
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -359,17 +348,17 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
                     .setCategory(cat);
               },
               selectedColor: _categoryColor(cat).withOpacity(0.25),
-              backgroundColor: AppTheme.surfaceDark,
+              backgroundColor: _theme.bgSurface,
               labelStyle: TextStyle(
                 color: isSelected
                     ? _categoryColor(cat)
-                    : AppTheme.textPrimary,
+                    : _theme.textPrimary,
                 fontSize: 13,
               ),
               side: BorderSide(
                 color: isSelected
                     ? _categoryColor(cat)
-                    : AppTheme.textSecondary.withOpacity(0.3),
+                    : _theme.textSecondary.withOpacity(0.3),
               ),
             );
           }).toList(),
@@ -382,10 +371,10 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Chart Headline',
           style: TextStyle(
-            color: AppTheme.textPrimary,
+            color: _theme.textPrimary,
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -394,15 +383,15 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
         TextFormField(
           key: const Key('title_field'),
           controller: _titleController,
-          style: const TextStyle(color: AppTheme.textPrimary),
-          decoration: const InputDecoration(
+          style: TextStyle(color: _theme.textPrimary),
+          decoration: InputDecoration(
             hintText: 'Enter chart headline...',
-            hintStyle: TextStyle(color: AppTheme.textSecondary),
-            border: OutlineInputBorder(),
+            hintStyle: TextStyle(color: _theme.textSecondary),
+            border: const OutlineInputBorder(),
             enabledBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: AppTheme.textSecondary),
+              borderSide: BorderSide(color: _theme.textSecondary),
             ),
-            counterStyle: TextStyle(color: AppTheme.textSecondary),
+            counterStyle: TextStyle(color: _theme.textSecondary),
           ),
           maxLength: 200,
           validator: (value) {
@@ -436,25 +425,25 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
-          disabledBackgroundColor: AppTheme.surfaceDark,
-          disabledForegroundColor: AppTheme.textSecondary,
+          disabledBackgroundColor: _theme.bgSurface,
+          disabledForegroundColor: _theme.textSecondary,
         ),
       ),
     );
   }
 
-  // ─── Generation Phase Views ──────────────────────────────────────
+  // --- Generation Phase Views ---
 
   Widget _buildSubmittingView() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 16),
+          const CircularProgressIndicator(),
+          const SizedBox(height: 16),
           Text(
             'Submitting generation task...',
-            style: TextStyle(color: AppTheme.textSecondary),
+            style: TextStyle(color: _theme.textSecondary),
           ),
         ],
       ),
@@ -472,24 +461,24 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
           children: [
             CircularProgressIndicator(
               value: pollCount / ChartGenerationNotifier.maxPolls,
-              color: AppTheme.neonGreen,
+              color: _theme.accent,
             ),
             const SizedBox(height: 16),
             Text(
               'Generating... (poll $pollCount/${ChartGenerationNotifier.maxPolls})',
-              style: const TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: _theme.textPrimary),
             ),
             const SizedBox(height: 8),
             LinearProgressIndicator(
               value: pollCount / ChartGenerationNotifier.maxPolls,
-              color: AppTheme.neonGreen,
-              backgroundColor: AppTheme.surfaceDark,
+              color: _theme.accent,
+              backgroundColor: _theme.bgSurface,
             ),
             const SizedBox(height: 8),
             Text(
               'Estimated time remaining: ~${remaining}s',
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
+              style: TextStyle(
+                color: _theme.textSecondary,
                 fontSize: 12,
               ),
             ),
@@ -523,12 +512,12 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
                   child: Center(child: CircularProgressIndicator()),
                 );
               },
-              errorBuilder: (_, __, ___) => const SizedBox(
+              errorBuilder: (_, __, ___) => SizedBox(
                 height: 300,
                 child: Center(
                   child: Icon(
                     Icons.broken_image,
-                    color: AppTheme.errorRed,
+                    color: _theme.destructive,
                     size: 64,
                   ),
                 ),
@@ -543,18 +532,18 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
             children: [
               Chip(
                 label: Text('Publication #${result.publicationId}'),
-                backgroundColor: AppTheme.surfaceDark,
-                labelStyle: const TextStyle(
-                  color: AppTheme.textPrimary,
+                backgroundColor: _theme.bgSurface,
+                labelStyle: TextStyle(
+                  color: _theme.textPrimary,
                   fontSize: 12,
                 ),
               ),
               const SizedBox(width: 8),
               Chip(
                 label: Text('v${result.version}'),
-                backgroundColor: AppTheme.surfaceDark,
-                labelStyle: const TextStyle(
-                  color: AppTheme.textPrimary,
+                backgroundColor: _theme.bgSurface,
+                labelStyle: TextStyle(
+                  color: _theme.textPrimary,
                   fontSize: 12,
                 ),
               ),
@@ -563,9 +552,9 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
                 label: Text(
                   ref.read(chartConfigNotifierProvider).chartType.displayName,
                 ),
-                backgroundColor: AppTheme.neonBlue.withOpacity(0.15),
-                labelStyle: const TextStyle(
-                  color: AppTheme.neonBlue,
+                backgroundColor: _theme.dataGov.withOpacity(0.15),
+                labelStyle: TextStyle(
+                  color: _theme.dataGov,
                   fontSize: 12,
                 ),
               ),
@@ -612,8 +601,8 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
               icon: const Icon(Icons.refresh, size: 18),
               label: const Text('Generate Another'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.neonGreen,
-                side: const BorderSide(color: AppTheme.neonGreen),
+                foregroundColor: _theme.accent,
+                side: BorderSide(color: _theme.accent),
               ),
             ),
           ),
@@ -629,8 +618,8 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
               icon: const Icon(Icons.arrow_back, size: 18),
               label: const Text('Back to Preview'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.textSecondary,
-                side: const BorderSide(color: AppTheme.textSecondary),
+                foregroundColor: _theme.textSecondary,
+                side: BorderSide(color: _theme.textSecondary),
               ),
             ),
           ),
@@ -650,7 +639,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
           children: [
             Icon(
               isTimed ? Icons.timer_off : Icons.error_outline,
-              color: AppTheme.errorRed,
+              color: _theme.destructive,
               size: 48,
             ),
             const SizedBox(height: 16),
@@ -658,7 +647,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
               message,
               key: const Key('error_message'),
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppTheme.textSecondary),
+              style: TextStyle(color: _theme.textSecondary),
             ),
             const SizedBox(height: 24),
             ElevatedButton(

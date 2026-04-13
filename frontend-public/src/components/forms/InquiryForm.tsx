@@ -94,12 +94,12 @@ export default function InquiryForm() {
   if (formState === 'success') {
     return (
       <div
-        className="rounded-2xl border border-neon-green/30 bg-surface p-8 text-center"
+        className="rounded-public border border-accent/30 bg-bg-surface p-8 text-center"
         data-testid="success-state"
       >
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-neon-green/10">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent/10">
           <svg
-            className="h-8 w-8 text-neon-green"
+            className="h-8 w-8 text-accent"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -143,14 +143,14 @@ export default function InquiryForm() {
           type="text"
           autoComplete="name"
           placeholder="Your full name"
-          className={`w-full rounded-lg border bg-background px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-neon-green ${
-            errors.name ? 'border-error-red' : 'border-white/10'
+          className={`w-full rounded-lg border bg-bg-app px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-accent ${
+            errors.name ? 'border-destructive' : 'border-border-default'
           }`}
           {...register('name')}
         />
         {errors.name && (
           <p
-            className="mt-1 text-xs text-error-red"
+            className="mt-1 text-xs text-destructive"
             role="alert"
             data-testid="name-error"
           >
@@ -172,14 +172,14 @@ export default function InquiryForm() {
           type="email"
           autoComplete="email"
           placeholder="you@company.com"
-          className={`w-full rounded-lg border bg-background px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-neon-green ${
-            errors.email ? 'border-error-red' : 'border-white/10'
+          className={`w-full rounded-lg border bg-bg-app px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-accent ${
+            errors.email ? 'border-destructive' : 'border-border-default'
           }`}
           {...register('email')}
         />
         {errors.email && (
           <p
-            className="mt-1 text-xs text-error-red"
+            className="mt-1 text-xs text-destructive"
             role="alert"
             data-testid="email-error"
           >
@@ -198,8 +198,8 @@ export default function InquiryForm() {
         </label>
         <select
           id="inquiry-budget"
-          className={`w-full appearance-none rounded-lg border bg-background px-4 py-3 text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green ${
-            errors.budget ? 'border-error-red' : 'border-white/10'
+          className={`w-full appearance-none rounded-lg border bg-bg-app px-4 py-3 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent ${
+            errors.budget ? 'border-destructive' : 'border-border-default'
           }`}
           {...register('budget')}
         >
@@ -211,7 +211,7 @@ export default function InquiryForm() {
         </select>
         {errors.budget && (
           <p
-            className="mt-1 text-xs text-error-red"
+            className="mt-1 text-xs text-destructive"
             role="alert"
             data-testid="budget-error"
           >
@@ -232,14 +232,14 @@ export default function InquiryForm() {
           id="inquiry-message"
           rows={4}
           placeholder="Tell us about your goals and how we can help..."
-          className={`w-full resize-none rounded-lg border bg-background px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-neon-green ${
-            errors.message ? 'border-error-red' : 'border-white/10'
+          className={`w-full resize-none rounded-lg border bg-bg-app px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-accent ${
+            errors.message ? 'border-destructive' : 'border-border-default'
           }`}
           {...register('message')}
         />
         {errors.message && (
           <p
-            className="mt-1 text-xs text-error-red"
+            className="mt-1 text-xs text-destructive"
             role="alert"
             data-testid="message-error"
           >
@@ -251,7 +251,7 @@ export default function InquiryForm() {
       {/* Server error */}
       {serverError && (
         <p
-          className="text-sm text-error-red"
+          className="text-sm text-destructive"
           role="alert"
           data-testid="server-error"
         >
@@ -263,7 +263,7 @@ export default function InquiryForm() {
       <button
         type="submit"
         disabled={formState === 'submitting'}
-        className="w-full rounded-lg bg-neon-green px-6 py-3 font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full rounded-button bg-btn-primary-bg px-6 py-3 font-semibold text-btn-primary-text transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {formState === 'submitting' ? (
           <span className="inline-flex items-center gap-2">

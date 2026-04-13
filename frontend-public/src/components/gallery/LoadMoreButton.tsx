@@ -47,7 +47,7 @@ export function LoadMoreButton({ initialOffset, limit, total }: LoadMoreButtonPr
           <button
             onClick={loadMore}
             disabled={isLoading}
-            className="px-6 py-3 rounded-lg bg-surface border border-white/10 text-text-primary font-semibold hover:bg-white/5 transition-colors disabled:opacity-50"
+            className="px-6 py-3 rounded-button bg-bg-surface border border-border-default text-text-primary font-semibold hover:bg-bg-surface-hover transition-colors disabled:opacity-50"
           >
             {isLoading ? 'Loading...' : 'Load More'}
           </button>

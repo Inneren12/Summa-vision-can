@@ -16,6 +16,7 @@ class CubeSearchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
@@ -31,21 +32,21 @@ class CubeSearchTile extends StatelessWidget {
                   // Frequency badge
                   _Badge(
                     label: entry.frequency,
-                    color: AppTheme.neonBlue,
+                    color: theme.accent,
                   ),
                   if (entry.archiveStatus) ...[
                     const SizedBox(width: 8),
-                    const _Badge(
+                    _Badge(
                       label: 'Archived',
-                      color: AppTheme.neonYellow,
+                      color: theme.textMuted,
                     ),
                   ],
                   const Spacer(),
                   // Product ID muted
                   Text(
                     entry.productId,
-                    style: const TextStyle(
-                      color: AppTheme.textSecondary,
+                    style: TextStyle(
+                      color: theme.textSecondary,
                       fontSize: 12,
                     ),
                   ),
@@ -55,8 +56,8 @@ class CubeSearchTile extends StatelessWidget {
               // Title
               Text(
                 entry.titleEn,
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
+                style: TextStyle(
+                  color: theme.textPrimary,
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
@@ -65,8 +66,8 @@ class CubeSearchTile extends StatelessWidget {
               // Subject tag
               Text(
                 entry.subjectEn,
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
+                style: TextStyle(
+                  color: theme.textSecondary,
                   fontSize: 13,
                 ),
               ),

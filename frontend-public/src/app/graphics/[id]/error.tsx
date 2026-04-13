@@ -6,7 +6,7 @@ export default function ErrorPage({ reset }: { reset: () => void }) {
       <h2 className="text-xl text-text-primary">Something went wrong loading this graphic</h2>
       <button
         onClick={reset}
-        className="px-6 py-3 rounded-lg bg-surface border border-white/10 text-text-primary font-semibold hover:bg-white/5 transition-colors"
+        className="px-6 py-3 rounded-button bg-bg-surface border border-border-default text-text-primary font-semibold hover:bg-bg-surface-hover transition-colors"
       >
         Try again
       </button>

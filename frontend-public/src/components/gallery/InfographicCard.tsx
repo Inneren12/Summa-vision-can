@@ -18,8 +18,8 @@ export function InfographicCard({ pub, priority = false }: { pub: PublicationRes
   }
 
   return (
-    <article className="bg-surface rounded-xl overflow-hidden border border-white/5 flex flex-col">
-      <Link href={`/graphics/${pub.id}`} className="relative aspect-video bg-black/30 block hover:opacity-90 transition-opacity">
+    <article className="bg-card-bg rounded-public overflow-hidden shadow-card flex flex-col">
+      <Link href={`/graphics/${pub.id}`} className="relative aspect-video bg-bg-app/30 block hover:opacity-90 transition-opacity">
         {pub.cdn_url ? (
           <Image
             src={pub.cdn_url}
@@ -38,33 +38,25 @@ export function InfographicCard({ pub, priority = false }: { pub: PublicationRes
       <div className="p-5 flex flex-col gap-3 flex-1">
         <div className="flex items-center gap-2">
           <span
-            className="text-xs font-bold px-2 py-1 rounded"
-            style={{
-              color:
-                (pub.virality_score ?? 0) > 0.8
-                  ? '#00FF94'
-                  : (pub.virality_score ?? 0) >= 0.7
-                  ? '#FFB700'
-                  : '#FF006E',
-              backgroundColor:
-                (pub.virality_score ?? 0) > 0.8
-                  ? 'rgba(0,255,148,0.1)'
-                  : (pub.virality_score ?? 0) >= 0.7
-                  ? 'rgba(255,183,0,0.1)'
-                  : 'rgba(255,0,110,0.1)',
-            }}
+            className={`text-xs font-bold font-data px-2 py-1 rounded ${
+              (pub.virality_score ?? 0) > 0.8
+                ? 'text-data-positive bg-data-positive/10'
+                : (pub.virality_score ?? 0) >= 0.7
+                ? 'text-data-warning bg-data-warning/10'
+                : 'text-destructive bg-destructive/10'
+            }`}
           >
             {(pub.virality_score ?? 0).toFixed(1)}
           </span>
-          <span className="text-xs text-text-secondary uppercase tracking-wider flex-1">
+          <span className="text-xs text-text-secondary font-data uppercase tracking-wider flex-1">
             {pub.chart_type}
           </span>
-          <span className="text-xs text-text-secondary">
+          <span className="text-xs text-text-secondary font-data">
             {timeStr}
           </span>
         </div>
         <Link href={`/graphics/${pub.id}`} className="flex-1 hover:underline">
-          <h2 className="text-text-primary font-semibold text-sm leading-snug">
+          <h2 className="text-text-primary font-display font-semibold text-sm leading-snug">
             {pub.headline}
           </h2>
         </Link>

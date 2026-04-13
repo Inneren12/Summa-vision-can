@@ -29,6 +29,8 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
   Timer? _debounce;
   bool _schemaExpanded = false;
 
+  SummaTheme get _theme => Theme.of(context).extension<SummaTheme>()!;
+
   @override
   void initState() {
     super.initState();
@@ -114,13 +116,13 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  color: AppTheme.errorRed, size: 48),
+              Icon(Icons.error_outline,
+                  color: _theme.destructive, size: 48),
               const SizedBox(height: 16),
               Text(
                 'Failed to load preview\n$err',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppTheme.textSecondary),
+                style: TextStyle(color: _theme.textSecondary),
               ),
               const SizedBox(height: 16),
               ElevatedButton(
@@ -132,10 +134,10 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
         ),
         data: (preview) {
           if (preview == null) {
-            return const Center(
+            return Center(
               child: Text(
                 'No data to preview',
-                style: TextStyle(color: AppTheme.textSecondary),
+                style: TextStyle(color: _theme.textSecondary),
               ),
             );
           }
@@ -188,14 +190,14 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
     final totalRows = preview.rows;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: AppTheme.surfaceDark,
+      color: _theme.bgSurface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             _readableKey(preview.storageKey),
-            style: const TextStyle(
-              color: AppTheme.neonBlue,
+            style: TextStyle(
+              color: _theme.dataGov,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
@@ -205,8 +207,8 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
             children: [
               Text(
                 'Showing ${_formatInt(returnedRows)} of ${_formatInt(totalRows)} rows',
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
+                style: TextStyle(
+                  color: _theme.textPrimary,
                   fontSize: 13,
                 ),
               ),
@@ -216,13 +218,13 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: AppTheme.neonYellow.withOpacity(0.15),
+                    color: _theme.dataWarning.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Preview limited to first 100 rows',
                     style: TextStyle(
-                      color: AppTheme.neonYellow,
+                      color: _theme.dataWarning,
                       fontSize: 11,
                     ),
                   ),
@@ -247,14 +249,14 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
       tilePadding: const EdgeInsets.symmetric(horizontal: 16),
       title: Text(
         'Column Schema (${preview.columnNames.length} columns)',
-        style: const TextStyle(
-          color: AppTheme.textPrimary,
+        style: TextStyle(
+          color: _theme.textPrimary,
           fontSize: 13,
           fontWeight: FontWeight.w600,
         ),
       ),
-      iconColor: AppTheme.textSecondary,
-      collapsedIconColor: AppTheme.textSecondary,
+      iconColor: _theme.textSecondary,
+      collapsedIconColor: _theme.textSecondary,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -268,9 +270,9 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
                   '$name ($dtype)',
                   style: const TextStyle(fontSize: 12),
                 ),
-                backgroundColor: AppTheme.surfaceDark,
-                side: const BorderSide(color: AppTheme.neonBlue, width: 0.5),
-                labelStyle: const TextStyle(color: AppTheme.textPrimary),
+                backgroundColor: _theme.bgSurface,
+                side: BorderSide(color: _theme.dataGov, width: 0.5),
+                labelStyle: TextStyle(color: _theme.textPrimary),
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               );
@@ -294,9 +296,9 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: AppTheme.surfaceDark, width: 1),
+          bottom: BorderSide(color: _theme.bgSurface, width: 1),
         ),
       ),
       child: Wrap(
@@ -310,22 +312,22 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
             child: DropdownButtonFormField<String>(
               value: filter.geoFilter,
               isExpanded: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Geography',
-                labelStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                labelStyle: TextStyle(color: _theme.textSecondary, fontSize: 12),
                 isDense: true,
                 contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                border: OutlineInputBorder(),
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                border: const OutlineInputBorder(),
                 enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: AppTheme.textSecondary),
+                  borderSide: BorderSide(color: _theme.textSecondary),
                 ),
               ),
-              dropdownColor: AppTheme.surfaceDark,
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
-              hint: const Text(
+              dropdownColor: _theme.bgSurface,
+              style: TextStyle(color: _theme.textPrimary, fontSize: 13),
+              hint: Text(
                 'All geographies',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                style: TextStyle(color: _theme.textSecondary, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
               items: [
@@ -353,18 +355,18 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
             child: TextField(
               controller: _dateFromController,
               style:
-                  const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
-              decoration: const InputDecoration(
+                  TextStyle(color: _theme.textPrimary, fontSize: 13),
+              decoration: InputDecoration(
                 labelText: 'Date from',
-                labelStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                labelStyle: TextStyle(color: _theme.textSecondary, fontSize: 12),
                 hintText: 'YYYY-MM',
-                hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                hintStyle: TextStyle(color: _theme.textSecondary, fontSize: 12),
                 isDense: true,
                 contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                border: OutlineInputBorder(),
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                border: const OutlineInputBorder(),
                 enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: AppTheme.textSecondary),
+                  borderSide: BorderSide(color: _theme.textSecondary),
                 ),
               ),
               onChanged: (value) {
@@ -380,18 +382,18 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
             child: TextField(
               controller: _dateToController,
               style:
-                  const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
-              decoration: const InputDecoration(
+                  TextStyle(color: _theme.textPrimary, fontSize: 13),
+              decoration: InputDecoration(
                 labelText: 'Date to',
-                labelStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                labelStyle: TextStyle(color: _theme.textSecondary, fontSize: 12),
                 hintText: 'YYYY-MM',
-                hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                hintStyle: TextStyle(color: _theme.textSecondary, fontSize: 12),
                 isDense: true,
                 contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                border: OutlineInputBorder(),
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                border: const OutlineInputBorder(),
                 enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: AppTheme.textSecondary),
+                  borderSide: BorderSide(color: _theme.textSecondary),
                 ),
               ),
               onChanged: (value) {
@@ -407,18 +409,18 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
             child: TextField(
               controller: _searchController,
               style:
-                  const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
-              decoration: const InputDecoration(
+                  TextStyle(color: _theme.textPrimary, fontSize: 13),
+              decoration: InputDecoration(
                 labelText: 'Search',
-                labelStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                labelStyle: TextStyle(color: _theme.textSecondary, fontSize: 12),
                 prefixIcon:
-                    Icon(Icons.search, size: 18, color: AppTheme.textSecondary),
+                    Icon(Icons.search, size: 18, color: _theme.textSecondary),
                 isDense: true,
                 contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                border: OutlineInputBorder(),
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                border: const OutlineInputBorder(),
                 enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: AppTheme.textSecondary),
+                  borderSide: BorderSide(color: _theme.textSecondary),
                 ),
               ),
               onChanged: _onSearchChanged,
@@ -431,7 +433,7 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
             icon: const Icon(Icons.clear_all, size: 18),
             label: const Text('Clear Filters'),
             style: TextButton.styleFrom(
-              foregroundColor: AppTheme.textSecondary,
+              foregroundColor: _theme.textSecondary,
             ),
           ),
         ],
@@ -459,7 +461,7 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
                   ? columnNames.indexOf(sortCol)
                   : null,
           sortAscending: sortAsc,
-          headingRowColor: WidgetStateProperty.all(AppTheme.surfaceDark),
+          headingRowColor: WidgetStateProperty.all(_theme.bgSurface),
           dataRowColor: WidgetStateProperty.resolveWith((states) {
             return null; // handled by row striping below
           }),
@@ -470,9 +472,9 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
             return DataColumn(
               label: Text(
                 name,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
+                  color: _theme.textPrimary,
                 ),
               ),
               numeric: isNumeric,
@@ -486,7 +488,7 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
               color: WidgetStateProperty.all(
                 isEven
                     ? Colors.transparent
-                    : AppTheme.surfaceDark.withOpacity(0.5),
+                    : _theme.bgSurface.withOpacity(0.5),
               ),
               cells: columnNames.map((name) {
                 final value = row[name];
@@ -502,9 +504,9 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
 
   Widget _buildCell(dynamic value, bool isNumeric) {
     if (value == null) {
-      return const Text(
+      return Text(
         '\u2014', // em dash
-        style: TextStyle(color: AppTheme.textSecondary),
+        style: TextStyle(color: _theme.textSecondary),
       );
     }
 
@@ -517,7 +519,7 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
         child: Text(
           text,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+          style: TextStyle(color: _theme.textPrimary, fontSize: 13),
         ),
       ),
     );
@@ -541,9 +543,9 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
   Widget _buildActionsBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(color: AppTheme.surfaceDark, width: 1),
+          top: BorderSide(color: _theme.bgSurface, width: 1),
         ),
       ),
       child: Row(
@@ -553,8 +555,8 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
             icon: const Icon(Icons.arrow_back, size: 18),
             label: const Text('Back to Search'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.textSecondary,
-              side: const BorderSide(color: AppTheme.textSecondary),
+              foregroundColor: _theme.textSecondary,
+              side: BorderSide(color: _theme.textSecondary),
             ),
           ),
           const Spacer(),

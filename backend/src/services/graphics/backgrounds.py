@@ -34,16 +34,16 @@ class BackgroundGenerator:
     # Max allowed dimension to avoid excessive RAM allocation
     MAX_DIMENSION = 4096
 
-    # Accent color palettes per category (Neon brand colors)
+    # Accent color palettes per category (Design System v3.2 data semantic tokens)
     # These exact RGB tuples are mixed with the BASE_COLOR
     # during gradient and noise calculation to theme the image.
     PALETTES = {
-        BackgroundCategory.HOUSING: (0, 229, 255),  # Neon Cyan
-        BackgroundCategory.INFLATION: (255, 107, 53),  # Neon Red/Orange
-        BackgroundCategory.EMPLOYMENT: (57, 255, 20),  # Neon Green
-        BackgroundCategory.TRADE: (191, 64, 191),  # Neon Purple
-        BackgroundCategory.ENERGY: (255, 215, 0),  # Neon Yellow
-        BackgroundCategory.DEMOGRAPHICS: (65, 105, 225),  # Neon Blue
+        BackgroundCategory.HOUSING: (34, 211, 238),  # --data-housing #22D3EE
+        BackgroundCategory.INFLATION: (249, 115, 22),  # --data-monopoly #F97316
+        BackgroundCategory.EMPLOYMENT: (16, 185, 129),  # --data-positive #10B981
+        BackgroundCategory.TRADE: (167, 139, 250),  # --data-society #A78BFA
+        BackgroundCategory.ENERGY: (251, 191, 36),  # --accent #FBBF24
+        BackgroundCategory.DEMOGRAPHICS: (59, 130, 246),  # --data-gov #3B82F6
     }
 
     @staticmethod

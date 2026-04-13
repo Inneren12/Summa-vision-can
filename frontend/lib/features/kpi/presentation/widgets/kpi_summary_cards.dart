@@ -11,6 +11,7 @@ class KPISummaryCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     final conversionRate = data.emailsSent > 0
         ? (data.tokensActivated / data.emailsSent * 100)
         : 0.0;
@@ -34,13 +35,13 @@ class KPISummaryCards extends StatelessWidget {
               label: 'Published',
               value: '${data.publishedCount}',
               subtitle: '+${data.draftCount} drafts',
-              accentColor: AppTheme.neonGreen,
+              accentColor: theme.accent,
             ),
             _MetricCard(
               label: 'Leads',
               value: '${data.totalLeads}',
               subtitle: '${data.b2bLeads} B2B',
-              accentColor: AppTheme.neonBlue,
+              accentColor: theme.dataGov,
             ),
             _MetricCard(
               label: 'Downloads',
@@ -48,7 +49,7 @@ class KPISummaryCards extends StatelessWidget {
               subtitle: data.emailsSent > 0
                   ? 'of ${data.emailsSent} sent (${conversionRate.toStringAsFixed(1)}%)'
                   : 'N/A',
-              accentColor: AppTheme.neonYellow,
+              accentColor: theme.dataWarning,
             ),
             _MetricCard(
               label: 'Job Success',
@@ -58,7 +59,7 @@ class KPISummaryCards extends StatelessWidget {
               subtitle: totalResolved > 0
                   ? '${data.jobsSucceeded}/${totalResolved}'
                   : 'No jobs',
-              accentColor: AppTheme.neonPink,
+              accentColor: theme.dataNegative,
             ),
           ],
         );
@@ -82,6 +83,7 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -91,8 +93,8 @@ class _MetricCard extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
+              style: TextStyle(
+                color: theme.textSecondary,
                 fontSize: 13,
               ),
             ),
@@ -108,8 +110,8 @@ class _MetricCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
+              style: TextStyle(
+                color: theme.textSecondary,
                 fontSize: 12,
               ),
             ),

@@ -20,11 +20,11 @@ class JobsDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _JobsDashboardScreenState extends ConsumerState<JobsDashboardScreen> {
+  SummaTheme get _theme => Theme.of(context).extension<SummaTheme>()!;
+
   @override
   void initState() {
     super.initState();
-    // Activate auto-refresh while this screen is visible.
-    // Reading the provider starts the timer; disposal cancels it.
   }
 
   static const _jobTypes = <String?, String>{
@@ -86,7 +86,7 @@ class _JobsDashboardScreenState extends ConsumerState<JobsDashboardScreen> {
       ),
       body: Column(
         children: [
-          // Stats bar — only shown when data is loaded
+          // Stats bar
           jobsAsync.whenOrNull(
                 data: (response) => Padding(
                   padding:
@@ -114,7 +114,7 @@ class _JobsDashboardScreenState extends ConsumerState<JobsDashboardScreen> {
                     decoration: InputDecoration(
                       labelText: 'Job Type',
                       labelStyle:
-                          const TextStyle(color: AppTheme.textSecondary),
+                          TextStyle(color: _theme.textSecondary),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -123,8 +123,8 @@ class _JobsDashboardScreenState extends ConsumerState<JobsDashboardScreen> {
                         vertical: 8,
                       ),
                     ),
-                    dropdownColor: AppTheme.surfaceDark,
-                    style: const TextStyle(color: AppTheme.textPrimary),
+                    dropdownColor: _theme.bgSurface,
+                    style: TextStyle(color: _theme.textPrimary),
                     items: _jobTypes.entries
                         .map(
                           (e) => DropdownMenuItem(
@@ -154,11 +154,11 @@ class _JobsDashboardScreenState extends ConsumerState<JobsDashboardScreen> {
                             label: Text(e.value),
                             selected: isSelected,
                             selectedColor:
-                                AppTheme.neonGreen.withOpacity(0.2),
+                                _theme.accent.withOpacity(0.2),
                             labelStyle: TextStyle(
                               color: isSelected
-                                  ? AppTheme.neonGreen
-                                  : AppTheme.textSecondary,
+                                  ? _theme.accent
+                                  : _theme.textSecondary,
                               fontSize: 12,
                             ),
                             onSelected: (_) {
@@ -183,8 +183,8 @@ class _JobsDashboardScreenState extends ConsumerState<JobsDashboardScreen> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       '${response.total} jobs',
-                      style: const TextStyle(
-                        color: AppTheme.textSecondary,
+                      style: TextStyle(
+                        color: _theme.textSecondary,
                         fontSize: 13,
                       ),
                     ),
@@ -204,14 +204,14 @@ class _JobsDashboardScreenState extends ConsumerState<JobsDashboardScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.error_outline,
-                        color: AppTheme.errorRed, size: 48),
+                    Icon(Icons.error_outline,
+                        color: _theme.destructive, size: 48),
                     const SizedBox(height: 16),
                     Text(
                       'Failed to load jobs\n$err',
                       textAlign: TextAlign.center,
                       style:
-                          const TextStyle(color: AppTheme.textSecondary),
+                          TextStyle(color: _theme.textSecondary),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
@@ -224,11 +224,11 @@ class _JobsDashboardScreenState extends ConsumerState<JobsDashboardScreen> {
               ),
               data: (response) {
                 if (response.items.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Text(
                       'No jobs found. Adjust filters or wait for new jobs.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: AppTheme.textSecondary),
+                      style: TextStyle(color: _theme.textSecondary),
                     ),
                   );
                 }

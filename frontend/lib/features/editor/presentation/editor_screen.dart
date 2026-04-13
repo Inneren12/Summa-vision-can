@@ -20,6 +20,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   late final TextEditingController _headlineController;
   late final TextEditingController _bgPromptController;
 
+  SummaTheme get _theme => Theme.of(context).extension<SummaTheme>()!;
+
   @override
   void initState() {
     super.initState();
@@ -57,7 +59,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         body: Center(
           child: Text(
             'Failed to load brief: $err',
-            style: const TextStyle(color: AppTheme.errorRed),
+            style: TextStyle(color: _theme.destructive),
           ),
         ),
       ),
@@ -66,10 +68,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         if (brief == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('Editor')),
-            body: const Center(
+            body: Center(
               child: Text(
                 'Brief not found',
-                style: TextStyle(color: AppTheme.textSecondary),
+                style: TextStyle(color: _theme.textSecondary),
               ),
             ),
           );
@@ -96,9 +98,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                     _headlineController.text = brief.headline;
                     _bgPromptController.text = '';
                   },
-                  child: const Text(
+                  child: Text(
                     'Reset',
-                    style: TextStyle(color: AppTheme.neonPink),
+                    style: TextStyle(color: _theme.destructive),
                   ),
                 ),
             ],
@@ -117,8 +119,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                         brief.viralityScore.toStringAsFixed(1),
                         style: TextStyle(
                           color: brief.viralityScore > 8
-                              ? AppTheme.neonGreen
-                              : AppTheme.neonYellow,
+                              ? _theme.dataPositive
+                              : _theme.dataWarning,
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
                         ),
@@ -131,7 +133,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                       TextFormField(
                         key: const Key('headline_field'),
                         controller: _headlineController,
-                        style: const TextStyle(color: AppTheme.textPrimary),
+                        style: TextStyle(color: _theme.textPrimary),
                         maxLength: 280,
                         decoration: _inputDecoration('Enter headline...'),
                         onChanged: (v) => ref
@@ -146,7 +148,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                       TextFormField(
                         key: const Key('bg_prompt_field'),
                         controller: _bgPromptController,
-                        style: const TextStyle(color: AppTheme.textPrimary),
+                        style: TextStyle(color: _theme.textPrimary),
                         maxLines: 3,
                         decoration: _inputDecoration(
                           'Describe the AI background image...',
@@ -163,8 +165,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                       DropdownButtonFormField<ChartType>(
                         key: const Key('chart_type_dropdown'),
                         value: editorState.chartType,
-                        dropdownColor: AppTheme.surfaceDark,
-                        style: const TextStyle(color: AppTheme.textPrimary),
+                        dropdownColor: _theme.bgSurface,
+                        style: TextStyle(color: _theme.textPrimary),
                         decoration: _inputDecoration(''),
                         items: ChartType.values
                             .map(
@@ -184,26 +186,25 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                       ),
                       const SizedBox(height: 32),
 
-                      // Preview Background — stub for future use
+                      // Preview Background -- stub for future use
                       OutlinedButton.icon(
                         key: const Key('preview_background_btn'),
-                        onPressed: null, // stub — not implemented yet
+                        onPressed: null,
                         icon: const Icon(Icons.image_outlined),
                         label: const Text('Preview Background'),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppTheme.textSecondary,
-                          side: const BorderSide(color: AppTheme.surfaceDark),
+                          foregroundColor: _theme.textSecondary,
+                          side: BorderSide(color: _theme.borderDefault),
                         ),
                       ),
                       const SizedBox(height: 16),
 
-                      // Generate button — navigates to preview
+                      // Generate button
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           key: const Key('generate_btn'),
                           onPressed: () {
-                            // Navigate to preview — PR-24 will wire up actual generation
                             context.go('/preview/${brief.id}');
                           },
                           icon: const Icon(Icons.auto_awesome),
@@ -220,18 +221,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
   InputDecoration _inputDecoration(String hint) => InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: AppTheme.textSecondary),
+        hintStyle: TextStyle(color: _theme.textSecondary),
         filled: true,
-        fillColor: AppTheme.surfaceDark,
+        fillColor: _theme.bgSurface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppTheme.neonGreen),
+          borderSide: BorderSide(color: _theme.accent),
         ),
-        counterStyle: const TextStyle(color: AppTheme.textSecondary),
+        counterStyle: TextStyle(color: _theme.textSecondary),
       );
 }
 
@@ -241,10 +242,11 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     return Text(
       text,
-      style: const TextStyle(
-        color: AppTheme.textSecondary,
+      style: TextStyle(
+        color: theme.textSecondary,
         fontSize: 12,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.8,
