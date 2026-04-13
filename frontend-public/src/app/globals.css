@@ -16,7 +16,7 @@
   --raw-slate-900: #15181E;
   --raw-slate-800: #1C1F26;
   --raw-slate-700: #262A33;
-  --raw-slate-600: #3A3F4B;
+  --raw-slate-600: #5C6370;
   --raw-slate-500: #6B7280;
   --raw-slate-400: #9CA3AF;
   --raw-slate-300: #D1D5DB;
@@ -78,7 +78,7 @@
 
   /* Text */
   --text-primary:      var(--raw-slate-100);
-  --text-secondary:    var(--raw-slate-400);
+  --text-secondary:    #8B949E;
   --text-muted:        var(--raw-slate-500);
   --text-inverse:      var(--raw-slate-950);
 
@@ -115,10 +115,10 @@
   --data-society:      var(--raw-purple-400);
   --data-infra:        var(--raw-teal-400);
   --data-monopoly:     var(--raw-orange-500);
-  --data-baseline:     var(--raw-slate-500);
+  --data-baseline:     #94A3B8;
   --data-housing:      var(--raw-cyan-400);
   --data-negative:     var(--raw-red-500);
-  --data-positive:     var(--raw-emerald-500);
+  --data-positive:     #0D9488;
   --data-warning:      var(--raw-yellow-500);
   --data-neutral:      var(--raw-slate-400);
 
@@ -143,10 +143,10 @@
   /* ───────────────────────────────────────────────────────────
      Border Radius (max 12px per design system)
      ─────────────────────────────────────────────────────────── */
-  --radius-admin:   6px;
-  --radius-public:  8px;
+  --radius-admin:   4px;
+  --radius-public:  10px;
   --radius-button:  8px;
-  --radius-tooltip: 6px;
+  --radius-tooltip: 4px;
 
   /* ───────────────────────────────────────────────────────────
      Shadows
@@ -159,36 +159,26 @@
      Z-Index Scale
      ─────────────────────────────────────────────────────────── */
   --z-base:          0;
-  --z-sticky:        100;
-  --z-chart-overlay: 200;
-  --z-popover:       300;
-  --z-tooltip:       400;
-  --z-modal:         500;
-  --z-alert:         600;
+  --z-sticky:        10;
+  --z-chart-overlay: 20;
+  --z-popover:       30;
+  --z-tooltip:       40;
+  --z-modal:         50;
+  --z-alert:         60;
 
   /* ───────────────────────────────────────────────────────────
      Motion (no bounce/elastic — design system constraint)
      ─────────────────────────────────────────────────────────── */
   --ease-out:        cubic-bezier(0.16, 1, 0.3, 1);
-  --duration-micro:  100ms;
-  --duration-data:   300ms;
-  --duration-page:   500ms;
+  --duration-micro:  150ms;
+  --duration-data:   400ms;
+  --duration-page:   800ms;
 }
 
 /* ───────────────────────────────────────────────────────────
    Density Modes
    ─────────────────────────────────────────────────────────── */
 body.density-compact {
-  --space-xs:  2px;
-  --space-sm:  4px;
-  --space-md:  8px;
-  --space-lg:  12px;
-  --space-xl:  16px;
-  --space-2xl: 24px;
-  --space-3xl: 32px;
-}
-
-body.density-dense {
   --space-xs:  3px;
   --space-sm:  6px;
   --space-md:  12px;
@@ -196,6 +186,16 @@ body.density-dense {
   --space-xl:  24px;
   --space-2xl: 36px;
   --space-3xl: 48px;
+}
+
+body.density-dense {
+  --space-xs:  2px;
+  --space-sm:  4px;
+  --space-md:  8px;
+  --space-lg:  12px;
+  --space-xl:  16px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
 }
 
 /* ───────────────────────────────────────────────────────────
@@ -238,8 +238,8 @@ body {
    Focus
    ─────────────────────────────────────────────────────────── */
 :focus-visible {
-  outline: 2px solid var(--border-focus);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-app), 0 0 0 4px var(--accent);
 }
 
 /* ───────────────────────────────────────────────────────────
@@ -247,10 +247,11 @@ body {
    ─────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   :root {
+    --space-md:  12px;
     --space-lg:  16px;
     --space-xl:  24px;
     --space-2xl: 32px;
-    --space-3xl: 48px;
+    --space-3xl: 40px;
   }
 }
 

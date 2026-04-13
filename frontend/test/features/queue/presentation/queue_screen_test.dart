@@ -106,7 +106,7 @@ void main() {
 
       // Score 9.1 > 8 should use dataPositive (design system token)
       final scoreText = tester.widget<Text>(find.text('9.1'));
-      expect(scoreText.style?.color, equals(const Color(0xFF10B981)));
+      expect(scoreText.style?.color, equals(const Color(0xFF0D9488)));
     });
   });
 
