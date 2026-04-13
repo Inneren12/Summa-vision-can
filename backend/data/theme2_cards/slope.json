@@ -1,0 +1,43 @@
+{
+  "card_type": "slope",
+  "eyebrow": "THE DEAD ZONE",
+  "headline": "A $10k Raise \u2014 What You Actually Keep",
+  "subheadline": "Ontario, single parent, 2 children under 6",
+  "slopes": [
+    {
+      "label": "$45k \u2192 $55k",
+      "gross_start": 45000,
+      "gross_end": 55000,
+      "net_start": 51453,
+      "net_end": 56033,
+      "gross_delta": 10000,
+      "net_delta": 4580,
+      "effective_rate": 54.2
+    },
+    {
+      "label": "$55k \u2192 $65k",
+      "gross_start": 55000,
+      "gross_end": 65000,
+      "net_start": 56033,
+      "net_end": 61079,
+      "gross_delta": 10000,
+      "net_delta": 5046,
+      "effective_rate": 49.5
+    },
+    {
+      "label": "$85k \u2192 $95k",
+      "gross_start": 85000,
+      "gross_end": 95000,
+      "net_start": 72120,
+      "net_end": 77780,
+      "gross_delta": 10000,
+      "net_delta": 5660,
+      "effective_rate": 43.4
+    }
+  ],
+  "source": "Summa Vision calculation from CRA formulas, 2025 tax year",
+  "size": [
+    1200,
+    900
+  ]
+}

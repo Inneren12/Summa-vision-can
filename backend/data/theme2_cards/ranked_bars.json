@@ -1,0 +1,37 @@
+{
+  "card_type": "ranked_bars",
+  "eyebrow": "PROVINCIAL COMPARISON",
+  "headline": "Which Province Punishes Your Raise Most?",
+  "subheadline": "METR at $47,000 \u2014 single parent, 2 children",
+  "bars": [
+    {
+      "province": "QC",
+      "province_name": "Quebec",
+      "metr": 61.1,
+      "zone": "dead_zone"
+    },
+    {
+      "province": "AB",
+      "province_name": "Alberta",
+      "metr": 55.1,
+      "zone": "dead_zone"
+    },
+    {
+      "province": "ON",
+      "province_name": "Ontario",
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "province": "BC",
+      "province_name": "British Columbia",
+      "metr": 48.8,
+      "zone": "high"
+    }
+  ],
+  "source": "Summa Vision calculation from CRA + provincial formulas, 2025",
+  "size": [
+    1200,
+    900
+  ]
+}

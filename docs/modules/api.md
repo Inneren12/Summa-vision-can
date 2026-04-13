@@ -16,6 +16,7 @@ api/
     ├── public_graphics.py      ← GET /api/v1/public/graphics
     ├── public_leads.py         ← POST /api/v1/public/leads/capture (D-2, D-3)
     ├── public_download.py      ← GET /api/v1/public/download
+    ├── public_metr.py          ← GET /api/v1/public/metr/* (Theme #2)
     └── public_sponsorship.py   ← POST /api/v1/public/sponsorship/inquire (D-3)
 ```
 
@@ -148,6 +149,41 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 - Dedupe key: `inquiry:{email}`.
 - Returns `{"message": "Your inquiry has been received. ..."}`
 
+### METR Calculator Router (`routers/public_metr.py`) — ✅ New (Theme #2)
+
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| `GET` | `/api/v1/public/metr/calculate` | 200 / 422 / 429 | Calculate METR at a specific income point |
+| `GET` | `/api/v1/public/metr/curve` | 200 / 422 / 429 | Generate full METR curve across income range |
+| `GET` | `/api/v1/public/metr/compare` | 200 / 422 / 429 | Compare METR across all 4 provinces |
+
+**Calculate — Query Parameters:**
+
+| Param | Type | Default | Constraints | Description |
+|-------|------|---------|-------------|-------------|
+| `income` | `int` | — | `0 ≤ income ≤ 500,000` | Annual gross employment income |
+| `province` | `str` | `"ON"` | `ON \| BC \| AB \| QC` | Province code |
+| `family_type` | `str` | `"single"` | `single \| single_parent \| couple` | Family type |
+| `n_children` | `int` | `0` | `0 ≤ n ≤ 6` | Number of children |
+| `children_under_6` | `int` | `0` | `0 ≤ n ≤ 6` | Children under age 6 |
+
+**Curve — Additional Parameters:**
+
+| Param | Type | Default | Constraints | Description |
+|-------|------|---------|-------------|-------------|
+| `income_min` | `int` | `15,000` | `≥ 0` | Income range start |
+| `income_max` | `int` | `155,000` | `≤ 500,000` | Income range end |
+| `step` | `int` | `1,000` | `500 ≤ step ≤ 5,000` | Income step size |
+
+**Behaviour:**
+- **Public endpoint** — no API key required.
+- Rate-limited to **60 requests/minute per IP** via `InMemoryRateLimiter`.
+- Pure CPU calculations — no DB, no network I/O. Engine functions are pure (ARCH-PURA-001).
+- Quebec uses simplified modelling (separate Revenu Québec filing not modelled).
+- Compare endpoint returns provinces sorted by METR descending.
+- Curve endpoint includes dead zone detection, peak METR, and annotations.
+- Tax year: **2025**.
+
 ### Download Router (`routers/public_download.py`) — ✅ New (D-2)
 
 | Method | Path | Status | Description |
@@ -177,6 +213,9 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 | `JobItemResponse` | `routers/admin_jobs.py` | `id: str`, `job_type: str`, `status: str`, `payload_json`, `result_json`, `error_code`, `error_message`, `attempt_count: int`, `max_attempts: int`, `created_at`, `started_at`, `finished_at`, `created_by`, `dedupe_key` |
 | `JobListResponse` | `routers/admin_jobs.py` | `items: list[JobItemResponse]`, `total: int` |
 | `RetryJobResponse` | `routers/admin_jobs.py` | `job_id: str`, `status: str` |
+| `METRCalculateResponse` | `schemas/metr.py` | `gross_income: int`, `net_income: int`, `metr: float`, `zone: str`, `keep_per_dollar: float`, `components: METRComponentsResponse` |
+| `METRCurveResponse` | `schemas/metr.py` | `province: str`, `family_type: str`, `n_children: int`, `children_under_6: int`, `curve: list[CurvePoint]`, `dead_zones`, `peak`, `annotations` |
+| `METRCompareResponse` | `schemas/metr.py` | `income: int`, `family_type: str`, `provinces: list[ProvinceCompareItem]` |
 
 ## Architectural Rules
 
@@ -201,6 +240,8 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 | `services.crm.scoring.LeadScoringService` | — |
 | `services.notifications.slack.SlackNotifierService` | — |
 | `services.email.esp_client.ESPSubscriberInterface` | — |
+| `services.metr.engine` (public_metr) | — |
+| `schemas.metr` (public_metr) | — |
 | `fastapi.Depends` | — |
 
 ---

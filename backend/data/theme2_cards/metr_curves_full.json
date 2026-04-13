@@ -1,0 +1,3394 @@
+{
+  "Single parent, 2 kids u6": [
+    {
+      "gross": 15000,
+      "net": 34463,
+      "metr": 12.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 16000,
+      "net": 35337,
+      "metr": 25.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 17000,
+      "net": 36080,
+      "metr": 27.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 18000,
+      "net": 36803,
+      "metr": 27.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 19000,
+      "net": 37526,
+      "metr": 27.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 20000,
+      "net": 38250,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 21000,
+      "net": 38913,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 22000,
+      "net": 39577,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 23000,
+      "net": 40240,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 24000,
+      "net": 40903,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 25000,
+      "net": 41567,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 26000,
+      "net": 42230,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 27000,
+      "net": 42894,
+      "metr": 30.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 28000,
+      "net": 43587,
+      "metr": 35.3,
+      "zone": "normal"
+    },
+    {
+      "gross": 29000,
+      "net": 44234,
+      "metr": 42.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 30000,
+      "net": 44808,
+      "metr": 42.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 31000,
+      "net": 45381,
+      "metr": 42.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 32000,
+      "net": 45955,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 33000,
+      "net": 46523,
+      "metr": 46.7,
+      "zone": "high"
+    },
+    {
+      "gross": 34000,
+      "net": 47056,
+      "metr": 46.7,
+      "zone": "high"
+    },
+    {
+      "gross": 35000,
+      "net": 47589,
+      "metr": 46.6,
+      "zone": "high"
+    },
+    {
+      "gross": 36000,
+      "net": 48123,
+      "metr": 68.4,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 37000,
+      "net": 48439,
+      "metr": 60.2,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 38000,
+      "net": 48837,
+      "metr": 72.6,
+      "zone": "extreme"
+    },
+    {
+      "gross": 39000,
+      "net": 49111,
+      "metr": 62.7,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 40000,
+      "net": 49484,
+      "metr": 60.1,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 41000,
+      "net": 49883,
+      "metr": 60.2,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 42000,
+      "net": 50281,
+      "metr": 60.2,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 43000,
+      "net": 50679,
+      "metr": 60.1,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 44000,
+      "net": 51078,
+      "metr": 62.5,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 45000,
+      "net": 51453,
+      "metr": 65.2,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 46000,
+      "net": 51801,
+      "metr": 60.6,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 47000,
+      "net": 52195,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 48000,
+      "net": 52694,
+      "metr": 65.2,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 49000,
+      "net": 53042,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 50000,
+      "net": 53541,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 51000,
+      "net": 54039,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 52000,
+      "net": 54537,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 53000,
+      "net": 55036,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 54000,
+      "net": 55534,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 55000,
+      "net": 56033,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 56000,
+      "net": 56531,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 57000,
+      "net": 57029,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 58000,
+      "net": 57528,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 59000,
+      "net": 58026,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 60000,
+      "net": 58525,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 61000,
+      "net": 59023,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 62000,
+      "net": 59521,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 63000,
+      "net": 60020,
+      "metr": 46.9,
+      "zone": "high"
+    },
+    {
+      "gross": 64000,
+      "net": 60551,
+      "metr": 47.2,
+      "zone": "high"
+    },
+    {
+      "gross": 65000,
+      "net": 61079,
+      "metr": 46.2,
+      "zone": "high"
+    },
+    {
+      "gross": 66000,
+      "net": 61617,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 67000,
+      "net": 62181,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 68000,
+      "net": 62745,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 69000,
+      "net": 63309,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 70000,
+      "net": 63873,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 71000,
+      "net": 64437,
+      "metr": 42.3,
+      "zone": "normal"
+    },
+    {
+      "gross": 72000,
+      "net": 65014,
+      "metr": 41.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 73000,
+      "net": 65598,
+      "metr": 44.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 74000,
+      "net": 66154,
+      "metr": 47.1,
+      "zone": "high"
+    },
+    {
+      "gross": 75000,
+      "net": 66683,
+      "metr": 47.2,
+      "zone": "high"
+    },
+    {
+      "gross": 76000,
+      "net": 67211,
+      "metr": 47.1,
+      "zone": "high"
+    },
+    {
+      "gross": 77000,
+      "net": 67740,
+      "metr": 47.2,
+      "zone": "high"
+    },
+    {
+      "gross": 78000,
+      "net": 68268,
+      "metr": 47.1,
+      "zone": "high"
+    },
+    {
+      "gross": 79000,
+      "net": 68797,
+      "metr": 47.2,
+      "zone": "high"
+    },
+    {
+      "gross": 80000,
+      "net": 69325,
+      "metr": 47.1,
+      "zone": "high"
+    },
+    {
+      "gross": 81000,
+      "net": 69854,
+      "metr": 44.0,
+      "zone": "normal"
+    },
+    {
+      "gross": 82000,
+      "net": 70414,
+      "metr": 43.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 83000,
+      "net": 70983,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 84000,
+      "net": 71551,
+      "metr": 43.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 85000,
+      "net": 72120,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 86000,
+      "net": 72688,
+      "metr": 43.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 87000,
+      "net": 73257,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 88000,
+      "net": 73825,
+      "metr": 43.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 89000,
+      "net": 74394,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 90000,
+      "net": 74962,
+      "metr": 43.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 91000,
+      "net": 75531,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 92000,
+      "net": 76099,
+      "metr": 43.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 93000,
+      "net": 76668,
+      "metr": 43.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 94000,
+      "net": 77230,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 95000,
+      "net": 77780,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 96000,
+      "net": 78330,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 97000,
+      "net": 78880,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 98000,
+      "net": 79430,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 99000,
+      "net": 79981,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 100000,
+      "net": 80531,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 101000,
+      "net": 81081,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 102000,
+      "net": 81631,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 103000,
+      "net": 82181,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 104000,
+      "net": 82732,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 105000,
+      "net": 83282,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 106000,
+      "net": 83832,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 107000,
+      "net": 84382,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 108000,
+      "net": 84932,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 109000,
+      "net": 85483,
+      "metr": 45.3,
+      "zone": "high"
+    },
+    {
+      "gross": 110000,
+      "net": 86030,
+      "metr": 48.3,
+      "zone": "high"
+    },
+    {
+      "gross": 111000,
+      "net": 86547,
+      "metr": 48.3,
+      "zone": "high"
+    },
+    {
+      "gross": 112000,
+      "net": 87064,
+      "metr": 48.3,
+      "zone": "high"
+    },
+    {
+      "gross": 113000,
+      "net": 87581,
+      "metr": 48.2,
+      "zone": "high"
+    },
+    {
+      "gross": 114000,
+      "net": 88099,
+      "metr": 48.3,
+      "zone": "high"
+    },
+    {
+      "gross": 115000,
+      "net": 88616,
+      "metr": 48.3,
+      "zone": "high"
+    },
+    {
+      "gross": 116000,
+      "net": 89133,
+      "metr": 48.3,
+      "zone": "high"
+    },
+    {
+      "gross": 117000,
+      "net": 89650,
+      "metr": 49.4,
+      "zone": "high"
+    },
+    {
+      "gross": 118000,
+      "net": 90156,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 119000,
+      "net": 90642,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 120000,
+      "net": 91128,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 121000,
+      "net": 91614,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 122000,
+      "net": 92100,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 123000,
+      "net": 92586,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 124000,
+      "net": 93072,
+      "metr": 51.5,
+      "zone": "high"
+    },
+    {
+      "gross": 125000,
+      "net": 93557,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 126000,
+      "net": 94043,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 127000,
+      "net": 94529,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 128000,
+      "net": 95015,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 129000,
+      "net": 95501,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 130000,
+      "net": 95987,
+      "metr": 52.1,
+      "zone": "high"
+    },
+    {
+      "gross": 131000,
+      "net": 96466,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 132000,
+      "net": 96897,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 133000,
+      "net": 97328,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 134000,
+      "net": 97759,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 135000,
+      "net": 98190,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 136000,
+      "net": 98621,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 137000,
+      "net": 99052,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 138000,
+      "net": 99483,
+      "metr": 57.0,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 139000,
+      "net": 99913,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 140000,
+      "net": 100344,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 141000,
+      "net": 100775,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 142000,
+      "net": 101206,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 143000,
+      "net": 101637,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 144000,
+      "net": 102068,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 145000,
+      "net": 102499,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 146000,
+      "net": 102930,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 147000,
+      "net": 103361,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 148000,
+      "net": 103792,
+      "metr": 57.0,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 149000,
+      "net": 104222,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 150000,
+      "net": 104653,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 151000,
+      "net": 105084,
+      "metr": 55.1,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 152000,
+      "net": 105533,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 153000,
+      "net": 106099,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 154000,
+      "net": 106665,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 155000,
+      "net": 107231,
+      "metr": 43.4,
+      "zone": "normal"
+    }
+  ],
+  "Single, no kids": [
+    {
+      "gross": 15000,
+      "net": 16851,
+      "metr": 12.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 16000,
+      "net": 17725,
+      "metr": 25.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 17000,
+      "net": 18468,
+      "metr": 27.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 18000,
+      "net": 19191,
+      "metr": 27.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 19000,
+      "net": 19914,
+      "metr": 27.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 20000,
+      "net": 20638,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 21000,
+      "net": 21301,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 22000,
+      "net": 21965,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 23000,
+      "net": 22628,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 24000,
+      "net": 23291,
+      "metr": 34.0,
+      "zone": "normal"
+    },
+    {
+      "gross": 25000,
+      "net": 23951,
+      "metr": 48.7,
+      "zone": "high"
+    },
+    {
+      "gross": 26000,
+      "net": 24464,
+      "metr": 48.6,
+      "zone": "high"
+    },
+    {
+      "gross": 27000,
+      "net": 24978,
+      "metr": 45.7,
+      "zone": "high"
+    },
+    {
+      "gross": 28000,
+      "net": 25521,
+      "metr": 42.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 29000,
+      "net": 26095,
+      "metr": 42.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 30000,
+      "net": 26668,
+      "metr": 42.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 31000,
+      "net": 27241,
+      "metr": 42.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 32000,
+      "net": 27815,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 33000,
+      "net": 28383,
+      "metr": 46.7,
+      "zone": "high"
+    },
+    {
+      "gross": 34000,
+      "net": 28916,
+      "metr": 46.6,
+      "zone": "high"
+    },
+    {
+      "gross": 35000,
+      "net": 29450,
+      "metr": 40.3,
+      "zone": "normal"
+    },
+    {
+      "gross": 36000,
+      "net": 30047,
+      "metr": 46.7,
+      "zone": "high"
+    },
+    {
+      "gross": 37000,
+      "net": 30580,
+      "metr": 31.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 38000,
+      "net": 31264,
+      "metr": 44.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 39000,
+      "net": 31822,
+      "metr": 34.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 40000,
+      "net": 32480,
+      "metr": 31.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 41000,
+      "net": 33164,
+      "metr": 31.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 42000,
+      "net": 33847,
+      "metr": 31.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 43000,
+      "net": 34531,
+      "metr": 31.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 44000,
+      "net": 35214,
+      "metr": 34.0,
+      "zone": "normal"
+    },
+    {
+      "gross": 45000,
+      "net": 35874,
+      "metr": 36.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 46000,
+      "net": 36507,
+      "metr": 36.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 47000,
+      "net": 37141,
+      "metr": 36.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 48000,
+      "net": 37774,
+      "metr": 51.7,
+      "zone": "high"
+    },
+    {
+      "gross": 49000,
+      "net": 38257,
+      "metr": 36.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 50000,
+      "net": 38891,
+      "metr": 36.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 51000,
+      "net": 39524,
+      "metr": 33.3,
+      "zone": "normal"
+    },
+    {
+      "gross": 52000,
+      "net": 40191,
+      "metr": 31.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 53000,
+      "net": 40875,
+      "metr": 31.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 54000,
+      "net": 41558,
+      "metr": 31.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 55000,
+      "net": 42241,
+      "metr": 31.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 56000,
+      "net": 42925,
+      "metr": 31.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 57000,
+      "net": 43608,
+      "metr": 31.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 58000,
+      "net": 44292,
+      "metr": 28.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 59000,
+      "net": 45007,
+      "metr": 27.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 60000,
+      "net": 45731,
+      "metr": 27.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 61000,
+      "net": 46454,
+      "metr": 27.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 62000,
+      "net": 47178,
+      "metr": 27.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 63000,
+      "net": 47901,
+      "metr": 27.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 64000,
+      "net": 48624,
+      "metr": 28.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 65000,
+      "net": 49338,
+      "metr": 31.3,
+      "zone": "normal"
+    },
+    {
+      "gross": 66000,
+      "net": 50025,
+      "metr": 30.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 67000,
+      "net": 50724,
+      "metr": 30.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 68000,
+      "net": 51423,
+      "metr": 30.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 69000,
+      "net": 52122,
+      "metr": 30.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 70000,
+      "net": 52821,
+      "metr": 30.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 71000,
+      "net": 53520,
+      "metr": 28.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 72000,
+      "net": 54233,
+      "metr": 28.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 73000,
+      "net": 54951,
+      "metr": 30.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 74000,
+      "net": 55642,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 75000,
+      "net": 56306,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 76000,
+      "net": 56969,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 77000,
+      "net": 57633,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 78000,
+      "net": 58296,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 79000,
+      "net": 58960,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 80000,
+      "net": 59623,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 81000,
+      "net": 60287,
+      "metr": 30.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 82000,
+      "net": 60982,
+      "metr": 29.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 83000,
+      "net": 61686,
+      "metr": 29.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 84000,
+      "net": 62389,
+      "metr": 29.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 85000,
+      "net": 63093,
+      "metr": 29.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 86000,
+      "net": 63796,
+      "metr": 29.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 87000,
+      "net": 64500,
+      "metr": 29.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 88000,
+      "net": 65203,
+      "metr": 29.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 89000,
+      "net": 65907,
+      "metr": 29.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 90000,
+      "net": 66610,
+      "metr": 29.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 91000,
+      "net": 67314,
+      "metr": 29.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 92000,
+      "net": 68017,
+      "metr": 29.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 93000,
+      "net": 68721,
+      "metr": 30.3,
+      "zone": "normal"
+    },
+    {
+      "gross": 94000,
+      "net": 69418,
+      "metr": 31.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 95000,
+      "net": 70103,
+      "metr": 31.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 96000,
+      "net": 70788,
+      "metr": 31.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 97000,
+      "net": 71474,
+      "metr": 31.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 98000,
+      "net": 72159,
+      "metr": 31.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 99000,
+      "net": 72844,
+      "metr": 31.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 100000,
+      "net": 73529,
+      "metr": 31.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 101000,
+      "net": 74214,
+      "metr": 31.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 102000,
+      "net": 74900,
+      "metr": 31.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 103000,
+      "net": 75585,
+      "metr": 31.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 104000,
+      "net": 76270,
+      "metr": 31.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 105000,
+      "net": 76955,
+      "metr": 31.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 106000,
+      "net": 77640,
+      "metr": 31.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 107000,
+      "net": 78326,
+      "metr": 31.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 108000,
+      "net": 79011,
+      "metr": 31.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 109000,
+      "net": 79696,
+      "metr": 31.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 110000,
+      "net": 80378,
+      "metr": 34.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 111000,
+      "net": 81030,
+      "metr": 34.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 112000,
+      "net": 81682,
+      "metr": 34.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 113000,
+      "net": 82335,
+      "metr": 34.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 114000,
+      "net": 82987,
+      "metr": 34.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 115000,
+      "net": 83639,
+      "metr": 34.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 116000,
+      "net": 84291,
+      "metr": 34.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 117000,
+      "net": 84944,
+      "metr": 36.0,
+      "zone": "normal"
+    },
+    {
+      "gross": 118000,
+      "net": 85584,
+      "metr": 37.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 119000,
+      "net": 86205,
+      "metr": 37.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 120000,
+      "net": 86826,
+      "metr": 37.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 121000,
+      "net": 87447,
+      "metr": 37.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 122000,
+      "net": 88068,
+      "metr": 37.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 123000,
+      "net": 88689,
+      "metr": 37.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 124000,
+      "net": 89310,
+      "metr": 37.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 125000,
+      "net": 89931,
+      "metr": 37.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 126000,
+      "net": 90552,
+      "metr": 38.0,
+      "zone": "normal"
+    },
+    {
+      "gross": 127000,
+      "net": 91172,
+      "metr": 37.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 128000,
+      "net": 91793,
+      "metr": 37.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 129000,
+      "net": 92414,
+      "metr": 37.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 130000,
+      "net": 93035,
+      "metr": 38.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 131000,
+      "net": 93649,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 132000,
+      "net": 94215,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 133000,
+      "net": 94781,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 134000,
+      "net": 95347,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 135000,
+      "net": 95913,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 136000,
+      "net": 96479,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 137000,
+      "net": 97045,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 138000,
+      "net": 97611,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 139000,
+      "net": 98177,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 140000,
+      "net": 98743,
+      "metr": 43.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 141000,
+      "net": 99308,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 142000,
+      "net": 99874,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 143000,
+      "net": 100440,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 144000,
+      "net": 101006,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 145000,
+      "net": 101572,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 146000,
+      "net": 102138,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 147000,
+      "net": 102704,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 148000,
+      "net": 103270,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 149000,
+      "net": 103836,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 150000,
+      "net": 104402,
+      "metr": 43.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 151000,
+      "net": 104967,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 152000,
+      "net": 105533,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 153000,
+      "net": 106099,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 154000,
+      "net": 106665,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 155000,
+      "net": 107231,
+      "metr": 43.4,
+      "zone": "normal"
+    }
+  ],
+  "Couple, 2 kids u6": [
+    {
+      "gross": 15000,
+      "net": 34463,
+      "metr": 12.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 16000,
+      "net": 35337,
+      "metr": 25.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 17000,
+      "net": 36080,
+      "metr": 27.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 18000,
+      "net": 36803,
+      "metr": 27.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 19000,
+      "net": 37526,
+      "metr": 27.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 20000,
+      "net": 38250,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 21000,
+      "net": 38913,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 22000,
+      "net": 39577,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 23000,
+      "net": 40240,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 24000,
+      "net": 40903,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 25000,
+      "net": 41567,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 26000,
+      "net": 42230,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 27000,
+      "net": 42894,
+      "metr": 30.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 28000,
+      "net": 43587,
+      "metr": 35.3,
+      "zone": "normal"
+    },
+    {
+      "gross": 29000,
+      "net": 44234,
+      "metr": 42.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 30000,
+      "net": 44808,
+      "metr": 42.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 31000,
+      "net": 45381,
+      "metr": 42.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 32000,
+      "net": 45955,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 33000,
+      "net": 46523,
+      "metr": 46.7,
+      "zone": "high"
+    },
+    {
+      "gross": 34000,
+      "net": 47056,
+      "metr": 46.7,
+      "zone": "high"
+    },
+    {
+      "gross": 35000,
+      "net": 47589,
+      "metr": 46.6,
+      "zone": "high"
+    },
+    {
+      "gross": 36000,
+      "net": 48123,
+      "metr": 68.4,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 37000,
+      "net": 48439,
+      "metr": 60.2,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 38000,
+      "net": 48837,
+      "metr": 72.6,
+      "zone": "extreme"
+    },
+    {
+      "gross": 39000,
+      "net": 49111,
+      "metr": 62.7,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 40000,
+      "net": 49484,
+      "metr": 60.1,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 41000,
+      "net": 49883,
+      "metr": 60.2,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 42000,
+      "net": 50281,
+      "metr": 60.2,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 43000,
+      "net": 50679,
+      "metr": 60.1,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 44000,
+      "net": 51078,
+      "metr": 62.5,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 45000,
+      "net": 51453,
+      "metr": 65.2,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 46000,
+      "net": 51801,
+      "metr": 60.6,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 47000,
+      "net": 52195,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 48000,
+      "net": 52694,
+      "metr": 65.2,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 49000,
+      "net": 53042,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 50000,
+      "net": 53541,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 51000,
+      "net": 54039,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 52000,
+      "net": 54537,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 53000,
+      "net": 55036,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 54000,
+      "net": 55534,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 55000,
+      "net": 56033,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 56000,
+      "net": 56531,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 57000,
+      "net": 57029,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 58000,
+      "net": 57528,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 59000,
+      "net": 58026,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 60000,
+      "net": 58525,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 61000,
+      "net": 59023,
+      "metr": 50.2,
+      "zone": "high"
+    },
+    {
+      "gross": 62000,
+      "net": 59521,
+      "metr": 50.1,
+      "zone": "high"
+    },
+    {
+      "gross": 63000,
+      "net": 60020,
+      "metr": 46.9,
+      "zone": "high"
+    },
+    {
+      "gross": 64000,
+      "net": 60551,
+      "metr": 47.2,
+      "zone": "high"
+    },
+    {
+      "gross": 65000,
+      "net": 61079,
+      "metr": 46.2,
+      "zone": "high"
+    },
+    {
+      "gross": 66000,
+      "net": 61617,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 67000,
+      "net": 62181,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 68000,
+      "net": 62745,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 69000,
+      "net": 63309,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 70000,
+      "net": 63873,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 71000,
+      "net": 64437,
+      "metr": 42.3,
+      "zone": "normal"
+    },
+    {
+      "gross": 72000,
+      "net": 65014,
+      "metr": 41.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 73000,
+      "net": 65598,
+      "metr": 44.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 74000,
+      "net": 66154,
+      "metr": 47.1,
+      "zone": "high"
+    },
+    {
+      "gross": 75000,
+      "net": 66683,
+      "metr": 47.2,
+      "zone": "high"
+    },
+    {
+      "gross": 76000,
+      "net": 67211,
+      "metr": 47.1,
+      "zone": "high"
+    },
+    {
+      "gross": 77000,
+      "net": 67740,
+      "metr": 47.2,
+      "zone": "high"
+    },
+    {
+      "gross": 78000,
+      "net": 68268,
+      "metr": 47.1,
+      "zone": "high"
+    },
+    {
+      "gross": 79000,
+      "net": 68797,
+      "metr": 47.2,
+      "zone": "high"
+    },
+    {
+      "gross": 80000,
+      "net": 69325,
+      "metr": 47.1,
+      "zone": "high"
+    },
+    {
+      "gross": 81000,
+      "net": 69854,
+      "metr": 44.0,
+      "zone": "normal"
+    },
+    {
+      "gross": 82000,
+      "net": 70414,
+      "metr": 43.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 83000,
+      "net": 70983,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 84000,
+      "net": 71551,
+      "metr": 43.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 85000,
+      "net": 72120,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 86000,
+      "net": 72688,
+      "metr": 43.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 87000,
+      "net": 73257,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 88000,
+      "net": 73825,
+      "metr": 43.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 89000,
+      "net": 74394,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 90000,
+      "net": 74962,
+      "metr": 43.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 91000,
+      "net": 75531,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 92000,
+      "net": 76099,
+      "metr": 43.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 93000,
+      "net": 76668,
+      "metr": 43.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 94000,
+      "net": 77230,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 95000,
+      "net": 77780,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 96000,
+      "net": 78330,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 97000,
+      "net": 78880,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 98000,
+      "net": 79430,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 99000,
+      "net": 79981,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 100000,
+      "net": 80531,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 101000,
+      "net": 81081,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 102000,
+      "net": 81631,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 103000,
+      "net": 82181,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 104000,
+      "net": 82732,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 105000,
+      "net": 83282,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 106000,
+      "net": 83832,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 107000,
+      "net": 84382,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 108000,
+      "net": 84932,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 109000,
+      "net": 85483,
+      "metr": 45.3,
+      "zone": "high"
+    },
+    {
+      "gross": 110000,
+      "net": 86030,
+      "metr": 48.3,
+      "zone": "high"
+    },
+    {
+      "gross": 111000,
+      "net": 86547,
+      "metr": 48.3,
+      "zone": "high"
+    },
+    {
+      "gross": 112000,
+      "net": 87064,
+      "metr": 48.3,
+      "zone": "high"
+    },
+    {
+      "gross": 113000,
+      "net": 87581,
+      "metr": 48.2,
+      "zone": "high"
+    },
+    {
+      "gross": 114000,
+      "net": 88099,
+      "metr": 48.3,
+      "zone": "high"
+    },
+    {
+      "gross": 115000,
+      "net": 88616,
+      "metr": 48.3,
+      "zone": "high"
+    },
+    {
+      "gross": 116000,
+      "net": 89133,
+      "metr": 48.3,
+      "zone": "high"
+    },
+    {
+      "gross": 117000,
+      "net": 89650,
+      "metr": 49.4,
+      "zone": "high"
+    },
+    {
+      "gross": 118000,
+      "net": 90156,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 119000,
+      "net": 90642,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 120000,
+      "net": 91128,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 121000,
+      "net": 91614,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 122000,
+      "net": 92100,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 123000,
+      "net": 92586,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 124000,
+      "net": 93072,
+      "metr": 51.5,
+      "zone": "high"
+    },
+    {
+      "gross": 125000,
+      "net": 93557,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 126000,
+      "net": 94043,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 127000,
+      "net": 94529,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 128000,
+      "net": 95015,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 129000,
+      "net": 95501,
+      "metr": 51.4,
+      "zone": "high"
+    },
+    {
+      "gross": 130000,
+      "net": 95987,
+      "metr": 52.1,
+      "zone": "high"
+    },
+    {
+      "gross": 131000,
+      "net": 96466,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 132000,
+      "net": 96897,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 133000,
+      "net": 97328,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 134000,
+      "net": 97759,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 135000,
+      "net": 98190,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 136000,
+      "net": 98621,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 137000,
+      "net": 99052,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 138000,
+      "net": 99483,
+      "metr": 57.0,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 139000,
+      "net": 99913,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 140000,
+      "net": 100344,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 141000,
+      "net": 100775,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 142000,
+      "net": 101206,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 143000,
+      "net": 101637,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 144000,
+      "net": 102068,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 145000,
+      "net": 102499,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 146000,
+      "net": 102930,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 147000,
+      "net": 103361,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 148000,
+      "net": 103792,
+      "metr": 57.0,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 149000,
+      "net": 104222,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 150000,
+      "net": 104653,
+      "metr": 56.9,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 151000,
+      "net": 105084,
+      "metr": 55.1,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 152000,
+      "net": 105533,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 153000,
+      "net": 106099,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 154000,
+      "net": 106665,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 155000,
+      "net": 107231,
+      "metr": 43.4,
+      "zone": "normal"
+    }
+  ],
+  "Single parent, 1 kid u6": [
+    {
+      "gross": 15000,
+      "net": 26497,
+      "metr": 12.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 16000,
+      "net": 27371,
+      "metr": 25.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 17000,
+      "net": 28114,
+      "metr": 27.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 18000,
+      "net": 28837,
+      "metr": 27.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 19000,
+      "net": 29560,
+      "metr": 27.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 20000,
+      "net": 30284,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 21000,
+      "net": 30947,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 22000,
+      "net": 31611,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 23000,
+      "net": 32274,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 24000,
+      "net": 32937,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 25000,
+      "net": 33601,
+      "metr": 33.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 26000,
+      "net": 34264,
+      "metr": 33.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 27000,
+      "net": 34928,
+      "metr": 30.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 28000,
+      "net": 35621,
+      "metr": 35.3,
+      "zone": "normal"
+    },
+    {
+      "gross": 29000,
+      "net": 36268,
+      "metr": 42.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 30000,
+      "net": 36842,
+      "metr": 42.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 31000,
+      "net": 37415,
+      "metr": 42.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 32000,
+      "net": 37989,
+      "metr": 43.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 33000,
+      "net": 38557,
+      "metr": 46.7,
+      "zone": "high"
+    },
+    {
+      "gross": 34000,
+      "net": 39090,
+      "metr": 46.7,
+      "zone": "high"
+    },
+    {
+      "gross": 35000,
+      "net": 39623,
+      "metr": 46.6,
+      "zone": "high"
+    },
+    {
+      "gross": 36000,
+      "net": 40157,
+      "metr": 65.2,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 37000,
+      "net": 40505,
+      "metr": 53.6,
+      "zone": "high"
+    },
+    {
+      "gross": 38000,
+      "net": 40969,
+      "metr": 66.2,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 39000,
+      "net": 41307,
+      "metr": 56.1,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 40000,
+      "net": 41746,
+      "metr": 53.7,
+      "zone": "high"
+    },
+    {
+      "gross": 41000,
+      "net": 42209,
+      "metr": 53.7,
+      "zone": "high"
+    },
+    {
+      "gross": 42000,
+      "net": 42672,
+      "metr": 53.6,
+      "zone": "high"
+    },
+    {
+      "gross": 43000,
+      "net": 43136,
+      "metr": 53.7,
+      "zone": "high"
+    },
+    {
+      "gross": 44000,
+      "net": 43599,
+      "metr": 56.0,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 45000,
+      "net": 44039,
+      "metr": 58.7,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 46000,
+      "net": 44452,
+      "metr": 54.0,
+      "zone": "high"
+    },
+    {
+      "gross": 47000,
+      "net": 44912,
+      "metr": 43.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 48000,
+      "net": 45475,
+      "metr": 58.6,
+      "zone": "dead_zone"
+    },
+    {
+      "gross": 49000,
+      "net": 45889,
+      "metr": 43.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 50000,
+      "net": 46452,
+      "metr": 43.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 51000,
+      "net": 47015,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 52000,
+      "net": 47579,
+      "metr": 43.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 53000,
+      "net": 48142,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 54000,
+      "net": 48706,
+      "metr": 43.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 55000,
+      "net": 49269,
+      "metr": 43.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 56000,
+      "net": 49832,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 57000,
+      "net": 50396,
+      "metr": 43.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 58000,
+      "net": 50959,
+      "metr": 43.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 59000,
+      "net": 51523,
+      "metr": 43.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 60000,
+      "net": 52086,
+      "metr": 43.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 61000,
+      "net": 52649,
+      "metr": 42.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 62000,
+      "net": 53227,
+      "metr": 38.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 63000,
+      "net": 53841,
+      "metr": 35.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 64000,
+      "net": 54487,
+      "metr": 35.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 65000,
+      "net": 55130,
+      "metr": 38.3,
+      "zone": "normal"
+    },
+    {
+      "gross": 66000,
+      "net": 55747,
+      "metr": 37.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 67000,
+      "net": 56376,
+      "metr": 37.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 68000,
+      "net": 57005,
+      "metr": 37.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 69000,
+      "net": 57634,
+      "metr": 37.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 70000,
+      "net": 58263,
+      "metr": 37.1,
+      "zone": "normal"
+    },
+    {
+      "gross": 71000,
+      "net": 58892,
+      "metr": 35.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 72000,
+      "net": 59535,
+      "metr": 35.2,
+      "zone": "normal"
+    },
+    {
+      "gross": 73000,
+      "net": 60183,
+      "metr": 37.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 74000,
+      "net": 60804,
+      "metr": 40.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 75000,
+      "net": 61398,
+      "metr": 40.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 76000,
+      "net": 61991,
+      "metr": 40.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 77000,
+      "net": 62585,
+      "metr": 40.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 78000,
+      "net": 63178,
+      "metr": 40.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 79000,
+      "net": 63772,
+      "metr": 40.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 80000,
+      "net": 64365,
+      "metr": 40.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 81000,
+      "net": 64959,
+      "metr": 37.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 82000,
+      "net": 65584,
+      "metr": 36.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 83000,
+      "net": 66218,
+      "metr": 36.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 84000,
+      "net": 66851,
+      "metr": 36.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 85000,
+      "net": 67485,
+      "metr": 36.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 86000,
+      "net": 68118,
+      "metr": 36.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 87000,
+      "net": 68752,
+      "metr": 36.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 88000,
+      "net": 69385,
+      "metr": 36.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 89000,
+      "net": 70019,
+      "metr": 36.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 90000,
+      "net": 70652,
+      "metr": 36.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 91000,
+      "net": 71286,
+      "metr": 36.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 92000,
+      "net": 71919,
+      "metr": 36.6,
+      "zone": "normal"
+    },
+    {
+      "gross": 93000,
+      "net": 72553,
+      "metr": 37.3,
+      "zone": "normal"
+    },
+    {
+      "gross": 94000,
+      "net": 73180,
+      "metr": 38.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 95000,
+      "net": 73795,
+      "metr": 38.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 96000,
+      "net": 74410,
+      "metr": 38.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 97000,
+      "net": 75026,
+      "metr": 38.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 98000,
+      "net": 75641,
+      "metr": 38.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 99000,
+      "net": 76256,
+      "metr": 38.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 100000,
+      "net": 76871,
+      "metr": 38.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 101000,
+      "net": 77486,
+      "metr": 38.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 102000,
+      "net": 78102,
+      "metr": 38.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 103000,
+      "net": 78717,
+      "metr": 38.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 104000,
+      "net": 79332,
+      "metr": 38.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 105000,
+      "net": 79947,
+      "metr": 38.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 106000,
+      "net": 80562,
+      "metr": 38.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 107000,
+      "net": 81178,
+      "metr": 38.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 108000,
+      "net": 81793,
+      "metr": 38.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 109000,
+      "net": 82408,
+      "metr": 38.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 110000,
+      "net": 83020,
+      "metr": 41.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 111000,
+      "net": 83602,
+      "metr": 41.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 112000,
+      "net": 84185,
+      "metr": 41.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 113000,
+      "net": 84767,
+      "metr": 41.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 114000,
+      "net": 85349,
+      "metr": 41.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 115000,
+      "net": 85931,
+      "metr": 41.7,
+      "zone": "normal"
+    },
+    {
+      "gross": 116000,
+      "net": 86514,
+      "metr": 41.8,
+      "zone": "normal"
+    },
+    {
+      "gross": 117000,
+      "net": 87096,
+      "metr": 43.0,
+      "zone": "normal"
+    },
+    {
+      "gross": 118000,
+      "net": 87666,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 119000,
+      "net": 88217,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 120000,
+      "net": 88768,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 121000,
+      "net": 89319,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 122000,
+      "net": 89870,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 123000,
+      "net": 90421,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 124000,
+      "net": 90972,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 125000,
+      "net": 91523,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 126000,
+      "net": 92074,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 127000,
+      "net": 92625,
+      "metr": 45.0,
+      "zone": "high"
+    },
+    {
+      "gross": 128000,
+      "net": 93175,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 129000,
+      "net": 93726,
+      "metr": 44.9,
+      "zone": "normal"
+    },
+    {
+      "gross": 130000,
+      "net": 94277,
+      "metr": 45.5,
+      "zone": "high"
+    },
+    {
+      "gross": 131000,
+      "net": 94822,
+      "metr": 50.5,
+      "zone": "high"
+    },
+    {
+      "gross": 132000,
+      "net": 95317,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 133000,
+      "net": 95813,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 134000,
+      "net": 96309,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 135000,
+      "net": 96805,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 136000,
+      "net": 97301,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 137000,
+      "net": 97797,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 138000,
+      "net": 98293,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 139000,
+      "net": 98789,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 140000,
+      "net": 99285,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 141000,
+      "net": 99781,
+      "metr": 50.5,
+      "zone": "high"
+    },
+    {
+      "gross": 142000,
+      "net": 100276,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 143000,
+      "net": 100772,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 144000,
+      "net": 101268,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 145000,
+      "net": 101764,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 146000,
+      "net": 102260,
+      "metr": 50.4,
+      "zone": "high"
+    },
+    {
+      "gross": 147000,
+      "net": 102756,
+      "metr": 48.6,
+      "zone": "high"
+    },
+    {
+      "gross": 148000,
+      "net": 103270,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 149000,
+      "net": 103836,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 150000,
+      "net": 104402,
+      "metr": 43.5,
+      "zone": "normal"
+    },
+    {
+      "gross": 151000,
+      "net": 104967,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 152000,
+      "net": 105533,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 153000,
+      "net": 106099,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 154000,
+      "net": 106665,
+      "metr": 43.4,
+      "zone": "normal"
+    },
+    {
+      "gross": 155000,
+      "net": 107231,
+      "metr": 43.4,
+      "zone": "normal"
+    }
+  ]
+}

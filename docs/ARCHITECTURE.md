@@ -109,6 +109,7 @@ Note template backgrounds instead of AI backgrounds for MVP.
    │   ├── public_graphics.py
    │   ├── public_leads.py        ← (D-3: scoring + Slack + ESP background tasks)
    │   ├── public_download.py     ← (D-2: token exchange → presigned URL)
+   │   ├── public_metr.py         ← (Theme #2: METR calculator — calculate, curve, compare)
    │   └── public_sponsorship.py  ← (D-3: tiered sponsorship inquiry)
    ├── models/
    │   ├── publication.py
@@ -128,5 +129,8 @@ Note template backgrounds instead of AI backgrounds for MVP.
        ├── email/
        │   ├── interface.py       ← (D-0a: EmailServiceInterface + ConsoleEmailService)
        │   └── esp_client.py      ← (D-3: Beehiiv ESP client with error classification)
+       ├── metr/                  ← (Theme #2: METR calculation engine + card data)
+       │   ├── engine.py          ← Pure functions: federal/provincial tax, CPP, EI, CCB, CWB, GST
+       │   └── card_data.py       ← Signal card dataset generator (4 cards)
        └── security/ (D-0b: TurnstileValidator)
 ```
