@@ -1,15 +1,18 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // ═══════════════════════════════════════════════════════════
 // SUMMA VISION — Design System v3.2 Flutter Token Mapping
+// (БЛОК 17 — exact spec values)
 // ═══════════════════════════════════════════════════════════
 
-/// Density modes for spacing configuration.
-enum DensityMode { normal, dense, compact }
+/// Density modes for spacing configuration (v3.2 БЛОК 17).
+enum DensityMode { comfortable, compact, dense }
 
-/// Chart display modes.
-enum ChartMode { standard, presentation, export }
+/// Chart display modes (v3.2 БЛОК 17).
+enum ChartMode { editorial, operational }
 
 /// Design system theme extension for Summa Vision.
 ///
@@ -93,6 +96,14 @@ class SummaTheme extends ThemeExtension<SummaTheme> {
     // Chart & Density
     required this.chartMode,
     required this.densityMode,
+    // Chart behavior tokens (v3.2 БЛОК 17)
+    required this.seriesPrimaryWeight,
+    required this.seriesSecondaryWeight,
+    required this.seriesBenchmarkWeight,
+    required this.seriesForecastWeight,
+    required this.seriesMutedOpacity,
+    required this.seriesHoverDim,
+    required this.seriesUncertaintyFillOpacity,
   });
 
   // ─── Layer 1 — Raw Palette ──────────────────────────────
@@ -180,6 +191,15 @@ class SummaTheme extends ThemeExtension<SummaTheme> {
   final ChartMode chartMode;
   final DensityMode densityMode;
 
+  // ─── Chart Behavior Tokens (v3.2 БЛОК 17) ──────────────
+  final double seriesPrimaryWeight;
+  final double seriesSecondaryWeight;
+  final double seriesBenchmarkWeight;
+  final double seriesForecastWeight;
+  final double seriesMutedOpacity;
+  final double seriesHoverDim;
+  final double seriesUncertaintyFillOpacity;
+
   /// Data series palette for charts (ordered).
   List<Color> get dataSeriesPalette => [
         dataGov,
@@ -190,14 +210,14 @@ class SummaTheme extends ThemeExtension<SummaTheme> {
         dataHousing,
       ];
 
-  /// Default dark theme instance.
-  static const defaultDark = SummaTheme(
+  /// Default dark theme instance (v3.2 БЛОК 17 values).
+  static const dark = SummaTheme(
     // Layer 1
     rawSlate950: Color(0xFF0B0D11),
     rawSlate900: Color(0xFF15181E),
     rawSlate800: Color(0xFF1C1F26),
     rawSlate700: Color(0xFF262A33),
-    rawSlate600: Color(0xFF3A3F4B),
+    rawSlate600: Color(0xFF5C6370),
     rawSlate500: Color(0xFF6B7280),
     rawSlate400: Color(0xFF9CA3AF),
     rawSlate300: Color(0xFFD1D5DB),
@@ -215,7 +235,7 @@ class SummaTheme extends ThemeExtension<SummaTheme> {
     rawEmerald500: Color(0xFF10B981),
     rawYellow500: Color(0xFFEAB308),
     rawCyan400: Color(0xFF22D3EE),
-    // Layer 2
+    // Layer 2 — exact v3.2 values
     bgApp: Color(0xFF0B0D11),
     bgSurface: Color(0xFF15181E),
     bgSurfaceHover: Color(0xFF1C1F26),
@@ -224,8 +244,8 @@ class SummaTheme extends ThemeExtension<SummaTheme> {
     borderSubtle: Color(0xFF1C1F26),
     borderFocus: Color(0xFFFBBF24),
     textPrimary: Color(0xFFF3F4F6),
-    textSecondary: Color(0xFF9CA3AF),
-    textMuted: Color(0xFF6B7280),
+    textSecondary: Color(0xFF8B949E),
+    textMuted: Color(0xFF5C6370),
     textInverse: Color(0xFF0B0D11),
     accent: Color(0xFFFBBF24),
     accentHover: Color(0xFFF59E0B),
@@ -238,18 +258,18 @@ class SummaTheme extends ThemeExtension<SummaTheme> {
     tooltipText: Color(0xFFF3F4F6),
     btnPrimaryBg: Color(0xFFFBBF24),
     btnPrimaryText: Color(0xFF0B0D11),
-    // Layer 4
+    // Layer 4 — exact v3.2 values
     dataGov: Color(0xFF3B82F6),
     dataSociety: Color(0xFFA78BFA),
     dataInfra: Color(0xFF2DD4BF),
     dataMonopoly: Color(0xFFF97316),
-    dataBaseline: Color(0xFF6B7280),
+    dataBaseline: Color(0xFF94A3B8),
     dataHousing: Color(0xFF22D3EE),
     dataNegative: Color(0xFFE11D48),
-    dataPositive: Color(0xFF10B981),
-    dataWarning: Color(0xFFEAB308),
-    dataNeutral: Color(0xFF9CA3AF),
-    // Spacing
+    dataPositive: Color(0xFF0D9488),
+    dataWarning: Color(0xFFF97316),
+    dataNeutral: Color(0xFF262A33),
+    // Spacing (comfortable defaults)
     spaceXs: 4,
     spaceSm: 8,
     spaceMd: 16,
@@ -257,18 +277,26 @@ class SummaTheme extends ThemeExtension<SummaTheme> {
     spaceXl: 32,
     space2xl: 48,
     space3xl: 64,
-    // Radii
-    radiusAdmin: 6,
-    radiusPublic: 8,
+    // Radii — v3.2 values
+    radiusAdmin: 4,
+    radiusPublic: 10,
     radiusButton: 8,
-    radiusTooltip: 6,
-    // Motion
-    durationMicro: Duration(milliseconds: 100),
-    durationData: Duration(milliseconds: 300),
-    durationPage: Duration(milliseconds: 500),
+    radiusTooltip: 4,
+    // Motion — v3.2 values
+    durationMicro: Duration(milliseconds: 150),
+    durationData: Duration(milliseconds: 400),
+    durationPage: Duration(milliseconds: 800),
     // Chart & Density
-    chartMode: ChartMode.standard,
-    densityMode: DensityMode.normal,
+    chartMode: ChartMode.editorial,
+    densityMode: DensityMode.comfortable,
+    // Chart behavior tokens — v3.2 БЛОК 17
+    seriesPrimaryWeight: 2.0,
+    seriesSecondaryWeight: 1.5,
+    seriesBenchmarkWeight: 1.0,
+    seriesForecastWeight: 1.0,
+    seriesMutedOpacity: 0.2,
+    seriesHoverDim: 0.25,
+    seriesUncertaintyFillOpacity: 0.12,
   );
 
   @override
@@ -342,6 +370,13 @@ class SummaTheme extends ThemeExtension<SummaTheme> {
     Duration? durationPage,
     ChartMode? chartMode,
     DensityMode? densityMode,
+    double? seriesPrimaryWeight,
+    double? seriesSecondaryWeight,
+    double? seriesBenchmarkWeight,
+    double? seriesForecastWeight,
+    double? seriesMutedOpacity,
+    double? seriesHoverDim,
+    double? seriesUncertaintyFillOpacity,
   }) {
     return SummaTheme(
       rawSlate950: rawSlate950 ?? this.rawSlate950,
@@ -413,6 +448,13 @@ class SummaTheme extends ThemeExtension<SummaTheme> {
       durationPage: durationPage ?? this.durationPage,
       chartMode: chartMode ?? this.chartMode,
       densityMode: densityMode ?? this.densityMode,
+      seriesPrimaryWeight: seriesPrimaryWeight ?? this.seriesPrimaryWeight,
+      seriesSecondaryWeight: seriesSecondaryWeight ?? this.seriesSecondaryWeight,
+      seriesBenchmarkWeight: seriesBenchmarkWeight ?? this.seriesBenchmarkWeight,
+      seriesForecastWeight: seriesForecastWeight ?? this.seriesForecastWeight,
+      seriesMutedOpacity: seriesMutedOpacity ?? this.seriesMutedOpacity,
+      seriesHoverDim: seriesHoverDim ?? this.seriesHoverDim,
+      seriesUncertaintyFillOpacity: seriesUncertaintyFillOpacity ?? this.seriesUncertaintyFillOpacity,
     );
   }
 
@@ -489,55 +531,82 @@ class SummaTheme extends ThemeExtension<SummaTheme> {
       durationPage: t < 0.5 ? durationPage : other.durationPage,
       chartMode: t < 0.5 ? chartMode : other.chartMode,
       densityMode: t < 0.5 ? densityMode : other.densityMode,
+      seriesPrimaryWeight: lerpDouble(seriesPrimaryWeight, other.seriesPrimaryWeight, t)!,
+      seriesSecondaryWeight: lerpDouble(seriesSecondaryWeight, other.seriesSecondaryWeight, t)!,
+      seriesBenchmarkWeight: lerpDouble(seriesBenchmarkWeight, other.seriesBenchmarkWeight, t)!,
+      seriesForecastWeight: lerpDouble(seriesForecastWeight, other.seriesForecastWeight, t)!,
+      seriesMutedOpacity: lerpDouble(seriesMutedOpacity, other.seriesMutedOpacity, t)!,
+      seriesHoverDim: lerpDouble(seriesHoverDim, other.seriesHoverDim, t)!,
+      seriesUncertaintyFillOpacity: lerpDouble(seriesUncertaintyFillOpacity, other.seriesUncertaintyFillOpacity, t)!,
     );
   }
 }
 
-/// Returns spacing values for a given [DensityMode].
-({
-  double xs,
-  double sm,
-  double md,
-  double lg,
-  double xl,
-  double xxl,
-  double xxxl,
-}) spacingForDensity(DensityMode mode) {
+/// Returns spacing values for a given [DensityMode] (v3.2 БЛОК 17).
+Map<String, double> spacingForDensity(DensityMode mode) {
   switch (mode) {
-    case DensityMode.normal:
-      return (xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48, xxxl: 64);
-    case DensityMode.dense:
-      return (xs: 3, sm: 6, md: 12, lg: 18, xl: 24, xxl: 36, xxxl: 48);
+    case DensityMode.comfortable:
+      return {'xs': 4, 'sm': 8, 'md': 16, 'lg': 24, 'xl': 32, '2xl': 48, '3xl': 64};
     case DensityMode.compact:
-      return (xs: 2, sm: 4, md: 8, lg: 12, xl: 16, xxl: 24, xxxl: 32);
+      return {'xs': 3, 'sm': 6, 'md': 12, 'lg': 18, 'xl': 24, '2xl': 36, '3xl': 48};
+    case DensityMode.dense:
+      return {'xs': 2, 'sm': 4, 'md': 8, 'lg': 12, 'xl': 16, '2xl': 24, '3xl': 32};
   }
 }
 
-/// Builds the complete Summa Vision [ThemeData] with design tokens.
+/// Builds the complete Summa Vision [ThemeData] with design tokens (v3.2 БЛОК 17).
 ///
 /// Uses Google Fonts: Bricolage Grotesque (display), DM Sans (body),
 /// JetBrains Mono (data/monospace).
 ThemeData buildSummaTheme({
-  DensityMode density = DensityMode.normal,
-  ChartMode chartMode = ChartMode.standard,
+  DensityMode density = DensityMode.comfortable,
+  ChartMode chartMode = ChartMode.editorial,
 }) {
   final spacing = spacingForDensity(density);
-  final summa = SummaTheme.defaultDark.copyWith(
+  final summa = SummaTheme.dark.copyWith(
     densityMode: density,
     chartMode: chartMode,
-    spaceXs: spacing.xs,
-    spaceSm: spacing.sm,
-    spaceMd: spacing.md,
-    spaceLg: spacing.lg,
-    spaceXl: spacing.xl,
-    space2xl: spacing.xxl,
-    space3xl: spacing.xxxl,
+    spaceXs: spacing['xs'],
+    spaceSm: spacing['sm'],
+    spaceMd: spacing['md'],
+    spaceLg: spacing['lg'],
+    spaceXl: spacing['xl'],
+    space2xl: spacing['2xl'],
+    space3xl: spacing['3xl'],
   );
 
-  final displayFont = GoogleFonts.bricolageGrotesqueTextTheme(
+  // Typography — exact v3.2 БЛОК 17 values with tabular figures
+  const tabularFigures = [FontFeature.tabularFigures()];
+
+  final displayLarge = GoogleFonts.bricolageGrotesque(
+    fontSize: 64,
+    fontWeight: FontWeight.w700,
+    height: 1.0,
+    letterSpacing: -1.92,
+    fontFeatures: tabularFigures,
+    color: summa.textPrimary,
+  );
+
+  final bodyLarge = GoogleFonts.dmSans(
+    fontSize: 16,
+    fontWeight: FontWeight.w400,
+    height: 1.6,
+    fontFeatures: tabularFigures,
+    color: summa.textPrimary,
+  );
+
+  final labelSmall = GoogleFonts.jetBrainsMono(
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.6,
+    fontFeatures: tabularFigures,
+    color: summa.textMuted,
+  );
+
+  final bodyFont = GoogleFonts.dmSansTextTheme(
     ThemeData.dark().textTheme,
   );
-  final bodyFont = GoogleFonts.dmSansTextTheme(
+  final displayFont = GoogleFonts.bricolageGrotesqueTextTheme(
     ThemeData.dark().textTheme,
   );
   final dataFont = GoogleFonts.jetBrainsMonoTextTheme(
@@ -546,7 +615,7 @@ ThemeData buildSummaTheme({
 
   return ThemeData.dark().copyWith(
     extensions: [summa],
-    scaffoldBackgroundColor: summa.bgApp,
+    scaffoldBackgroundColor: const Color(0xFF0B0D11),
     colorScheme: ColorScheme.dark(
       primary: summa.accent,
       onPrimary: summa.textInverse,
@@ -600,7 +669,7 @@ ThemeData buildSummaTheme({
       thickness: 1,
     ),
     textTheme: bodyFont.copyWith(
-      displayLarge: displayFont.displayLarge?.copyWith(color: summa.textPrimary),
+      displayLarge: displayLarge,
       displayMedium: displayFont.displayMedium?.copyWith(color: summa.textPrimary),
       displaySmall: displayFont.displaySmall?.copyWith(color: summa.textPrimary),
       headlineLarge: displayFont.headlineLarge?.copyWith(color: summa.textPrimary),
@@ -609,12 +678,12 @@ ThemeData buildSummaTheme({
       titleLarge: bodyFont.titleLarge?.copyWith(color: summa.textPrimary, fontWeight: FontWeight.bold),
       titleMedium: bodyFont.titleMedium?.copyWith(color: summa.textPrimary),
       titleSmall: bodyFont.titleSmall?.copyWith(color: summa.textSecondary),
-      bodyLarge: bodyFont.bodyLarge?.copyWith(color: summa.textPrimary),
+      bodyLarge: bodyLarge,
       bodyMedium: bodyFont.bodyMedium?.copyWith(color: summa.textSecondary),
       bodySmall: bodyFont.bodySmall?.copyWith(color: summa.textMuted),
       labelLarge: dataFont.labelLarge?.copyWith(color: summa.textPrimary),
       labelMedium: dataFont.labelMedium?.copyWith(color: summa.textSecondary),
-      labelSmall: dataFont.labelSmall?.copyWith(color: summa.textMuted),
+      labelSmall: labelSmall,
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -669,7 +738,7 @@ class AppTheme {
 
   // Text
   static const Color textPrimary    = Color(0xFFF3F4F6);
-  static const Color textSecondary  = Color(0xFF9CA3AF);
+  static const Color textSecondary  = Color(0xFF8B949E);
 
   // Status
   static const Color errorRed       = Color(0xFFE11D48);
