@@ -19,6 +19,7 @@ class JobsStatsBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     final queued = jobs.where((j) => j.status == 'queued').length;
     final running = jobs.where((j) => j.status == 'running').length;
     final success = jobs.where((j) => j.status == 'success').length;
@@ -32,35 +33,35 @@ class JobsStatsBar extends StatelessWidget {
           _StatChip(
             label: 'Queued',
             count: queued,
-            color: Colors.grey,
+            color: theme.textMuted,
             onTap: () => onStatusTap('queued'),
           ),
-          _divider(),
+          _divider(theme.textSecondary),
           _StatChip(
             label: 'Running',
             count: running,
-            color: AppTheme.neonBlue,
+            color: theme.dataGov,
             onTap: () => onStatusTap('running'),
           ),
-          _divider(),
+          _divider(theme.textSecondary),
           _StatChip(
             label: 'Success',
             count: success,
-            color: AppTheme.neonGreen,
+            color: theme.dataPositive,
             onTap: () => onStatusTap('success'),
           ),
-          _divider(),
+          _divider(theme.textSecondary),
           _StatChip(
             label: 'Failed',
             count: failed,
-            color: AppTheme.errorRed,
+            color: theme.destructive,
             onTap: () => onStatusTap('failed'),
           ),
-          _divider(),
+          _divider(theme.textSecondary),
           _StatChip(
             label: 'Stale',
             count: stale,
-            color: AppTheme.neonYellow,
+            color: theme.dataWarning,
             onTap: () => onStatusTap('running'),
           ),
         ],
@@ -68,13 +69,13 @@ class JobsStatsBar extends StatelessWidget {
     );
   }
 
-  Widget _divider() {
+  Widget _divider(Color dividerColor) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Text(
         '|',
         style: TextStyle(
-          color: AppTheme.textSecondary.withOpacity(0.4),
+          color: dividerColor.withOpacity(0.4),
           fontSize: 14,
         ),
       ),
@@ -97,6 +98,7 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -107,8 +109,8 @@ class _StatChip extends StatelessWidget {
           children: [
             Text(
               '$label: ',
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
+              style: TextStyle(
+                color: theme.textSecondary,
                 fontSize: 13,
               ),
             ),

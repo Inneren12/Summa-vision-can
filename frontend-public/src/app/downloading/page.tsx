@@ -47,7 +47,7 @@ export default function DownloadingPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="bg-surface rounded-2xl p-8 w-full max-w-md shadow-2xl border border-white/10 text-center">
+      <div className="bg-bg-surface rounded-public p-8 w-full max-w-md shadow-elevated border border-border-default text-center">
         {/* Summa Vision branding */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-text-primary">
@@ -85,7 +85,7 @@ export default function DownloadingPage() {
             </p>
             <button
               onClick={handleDownloadClick}
-              className="w-full py-3 px-6 rounded-lg bg-neon-green text-background font-bold text-center hover:opacity-90 transition-opacity"
+              className="w-full py-3 px-6 rounded-button bg-btn-primary-bg text-btn-primary-text font-bold text-center hover:opacity-90 transition-opacity"
               data-testid="download-btn"
             >
               Verify and Download
@@ -96,7 +96,7 @@ export default function DownloadingPage() {
         {pageState === 'loading' && (
           <div className="space-y-4">
             <div
-              className="w-8 h-8 border-2 border-neon-green border-t-transparent rounded-full animate-spin mx-auto"
+              className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto"
               aria-label="Loading"
               data-testid="loading-spinner"
             />
@@ -131,7 +131,7 @@ export default function DownloadingPage() {
             </p>
             <a
               href="/graphics"
-              className="inline-block w-full py-3 px-6 rounded-lg bg-white/10 text-text-primary font-semibold text-center hover:bg-white/20 transition-colors"
+              className="inline-block w-full py-3 px-6 rounded-button bg-bg-surface-hover text-text-primary font-semibold text-center hover:bg-bg-surface-active transition-colors"
             >
               Request New Link
             </a>

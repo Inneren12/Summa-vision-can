@@ -29,6 +29,8 @@ class _CubeDetailScreenState extends ConsumerState<CubeDetailScreen> {
   static const int _maxPolls = 60;
   static const Duration _pollInterval = Duration(seconds: 2);
 
+  SummaTheme get _theme => Theme.of(context).extension<SummaTheme>()!;
+
   Future<void> _onFetchData() async {
     if (_isFetching) return;
 
@@ -135,13 +137,13 @@ class _CubeDetailScreenState extends ConsumerState<CubeDetailScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  color: AppTheme.errorRed, size: 48),
+              Icon(Icons.error_outline,
+                  color: _theme.destructive, size: 48),
               const SizedBox(height: 16),
               Text(
                 'Failed to load cube\n$err',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppTheme.textSecondary),
+                style: TextStyle(color: _theme.textSecondary),
               ),
               const SizedBox(height: 16),
               ElevatedButton(
@@ -163,8 +165,8 @@ class _CubeDetailScreenState extends ConsumerState<CubeDetailScreen> {
                   // Title EN
                   Text(
                     cube.titleEn,
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
+                    style: TextStyle(
+                      color: _theme.textPrimary,
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
@@ -173,8 +175,8 @@ class _CubeDetailScreenState extends ConsumerState<CubeDetailScreen> {
                     const SizedBox(height: 4),
                     Text(
                       cube.titleFr!,
-                      style: const TextStyle(
-                        color: AppTheme.textSecondary,
+                      style: TextStyle(
+                        color: _theme.textSecondary,
                         fontSize: 16,
                         fontStyle: FontStyle.italic,
                       ),
@@ -198,16 +200,16 @@ class _CubeDetailScreenState extends ConsumerState<CubeDetailScreen> {
                     value: cube.archiveStatus ? 'Archived' : 'Active',
                   ),
                   const SizedBox(height: 24),
-                  // Fetch Data button — enabled, triggers fetch + polling
+                  // Fetch Data button
                   ElevatedButton.icon(
                     onPressed: _isFetching ? null : _onFetchData,
                     icon: _isFetching
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: AppTheme.backgroundDark,
+                              color: _theme.bgApp,
                             ),
                           )
                         : const Icon(Icons.download),
@@ -235,6 +237,7 @@ class _DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -244,8 +247,8 @@ class _DetailRow extends StatelessWidget {
             width: 130,
             child: Text(
               label,
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
+              style: TextStyle(
+                color: theme.textSecondary,
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
               ),
@@ -254,8 +257,8 @@ class _DetailRow extends StatelessWidget {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
+              style: TextStyle(
+                color: theme.textPrimary,
                 fontSize: 14,
               ),
             ),

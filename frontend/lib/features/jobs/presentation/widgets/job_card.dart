@@ -18,20 +18,20 @@ class JobCard extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback onViewDetail;
 
-  Color _statusColor(String status) {
+  Color _statusColor(String status, SummaTheme theme) {
     switch (status) {
       case 'queued':
-        return Colors.grey;
+        return theme.textMuted;
       case 'running':
-        return AppTheme.neonBlue;
+        return theme.dataGov;
       case 'success':
-        return AppTheme.neonGreen;
+        return theme.dataPositive;
       case 'failed':
-        return AppTheme.errorRed;
+        return theme.destructive;
       case 'cancelled':
-        return AppTheme.textSecondary;
+        return theme.textSecondary;
       default:
-        return AppTheme.textSecondary;
+        return theme.textSecondary;
     }
   }
 
@@ -51,7 +51,8 @@ class JobCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = _statusColor(job.status);
+    final theme = Theme.of(context).extension<SummaTheme>()!;
+    final statusColor = _statusColor(job.status, theme);
     final isStale = job.isStale;
     final duration = job.duration;
     final isRetryable = job.isRetryable;
@@ -74,8 +75,8 @@ class JobCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     job.jobTypeDisplay,
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
+                    style: TextStyle(
+                      color: theme.textPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -84,8 +85,8 @@ class JobCard extends StatelessWidget {
                 if (duration != null)
                   Text(
                     _formatDuration(duration),
-                    style: const TextStyle(
-                      color: AppTheme.textSecondary,
+                    style: TextStyle(
+                      color: theme.textSecondary,
                       fontSize: 13,
                       fontFamily: 'monospace',
                     ),
@@ -100,8 +101,8 @@ class JobCard extends StatelessWidget {
             Text(
               'Created: ${_formatDateTime(job.createdAt)}'
               '${job.createdBy != null ? ' by ${job.createdBy}' : ''}',
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
+              style: TextStyle(
+                color: theme.textSecondary,
                 fontSize: 13,
               ),
             ),
@@ -114,8 +115,8 @@ class JobCard extends StatelessWidget {
                   'Attempts: ${job.attemptCount}/${job.maxAttempts}',
                   style: TextStyle(
                     color: job.attemptCount > 1
-                        ? AppTheme.neonYellow
-                        : AppTheme.textSecondary,
+                        ? theme.dataWarning
+                        : theme.textSecondary,
                     fontSize: 13,
                     fontWeight: job.attemptCount > 1
                         ? FontWeight.w600
@@ -132,8 +133,8 @@ class JobCard extends StatelessWidget {
                 message: job.dedupeKey!,
                 child: Text(
                   'Dedupe: ${job.dedupeKey!.length > 40 ? '${job.dedupeKey!.substring(0, 40)}...' : job.dedupeKey!}',
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
+                  style: TextStyle(
+                    color: theme.textSecondary,
                     fontSize: 12,
                     fontFamily: 'monospace',
                   ),
@@ -150,22 +151,22 @@ class JobCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: AppTheme.neonYellow.withOpacity(0.1),
+                  color: theme.dataWarning.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: AppTheme.neonYellow.withOpacity(0.4),
+                    color: theme.dataWarning.withOpacity(0.4),
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(Icons.warning_amber,
-                        color: AppTheme.neonYellow, size: 18),
+                        color: theme.dataWarning, size: 18),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Running for ${DateTime.now().difference(job.startedAt!).inMinutes} minutes — may be stale',
+                        'Running for ${DateTime.now().difference(job.startedAt!).inMinutes} minutes \u2014 may be stale',
                         style: TextStyle(
-                          color: AppTheme.neonYellow,
+                          color: theme.dataWarning,
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -185,10 +186,10 @@ class JobCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: AppTheme.errorRed.withOpacity(0.1),
+                  color: theme.destructive.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: AppTheme.errorRed.withOpacity(0.4),
+                    color: theme.destructive.withOpacity(0.4),
                   ),
                 ),
                 child: Column(
@@ -198,7 +199,7 @@ class JobCard extends StatelessWidget {
                       Text(
                         job.errorCode!,
                         style: TextStyle(
-                          color: AppTheme.errorRed,
+                          color: theme.destructive,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           fontFamily: 'monospace',
@@ -211,7 +212,7 @@ class JobCard extends StatelessWidget {
                             ? '${job.errorMessage!.substring(0, 120)}...'
                             : job.errorMessage!,
                         style: TextStyle(
-                          color: AppTheme.errorRed.withOpacity(0.85),
+                          color: theme.destructive.withOpacity(0.85),
                           fontSize: 12,
                         ),
                       ),
@@ -233,16 +234,16 @@ class JobCard extends StatelessWidget {
                     icon: const Icon(Icons.replay, size: 16),
                     label: const Text('Retry'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.neonYellow,
-                      side: const BorderSide(color: AppTheme.neonYellow),
+                      foregroundColor: theme.dataWarning,
+                      side: BorderSide(color: theme.dataWarning),
                     ),
                   ),
                 if (isRetryable) const SizedBox(width: 12),
                 OutlinedButton(
                   onPressed: onViewDetail,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.neonBlue,
-                    side: const BorderSide(color: AppTheme.neonBlue),
+                    foregroundColor: theme.dataGov,
+                    side: BorderSide(color: theme.dataGov),
                   ),
                   child: const Text('View Detail'),
                 ),
@@ -377,10 +378,11 @@ class _ElapsedTimerState extends State<_ElapsedTimer> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     return Text(
       _format(_elapsed),
-      style: const TextStyle(
-        color: AppTheme.neonBlue,
+      style: TextStyle(
+        color: theme.dataGov,
         fontSize: 13,
         fontFamily: 'monospace',
       ),

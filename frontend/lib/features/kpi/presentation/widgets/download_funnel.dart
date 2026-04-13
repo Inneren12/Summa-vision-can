@@ -5,9 +5,9 @@ import '../../domain/kpi_data.dart';
 
 /// Horizontal funnel visualization of the download conversion pipeline.
 ///
-/// Steps: Leads Captured → Emails Sent → Tokens Created → Downloads → Exhausted
+/// Steps: Leads Captured -> Emails Sent -> Tokens Created -> Downloads -> Exhausted
 ///
-/// Uses proportional-width [Container] bars — no heavy charting dependency.
+/// Uses proportional-width [Container] bars -- no heavy charting dependency.
 class DownloadFunnel extends StatelessWidget {
   const DownloadFunnel({super.key, required this.data});
 
@@ -15,12 +15,13 @@ class DownloadFunnel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     final steps = [
-      _FunnelStep('Leads Captured', data.totalLeads, AppTheme.neonGreen),
-      _FunnelStep('Emails Sent', data.emailsSent, AppTheme.neonBlue),
-      _FunnelStep('Tokens Created', data.tokensCreated, AppTheme.neonYellow),
-      _FunnelStep('Downloads', data.tokensActivated, AppTheme.neonPink),
-      _FunnelStep('Exhausted', data.tokensExhausted, AppTheme.textSecondary),
+      _FunnelStep('Leads Captured', data.totalLeads, theme.accent),
+      _FunnelStep('Emails Sent', data.emailsSent, theme.dataGov),
+      _FunnelStep('Tokens Created', data.tokensCreated, theme.dataWarning),
+      _FunnelStep('Downloads', data.tokensActivated, theme.dataNegative),
+      _FunnelStep('Exhausted', data.tokensExhausted, theme.textMuted),
     ];
 
     final maxVal =
@@ -32,10 +33,10 @@ class DownloadFunnel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Download Funnel',
               style: TextStyle(
-                color: AppTheme.textPrimary,
+                color: theme.textPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
@@ -77,6 +78,7 @@ class _FunnelBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     final fraction = step.count / maxValue;
     final dropoff = previousCount != null && previousCount! > 0
         ? ((1 - step.count / previousCount!) * 100).toStringAsFixed(0)
@@ -90,8 +92,8 @@ class _FunnelBar extends StatelessWidget {
             Expanded(
               child: Text(
                 step.label,
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
+                style: TextStyle(
+                  color: theme.textSecondary,
                   fontSize: 12,
                 ),
               ),
@@ -108,8 +110,8 @@ class _FunnelBar extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 '-$dropoff%',
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
+                style: TextStyle(
+                  color: theme.textSecondary,
                   fontSize: 11,
                 ),
               ),

@@ -100,13 +100,13 @@ void main() {
       expect(find.text('Reject'), findsOneWidget);
     });
 
-    testWidgets('score >8 renders with neon green colour', (tester) async {
+    testWidgets('score >8 renders with data-positive colour', (tester) async {
       await tester.pumpWidget(_buildScreen(AsyncData([_sampleBriefs.first])));
       await tester.pumpAndSettle();
 
-      // Score 9.1 > 8 should use neonGreen
+      // Score 9.1 > 8 should use dataPositive (design system token)
       final scoreText = tester.widget<Text>(find.text('9.1'));
-      expect(scoreText.style?.color, equals(AppTheme.neonGreen));
+      expect(scoreText.style?.color, equals(const Color(0xFF10B981)));
     });
   });
 

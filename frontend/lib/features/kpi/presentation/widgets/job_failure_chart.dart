@@ -21,6 +21,7 @@ class JobFailureChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     final entries = failedByType.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
@@ -32,23 +33,23 @@ class JobFailureChart extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Job Failures by Type',
               style: TextStyle(
-                color: AppTheme.textPrimary,
+                color: theme.textPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 16),
             if (!hasFailures)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Center(
                   child: Text(
                     'No job failures in this period',
                     style: TextStyle(
-                      color: AppTheme.neonGreen,
+                      color: theme.dataPositive,
                       fontSize: 14,
                     ),
                   ),
@@ -83,6 +84,7 @@ class _FailureBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).extension<SummaTheme>()!;
     final fraction = count / maxCount;
 
     return Column(
@@ -93,16 +95,16 @@ class _FailureBar extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
+                style: TextStyle(
+                  color: theme.textSecondary,
                   fontSize: 12,
                 ),
               ),
             ),
             Text(
               '$count',
-              style: const TextStyle(
-                color: AppTheme.errorRed,
+              style: TextStyle(
+                color: theme.destructive,
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
               ),
@@ -116,9 +118,9 @@ class _FailureBar extends StatelessWidget {
               width: constraints.maxWidth * fraction.clamp(0.05, 1.0),
               height: 20,
               decoration: BoxDecoration(
-                color: AppTheme.errorRed.withOpacity(0.25),
+                color: theme.destructive.withOpacity(0.25),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: AppTheme.errorRed.withOpacity(0.5)),
+                border: Border.all(color: theme.destructive.withOpacity(0.5)),
               ),
             );
           },

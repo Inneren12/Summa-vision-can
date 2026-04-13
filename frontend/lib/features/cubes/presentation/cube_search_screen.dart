@@ -18,6 +18,8 @@ class CubeSearchScreen extends ConsumerStatefulWidget {
 class _CubeSearchScreenState extends ConsumerState<CubeSearchScreen> {
   final _controller = TextEditingController();
 
+  SummaTheme get _theme => Theme.of(context).extension<SummaTheme>()!;
+
   @override
   void dispose() {
     _controller.dispose();
@@ -61,7 +63,7 @@ class _CubeSearchScreenState extends ConsumerState<CubeSearchScreen> {
                       )
                     : null,
                 filled: true,
-                fillColor: AppTheme.surfaceDark,
+                fillColor: _theme.bgSurface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide.none,
@@ -75,10 +77,10 @@ class _CubeSearchScreenState extends ConsumerState<CubeSearchScreen> {
           // Results
           Expanded(
             child: query.trim().isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
                       'Enter a search term to find StatCan datasets',
-                      style: TextStyle(color: AppTheme.textSecondary),
+                      style: TextStyle(color: _theme.textSecondary),
                     ),
                   )
                 : searchResults.when(
@@ -89,17 +91,17 @@ class _CubeSearchScreenState extends ConsumerState<CubeSearchScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.error_outline,
-                            color: AppTheme.errorRed,
+                            color: _theme.destructive,
                             size: 48,
                           ),
                           const SizedBox(height: 16),
                           Text(
                             'Failed to search cubes\n$err',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: AppTheme.textSecondary,
+                            style: TextStyle(
+                              color: _theme.textSecondary,
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -116,8 +118,8 @@ class _CubeSearchScreenState extends ConsumerState<CubeSearchScreen> {
                             child: Text(
                               "No datasets found for '$query'. Try different keywords.",
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: AppTheme.textSecondary,
+                              style: TextStyle(
+                                color: _theme.textSecondary,
                               ),
                             ),
                           )
@@ -155,7 +157,7 @@ class _CubeSearchScreenState extends ConsumerState<CubeSearchScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Sync failed: $e'),
-            backgroundColor: AppTheme.errorRed,
+            backgroundColor: _theme.destructive,
           ),
         );
       }
