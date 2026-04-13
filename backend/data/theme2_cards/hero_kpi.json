@@ -1,0 +1,133 @@
+{
+  "card_type": "hero_kpi",
+  "eyebrow": "TAXATION",
+  "headline": "Earn $1 More. Keep 22\u00a2.",
+  "subheadline": "Ontario single parent, 2 children under 6",
+  "hero_kpi": {
+    "value": "65.2%",
+    "label": "Peak Marginal Tax Rate"
+  },
+  "mini_chart": [
+    {
+      "gross": 15000,
+      "metr": 12.6
+    },
+    {
+      "gross": 20000,
+      "metr": 33.7
+    },
+    {
+      "gross": 25000,
+      "metr": 33.7
+    },
+    {
+      "gross": 30000,
+      "metr": 42.7
+    },
+    {
+      "gross": 35000,
+      "metr": 46.6
+    },
+    {
+      "gross": 40000,
+      "metr": 60.1
+    },
+    {
+      "gross": 45000,
+      "metr": 65.2
+    },
+    {
+      "gross": 50000,
+      "metr": 50.2
+    },
+    {
+      "gross": 55000,
+      "metr": 50.2
+    },
+    {
+      "gross": 60000,
+      "metr": 50.2
+    },
+    {
+      "gross": 65000,
+      "metr": 46.2
+    },
+    {
+      "gross": 70000,
+      "metr": 43.6
+    },
+    {
+      "gross": 75000,
+      "metr": 47.2
+    },
+    {
+      "gross": 80000,
+      "metr": 47.1
+    },
+    {
+      "gross": 85000,
+      "metr": 43.2
+    },
+    {
+      "gross": 90000,
+      "metr": 43.1
+    },
+    {
+      "gross": 95000,
+      "metr": 45.0
+    },
+    {
+      "gross": 100000,
+      "metr": 45.0
+    },
+    {
+      "gross": 105000,
+      "metr": 45.0
+    },
+    {
+      "gross": 110000,
+      "metr": 48.3
+    },
+    {
+      "gross": 115000,
+      "metr": 48.3
+    },
+    {
+      "gross": 120000,
+      "metr": 51.4
+    },
+    {
+      "gross": 125000,
+      "metr": 51.4
+    },
+    {
+      "gross": 130000,
+      "metr": 52.1
+    },
+    {
+      "gross": 135000,
+      "metr": 56.9
+    },
+    {
+      "gross": 140000,
+      "metr": 56.9
+    },
+    {
+      "gross": 145000,
+      "metr": 56.9
+    },
+    {
+      "gross": 150000,
+      "metr": 56.9
+    },
+    {
+      "gross": 155000,
+      "metr": 43.4
+    }
+  ],
+  "source": "Summa Vision calculation from CRA formulas, 2025 tax year",
+  "size": [
+    1200,
+    900
+  ]
+}

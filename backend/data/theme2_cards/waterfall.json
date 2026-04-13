@@ -1,0 +1,53 @@
+{
+  "card_type": "waterfall",
+  "eyebrow": "THE RAISE TRAP",
+  "headline": "Where Does Your $10,000 Raise Go?",
+  "subheadline": "Ontario, single parent, 2 kids \u2014 earning $45k \u2192 $55k",
+  "steps": [
+    {
+      "label": "Gross Raise",
+      "value": 10000,
+      "type": "start"
+    },
+    {
+      "label": "Federal Tax",
+      "value": -1500,
+      "type": "loss"
+    },
+    {
+      "label": "Provincial Tax",
+      "value": -505,
+      "type": "loss"
+    },
+    {
+      "label": "CPP/EI",
+      "value": -761,
+      "type": "loss"
+    },
+    {
+      "label": "CCB Lost",
+      "value": -1350,
+      "type": "loss"
+    },
+    {
+      "label": "CWB Lost",
+      "value": -254,
+      "type": "loss"
+    },
+    {
+      "label": "Prov Benefits Lost",
+      "value": -400,
+      "type": "loss"
+    },
+    {
+      "label": "Real Gain",
+      "value": 4580,
+      "type": "end"
+    }
+  ],
+  "source": "Summa Vision calculation from CRA formulas, 2025 tax year",
+  "size": [
+    1200,
+    900
+  ]
+}

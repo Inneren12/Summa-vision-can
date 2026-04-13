@@ -98,3 +98,12 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 | D-2 | Lead Capture + Secure Download | ✅ | D-0a, D-0b, D-0c |
 | D-3 | B2B Scoring + Slack Notifications | ✅ | D-2 |
 | D-4 | Partner Page — Media Kit | ✅ | D-3 |
+
+## Theme #2: Marginal Tax Rate Meatgrinder
+
+| PR | Title | Status | Dependencies |
+|----|-------|--------|--------------|
+| T2-BE | METR Calculator Backend — Engine, API, Card Data | ✅ | — |
+| T2-FE | METR Interactive Calculator (Next.js) | ⬜ | T2-BE |
+
+**T2-BE:** Pure-function METR calculation engine (federal tax, CPP/CPP2, EI, provincial tax for ON/BC/AB/QC, CCB, GST/HST Credit, CWB, OTB/BCF/ACFB/QC solidarity). Three public API endpoints: `/calculate`, `/curve`, `/compare`. Signal card data generator (4 cards: hero KPI, waterfall, provincial bars, slope). 90 tests passing. Tax year: 2025.
