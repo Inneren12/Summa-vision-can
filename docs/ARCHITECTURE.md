@@ -76,6 +76,24 @@ Note: Polars is primary engine, Pandas only in legacy StatCan code.
 Plotly SVG + backgrounds + compositor.
 Note template backgrounds instead of AI backgrounds for MVP.
 
+### Pipeline data input paths
+
+``GraphicPipeline.generate()`` takes a single ``data_key`` pointing at a
+Parquet object in storage. Two paths feed into this contract:
+
+1. **StatCan path** — `POST /api/v1/admin/graphics/generate`. The
+   ``data_key`` is a StatCan-origin Parquet written by the ETL /
+   Workbench pipeline (Étape A).
+2. **Upload path** — `POST /api/v1/admin/graphics/generate-from-data`.
+   The endpoint serializes the user-supplied rows into a temporary
+   Parquet under ``temp/uploads/{uuid}.parquet`` (via the injected
+   ``StorageInterface.upload_bytes``) and enqueues the same
+   ``graphics_generate`` job type against that key.
+
+`GraphicPipeline` itself is unchanged — Stage 1 (`_load_data`) can't
+tell which path the Parquet came from. Temp Parquet cleanup is tracked
+as `DEBT-021` (24 h TTL via ``temp_upload_ttl_hours``).
+
 ## Technology Summary
 
 | Component | Technology |

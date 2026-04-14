@@ -1,27 +1,38 @@
 """Admin endpoints for publication queue, graphic generation, and job status.
 
-Provides three endpoints:
+Provides four endpoints:
 
-* ``GET  /api/v1/admin/queue``                — list DRAFT publications
-* ``POST /api/v1/admin/graphics/generate``    — enqueue persistent generation job (B-4)
-* ``GET  /api/v1/admin/jobs/{job_id}``        — check job status / result (B-4)
+* ``GET  /api/v1/admin/queue``                        — list DRAFT publications
+* ``POST /api/v1/admin/graphics/generate``            — enqueue persistent generation job (B-4)
+* ``POST /api/v1/admin/graphics/generate-from-data``  — same, but from uploaded JSON/CSV data
+* ``GET  /api/v1/admin/jobs/{job_id}``                — check job status / result (B-4)
 
 Architecture:
     Follows ARCH-DPEN-001 — all services arrive via ``Depends``.
     Follows ARCH-JOBS-001 — generation is submitted as a persistent job,
     not executed synchronously. Endpoint returns HTTP 202 immediately.
+
+    The "generate-from-data" endpoint converts user-supplied rows to a
+    temporary Parquet in S3 (``temp/uploads/{uuid}.parquet``) and then
+    enqueues the *same* ``graphics_generate`` job type with that key —
+    the ``GraphicPipeline`` itself is unchanged (it simply loads the
+    Parquet from Stage 1).
 """
 
 from __future__ import annotations
 
 import hashlib
+import io
 import json
+import uuid
 
+import polars as pl
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.schemas.admin_graphics import (
+    GenerateFromDataRequest,
     GraphicsGenerateRequest,
     GraphicsGenerateResponse,
     JobStatusResponse,
@@ -29,6 +40,7 @@ from src.api.schemas.admin_graphics import (
 )
 from src.core.database import get_db
 from src.core.logging import get_logger
+from src.core.storage import StorageInterface, get_storage_manager
 from src.models.publication import PublicationStatus
 from src.repositories.job_repository import JobRepository
 from src.repositories.publication_repository import PublicationRepository
@@ -56,6 +68,26 @@ def _get_repo(session: AsyncSession = Depends(get_db)) -> PublicationRepository:
 def _get_job_repo(session: AsyncSession = Depends(get_db)) -> JobRepository:
     """Provide a JobRepository via dependency injection."""
     return JobRepository(session)
+
+
+def _get_storage() -> StorageInterface:
+    """Provide a StorageInterface via dependency injection."""
+    return get_storage_manager()
+
+
+def _compute_config_hash(chart_type: str, size: tuple[int, int], title: str) -> str:
+    """Compute a deterministic SHA-256 hex digest of the chart config.
+
+    Callers typically slice the first 16 chars for dedupe keys.
+    """
+    config_dict = {
+        "chart_type": chart_type,
+        "size": list(size),
+        "title": title,
+    }
+    return hashlib.sha256(
+        json.dumps(config_dict, sort_keys=True).encode("utf-8")
+    ).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -132,14 +164,7 @@ async def generate_graphic(
     )
 
     # 2. Compute dedupe key
-    config_dict = {
-        "chart_type": body.chart_type,
-        "size": list(body.size),
-        "title": body.title,
-    }
-    config_hash = hashlib.sha256(
-        json.dumps(config_dict, sort_keys=True).encode("utf-8")
-    ).hexdigest()[:16]
+    config_hash = _compute_config_hash(body.chart_type, body.size, body.title)[:16]
     dedupe_key = (
         f"graphics:{body.source_product_id or 'manual'}"
         f":{body.data_key}:{config_hash}"
@@ -158,6 +183,118 @@ async def generate_graphic(
         job_id=result.job.id,
         created=result.created,
         dedupe_key=dedupe_key,
+    )
+
+    return GraphicsGenerateResponse(
+        job_id=str(result.job.id),
+        status=result.job.status.value,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/admin/graphics/generate-from-data  (uploaded JSON/CSV)
+# ---------------------------------------------------------------------------
+
+
+def _cast_uploaded_dataframe(
+    df: pl.DataFrame, columns: list, *, strict: bool = False
+) -> pl.DataFrame:
+    """Apply per-column dtype coercion as specified by the caller.
+
+    Columns whose ``dtype`` is ``"str"`` are left untouched; ``"int"``
+    and ``"float"`` go through Polars ``cast``; ``"date"`` goes through
+    ``str.to_date``.  Values that fail to coerce become ``None``
+    (``strict=False``), matching the UX expectation that an upload with
+    a single malformed cell should not 500 the whole request.
+    """
+    for col in columns:
+        if col.name not in df.columns:
+            continue
+        if col.dtype == "int":
+            df = df.with_columns(pl.col(col.name).cast(pl.Int64, strict=strict))
+        elif col.dtype == "float":
+            df = df.with_columns(pl.col(col.name).cast(pl.Float64, strict=strict))
+        elif col.dtype == "date":
+            df = df.with_columns(
+                pl.col(col.name).cast(pl.Utf8).str.to_date(strict=strict)
+            )
+    return df
+
+
+@router.post(
+    "/graphics/generate-from-data",
+    response_model=GraphicsGenerateResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Enqueue graphic generation from uploaded data",
+    responses={
+        202: {"description": "Job enqueued — poll GET /api/v1/admin/jobs/{job_id}."},
+        422: {"description": "Data is empty, oversized, or cannot be parsed."},
+    },
+)
+async def generate_from_data(
+    body: GenerateFromDataRequest,
+    job_repo: JobRepository = Depends(_get_job_repo),
+    storage: StorageInterface = Depends(_get_storage),
+) -> GraphicsGenerateResponse:
+    """Enqueue a graphic generation job from user-uploaded JSON/CSV data.
+
+    Flow:
+        1. Build a Polars DataFrame from ``body.data`` and apply the
+           requested column dtypes.
+        2. Serialize the DataFrame to Parquet bytes.
+        3. Upload to ``temp/uploads/{uuid}.parquet`` via
+           ``StorageInterface.upload_bytes``.
+        4. Enqueue a ``graphics_generate`` job whose ``data_key`` points
+           at the temp Parquet — downstream ``GraphicPipeline`` is
+           unchanged (Stage 1 loads the Parquet from storage).
+
+    Returns HTTP 202 with ``job_id`` and current ``status``.
+    """
+    # 1. Build + coerce DataFrame
+    try:
+        df = pl.DataFrame(body.data)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Failed to build DataFrame from data: {exc}",
+        )
+    df = _cast_uploaded_dataframe(df, body.columns)
+
+    # 2. Serialize to Parquet bytes via an in-memory buffer.
+    buf = io.BytesIO()
+    df.write_parquet(buf)
+    parquet_bytes = buf.getvalue()
+
+    # 3. Upload under temp/uploads/
+    temp_key = f"temp/uploads/{uuid.uuid4().hex}.parquet"
+    await storage.upload_bytes(data=parquet_bytes, key=temp_key)
+
+    # 4. Build payload + dedupe key, then enqueue same job type
+    payload = GraphicsGeneratePayload(
+        data_key=temp_key,
+        chart_type=body.chart_type,
+        title=body.title,
+        size=body.size,
+        category=body.category,
+        source_product_id=None,  # not a StatCan source
+    )
+    config_hash = _compute_config_hash(body.chart_type, body.size, body.title)
+    dedupe_key = f"graphics:custom:{temp_key}:{config_hash[:16]}"
+
+    result = await job_repo.enqueue(
+        job_type="graphics_generate",
+        payload_json=payload.model_dump_json(),
+        dedupe_key=dedupe_key,
+        created_by="admin_api",
+    )
+
+    logger.info(
+        "graphics_generate_from_data_enqueued",
+        job_id=result.job.id,
+        created=result.created,
+        temp_key=temp_key,
+        source_label=body.source_label,
+        row_count=len(body.data),
     )
 
     return GraphicsGenerateResponse(

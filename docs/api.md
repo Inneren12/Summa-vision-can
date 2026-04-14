@@ -115,6 +115,63 @@ Trigger asynchronous graphic generation for a draft publication.
 
 ---
 
+### `POST /api/v1/admin/graphics/generate-from-data`
+
+Enqueue graphic generation from user-uploaded JSON/CSV data. The backend
+converts rows into a temporary Parquet (`temp/uploads/{uuid}.parquet`)
+and reuses the existing `graphics_generate` job type — the
+`GraphicPipeline` itself is unchanged.
+
+| Property | Value |
+|----------|-------|
+| Auth | Admin (`X-API-KEY`) |
+| Rate Limit | 10 req/min |
+
+**Request Body:**
+```json
+{
+  "data": [
+    {"year": "2020", "value": 100},
+    {"year": "2021", "value": 120}
+  ],
+  "columns": [
+    {"name": "year", "dtype": "str"},
+    {"name": "value", "dtype": "float"}
+  ],
+  "chart_type": "line",
+  "title": "Custom Series",
+  "size": [1200, 900],
+  "category": "housing",
+  "source_label": "custom"
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `data` | `list[dict]` | *required* | Rows as JSON objects. Must be 1–10 000 rows (R15). |
+| `columns` | `list[{name, dtype}]` | *required* | Column specs. `dtype` ∈ `str`, `int`, `float`, `date`. |
+| `chart_type` | `str` | *required* | Same chart types as `/generate`. |
+| `title` | `str` | *required* | Chart headline. |
+| `size` | `[w, h]` | `[1200, 900]` | Pixel dimensions, each in 1–4096. |
+| `category` | `str` | *required* | Background template category. |
+| `source_label` | `str` | `"custom"` | Label stored in metadata (no `source_product_id`). |
+
+**Response (202 Accepted):**
+```json
+{"job_id": "7", "status": "queued"}
+```
+
+**Errors:**
+
+| Status | Condition |
+|--------|-----------|
+| 401 | Missing/invalid `X-API-KEY` |
+| 422 | Empty / oversized data, invalid dimensions, or malformed rows |
+
+Poll via `GET /api/v1/admin/jobs/{job_id}` exactly as for `/generate`.
+
+---
+
 ### `GET /api/v1/admin/tasks/{task_id}`
 
 Poll the status of a background task.

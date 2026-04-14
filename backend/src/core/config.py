@@ -85,6 +85,13 @@ class Settings(BaseSettings):
     scheduler_db_url: str = "sqlite:///data/jobs.sqlite"
     scheduler_enabled: bool = True
 
+    # --- Admin uploads ---
+    # TTL for temp Parquet files written under ``temp/uploads/`` by
+    # POST /api/v1/admin/graphics/generate-from-data.  Files older than
+    # this are eligible for deletion by a (future) cleanup cron
+    # (tracked as DEBT-021 until implemented).
+    temp_upload_ttl_hours: int = 24
+
     # --- Audit (R18) ---
     audit_retention_days: int = 90
 

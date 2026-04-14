@@ -86,6 +86,16 @@ audit events, backup, monitoring. Production hardening items tracked in DEBT.md.
 | B-2 | Template Backgrounds | 🔄 | — |
 | B-3 | End-to-End Pipeline | 🔄 | B-1, B-2 |
 | B-4 | Admin Graphics API + Batch CLI | ⬜ | B-3 |
+| B-5 | JSON/CSV Upload → Graphic Generation | ✅ | B-4 |
+
+**B-5 status:** Admin can now feed arbitrary JSON/CSV into the same
+graphic pipeline without going through a StatCan cube. Backend exposes
+`POST /api/v1/admin/graphics/generate-from-data` which serializes rows
+to a temporary Parquet under `temp/uploads/` and enqueues the existing
+`graphics_generate` job — pipeline is *unchanged*. Flutter admin adds a
+"StatCan Cube / Upload Data" toggle, a `DataUploadWidget` (JSON + CSV
+parsing, dtype inference), and an editable `EditableDataTable` preview.
+Temp Parquet cleanup tracked as DEBT-021.
 
 ## Étape D: Lead Capture & Download
 
