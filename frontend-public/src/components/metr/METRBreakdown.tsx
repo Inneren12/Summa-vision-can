@@ -32,7 +32,7 @@ export default function METRBreakdown({ components }: METRBreakdownProps) {
           <div key={key} className="flex justify-between text-sm">
             <dt className="text-text-secondary font-body">{LABELS[key]}</dt>
             <dd className="font-data text-text-primary">
-              {components[key].toFixed(1)}%
+              ${components[key].toLocaleString('en-CA', { maximumFractionDigits: 0 })}
             </dd>
           </div>
         ))}

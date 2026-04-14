@@ -16,7 +16,9 @@ The engine functions are pure (ARCH-PURA-001).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, Request, status
+from functools import lru_cache
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from src.core.security.ip_rate_limiter import InMemoryRateLimiter
@@ -48,30 +50,15 @@ router = APIRouter(prefix="/api/v1/public/metr", tags=["public-metr"])
 # Rate limiter — 60 requests per minute per IP (lightweight CPU calculations)
 # ---------------------------------------------------------------------------
 
-_metr_limiter = InMemoryRateLimiter(max_requests=60, window_seconds=60)
 
-
+@lru_cache(maxsize=1)
 def get_metr_limiter() -> InMemoryRateLimiter:
     """Provide the METR rate limiter via dependency injection.
 
-    Tests can override this dependency with a custom limiter.
+    Singleton via ``lru_cache`` so all requests share the same window state.
+    Tests can override this dependency with ``app.dependency_overrides``.
     """
-    return _metr_limiter
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _check_rate_limit(request: Request) -> JSONResponse | None:
-    """Return a 429 response if rate-limited, else None."""
-    client_ip: str = request.client.host if request.client else "unknown"
-    if not _metr_limiter.is_allowed(client_ip):
-        return JSONResponse(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            content={"detail": "Rate limit exceeded. Try again later."},
-        )
-    return None
+    return InMemoryRateLimiter(max_requests=60, window_seconds=60)
 
 
 # ---------------------------------------------------------------------------
@@ -96,11 +83,18 @@ async def calculate_metr_endpoint(
     family_type: FamilyType = Query(default=FamilyType.SINGLE, description="Family type."),
     n_children: int = Query(default=0, ge=0, le=6, description="Number of children."),
     children_under_6: int = Query(default=0, ge=0, le=6, description="Children under age 6."),
+    limiter: InMemoryRateLimiter = Depends(get_metr_limiter),
 ) -> JSONResponse:
     """Calculate METR at a specific income point with full component breakdown."""
-    rate_limit_resp = _check_rate_limit(request)
-    if rate_limit_resp is not None:
-        return rate_limit_resp
+    client_ip = request.client.host if request.client else "unknown"
+    if not limiter.is_allowed(client_ip):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Rate limit exceeded. Try again later.")
+
+    if children_under_6 > n_children:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"children_under_6 ({children_under_6}) cannot exceed n_children ({n_children})",
+        )
 
     inp = METRInput(
         gross_income=income,
@@ -156,11 +150,18 @@ async def metr_curve_endpoint(
     income_min: int = Query(default=15_000, ge=0, description="Income range start."),
     income_max: int = Query(default=155_000, le=500_000, description="Income range end."),
     step: int = Query(default=1_000, ge=500, le=5_000, description="Income step size."),
+    limiter: InMemoryRateLimiter = Depends(get_metr_limiter),
 ) -> JSONResponse:
     """Generate full METR curve across an income range."""
-    rate_limit_resp = _check_rate_limit(request)
-    if rate_limit_resp is not None:
-        return rate_limit_resp
+    client_ip = request.client.host if request.client else "unknown"
+    if not limiter.is_allowed(client_ip):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Rate limit exceeded. Try again later.")
+
+    if children_under_6 > n_children:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"children_under_6 ({children_under_6}) cannot exceed n_children ({n_children})",
+        )
 
     curve = generate_curve(
         province=province,
@@ -238,15 +239,22 @@ async def metr_compare_provinces(
     family_type: FamilyType = Query(default=FamilyType.SINGLE_PARENT, description="Family type."),
     n_children: int = Query(default=2, ge=0, le=6, description="Number of children."),
     children_under_6: int = Query(default=2, ge=0, le=6, description="Children under 6."),
+    limiter: InMemoryRateLimiter = Depends(get_metr_limiter),
 ) -> JSONResponse:
     """Compare METR across all 4 provinces at a given income point.
 
     Note: Quebec results use simplified modelling (separate Revenu Québec
     filing is not modelled).
     """
-    rate_limit_resp = _check_rate_limit(request)
-    if rate_limit_resp is not None:
-        return rate_limit_resp
+    client_ip = request.client.host if request.client else "unknown"
+    if not limiter.is_allowed(client_ip):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Rate limit exceeded. Try again later.")
+
+    if children_under_6 > n_children:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"children_under_6 ({children_under_6}) cannot exceed n_children ({n_children})",
+        )
 
     results: list[ProvinceCompareItem] = []
     for prov in Province:

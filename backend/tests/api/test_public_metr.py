@@ -254,6 +254,27 @@ class TestValidation:
         )
         assert resp.status_code == 422
 
+    def test_invalid_children_under6_exceeds_total(self) -> None:
+        resp = client.get(
+            "/api/v1/public/metr/calculate",
+            params={"income": 50000, "n_children": 1, "children_under_6": 3},
+        )
+        assert resp.status_code == 422
+
+    def test_invalid_children_under6_exceeds_total_curve(self) -> None:
+        resp = client.get(
+            "/api/v1/public/metr/curve",
+            params={"n_children": 1, "children_under_6": 3},
+        )
+        assert resp.status_code == 422
+
+    def test_invalid_children_under6_exceeds_total_compare(self) -> None:
+        resp = client.get(
+            "/api/v1/public/metr/compare",
+            params={"income": 50000, "n_children": 1, "children_under_6": 3},
+        )
+        assert resp.status_code == 422
+
 
 # ---------------------------------------------------------------------------
 # Rate limiting
@@ -263,9 +284,8 @@ class TestValidation:
 class TestRateLimit:
     def test_rate_limit_enforced(self) -> None:
         """After 60 requests, subsequent ones should be rate-limited."""
-        # Reset any existing limiter state by importing and resetting
-        from src.api.routers.public_metr import _metr_limiter
-        _metr_limiter.reset()
+        from src.api.routers.public_metr import get_metr_limiter
+        get_metr_limiter().reset()
 
         for i in range(60):
             resp = client.get(
@@ -282,4 +302,4 @@ class TestRateLimit:
         assert resp.status_code == 429
 
         # Clean up
-        _metr_limiter.reset()
+        get_metr_limiter().reset()

@@ -21,10 +21,9 @@ const PROVINCES: { value: Province; label: string }[] = [
 ];
 
 const FAMILY_TYPES: { value: FamilyType; label: string }[] = [
-  { value: 'single', label: 'Single' },
-  { value: 'single_parent', label: 'Single Parent' },
+  { value: 'single', label: 'Single, no children' },
+  { value: 'single_parent', label: 'Single parent' },
   { value: 'couple', label: 'Couple' },
-  { value: 'couple_children', label: 'Couple with Children' },
 ];
 
 export default function METRCalculator() {
@@ -32,13 +31,16 @@ export default function METRCalculator() {
   const [province, setProvince] = useState<Province>('ON');
   const [familyType, setFamilyType] = useState<FamilyType>('single');
   const [nChildren, setNChildren] = useState(0);
+  const [childrenUnder6, setChildrenUnder6] = useState(0);
 
   const [calcData, setCalcData] = useState<METRCalculateResponse | null>(null);
   const [curveData, setCurveData] = useState<METRCurveResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [calc, curve] = await Promise.all([
         fetchMETRCalculation({
@@ -46,21 +48,24 @@ export default function METRCalculator() {
           province,
           family_type: familyType,
           n_children: nChildren,
+          children_under_6: childrenUnder6,
         }),
         fetchMETRCurve({
           province,
           family_type: familyType,
           n_children: nChildren,
+          children_under_6: childrenUnder6,
         }),
       ]);
       setCalcData(calc);
       setCurveData(curve);
-    } catch {
-      // Error handling deferred to error boundary
+    } catch (err) {
+      console.error('METR calculation failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load METR data. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [income, province, familyType, nChildren]);
+  }, [income, province, familyType, nChildren, childrenUnder6]);
 
   useEffect(() => {
     loadData();
@@ -154,7 +159,13 @@ export default function METRCalculator() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setNChildren((n) => Math.max(0, n - 1))}
+              onClick={() => {
+                setNChildren((n) => {
+                  const next = Math.max(0, n - 1);
+                  setChildrenUnder6((u6) => Math.min(u6, next));
+                  return next;
+                });
+              }}
               aria-label="Decrease children"
               className="px-2 py-1 rounded-button border border-border-default text-text-primary"
             >
@@ -177,7 +188,58 @@ export default function METRCalculator() {
             </button>
           </div>
         </div>
+
+        {/* Children under 6 stepper — visible when nChildren > 0 */}
+        {nChildren > 0 && (
+          <div>
+            <label
+              htmlFor="children-under6-stepper"
+              className="block text-sm text-text-secondary font-body mb-1"
+            >
+              Children under 6
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setChildrenUnder6((n) => Math.max(0, n - 1))}
+                aria-label="Decrease children under 6"
+                className="px-2 py-1 rounded-button border border-border-default text-text-primary"
+              >
+                &minus;
+              </button>
+              <span
+                className="font-data text-text-primary w-8 text-center"
+                aria-label="Children under 6 count"
+                data-testid="children-under6-count"
+              >
+                {childrenUnder6}
+              </span>
+              <button
+                type="button"
+                onClick={() => setChildrenUnder6((n) => Math.min(nChildren, n + 1))}
+                aria-label="Increase children under 6"
+                className="px-2 py-1 rounded-button border border-border-default text-text-primary"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Error display */}
+      {error && (
+        <div className="bg-destructive/10 border border-destructive rounded-public p-md text-destructive">
+          {error}
+          <button
+            type="button"
+            onClick={() => { setError(null); loadData(); }}
+            className="ml-md text-accent underline"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Loading state — skeleton loader */}
       {loading && (

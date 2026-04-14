@@ -1,12 +1,13 @@
 {
   "card_type": "hero_kpi",
   "eyebrow": "TAXATION",
-  "headline": "Earn $1 More. Keep 22\u00a2.",
+  "headline": "Earn $1 More. Keep 35\u00a2.",
   "subheadline": "Ontario single parent, 2 children under 6",
   "hero_kpi": {
     "value": "65.2%",
     "label": "Peak Marginal Tax Rate"
   },
+  "peak_income": 45000,
   "mini_chart": [
     {
       "gross": 15000,

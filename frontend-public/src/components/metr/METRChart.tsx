@@ -36,7 +36,7 @@ export default function METRChart({ curve, deadZones }: METRChartProps) {
       rect.setAttribute('width', String(xScale(dz.end) - xScale(dz.start)));
       rect.setAttribute('height', String(height));
       rect.setAttribute('class', 'dead-zone-shading');
-      rect.setAttribute('fill', 'var(--color-data-warning, #ef4444)');
+      rect.setAttribute('fill', 'var(--data-warning, #F97316)');
       rect.setAttribute('opacity', '0.15');
       rect.setAttribute('data-testid', 'dead-zone-rect');
       svg.appendChild(rect);
@@ -50,7 +50,7 @@ export default function METRChart({ curve, deadZones }: METRChartProps) {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', pathD);
     path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', 'var(--color-accent, #3b82f6)');
+    path.setAttribute('stroke', 'var(--accent, #FBBF24)');
     path.setAttribute('stroke-width', '2');
     path.setAttribute('data-testid', 'metr-curve-path');
     svg.appendChild(path);
@@ -66,7 +66,7 @@ export default function METRChart({ curve, deadZones }: METRChartProps) {
         data-testid="metr-chart-svg"
       />
       <p className="text-xs text-text-secondary mt-2 font-body">
-        Source: Summa Vision METR Calculator, 2026 tax year
+        Source: Summa Vision METR Calculator, 2025 tax year
       </p>
     </div>
   );

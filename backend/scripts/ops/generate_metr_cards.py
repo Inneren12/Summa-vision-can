@@ -1,7 +1,7 @@
 """Generate signal card data JSON files for Theme #2 METR.
 
 Usage:
-    python -m scripts.ops.generate_metr_cards
+    cd backend && python -m scripts.ops.generate_metr_cards
 
 Outputs:
     backend/data/theme2_cards/hero_kpi.json
@@ -14,11 +14,7 @@ Outputs:
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
-
-# Allow running from backend/ directory
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.services.metr.card_data import generate_all_cards
 from src.services.metr.engine import (
