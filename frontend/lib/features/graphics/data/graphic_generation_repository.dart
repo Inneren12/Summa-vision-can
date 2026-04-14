@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/graphics_generate_request.dart';
 import '../domain/job_status.dart';
+import '../domain/raw_data_upload.dart';
 
 /// Repository for the C-3 chart generation flow.
 ///
@@ -17,6 +18,20 @@ class GraphicGenerationRepository {
   Future<String> submitGeneration(GraphicsGenerateRequest request) async {
     final response = await _dio.post(
       '/api/v1/admin/graphics/generate',
+      data: request.toJson(),
+    );
+    return response.data['job_id'] as String;
+  }
+
+  /// POST /api/v1/admin/graphics/generate-from-data → 202 with job_id.
+  ///
+  /// The backend converts the uploaded rows into a temporary Parquet in S3
+  /// and enqueues the existing ``graphics_generate`` job type against that
+  /// key — the downstream pipeline is unchanged.
+  Future<String> submitGenerationFromData(
+      GenerateFromDataRequest request) async {
+    final response = await _dio.post(
+      '/api/v1/admin/graphics/generate-from-data',
       data: request.toJson(),
     );
     return response.data['job_id'] as String;

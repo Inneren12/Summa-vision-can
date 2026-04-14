@@ -62,7 +62,7 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `api/routers/health.py` | >90% | ✅ 100% | `tests/api/test_health.py` |
 | `api/routers/admin_cubes.py` | >90% | ✅ 92% | `tests/api/test_admin_cubes.py` |
 | `api/routers/admin_data.py` | >90% | ✅ 90% | `tests/api/test_admin_data.py` |
-| `api/routers/admin_graphics.py` | >90% | ✅ 97% | `tests/api/test_admin_graphics.py` |
+| `api/routers/admin_graphics.py` | >90% | ✅ 97% | `tests/api/test_admin_graphics.py`, `tests/api/test_admin_graphics_upload.py` |
 | `api/routers/admin_jobs.py` | >90% | ✅ 100% | `tests/api/test_admin_jobs.py` |
 | `api/routers/admin_kpi.py` | >90% | ✅ 100% | `tests/api/test_admin_kpi.py` |
 | `api/routers/admin_leads.py` | >90% | ✅ 100% | `tests/api/test_resync.py` |
@@ -70,7 +70,7 @@ pytest tests/services/statcan/test_maintenance.py -v
 | `api/routers/public_leads.py` | >90% | ✅ 100% | `tests/api/test_lead_capture.py`, `tests/api/test_lead_capture_scoring.py` |
 | `api/routers/public_download.py` | >90% | ✅ 100% | `tests/api/test_download.py` |
 | `api/routers/public_sponsorship.py` | >90% | ✅ 100% | `tests/api/test_sponsorship.py` |
-| `api/schemas/admin_graphics.py` | >90% | ✅ 100% | `tests/api/test_admin_graphics.py` |
+| `api/schemas/admin_graphics.py` | >90% | ✅ 100% | `tests/api/test_admin_graphics.py`, `tests/api/test_admin_graphics_upload.py` |
 | `api/schemas/public_leads.py` | >90% | ✅ 100% | `tests/api/test_lead_capture.py` |
 | `models/job.py` | >90% | ✅ 100% | `tests/repositories/test_job_repository.py` |
 | `models/audit_event.py` | >90% | ✅ 100% | `tests/repositories/test_*.py` |
@@ -191,7 +191,9 @@ flutter test -v
 | `test/features/editor/presentation/editor_screen_test.dart` | 16 | EditorScreen rendering, form interactions, EditorNotifier state management, ChartType parsing |
 | `test/features/kpi/presentation/kpi_screen_test.dart` | 13 | KPI summary cards, conversion rate, job success rate, division-by-zero, funnel steps, lead breakdown, job failures, data contract warning, period selector, loading/error states |
 | `test/features/kpi/domain/kpi_data_test.dart` | 3 | KPIData.fromJson full parsing, empty failedByType map, JSON round-trip |
-| **Total** | **64** | |
+| `test/features/graphics/domain/raw_data_upload_test.dart` | 6 | `RawDataColumn` / `GenerateFromDataRequest` snake_case JSON round-trip, default dtype + size |
+| `test/features/graphics/presentation/data_upload_widget_test.dart` | 5 | `DataUploadWidget` pick-button rendering, `EditableDataTable` header/rows/truncation hint, inline cell edit dialog |
+| **Total** | **75** | |
 
 ### Notes
 - Tests use `dotenv.testLoad(mergeWith: {...})` to inject env vars without reading `.env` from disk

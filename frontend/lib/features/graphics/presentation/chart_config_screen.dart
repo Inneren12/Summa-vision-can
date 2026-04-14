@@ -9,6 +9,12 @@ import '../application/generation_state_notifier.dart';
 import '../data/download_helper.dart';
 import '../domain/chart_constants.dart';
 import '../domain/graphics_generate_request.dart';
+import '../domain/raw_data_upload.dart';
+import 'data_upload_widget.dart';
+import 'editable_data_table.dart';
+
+/// Which source the operator wants to generate from.
+enum DataSource { statcan, upload }
 
 /// Chart Configuration & Generation Screen (C-3).
 ///
@@ -32,6 +38,14 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
   final _titleController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _initialized = false;
+
+  // Upload data source state. When [_dataSource] is [DataSource.upload]
+  // the operator is generating from locally-uploaded JSON/CSV rather than
+  // from a StatCan cube.
+  DataSource _dataSource = DataSource.statcan;
+  List<Map<String, dynamic>>? _uploadedData;
+  List<RawDataColumn>? _uploadedColumns;
+  String? _uploadError;
 
   SummaTheme get _theme => Theme.of(context).extension<SummaTheme>()!;
 
@@ -72,6 +86,29 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final config = ref.read(chartConfigNotifierProvider);
+
+    if (_dataSource == DataSource.upload) {
+      if (_uploadedData == null ||
+          _uploadedData!.isEmpty ||
+          _uploadedColumns == null) {
+        setState(() => _uploadError = 'Upload a JSON or CSV file first.');
+        return;
+      }
+      setState(() => _uploadError = null);
+      final request = GenerateFromDataRequest(
+        data: _uploadedData!,
+        columns: _uploadedColumns!,
+        chartType: config.chartType.apiValue,
+        title: config.title,
+        size: config.sizePreset.dimensions,
+        category: config.category.apiValue,
+      );
+      ref
+          .read(chartGenerationNotifierProvider.notifier)
+          .generateFromData(request);
+      return;
+    }
+
     final request = GraphicsGenerateRequest(
       dataKey: config.dataKey,
       chartType: config.chartType.apiValue,
@@ -98,8 +135,11 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     final config = ref.watch(chartConfigNotifierProvider);
     final genState = ref.watch(chartGenerationNotifierProvider);
 
-    // Reset state if we're viewing a different dataset
-    if (config.dataKey != widget.storageKey) {
+    // Reset state if we're viewing a different StatCan dataset. In upload
+    // mode ``config.dataKey`` is irrelevant — the key is created server-side
+    // from the uploaded rows on each Generate click — so skip the reset.
+    if (_dataSource == DataSource.statcan &&
+        config.dataKey != widget.storageKey) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(chartConfigNotifierProvider.notifier).reset(
               widget.storageKey,
@@ -156,7 +196,12 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildDatasetHeader(config),
+            _buildDataSourceSelector(),
+            const SizedBox(height: 16),
+            if (_dataSource == DataSource.statcan)
+              _buildDatasetHeader(config)
+            else
+              _buildUploadSection(),
             const SizedBox(height: 24),
             _buildChartTypeSelector(config),
             const SizedBox(height: 24),
@@ -167,6 +212,86 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
             _buildTitleField(config),
             const SizedBox(height: 32),
             _buildGenerateButton(config),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDataSourceSelector() {
+    return SegmentedButton<DataSource>(
+      key: const Key('data_source_selector'),
+      segments: const [
+        ButtonSegment(
+          value: DataSource.statcan,
+          label: Text('StatCan Cube'),
+          icon: Icon(Icons.dataset, size: 18),
+        ),
+        ButtonSegment(
+          value: DataSource.upload,
+          label: Text('Upload Data'),
+          icon: Icon(Icons.upload_file, size: 18),
+        ),
+      ],
+      selected: {_dataSource},
+      onSelectionChanged: (selection) {
+        setState(() => _dataSource = selection.first);
+      },
+    );
+  }
+
+  Widget _buildUploadSection() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Custom Data',
+              style: TextStyle(
+                color: _theme.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            DataUploadWidget(
+              onDataLoaded: (data, columns) {
+                setState(() {
+                  _uploadedData = List<Map<String, dynamic>>.from(data);
+                  _uploadedColumns = columns;
+                  _uploadError = null;
+                });
+              },
+            ),
+            if (_uploadError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  _uploadError!,
+                  key: const Key('upload_data_error'),
+                  style: TextStyle(color: _theme.destructive),
+                ),
+              ),
+            if (_uploadedData != null && _uploadedColumns != null) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 400,
+                child: EditableDataTable(
+                  data: _uploadedData!,
+                  columns: _uploadedColumns!.map((c) => c.name).toList(),
+                  onCellChanged: (row, col, val) {
+                    setState(() {
+                      _uploadedData![row] = {
+                        ..._uploadedData![row],
+                        col: val,
+                      };
+                    });
+                  },
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -412,7 +537,10 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
   }
 
   Widget _buildGenerateButton(ChartConfig config) {
-    final isDisabled = config.title.trim().isEmpty;
+    final titleMissing = config.title.trim().isEmpty;
+    final uploadMissing = _dataSource == DataSource.upload &&
+        (_uploadedData == null || _uploadedData!.isEmpty);
+    final isDisabled = titleMissing || uploadMissing;
 
     return SizedBox(
       height: 52,

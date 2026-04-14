@@ -6,6 +6,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import '../data/graphic_generation_repository.dart';
 import '../domain/generation_result.dart';
 import '../domain/graphics_generate_request.dart';
+import '../domain/raw_data_upload.dart';
 
 part 'generation_state_notifier.freezed.dart';
 
@@ -97,6 +98,34 @@ class ChartGenerationNotifier extends Notifier<ChartGenerationState> {
       phase: GenerationPhase.timeout,
       errorMessage: 'Generation timed out after 2 minutes.',
     );
+  }
+
+  /// Kick off a generation job from user-uploaded JSON/CSV data.
+  ///
+  /// No-op if a submission is already in flight. Shares submit → poll →
+  /// result phases with [generate] so the UI can continue to branch on
+  /// ``GenerationPhase`` without any upload-specific additions.
+  Future<void> generateFromData(GenerateFromDataRequest request) async {
+    if (state.phase == GenerationPhase.submitting ||
+        state.phase == GenerationPhase.polling) return;
+
+    final repo = ref.read(graphicGenerationRepositoryProvider);
+
+    try {
+      state = state.copyWith(phase: GenerationPhase.submitting);
+      final jobId = await repo.submitGenerationFromData(request);
+      state = state.copyWith(
+        phase: GenerationPhase.polling,
+        jobId: jobId,
+        pollCount: 0,
+      );
+      await _poll(jobId, repo);
+    } catch (e) {
+      state = state.copyWith(
+        phase: GenerationPhase.failed,
+        errorMessage: e.toString(),
+      );
+    }
   }
 
   /// Reset to idle so the operator can reconfigure and retry.
