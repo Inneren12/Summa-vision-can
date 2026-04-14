@@ -57,3 +57,6 @@ _No active debt._
 | DEBT-018 | TESTING.md coverage table is stale | Docs & Quality | 2026-04-12 |
 | DEBT-019 | Orphaned LLM infrastructure outside services/ai/ | Dead Code Cleanup | 2026-04-12 |
 | DEBT-020 | CMHC and Tasks routers still mounted for deferred features | Dead Code Cleanup | 2026-04-12 |
+| DEBT-021 | svg_generator used Kaleido (Chrome) for SVG export → BrowserFailedError on Python 3.14 | fix-svg-generator-browser-error | 2026-04-14 |
+
+> DEBT-021: Replaced `pio.to_image(fig, format="svg")` with `pio.to_svg(fig).encode("utf-8")` in `backend/src/services/graphics/svg_generator.py`. Plotly's native SVG renderer is pure Python and does not require a headless browser, eliminating the Kaleido/Chrome dependency for the SVG path. [RESOLVED — no new debt introduced]

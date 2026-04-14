@@ -3,7 +3,8 @@
 Produces transparent-background, neon-styled SVG charts from a pandas
 DataFrame and a :class:`ChartType` enum value.  This module is a **pure
 function** (ARCH-PURA-001) — no HTTP, no database, no file I/O beyond
-the in-memory SVG serialisation performed by Plotly/Kaleido.
+the in-memory SVG serialisation performed by Plotly's native SVG
+renderer (:func:`plotly.io.to_svg` — pure Python, no Kaleido/Chrome).
 
 Supported chart types
 ---------------------
@@ -568,8 +569,8 @@ def _generate_chart_svg_legacy(
 
     fig = go.Figure(data=traces, layout=layout)
 
-    # Render to SVG bytes via kaleido
-    svg_bytes: bytes = pio.to_image(fig, format="svg")
+    # Render to SVG bytes via Plotly's native SVG renderer (no Kaleido/Chrome required).
+    svg_bytes: bytes = pio.to_svg(fig).encode("utf-8")
 
     return svg_bytes
 
@@ -698,7 +699,10 @@ def _generate_statcan_chart(
     fig = go.Figure(data=traces, layout=layout)
 
     # --- Export as SVG ---
-    svg_bytes: bytes = pio.to_image(fig, format="svg", width=width, height=height)
+    # Use Plotly's native SVG renderer (pure Python, no Kaleido/Chrome) so we
+    # do not hit BrowserFailedError on Python 3.14+. Width/height are baked
+    # into the figure via layout.width/layout.height set above.
+    svg_bytes: bytes = pio.to_svg(fig).encode("utf-8")
 
     return svg_bytes
 
