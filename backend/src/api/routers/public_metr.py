@@ -51,18 +51,15 @@ router = APIRouter(prefix="/api/v1/public/metr", tags=["public-metr"])
 # ---------------------------------------------------------------------------
 
 
+# Slider UI debounces at 500ms (theoretical max ~120/min per user).
+# 200/min gives headroom for rapid parameter changes. CPU-only, no DB.
+METR_RATE_LIMIT_PER_MINUTE = 200
+
+
 @lru_cache(maxsize=1)
 def get_metr_limiter() -> InMemoryRateLimiter:
-    """METR rate limiter — 200/min to accommodate slider-based UI.
-
-    The interactive calculator debounces at 500ms, but rapid slider
-    movement can still generate bursts. 200/min gives ~3.3 req/sec
-    sustained headroom. CPU-only calculations, no DB.
-
-    Singleton via ``lru_cache`` so all requests share the same window state.
-    Tests can override this dependency with ``app.dependency_overrides``.
-    """
-    return InMemoryRateLimiter(max_requests=200, window_seconds=60)
+    """Singleton METR rate limiter. Tests override via app.dependency_overrides."""
+    return InMemoryRateLimiter(max_requests=METR_RATE_LIMIT_PER_MINUTE, window_seconds=60)
 
 
 # ---------------------------------------------------------------------------

@@ -15,7 +15,13 @@ Write-OK "Node: $(node --version)"
 
 Write-Step "2/3" "npm install..."
 Set-Location $dir
-if (-not (Test-Path "node_modules")) { npm install --silent } else { Write-OK "node_modules exists" }
+if (Test-Path "package-lock.json") {
+    Write-Host "  Running npm ci..." -ForegroundColor DarkGray
+    npm ci 2>&1 | Select-Object -Last 3
+} else {
+    npm install
+}
+Write-OK "Dependencies installed"
 
 Write-Step "3/3" ".env.local..."
 if (-not (Test-Path ".env.local")) {

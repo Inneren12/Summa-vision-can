@@ -61,7 +61,7 @@ if (-not $NoFlutter) {
         Write-Host "`n  Launching Flutter..." -ForegroundColor Yellow
         Start-Process pwsh -ArgumentList "-NoExit", "-File", "$PSScriptRoot\start-flutter.ps1" `
             -WorkingDirectory (Get-ProjectRoot)
-        Write-OK "Flutter window opened (:8082)"
+        Write-Host "  ➜  Flutter launched in new window (:8082) — check window for status" -ForegroundColor DarkYellow
     } else {
         Write-Host "  !!  Flutter not found - skipping" -ForegroundColor DarkYellow
     }

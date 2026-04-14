@@ -90,6 +90,7 @@ export default function METRCalculator() {
     debounceRef.current = setTimeout(() => { loadData(); }, 500);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (abortRef.current) abortRef.current.abort();
     };
   }, [loadData]);
 

@@ -283,18 +283,18 @@ class TestValidation:
 
 class TestRateLimit:
     def test_rate_limit_enforced(self) -> None:
-        """After 60 requests, subsequent ones should be rate-limited."""
-        from src.api.routers.public_metr import get_metr_limiter
+        """After METR_RATE_LIMIT_PER_MINUTE requests, next one returns 429."""
+        from src.api.routers.public_metr import METR_RATE_LIMIT_PER_MINUTE, get_metr_limiter
         get_metr_limiter().reset()
 
-        for i in range(60):
+        for i in range(METR_RATE_LIMIT_PER_MINUTE):
             resp = client.get(
                 "/api/v1/public/metr/calculate",
                 params={"income": 50000},
             )
             assert resp.status_code == 200, f"Request {i+1} failed unexpectedly"
 
-        # 61st request should be rate-limited
+        # Next request should be rate-limited
         resp = client.get(
             "/api/v1/public/metr/calculate",
             params={"income": 50000},

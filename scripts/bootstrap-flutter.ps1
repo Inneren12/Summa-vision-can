@@ -32,8 +32,9 @@ Write-Host "  SDK: $flDir" -ForegroundColor White
 
 # Check if flutter is in persistent PATH
 $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
-if ($userPath -notmatch [regex]::Escape($flDir)) {
-    Write-Host "  WARNING: Flutter NOT in permanent PATH" -ForegroundColor DarkYellow
-    Write-Host "  Add to User PATH: $flDir" -ForegroundColor DarkYellow
-    Write-Host "  Or set env: FLUTTER_ROOT=$(Split-Path $flDir -Parent)" -ForegroundColor DarkYellow
+$machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+$inPermanentPath = ($userPath -match [regex]::Escape($flDir)) -or ($machinePath -match [regex]::Escape($flDir))
+if (-not $inPermanentPath) {
+    Write-Host "  NOTE: Flutter found but not in permanent PATH" -ForegroundColor DarkYellow
+    Write-Host "  Current session works fine. For new terminals, add to User PATH: $flDir" -ForegroundColor DarkYellow
 }

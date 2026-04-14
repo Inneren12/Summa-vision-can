@@ -57,11 +57,16 @@ try {
     $env:VIRTUAL_ENV = $venv
     $env:PATH = "$venv\Scripts;$env:PATH"
 
-    & $poetryInVenv install --no-interaction 2>&1 | ForEach-Object {
+    $poetryOutput = & $poetryInVenv install --no-interaction 2>&1
+    $poetryExit = $LASTEXITCODE
+
+    $poetryOutput | ForEach-Object {
         if ($_ -match "Installing|Updating") { Write-Host "    $_" -ForegroundColor DarkGray }
     }
-    if ($LASTEXITCODE -ne 0) {
-        Write-Fail "poetry install failed"
+
+    if ($poetryExit -ne 0) {
+        Write-Fail "poetry install failed. Full output:"
+        $poetryOutput | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
         exit 1
     }
 
