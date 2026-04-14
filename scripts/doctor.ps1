@@ -14,13 +14,20 @@ else { Write-Fail "Python 3.12: NOT FOUND"; $issues++ }
 $bp = Get-BackendPython
 if ($bp) {
     $v = & $bp --version 2>&1
-    Write-OK "Backend venv: $v"
+    Write-OK "Backend venv: $bp ($v)"
 } else { Write-Fail "Backend venv: NOT FOUND (.venv missing)"; $issues++ }
 
-# Backend .env
+# Backend .env + mode
 $root = Get-ProjectRoot
-if (Test-Path "$root\backend\.env") { Write-OK "Backend .env: exists" }
-else { Write-Fail "Backend .env: MISSING"; $issues++ }
+$envFile = "$root\backend\.env"
+if (Test-Path $envFile) {
+    $dbLine = Get-Content $envFile | Select-String 'DATABASE_URL'
+    $mode = if ($dbLine -match "sqlite") { "Lite (SQLite)" } else { "Full (Postgres)" }
+    Write-OK "Backend .env: $mode"
+} else {
+    Write-Fail "Backend .env: MISSING"
+    $issues++
+}
 
 # Node.js
 if (Get-Command node -ErrorAction SilentlyContinue) { Write-OK "Node.js: $(node --version)" }
@@ -34,9 +41,9 @@ else { Write-Fail "npm: NOT FOUND"; $issues++ }
 if (Test-Path "$root\frontend-public\node_modules") { Write-OK "Frontend deps: installed" }
 else { Write-Fail "Frontend deps: node_modules MISSING"; $issues++ }
 
-# Flutter
+# Flutter - show full path
 $fl = Get-FlutterCmd
-if ($fl) { Write-OK "Flutter: $(flutter --version 2>&1 | Select-Object -First 1)" }
+if ($fl) { Write-OK "Flutter: $fl" }
 else { Write-Fail "Flutter: NOT FOUND"; $issues++ }
 
 # Ports

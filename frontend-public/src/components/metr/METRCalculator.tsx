@@ -67,7 +67,7 @@ export default function METRCalculator() {
     }
   }, [income, province, familyType, nChildren, childrenUnder6]);
 
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);

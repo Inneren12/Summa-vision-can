@@ -13,15 +13,15 @@ function Get-ProjectRoot {
 
 function Get-Python312 {
     <#
-    .SYNOPSIS Find Python 3.12 interpreter. Returns path or $null.
+    .SYNOPSIS Returns full path to Python 3.12 executable, or $null.
     #>
-    # Try py launcher
+    # Try py launcher -> resolve to actual path
     try {
-        $ver = py -3.12 --version 2>&1
-        if ($LASTEXITCODE -eq 0 -and $ver -match "3\.12") { return "py -3.12" }
+        $path = py -3.12 -c "import sys; print(sys.executable)" 2>&1
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $path)) { return $path.Trim() }
     } catch {}
 
-    # Try common install locations
+    # Try known install locations
     $candidates = @(
         "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
         "C:\Python312\python.exe",
@@ -36,8 +36,10 @@ function Get-Python312 {
 
     # Try generic python in PATH
     try {
-        $ver = python --version 2>&1
-        if ($ver -match "3\.12") { return "python" }
+        $v = python --version 2>&1
+        if ($v -match "3\.12") {
+            return (python -c "import sys; print(sys.executable)").Trim()
+        }
     } catch {}
 
     return $null
@@ -55,28 +57,27 @@ function Get-BackendPython {
 
 function Get-FlutterCmd {
     <#
-    .SYNOPSIS Find flutter command. Fixes PATH if needed. Returns command name or $null.
+    .SYNOPSIS Returns full path to flutter.bat, or $null. Adds to PATH if found.
     #>
-    if (Get-Command flutter -ErrorAction SilentlyContinue) { return "flutter" }
+    $existing = Get-Command flutter -ErrorAction SilentlyContinue
+    if ($existing) { return $existing.Source }
 
-    # Known locations
     $searchPaths = @(
         "C:\flutter\flutter\bin",
         "C:\flutter\bin",
         "$env:LOCALAPPDATA\flutter\bin",
         "$env:USERPROFILE\flutter\bin"
     )
-
-    # Also check FLUTTER_ROOT env var
-    if ($env:FLUTTER_ROOT -and (Test-Path "$env:FLUTTER_ROOT\bin\flutter.bat")) {
+    if ($env:FLUTTER_ROOT) {
         $searchPaths = @("$env:FLUTTER_ROOT\bin") + $searchPaths
     }
 
     foreach ($p in $searchPaths) {
-        if (Test-Path "$p\flutter.bat") {
+        $bat = "$p\flutter.bat"
+        if (Test-Path $bat) {
             $env:PATH = "$p;$env:PATH"
-            Write-Host "  [PATH] Added $p" -ForegroundColor DarkYellow
-            return "flutter"
+            Write-Host "  [PATH] Using Flutter from: $p" -ForegroundColor DarkYellow
+            return $bat
         }
     }
 

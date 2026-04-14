@@ -21,4 +21,9 @@ flutter pub get 2>&1 | Out-Null
 Write-OK "Dependencies resolved"
 
 Set-Location $root
+
+$flPath = Split-Path (Get-FlutterCmd) -Parent
 Write-Host "`n=== FLUTTER READY ===" -ForegroundColor Cyan
+Write-Host "  SDK: $flPath" -ForegroundColor White
+Write-Host "  Current session: PATH updated" -ForegroundColor Green
+Write-Host "  Permanent: add '$flPath' to User PATH in System Settings" -ForegroundColor DarkYellow
