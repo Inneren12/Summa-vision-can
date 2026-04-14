@@ -8,7 +8,7 @@ Effective Tax Rates across Canadian provinces:
 * ``GET /api/v1/public/metr/compare``   — provincial METR comparison
 
 All endpoints are **public** (no auth required). Rate-limited to
-60 req/min per IP via :class:`InMemoryRateLimiter`.
+200 req/min per IP via :class:`InMemoryRateLimiter`.
 
 Architecture: pure CPU calculations — no DB, no network I/O.
 The engine functions are pure (ARCH-PURA-001).
@@ -47,7 +47,7 @@ router = APIRouter(prefix="/api/v1/public/metr", tags=["public-metr"])
 
 
 # ---------------------------------------------------------------------------
-# Rate limiter — 60 requests per minute per IP (lightweight CPU calculations)
+# Rate limiter — 200 requests per minute per IP (lightweight CPU calculations)
 # ---------------------------------------------------------------------------
 
 
@@ -58,7 +58,7 @@ def get_metr_limiter() -> InMemoryRateLimiter:
     Singleton via ``lru_cache`` so all requests share the same window state.
     Tests can override this dependency with ``app.dependency_overrides``.
     """
-    return InMemoryRateLimiter(max_requests=60, window_seconds=60)
+    return InMemoryRateLimiter(max_requests=200, window_seconds=60)
 
 
 # ---------------------------------------------------------------------------

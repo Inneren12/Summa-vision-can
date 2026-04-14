@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchMETRCalculation, fetchMETRCurve } from '@/lib/api/metr';
 import type {
   FamilyType,
@@ -67,9 +67,17 @@ export default function METRCalculator() {
     }
   }, [income, province, familyType, nChildren, childrenUnder6]);
 
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      loadData();
+    }, 500);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [income, province, familyType, nChildren, childrenUnder6]);
 
   return (
     <div className="space-y-6" data-testid="metr-calculator">
