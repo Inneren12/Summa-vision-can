@@ -3,4 +3,4 @@
 $fl = Get-FlutterCmd
 if (-not $fl) { Write-Fail "Flutter not found. Run bootstrap-flutter.ps1"; exit 1 }
 Set-Location "$(Get-ProjectRoot)\frontend"
-flutter test @args
+& $fl test @args

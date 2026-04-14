@@ -13,61 +13,67 @@ if ($BackendOnly)  { & "$PSScriptRoot\start-backend.ps1"; exit $LASTEXITCODE }
 if ($PublicOnly)   { & "$PSScriptRoot\start-frontend.ps1"; exit $LASTEXITCODE }
 if ($FlutterOnly)  { & "$PSScriptRoot\start-flutter.ps1"; exit $LASTEXITCODE }
 
-# Default: start backend + frontend in parallel
-Write-Host "Starting backend + frontend..." -ForegroundColor Cyan
+Write-Host "=== STARTING SUMMA VISION ===" -ForegroundColor Cyan
 
-# Start backend
-$be = Start-Job -ScriptBlock { & "$using:PSScriptRoot\start-backend.ps1" }
+# -- Backend in new window --
+Write-Host "`n  Launching backend..." -ForegroundColor Yellow
+Start-Process pwsh -ArgumentList "-NoExit", "-File", "$PSScriptRoot\start-backend.ps1" `
+    -WorkingDirectory (Get-ProjectRoot)
 
-# Wait for backend readiness (max 30 seconds)
-Write-Host "  Waiting for backend..." -ForegroundColor Yellow
+# Wait for backend readiness
+Write-Host "  Waiting for backend health..." -ForegroundColor Yellow
 $ready = $false
 for ($i = 0; $i -lt 30; $i++) {
     Start-Sleep 1
     try {
-        $resp = Invoke-RestMethod "http://localhost:8000/api/health" -TimeoutSec 2 -ErrorAction Stop
-        if ($resp.status -eq "ok") { $ready = $true; break }
+        $resp = Invoke-WebRequest "http://localhost:8000/api/health" -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
+        if ($resp.StatusCode -eq 200) { $ready = $true; break }
     } catch {}
 }
 if (-not $ready) {
-    Write-Fail "Backend failed to start within 30s"
-    Receive-Job $be
-    Stop-Job $be; Remove-Job $be
+    Write-Fail "Backend didn't start within 30s - check the backend window"
     exit 1
 }
-Write-OK "Backend ready"
+Write-OK "Backend alive on :8000"
 
-# Now start frontend
-$fe = Start-Job -ScriptBlock { & "$using:PSScriptRoot\start-frontend.ps1" }
+# -- Frontend in new window --
+Write-Host "`n  Launching frontend..." -ForegroundColor Yellow
+Start-Process pwsh -ArgumentList "-NoExit", "-File", "$PSScriptRoot\start-frontend.ps1" `
+    -WorkingDirectory (Get-ProjectRoot)
 
-$fl = $null
+# Wait for frontend
+Write-Host "  Waiting for frontend..." -ForegroundColor Yellow
+$feReady = $false
+for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep 1
+    try {
+        $resp = Invoke-WebRequest "http://localhost:3000" -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
+        if ($resp.StatusCode -eq 200) { $feReady = $true; break }
+    } catch {}
+}
+if ($feReady) { Write-OK "Frontend alive on :3000" }
+else { Write-Host "  !!  Frontend still compiling - check the frontend window" -ForegroundColor DarkYellow }
+
+# -- Flutter in new window (optional) --
 if (-not $NoFlutter) {
-    Start-Sleep 2
-    $fl = Start-Job -ScriptBlock { & "$using:PSScriptRoot\start-flutter.ps1" }
-}
-
-Write-Host "`n=== ALL SERVICES STARTING ===" -ForegroundColor Cyan
-Write-Host "  Backend:    http://localhost:8000/docs"
-Write-Host "  Frontend:   http://localhost:3000"
-if (-not $NoFlutter) { Write-Host "  Flutter:    http://localhost:8082" }
-Write-Host "`nCtrl+C to stop all`n" -ForegroundColor DarkGray
-
-$jobs = @($be, $fe)
-if (-not $NoFlutter -and $fl) { $jobs += $fl }
-
-try {
-    while ($true) {
-        foreach ($j in $jobs) {
-            if ($j.State -eq "Failed" -or $j.State -eq "Completed") {
-                Write-Fail "Service died: $($j.Name)"
-                Receive-Job $j
-                throw "Service crashed"
-            }
-        }
-        Receive-Job $jobs -ErrorAction SilentlyContinue
-        Start-Sleep 2
+    $fl = Get-FlutterCmd
+    if ($fl) {
+        Write-Host "`n  Launching Flutter..." -ForegroundColor Yellow
+        Start-Process pwsh -ArgumentList "-NoExit", "-File", "$PSScriptRoot\start-flutter.ps1" `
+            -WorkingDirectory (Get-ProjectRoot)
+        Write-OK "Flutter window opened (:8082)"
+    } else {
+        Write-Host "  !!  Flutter not found - skipping" -ForegroundColor DarkYellow
     }
-} finally {
-    Stop-Job $jobs -ErrorAction SilentlyContinue
-    Remove-Job $jobs -ErrorAction SilentlyContinue
 }
+
+# -- Summary --
+Write-Host "`n=== ALL SERVICES LAUNCHED ===" -ForegroundColor Cyan
+Write-Host "  Backend:    http://localhost:8000/docs" -ForegroundColor White
+Write-Host "  Frontend:   http://localhost:3000" -ForegroundColor White
+Write-Host "  Calculator: http://localhost:3000/insights/metr/calculator" -ForegroundColor White
+if (-not $NoFlutter) {
+    Write-Host "  Flutter:    http://localhost:8082 (open URL manually)" -ForegroundColor White
+}
+Write-Host "`n  Each service runs in its own terminal window." -ForegroundColor DarkGray
+Write-Host "  Close windows individually with Ctrl+C." -ForegroundColor DarkGray

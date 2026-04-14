@@ -1,4 +1,6 @@
 #!/usr/bin/env pwsh
 . "$PSScriptRoot\lib\common.ps1"
-Set-Location "$(Get-ProjectRoot)\frontend-public"
+$dir = "$(Get-ProjectRoot)\frontend-public"
+Assert-FileExists "$dir\node_modules" "Run bootstrap-frontend.ps1"
+Set-Location $dir
 npm test -- --passWithNoTests @args

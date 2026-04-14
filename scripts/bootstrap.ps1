@@ -1,27 +1,30 @@
 #!/usr/bin/env pwsh
 # Facade: bootstrap everything
 param(
-    [switch]$BackendOnly,
-    [switch]$FrontendOnly,
-    [switch]$FlutterOnly,
-    [switch]$NoFlutter,
-    [switch]$Lite,
-    [switch]$Full
+    [switch]$BackendOnly, [switch]$FrontendOnly, [switch]$FlutterOnly,
+    [switch]$NoFlutter, [switch]$Lite, [switch]$Full
 )
 
-$backendArg = if ($Full) { "-Full" } else { "-Lite" }
-
-if ($BackendOnly)  { & "$PSScriptRoot\bootstrap-backend.ps1" $backendArg; exit $LASTEXITCODE }
+if ($BackendOnly)  { & "$PSScriptRoot\bootstrap-backend.ps1" $(if ($Full) {"-Full"} else {"-Lite"}); exit $LASTEXITCODE }
 if ($FrontendOnly) { & "$PSScriptRoot\bootstrap-frontend.ps1"; exit $LASTEXITCODE }
 if ($FlutterOnly)  { & "$PSScriptRoot\bootstrap-flutter.ps1"; exit $LASTEXITCODE }
 
-& "$PSScriptRoot\bootstrap-backend.ps1" $backendArg
-if ($LASTEXITCODE -ne 0) { exit 1 }
+$results = @()
+
+& "$PSScriptRoot\bootstrap-backend.ps1" $(if ($Full) {"-Full"} else {"-Lite"})
+$results += @{name="Backend"; ok=$($LASTEXITCODE -eq 0)}
 
 & "$PSScriptRoot\bootstrap-frontend.ps1"
-if ($LASTEXITCODE -ne 0) { exit 1 }
+$results += @{name="Frontend"; ok=$($LASTEXITCODE -eq 0)}
 
 if (-not $NoFlutter) {
     & "$PSScriptRoot\bootstrap-flutter.ps1"
-    # Flutter failure is non-fatal
+    $results += @{name="Flutter"; ok=$($LASTEXITCODE -eq 0)}
+}
+
+Write-Host "`n=== BOOTSTRAP SUMMARY ===" -ForegroundColor Cyan
+foreach ($r in $results) {
+    $icon = if ($r.ok) { "OK" } else { "FAIL" }
+    $color = if ($r.ok) { "Green" } else { "Red" }
+    Write-Host "  $icon  $($r.name)" -ForegroundColor $color
 }

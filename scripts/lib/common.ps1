@@ -15,17 +15,21 @@ function Get-Python312 {
     <#
     .SYNOPSIS Returns full path to Python 3.12 executable, or $null.
     #>
-    # Try py launcher -> resolve to actual path
+    # py launcher
     try {
-        $path = py -3.12 -c "import sys; print(sys.executable)" 2>&1
-        if ($LASTEXITCODE -eq 0 -and (Test-Path $path)) { return $path.Trim() }
+        $output = py -3.12 -c "import sys; print(sys.executable)" 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $path = ($output | Select-Object -Last 1).Trim()
+            if ((Test-Path $path) -and (& $path --version 2>&1) -match "3\.12") {
+                return $path
+            }
+        }
     } catch {}
 
-    # Try known install locations
+    # Known locations
     $candidates = @(
         "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
-        "C:\Python312\python.exe",
-        "C:\Python\3.12\python.exe"
+        "C:\Python312\python.exe"
     )
     foreach ($c in $candidates) {
         if (Test-Path $c) {
@@ -34,11 +38,12 @@ function Get-Python312 {
         }
     }
 
-    # Try generic python in PATH
+    # Generic python
     try {
         $v = python --version 2>&1
         if ($v -match "3\.12") {
-            return (python -c "import sys; print(sys.executable)").Trim()
+            $p = (python -c "import sys; print(sys.executable)" 2>$null | Select-Object -Last 1).Trim()
+            if (Test-Path $p) { return $p }
         }
     } catch {}
 
@@ -57,7 +62,7 @@ function Get-BackendPython {
 
 function Get-FlutterCmd {
     <#
-    .SYNOPSIS Returns full path to flutter.bat, or $null. Adds to PATH if found.
+    .SYNOPSIS Returns full path to flutter.bat, or $null. Does NOT modify PATH.
     #>
     $existing = Get-Command flutter -ErrorAction SilentlyContinue
     if ($existing) { return $existing.Source }
@@ -74,13 +79,8 @@ function Get-FlutterCmd {
 
     foreach ($p in $searchPaths) {
         $bat = "$p\flutter.bat"
-        if (Test-Path $bat) {
-            $env:PATH = "$p;$env:PATH"
-            Write-Host "  [PATH] Using Flutter from: $p" -ForegroundColor DarkYellow
-            return $bat
-        }
+        if (Test-Path $bat) { return $bat }
     }
-
     return $null
 }
 
@@ -88,14 +88,8 @@ function Test-PortFree([int]$port) {
     <#
     .SYNOPSIS Returns $true if port is free
     #>
-    try {
-        $listener = [System.Net.Sockets.TcpClient]::new()
-        $listener.Connect("127.0.0.1", $port)
-        $listener.Close()
-        return $false  # port is occupied
-    } catch {
-        return $true   # port is free
-    }
+    $connections = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
+    return ($null -eq $connections -or $connections.Count -eq 0)
 }
 
 function Assert-PortFree([int]$port, [string]$service) {
