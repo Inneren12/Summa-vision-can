@@ -131,6 +131,7 @@ describe('METRCalculator', () => {
     await waitFor(() => {
       expect(mockFetchMETRCurve).toHaveBeenCalledWith(
         expect.objectContaining({ province: 'BC' }),
+        expect.any(AbortSignal),
       );
     });
   });

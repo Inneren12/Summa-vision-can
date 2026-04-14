@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchMETRCalculation, fetchMETRCurve } from '@/lib/api/metr';
 import type {
   FamilyType,
@@ -38,37 +38,60 @@ export default function METRCalculator() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
   const loadData = useCallback(async () => {
+    // Cancel previous in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     setError(null);
     try {
       const [calc, curve] = await Promise.all([
-        fetchMETRCalculation({
-          income,
-          province,
-          family_type: familyType,
-          n_children: nChildren,
-          children_under_6: childrenUnder6,
-        }),
-        fetchMETRCurve({
-          province,
-          family_type: familyType,
-          n_children: nChildren,
-          children_under_6: childrenUnder6,
-        }),
+        fetchMETRCalculation(
+          {
+            income,
+            province,
+            family_type: familyType,
+            n_children: nChildren,
+            children_under_6: childrenUnder6,
+          },
+          controller.signal,
+        ),
+        fetchMETRCurve(
+          {
+            province,
+            family_type: familyType,
+            n_children: nChildren,
+            children_under_6: childrenUnder6,
+          },
+          controller.signal,
+        ),
       ]);
-      setCalcData(calc);
-      setCurveData(curve);
+      // Only update if this request wasn't aborted
+      if (!controller.signal.aborted) {
+        setCalcData(calc);
+        setCurveData(curve);
+      }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('METR calculation failed:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load METR data. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to load METR data.');
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, [income, province, familyType, nChildren, childrenUnder6]);
 
   useEffect(() => {
-    loadData();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => { loadData(); }, 500);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (abortRef.current) abortRef.current.abort();
+    };
   }, [loadData]);
 
   return (

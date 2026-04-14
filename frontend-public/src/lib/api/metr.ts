@@ -11,6 +11,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 export async function fetchMETRCalculation(
   params: METRCalculateParams,
+  signal?: AbortSignal,
 ): Promise<METRCalculateResponse> {
   const searchParams = new URLSearchParams();
   searchParams.set('income', String(params.income));
@@ -23,6 +24,7 @@ export async function fetchMETRCalculation(
 
   const res = await fetch(
     `${API_URL}/api/v1/public/metr/calculate?${searchParams.toString()}`,
+    { signal },
   );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -33,6 +35,7 @@ export async function fetchMETRCalculation(
 
 export async function fetchMETRCurve(
   params: METRCurveParams = {},
+  signal?: AbortSignal,
 ): Promise<METRCurveResponse> {
   const searchParams = new URLSearchParams();
   if (params.province) searchParams.set('province', params.province);
@@ -49,7 +52,7 @@ export async function fetchMETRCurve(
 
   const qs = searchParams.toString();
   const url = `${API_URL}/api/v1/public/metr/curve${qs ? `?${qs}` : ''}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail ?? 'METR curve fetch failed');
