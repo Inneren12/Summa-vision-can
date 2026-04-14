@@ -37,6 +37,25 @@ class PublicationRepository:
         """
         self._session = session
 
+    @staticmethod
+    def _published_order_clause(sort: str) -> tuple:
+        """Stable ordering for published publications.
+
+        Tie-breakers are required because timestamps/scores can be equal,
+        otherwise DB row order becomes non-deterministic and pagination/tests
+        become flaky.
+        """
+        if sort == "oldest":
+            return (Publication.created_at.asc(), Publication.id.asc())
+        if sort == "score":
+            return (
+                Publication.virality_score.desc(),
+                Publication.created_at.desc(),
+                Publication.id.desc(),
+            )
+        # default: newest
+        return (Publication.created_at.desc(), Publication.id.desc())
+
     async def get_latest_version(self, source_product_id: str, config_hash: str) -> int | None:
         """Get the latest version number for a given product and configuration hash.
 
@@ -163,7 +182,7 @@ class PublicationRepository:
         stmt = (
             select(Publication)
             .where(Publication.status == PublicationStatus.PUBLISHED)
-            .order_by(Publication.created_at.desc())
+            .order_by(Publication.created_at.desc(), Publication.id.desc())
             .limit(limit)
             .offset(offset)
         )
@@ -187,16 +206,10 @@ class PublicationRepository:
         Returns:
             A list of ``Publication`` instances with ``PUBLISHED`` status.
         """
-        order_clause = {
-            "newest": Publication.created_at.desc(),
-            "oldest": Publication.created_at.asc(),
-            "score": Publication.virality_score.desc(),
-        }.get(sort, Publication.created_at.desc())
-
         stmt = (
             select(Publication)
             .where(Publication.status == PublicationStatus.PUBLISHED)
-            .order_by(order_clause)
+            .order_by(*self._published_order_clause(sort))
             .limit(limit)
             .offset(offset)
         )
