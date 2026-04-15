@@ -13,6 +13,7 @@ from src.api.routers.admin_jobs import router as admin_jobs_router
 from src.api.routers.admin_data import router as admin_data_router
 from src.api.routers.admin_kpi import router as admin_kpi_router
 from src.api.routers.admin_graphics import router as admin_graphics_router
+from src.api.routers.admin_publications import router as admin_publications_router
 from src.api.routers.public_graphics import router as public_graphics_router
 from src.api.routers.public_download import router as public_download_router
 from src.api.routers.public_leads import router as public_leads_router
@@ -150,6 +151,7 @@ app.include_router(public_download_router)
 app.include_router(public_metr_router)
 app.include_router(admin_leads_router)
 app.include_router(admin_graphics_router)
+app.include_router(admin_publications_router)
 app.include_router(admin_cubes_router)
 app.include_router(admin_data_router)
 app.include_router(admin_kpi_router)
