@@ -78,7 +78,7 @@ class MockInterceptor extends Interceptor {
         Response(
           requestOptions: options,
           statusCode: 200,
-          data: _jobsListFixture,
+          data: _filteredJobsListFixture(options.queryParameters),
         ),
         true,
       );
@@ -266,8 +266,61 @@ class MockInterceptor extends Interceptor {
       return;
     }
 
-    // Pass through any unmatched routes
-    handler.next(options);
+    // Catch-all: when USE_MOCK=true, NEVER let requests reach the network.
+    // Return a mock 404 so missing fixtures are immediately obvious and
+    // DioException [connection error] can never be produced from the mock
+    // admin panel.
+    handler.resolve(
+      Response(
+        requestOptions: options,
+        statusCode: 404,
+        data: {
+          'error': 'MockInterceptor: no fixture for ${options.path}',
+        },
+      ),
+      true,
+    );
+  }
+
+  /// Applies [status] / [job_type] query-param filtering on top of
+  /// [_jobsListFixture]. Values of `all`, empty string, or missing params
+  /// return the full fixture list. Updates `total` to match filtered length
+  /// so the Jobs Dashboard header count stays in sync.
+  static Map<String, dynamic> _filteredJobsListFixture(
+    Map<String, dynamic> queryParameters,
+  ) {
+    final fixture = _jobsListFixture;
+    final items =
+        List<Map<String, dynamic>>.from(fixture['items'] as List<dynamic>);
+
+    final rawStatus = queryParameters['status']?.toString();
+    final rawJobType = queryParameters['job_type']?.toString();
+
+    final statusFilter = (rawStatus == null ||
+            rawStatus.isEmpty ||
+            rawStatus.toLowerCase() == 'all')
+        ? null
+        : rawStatus;
+    final jobTypeFilter = (rawJobType == null ||
+            rawJobType.isEmpty ||
+            rawJobType.toLowerCase() == 'all')
+        ? null
+        : rawJobType;
+
+    final filtered = items.where((job) {
+      if (statusFilter != null && job['status'] != statusFilter) {
+        return false;
+      }
+      if (jobTypeFilter != null && job['job_type'] != jobTypeFilter) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    return {
+      'items': filtered,
+      'total': filtered.length,
+    };
   }
 
   static const List<Map<String, dynamic>> _cubeSearchFixture = [
