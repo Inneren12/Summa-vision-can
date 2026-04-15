@@ -45,3 +45,7 @@ jobs.sqlite
 
 __pycache__/
 *.pyc
+
+backend/.venv312/
+backend/.venv/
+

@@ -57,7 +57,7 @@ try {
     $env:VIRTUAL_ENV = $venv
     $env:PATH = "$venv\Scripts;$env:PATH"
 
-    $poetryOutput = & $poetryInVenv install --no-interaction 2>&1
+    $poetryOutput = & $poetryInVenv install --no-root --no-interaction 2>&1
     $poetryExit = $LASTEXITCODE
 
     $poetryOutput | ForEach-Object {

@@ -119,3 +119,13 @@ function Assert-FileExists([string]$path, [string]$hint) {
         exit 1
     }
 }
+
+function Get-HostPowerShell {
+    $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+    if ($pwsh) { return $pwsh.Source }
+
+    $ps = Get-Command powershell.exe -ErrorAction SilentlyContinue
+    if ($ps) { return $ps.Source }
+
+    throw "Neither pwsh nor powershell.exe is available in PATH."
+}

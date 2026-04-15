@@ -14,10 +14,11 @@ if ($PublicOnly)   { & "$PSScriptRoot\start-frontend.ps1"; exit $LASTEXITCODE }
 if ($FlutterOnly)  { & "$PSScriptRoot\start-flutter.ps1"; exit $LASTEXITCODE }
 
 Write-Host "=== STARTING SUMMA VISION ===" -ForegroundColor Cyan
+$psExe = (Get-Command powershell.exe -ErrorAction Stop).Source
 
 # -- Backend in new window --
 Write-Host "`n  Launching backend..." -ForegroundColor Yellow
-Start-Process pwsh -ArgumentList "-NoExit", "-File", "$PSScriptRoot\start-backend.ps1" `
+Start-Process $psExe -ArgumentList "-NoExit", "-File", "$PSScriptRoot\start-backend.ps1" `
     -WorkingDirectory (Get-ProjectRoot)
 
 # Wait for backend readiness
@@ -38,7 +39,7 @@ Write-OK "Backend alive on :8000"
 
 # -- Frontend in new window --
 Write-Host "`n  Launching frontend..." -ForegroundColor Yellow
-Start-Process pwsh -ArgumentList "-NoExit", "-File", "$PSScriptRoot\start-frontend.ps1" `
+Start-Process $psExe -ArgumentList "-NoExit", "-File", "$PSScriptRoot\start-frontend.ps1" `
     -WorkingDirectory (Get-ProjectRoot)
 
 # Wait for frontend
@@ -59,11 +60,11 @@ if (-not $NoFlutter) {
     $fl = Get-FlutterCmd
     if ($fl) {
         Write-Host "`n  Launching Flutter..." -ForegroundColor Yellow
-        Start-Process pwsh -ArgumentList "-NoExit", "-File", "$PSScriptRoot\start-flutter.ps1" `
+        Start-Process $psExe -ArgumentList "-NoExit", "-File", "$PSScriptRoot\start-flutter.ps1" `
             -WorkingDirectory (Get-ProjectRoot)
-        Write-Host "  ➜  Flutter launched in new window (:8082) — check window for status" -ForegroundColor DarkYellow
+        Write-Host "  -> Flutter launched in new window (:8082) - check window for status" -ForegroundColor DarkYellow
     } else {
-        Write-Host "  !!  Flutter not found - skipping" -ForegroundColor DarkYellow
+        Write-Host "  !! Flutter not found - skipping" -ForegroundColor DarkYellow
     }
 }
 
