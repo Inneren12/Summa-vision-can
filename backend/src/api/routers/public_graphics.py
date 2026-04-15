@@ -12,18 +12,18 @@ SQLAlchemy imports appear in this module.
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db
 from src.core.security.ip_rate_limiter import InMemoryRateLimiter
 from src.core.storage import StorageInterface, get_storage_manager
 from src.repositories.publication_repository import PublicationRepository
+from src.schemas.publication import PublicationPublicResponse
 
 router = APIRouter(prefix="/api/v1/public", tags=["public"])
 
@@ -69,45 +69,19 @@ def _get_repo(session: AsyncSession = Depends(get_db)) -> PublicationRepository:
 # ---------------------------------------------------------------------------
 # Response schema
 # ---------------------------------------------------------------------------
+#
+# The public gallery uses :class:`PublicationPublicResponse` from
+# ``src.schemas.publication`` as the single source of truth for the
+# public-facing contract. Deliberately omits ``s3_key_lowres``,
+# ``s3_key_highres`` and ``visual_config`` to prevent leaking internal
+# object keys or the editor's layer configuration to the public
+# internet.
+#
+# ``PublicationResponse`` is re-exported below as a backward-compat
+# alias — external imports (tests, etc.) continue to work while the
+# canonical schema is in a single location.
 
-
-class PublicationResponse(BaseModel):
-    """Public-facing publication representation.
-
-    Deliberately omits ``s3_key_lowres``, ``s3_key_highres`` and
-    ``visual_config`` to prevent leaking internal object keys or the
-    editor's layer configuration to the public internet.
-
-    Attributes:
-        id: Publication primary key.
-        headline: Short title of the graphic.
-        chart_type: Type of chart (e.g. ``"bar"``, ``"infographic"``).
-        virality_score: AI-estimated virality score (0.0 – 1.0).
-        preview_url: Time-limited presigned URL for the low-res preview.
-        created_at: UTC timestamp of record creation.
-        eyebrow: Optional editorial kicker shown above the headline.
-        description: Optional gallery card description.
-        source_text: Optional source attribution.
-        footnote: Optional methodology / footnote text.
-        updated_at: UTC timestamp of the most recent change.
-        published_at: UTC timestamp recorded when status flipped to
-            ``PUBLISHED``.
-    """
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    headline: str
-    chart_type: str
-    virality_score: float
-    preview_url: str
-    created_at: datetime
-    eyebrow: str | None = None
-    description: str | None = None
-    source_text: str | None = None
-    footnote: str | None = None
-    updated_at: datetime | None = None
-    published_at: datetime | None = None
+PublicationResponse = PublicationPublicResponse
 
 
 class PaginatedGraphicsResponse(BaseModel):
@@ -119,7 +93,7 @@ class PaginatedGraphicsResponse(BaseModel):
         offset: The offset that was applied.
     """
 
-    items: list[PublicationResponse]
+    items: list[PublicationPublicResponse]
     limit: int
     offset: int
 
@@ -135,7 +109,12 @@ class PaginatedGraphicsResponse(BaseModel):
     status_code=status.HTTP_200_OK,
     summary="List published infographics",
     responses={
-        200: {"description": "Paginated list of published graphics."},
+        200: {
+            "description": (
+                "Paginated list of published graphics using the canonical "
+                "PublicationPublicResponse schema."
+            ),
+        },
         429: {"description": "Rate limit exceeded."},
     },
 )
@@ -192,13 +171,18 @@ async def list_public_graphics(
                 pub.s3_key_lowres, ttl=3600
             )
 
+        status_value = getattr(pub, "status", "PUBLISHED")
+        if hasattr(status_value, "value"):
+            status_value = status_value.value
+
         items.append(
-            PublicationResponse(
+            PublicationPublicResponse(
                 id=pub.id,
                 headline=pub.headline,
                 chart_type=pub.chart_type,
                 virality_score=pub.virality_score or 0.0,
                 preview_url=preview_url,
+                status=status_value,
                 created_at=pub.created_at,
                 eyebrow=getattr(pub, "eyebrow", None),
                 description=getattr(pub, "description", None),

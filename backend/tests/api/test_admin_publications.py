@@ -30,13 +30,24 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from sqlalchemy import select
+
 from src.api.routers.admin_publications import (
     _get_audit,
     _get_repo,
     router,
 )
+from src.api.routers.public_graphics import (
+    _get_repo as _get_public_repo,
+    _get_storage as _get_public_storage,
+    get_gallery_limiter,
+    router as public_graphics_router,
+)
 from src.core.database import Base
 from src.core.security.auth import AuthMiddleware
+from src.core.security.ip_rate_limiter import InMemoryRateLimiter
+from src.core.storage import StorageInterface
+from src.models.audit_event import AuditEvent
 from src.repositories.publication_repository import PublicationRepository
 from src.services.audit import AuditWriter
 
@@ -370,3 +381,295 @@ async def test_unpublish_reverts_to_draft(session_factory) -> None:
 
     assert resp.status_code == 200, resp.text
     assert resp.json()["status"] == "DRAFT"
+
+
+# ---------------------------------------------------------------------------
+# Unpublish — audit symmetry with publish (FIX 2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_unpublish_writes_audit_event(session_factory) -> None:
+    """Unpublish must emit an audit event mirroring the publish lifecycle.
+
+    Admin lifecycle actions are symmetrically audited. There is no
+    dedicated ``PUBLICATION_UNPUBLISHED`` enum member, so the router
+    reuses ``PUBLICATION_PUBLISHED`` with ``metadata.action='unpublish'``
+    as the distinguishing marker for dashboards.
+    """
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = resp.json()["id"]
+
+        await client.post(
+            f"/api/v1/admin/publications/{pub_id}/publish",
+            headers=_auth_headers(),
+        )
+        resp = await client.post(
+            f"/api/v1/admin/publications/{pub_id}/unpublish",
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 200, resp.text
+
+    # Inspect the audit trail directly via a fresh session.
+    async with session_factory() as session:
+        result = await session.execute(
+            select(AuditEvent).where(AuditEvent.entity_id == str(pub_id))
+        )
+        events = list(result.scalars().all())
+
+    assert len(events) == 2, f"expected publish+unpublish events, got {events}"
+    # Both events share the same type; unpublish carries the 'action' marker.
+    unpublish_events = [
+        e for e in events if e.metadata_json and "unpublish" in e.metadata_json
+    ]
+    assert len(unpublish_events) == 1
+    unpublish_event = unpublish_events[0]
+    assert unpublish_event.event_type == "publication.published"
+    assert unpublish_event.entity_type == "publication"
+    assert unpublish_event.entity_id == str(pub_id)
+    metadata = json.loads(unpublish_event.metadata_json)
+    assert metadata["action"] == "unpublish"
+    assert metadata["new_status"] == "DRAFT"
+
+
+# ---------------------------------------------------------------------------
+# PATCH — clearing nullable fields with explicit null (FIX 4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_patch_clear_nullable_field_with_null(session_factory) -> None:
+    """Explicit ``null`` in the PATCH body clears the column.
+
+    Contract:
+    * Field omitted from the JSON body → column unchanged.
+    * Field sent as ``null`` → column cleared (set to NULL).
+    * Field sent with a value → column updated.
+
+    Drives the ``exclude_unset=True`` + repository apply-all-keys fix.
+    """
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Create with footnote + description set.
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json={
+                **_VALID_BODY,
+                "headline": "Clearable",
+                "footnote": "Seasonally adjusted.",
+                "description": "A description to preserve.",
+            },
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 201, resp.text
+        pub_id = resp.json()["id"]
+        assert resp.json()["footnote"] == "Seasonally adjusted."
+
+        # PATCH: clear footnote via explicit null, leave everything else alone.
+        resp = await client.patch(
+            f"/api/v1/admin/publications/{pub_id}",
+            json={"footnote": None},
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 200, resp.text
+        patched = resp.json()
+        assert patched["footnote"] is None
+        # Omitted fields must remain unchanged.
+        assert patched["description"] == "A description to preserve."
+        assert patched["eyebrow"] == _VALID_BODY["eyebrow"]
+
+        # Re-fetch to confirm persistence.
+        resp = await client.get(
+            f"/api/v1/admin/publications/{pub_id}",
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 200
+        fetched = resp.json()
+        assert fetched["footnote"] is None
+        assert fetched["description"] == "A description to preserve."
+
+
+@pytest.mark.asyncio
+async def test_patch_unknown_field_rejected(session_factory) -> None:
+    """``extra='forbid'`` on PublicationUpdate rejects typos with 422."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = resp.json()["id"]
+
+        # Deliberate typo — should be rejected rather than silently ignored.
+        resp = await client.patch(
+            f"/api/v1/admin/publications/{pub_id}",
+            json={"eybrow": "TYPO"},
+            headers=_auth_headers(),
+        )
+
+    assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Public gallery contract test (FIX 1 + FIX 3)
+# ---------------------------------------------------------------------------
+
+
+class _ContractTestStorage(StorageInterface):
+    """Tiny mock storage for the public gallery contract test."""
+
+    async def upload_bytes(self, data: bytes, key: str) -> None:
+        pass
+
+    async def download_bytes(self, key: str) -> bytes:  # pragma: no cover
+        return b""
+
+    async def upload_dataframe_as_csv(self, df: Any, path: str) -> None:
+        pass
+
+    async def upload_raw(
+        self, data: str | bytes, path: str, content_type: str = "text/html"
+    ) -> None:
+        pass
+
+    async def download_csv(self, path: str) -> Any:  # pragma: no cover
+        import pandas as pd
+
+        return pd.DataFrame()
+
+    async def list_objects(self, prefix: str) -> list[str]:
+        return []
+
+    async def generate_presigned_url(self, path: str, ttl: int = 3600) -> str:
+        return f"https://cdn.example.test/{path}?ttl={ttl}"
+
+    async def delete_object(self, key: str) -> None:
+        pass
+
+
+def _make_admin_and_public_app(session_factory):
+    """Build an app with BOTH admin + public routers sharing one DB."""
+    app = FastAPI()
+    app.include_router(router)
+    app.include_router(public_graphics_router)
+
+    async def _override_repo() -> AsyncGenerator[PublicationRepository, None]:
+        async with session_factory() as session:
+            try:
+                yield PublicationRepository(session)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    async def _override_audit() -> AsyncGenerator[AuditWriter, None]:
+        async with session_factory() as session:
+            try:
+                yield AuditWriter(session)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    app.dependency_overrides[_get_repo] = _override_repo
+    app.dependency_overrides[_get_audit] = _override_audit
+    # Public router uses its own dependency symbols — override them too so
+    # requests hit the same per-test DB / session factory.
+    app.dependency_overrides[_get_public_repo] = _override_repo
+    app.dependency_overrides[_get_public_storage] = lambda: _ContractTestStorage()
+    # Use an isolated limiter so other tests don't consume quota.
+    app.dependency_overrides[get_gallery_limiter] = lambda: InMemoryRateLimiter(
+        max_requests=1000, window_seconds=60
+    )
+
+    app.add_middleware(AuthMiddleware, admin_api_key="test-admin-key")
+    return app
+
+
+@pytest.mark.asyncio
+async def test_public_gallery_includes_editorial_excludes_visual_config(
+    session_factory,
+) -> None:
+    """Public gallery must expose editorial fields but not visual_config.
+
+    End-to-end contract:
+    1. Admin creates a publication with the full editorial set + a
+       ``visual_config`` block.
+    2. Admin publishes it.
+    3. Public endpoint lists it.
+    4. Editorial fields are present; ``visual_config`` is omitted;
+       ``s3_key_*`` are omitted.
+    """
+    app = _make_admin_and_public_app(session_factory)
+    transport = ASGITransport(app=app)
+    create_payload: dict[str, Any] = {
+        "headline": "Test Editorial",
+        "chart_type": "BAR",
+        "eyebrow": "STATISTICS CANADA",
+        "description": "Test description for gallery",
+        "source_text": "Source: StatCan",
+        "footnote": "Seasonally adjusted",
+        "visual_config": {
+            "layout": "bar_editorial",
+            "palette": "housing",
+            "background": "gradient_warm",
+            "size": "instagram",
+            "branding": {
+                "show_top_accent": True,
+                "show_corner_mark": True,
+                "accent_color": "#FBBF24",
+            },
+        },
+    }
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Create via admin
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=create_payload,
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 201, resp.text
+        pub_id = resp.json()["id"]
+
+        # 2. Publish via admin
+        resp = await client.post(
+            f"/api/v1/admin/publications/{pub_id}/publish",
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 200, resp.text
+
+        # 3. Fetch public gallery (no auth)
+        resp = await client.get("/api/v1/public/graphics")
+        assert resp.status_code == 200, resp.text
+
+    body = resp.json()
+    items = body["items"]
+    assert len(items) == 1
+    pub = items[0]
+
+    # 4a. Editorial fields are present.
+    assert pub["headline"] == "Test Editorial"
+    assert pub["eyebrow"] == "STATISTICS CANADA"
+    assert pub["description"] == "Test description for gallery"
+    assert pub["source_text"] == "Source: StatCan"
+    assert pub["footnote"] == "Seasonally adjusted"
+    # Lifecycle timestamps are exposed.
+    assert "updated_at" in pub
+    assert "published_at" in pub
+    assert pub["published_at"] is not None
+
+    # 4b. Admin-only / internal fields must NOT be exposed.
+    assert "visual_config" not in pub
+    assert "s3_key_lowres" not in pub
+    assert "s3_key_highres" not in pub

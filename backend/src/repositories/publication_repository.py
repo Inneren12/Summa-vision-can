@@ -375,13 +375,25 @@ class PublicationRepository:
     ) -> Publication | None:
         """Apply a partial update to a publication.
 
-        ``None`` values are treated as "field not provided" and skipped,
-        so the patch is non-destructive. Visual config dicts / Pydantic
-        models are serialised to JSON before being persisted.
+        Partial-update semantics (PATCH):
+
+        * Keys NOT present in ``data`` are left unchanged.
+        * Keys present in ``data`` are always applied — including
+          explicit ``None`` which clears nullable editorial fields
+          (``eyebrow``, ``description``, ``source_text``, ``footnote``,
+          ``visual_config``).
+
+        Callers should produce ``data`` via
+        ``PublicationUpdate.model_dump(exclude_unset=True)`` so omitted
+        fields do not accidentally overwrite existing values.
+
+        Visual config dicts / Pydantic models are serialised to JSON
+        before being persisted; ``None`` clears the column.
 
         Args:
             pub_id: Primary key of the publication to update.
-            data: Field map; only non-``None`` entries are applied.
+            data: Field map. Every key in the dict is applied, including
+                explicit ``None`` values (for clearing nullable fields).
 
         Returns:
             The updated :class:`Publication`, or ``None`` if not found.
@@ -391,8 +403,6 @@ class PublicationRepository:
             return None
 
         for key, value in data.items():
-            if value is None:
-                continue
             if key == "visual_config":
                 value = self._serialize_visual_config(value)
             setattr(publication, key, value)

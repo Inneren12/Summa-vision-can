@@ -1,18 +1,25 @@
 """add_editorial_and_visual_config_to_publication
 
-Adds editorial fields (eyebrow, description, source_text, footnote) and a
-JSON-serialised ``visual_config`` column to the ``publications`` table so
-the public gallery can render rich editorial cards and the new in-house
-editor can persist its layer configuration.
+Adds 7 new nullable columns to the ``publications`` table:
 
-Also adds two lifecycle timestamps:
+Editorial fields (4):
+    * ``eyebrow``      — String(255), Optional kicker line.
+    * ``description``  — Text, Optional gallery-card description.
+    * ``source_text``  — String(500), Optional source attribution.
+    * ``footnote``     — Text, Optional methodology / caveat.
 
-* ``updated_at`` — populated automatically by SQLAlchemy ``onupdate``.
-* ``published_at`` — set by the application when the status flips from
-  ``DRAFT`` to ``PUBLISHED``.
+Visual configuration (1):
+    * ``visual_config`` — Text (JSON-serialised editor layer config).
 
-All new columns are ``nullable=True`` so existing rows remain valid and
-no backfill is required.
+Lifecycle timestamps (2):
+    * ``updated_at``   — DateTime(tz), populated automatically by
+      SQLAlchemy ``onupdate``.
+    * ``published_at`` — DateTime(tz), set by the application when the
+      status flips from ``DRAFT`` to ``PUBLISHED``.
+
+All 7 new columns are ``nullable=True`` so existing rows remain valid
+and no backfill is required. Together they power the public gallery
+(editorial cards) and the in-house editor (layer persistence).
 
 Revision ID: e9b4f8a72c10
 Revises: d7a1b2c3e4f5
