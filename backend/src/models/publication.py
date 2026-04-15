@@ -11,7 +11,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, Float, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Enum, Float, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
@@ -41,6 +41,23 @@ class Publication(Base):
         version: Publication version number.
         config_hash: Hash of the chart configuration.
         content_hash: Hash of the low-resolution image content.
+        eyebrow: Optional eyebrow / kicker line shown above the
+            headline on the public gallery card (e.g.
+            ``"STATISTICS CANADA · TABLE 18-10-0004"``).
+        description: Optional short description shown on the gallery
+            card body.
+        source_text: Optional source attribution
+            (e.g. ``"Source: Statistics Canada, Table 18-10-0004-01"``).
+        footnote: Optional methodology / footnote text rendered at the
+            bottom of the publication detail view.
+        visual_config: JSON-serialised editor layer configuration
+            (palette, background, layout, branding, custom primary
+            colour). Stored as Text to keep SQLite compatibility for
+            unit tests; the application layer parses/dumps the JSON.
+        updated_at: UTC timestamp of the most recent change. Set
+            automatically by SQLAlchemy on update.
+        published_at: UTC timestamp recorded when the publication
+            transitions to ``PUBLISHED``. ``None`` while DRAFT.
     """
 
     __tablename__ = "publications"
@@ -75,6 +92,34 @@ class Publication(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
         index=True,
+    )
+
+    # ------------------------------------------------------------------
+    # Editorial fields (Editor + Gallery extension)
+    # All nullable for backward compatibility with pre-existing rows.
+    # ------------------------------------------------------------------
+    eyebrow: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_text: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    footnote: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # ------------------------------------------------------------------
+    # Visual config — JSON-serialised editor layer configuration.
+    # Stored as Text for SQLite compatibility.
+    # ------------------------------------------------------------------
+    visual_config: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # ------------------------------------------------------------------
+    # Lifecycle metadata
+    # ------------------------------------------------------------------
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        onupdate=func.now(),
+    )
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     def __repr__(self) -> str:  # pragma: no cover

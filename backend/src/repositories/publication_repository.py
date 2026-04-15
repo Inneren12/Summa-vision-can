@@ -15,6 +15,9 @@ Commit semantics:
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -314,3 +317,161 @@ class PublicationRepository:
             )
         )
         await self._session.execute(stmt)
+
+    # ------------------------------------------------------------------
+    # Editor + Gallery extension
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _serialize_visual_config(value: Any) -> str | None:
+        """Coerce a visual_config value to a JSON string for storage.
+
+        Accepts ``None``, an existing JSON string, a dict, or a Pydantic
+        model exposing ``model_dump``. Returns the JSON-serialised form.
+        """
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict):
+            return json.dumps(value)
+        # Pydantic model with ``model_dump`` (e.g. VisualConfig)
+        if hasattr(value, "model_dump"):
+            return json.dumps(value.model_dump())
+        raise TypeError(
+            f"Unsupported visual_config type: {type(value).__name__}"
+        )
+
+    async def create_full(self, data: dict[str, Any]) -> Publication:
+        """Create a publication with all editorial + visual fields.
+
+        Args:
+            data: Mapping produced by ``PublicationCreate.model_dump()``.
+                If a ``visual_config`` entry is present and not already a
+                JSON string, it is serialised before persistence.
+
+        Returns:
+            The newly created :class:`Publication` (in ``DRAFT`` status
+            unless ``status`` is provided in ``data``).
+        """
+        payload = dict(data)
+        if "visual_config" in payload:
+            payload["visual_config"] = self._serialize_visual_config(
+                payload["visual_config"]
+            )
+
+        payload.setdefault("status", PublicationStatus.DRAFT)
+
+        publication = Publication(**payload)
+        self._session.add(publication)
+        await self._session.flush()
+        await self._session.refresh(publication)
+        return publication
+
+    async def update_fields(
+        self,
+        pub_id: int,
+        data: dict[str, Any],
+    ) -> Publication | None:
+        """Apply a partial update to a publication.
+
+        ``None`` values are treated as "field not provided" and skipped,
+        so the patch is non-destructive. Visual config dicts / Pydantic
+        models are serialised to JSON before being persisted.
+
+        Args:
+            pub_id: Primary key of the publication to update.
+            data: Field map; only non-``None`` entries are applied.
+
+        Returns:
+            The updated :class:`Publication`, or ``None`` if not found.
+        """
+        publication = await self._session.get(Publication, pub_id)
+        if publication is None:
+            return None
+
+        for key, value in data.items():
+            if value is None:
+                continue
+            if key == "visual_config":
+                value = self._serialize_visual_config(value)
+            setattr(publication, key, value)
+
+        await self._session.flush()
+        await self._session.refresh(publication)
+        return publication
+
+    async def publish(self, pub_id: int) -> Publication | None:
+        """Transition the publication to ``PUBLISHED`` and stamp the time.
+
+        Args:
+            pub_id: Primary key of the publication to publish.
+
+        Returns:
+            The updated :class:`Publication`, or ``None`` if not found.
+        """
+        publication = await self._session.get(Publication, pub_id)
+        if publication is None:
+            return None
+
+        publication.status = PublicationStatus.PUBLISHED
+        publication.published_at = func.now()
+        await self._session.flush()
+        await self._session.refresh(publication)
+        return publication
+
+    async def unpublish(self, pub_id: int) -> Publication | None:
+        """Revert the publication back to ``DRAFT`` status.
+
+        Note:
+            ``published_at`` is intentionally left in place so the
+            timeline of past publications remains auditable.
+
+        Args:
+            pub_id: Primary key of the publication to revert.
+
+        Returns:
+            The updated :class:`Publication`, or ``None`` if not found.
+        """
+        publication = await self._session.get(Publication, pub_id)
+        if publication is None:
+            return None
+
+        publication.status = PublicationStatus.DRAFT
+        await self._session.flush()
+        await self._session.refresh(publication)
+        return publication
+
+    async def list_by_status(
+        self,
+        status_filter: PublicationStatus | None,
+        limit: int,
+        offset: int,
+    ) -> list[Publication]:
+        """List publications, optionally filtered by status.
+
+        Used by the admin listing endpoint
+        (``GET /api/v1/admin/publications``). Ordering is newest-first
+        with id tie-break for stable pagination.
+
+        Args:
+            status_filter: ``None`` returns all statuses;
+                ``PublicationStatus.DRAFT`` or ``.PUBLISHED`` filter.
+            limit: Maximum number of records.
+            offset: Number of records to skip.
+
+        Returns:
+            A list of :class:`Publication` instances.
+        """
+        stmt = select(Publication)
+        if status_filter is not None:
+            stmt = stmt.where(Publication.status == status_filter)
+        stmt = (
+            stmt.order_by(
+                Publication.created_at.desc(), Publication.id.desc()
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())

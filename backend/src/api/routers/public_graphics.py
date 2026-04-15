@@ -74,8 +74,9 @@ def _get_repo(session: AsyncSession = Depends(get_db)) -> PublicationRepository:
 class PublicationResponse(BaseModel):
     """Public-facing publication representation.
 
-    Deliberately omits ``s3_key_lowres`` and ``s3_key_highres`` to
-    prevent exposing internal object keys to the public internet.
+    Deliberately omits ``s3_key_lowres``, ``s3_key_highres`` and
+    ``visual_config`` to prevent leaking internal object keys or the
+    editor's layer configuration to the public internet.
 
     Attributes:
         id: Publication primary key.
@@ -84,6 +85,13 @@ class PublicationResponse(BaseModel):
         virality_score: AI-estimated virality score (0.0 – 1.0).
         preview_url: Time-limited presigned URL for the low-res preview.
         created_at: UTC timestamp of record creation.
+        eyebrow: Optional editorial kicker shown above the headline.
+        description: Optional gallery card description.
+        source_text: Optional source attribution.
+        footnote: Optional methodology / footnote text.
+        updated_at: UTC timestamp of the most recent change.
+        published_at: UTC timestamp recorded when status flipped to
+            ``PUBLISHED``.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -94,6 +102,12 @@ class PublicationResponse(BaseModel):
     virality_score: float
     preview_url: str
     created_at: datetime
+    eyebrow: str | None = None
+    description: str | None = None
+    source_text: str | None = None
+    footnote: str | None = None
+    updated_at: datetime | None = None
+    published_at: datetime | None = None
 
 
 class PaginatedGraphicsResponse(BaseModel):
@@ -186,6 +200,12 @@ async def list_public_graphics(
                 virality_score=pub.virality_score or 0.0,
                 preview_url=preview_url,
                 created_at=pub.created_at,
+                eyebrow=getattr(pub, "eyebrow", None),
+                description=getattr(pub, "description", None),
+                source_text=getattr(pub, "source_text", None),
+                footnote=getattr(pub, "footnote", None),
+                updated_at=getattr(pub, "updated_at", None),
+                published_at=getattr(pub, "published_at", None),
             ).model_dump(mode="json")
         )
 

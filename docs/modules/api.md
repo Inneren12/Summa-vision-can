@@ -13,6 +13,7 @@ api/
     ├── health.py               ← GET /api/health, GET /api/health/ready
     ├── admin_kpi.py            ← GET /api/v1/admin/kpi
     ├── admin_leads.py          ← POST /api/v1/admin/leads/resync (D-3)
+    ├── admin_publications.py   ← CRUD /api/v1/admin/publications (Editor + Gallery)
     ├── public_graphics.py      ← GET /api/v1/public/graphics
     ├── public_leads.py         ← POST /api/v1/public/leads/capture (D-2, D-3)
     ├── public_download.py      ← GET /api/v1/public/download
@@ -49,6 +50,33 @@ Retry logic:
 
 Query params for search: `q` (required, min 1 char), `limit` (default 20, max 100).
 Sync uses dedupe_key `catalog_sync:{date}` — same-day requests return existing job.
+
+### Admin Publications Router (`routers/admin_publications.py`) — ✅ New (Editor + Gallery)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST   | `/api/v1/admin/publications`                 | Create a publication in `DRAFT`                 | X-API-KEY |
+| GET    | `/api/v1/admin/publications`                 | List publications (optional status filter)      | X-API-KEY |
+| GET    | `/api/v1/admin/publications/{publication_id}`| Fetch a single publication                       | X-API-KEY |
+| PATCH  | `/api/v1/admin/publications/{publication_id}`| Partial update (editorial + visual_config)       | X-API-KEY |
+| POST   | `/api/v1/admin/publications/{publication_id}/publish`   | Flip DRAFT → PUBLISHED + emit audit event | X-API-KEY |
+| POST   | `/api/v1/admin/publications/{publication_id}/unpublish` | Flip PUBLISHED → DRAFT (preserves `published_at`) | X-API-KEY |
+
+**Query params for list:**
+- `status` (optional, one of `draft` / `published` / `all`, default `all`).
+- `limit` (default 50, min 1, max 200).
+- `offset` (default 0, min 0).
+
+**Behaviour:**
+- All endpoints sit behind `AuthMiddleware` (`X-API-KEY` required) — missing key returns 401.
+- `POST /` accepts `PublicationCreate`. Returns **201 Created** with the full `PublicationResponse` (status forced to `DRAFT`).
+- `PATCH /{id}` accepts `PublicationUpdate`. Only fields explicitly set in the request body are mutated (`exclude_unset=True`); explicit `null`/`None` values are skipped, so PATCHing one field preserves all others.
+- `visual_config` is persisted as a JSON string in the database. The router serialises a `VisualConfig` Pydantic model on the way in and parses it back into a `VisualConfig` on the way out. Parse failures are logged (`publication_visual_config_parse_failed`) and surface as `null` rather than 500.
+- `POST /{id}/publish` writes an `AuditEvent` of type `EventType.PUBLICATION_PUBLISHED` (`entity_type="publication"`, `entity_id={id}`, `actor="admin_api"`, `metadata={"headline": ...}`). Stamps `published_at = func.now()`.
+- `POST /{id}/unpublish` does **not** clear `published_at` — the original publish timestamp is preserved for audit history.
+- Missing IDs → 404 `{"detail": "Publication not found"}`.
+- Sensitive S3 keys (`s3_key_lowres`, `s3_key_highres`) are **never** included in the admin response — only `cdn_url` (currently always `null` until CDN integration lands).
+- Dependencies: `PublicationRepository` and `AuditWriter` are injected via `_get_repo` / `_get_audit` (ARCH-DPEN-001).
 
 ### Admin KPI Router (`routers/admin_kpi.py`)
 
@@ -203,8 +231,12 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 
 | Schema | Module | Fields |
 |--------|--------|--------|
-| `PublicationResponse` | `routers/public_graphics.py` | `id: int`, `headline: str`, `chart_type: str`, `virality_score: float`, `preview_url: str`, `created_at: datetime` |
+| `PublicationResponse` (public) | `routers/public_graphics.py` | `id: int`, `headline: str`, `chart_type: str`, `virality_score: float`, `preview_url: str`, `created_at: datetime`, `eyebrow?`, `description?`, `source_text?`, `footnote?`, `updated_at?`, `published_at?` (no `visual_config`, no S3 keys) |
 | `PaginatedGraphicsResponse` | `routers/public_graphics.py` | `items: list[PublicationResponse]`, `limit: int`, `offset: int` |
+| `VisualConfig` | `schemas/publication.py` | `layout: str`, `palette: str`, `background: str`, `size: str`, `custom_primary?: str`, `branding: BrandingConfig` (editor visual layer config) |
+| `PublicationCreate` | `schemas/publication.py` | `headline: str` (req), `chart_type: str` (req), `eyebrow?`, `description?`, `source_text?`, `footnote?`, `visual_config?: VisualConfig`, `virality_score?: float` |
+| `PublicationUpdate` | `schemas/publication.py` | All fields optional — partial PATCH payload |
+| `PublicationResponse` (admin) | `schemas/publication.py` | Full record — `id: str`, lifecycle (`status`, `created_at`, `updated_at`, `published_at`), editorial fields, `visual_config: VisualConfig?`, `cdn_url?` |
 | `LeadCaptureRequest` | `schemas/public_leads.py` | `email: EmailStr`, `asset_id: int`, `turnstile_token: str` |
 | `LeadCaptureResponse` | `schemas/public_leads.py` | `message: str` |
 | `KPIResponse` | `schemas/kpi.py` | Aggregated metrics: publications, leads, download funnel, jobs, system health, period |
@@ -232,6 +264,7 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 | `core.storage.StorageInterface` | — |
 | `core.security.ip_rate_limiter.InMemoryRateLimiter` | — |
 | `repositories.publication_repository.PublicationRepository` | — |
+| `schemas.publication.{PublicationCreate, PublicationUpdate, PublicationResponse, VisualConfig}` (admin_publications) | — |
 | `repositories.lead_repository.LeadRepository` | — |
 | `repositories.download_token_repository.DownloadTokenRepository` | — |
 | `services.email.interface.EmailServiceInterface` | — |
