@@ -23,17 +23,63 @@ export const BR: Record<string, BlockRenderer> = {
     const al = p.align || "left";
     ctx.textAlign = al;
     const ax = al === "center" ? x + w / 2 : al === "right" ? x + w : x;
-    const lines = (p.text || "").split("\n");
-    lines.forEach((l: string, i: number) => ctx.fillText(l, ax, y + 42 * s + i * 50 * s));
-    return (lines.length * 50 + 10) * s;
+
+    // Use explicit \n breaks, then auto-wrap each segment if too long
+    const maxW = w * 0.95;
+    const manualLines = (p.text || "").split("\n");
+    const allLines: string[] = [];
+
+    manualLines.forEach((line: string) => {
+      if (ctx.measureText(line).width <= maxW) {
+        allLines.push(line);
+        return;
+      }
+      // Auto-wrap this line
+      const words = line.split(" ");
+      let buffer = "";
+      words.forEach((word: string) => {
+        const test = buffer ? buffer + " " + word : word;
+        if (ctx.measureText(test).width > maxW && buffer) {
+          allLines.push(buffer);
+          buffer = word;
+        } else {
+          buffer = test;
+        }
+      });
+      if (buffer) allLines.push(buffer);
+    });
+
+    allLines.forEach((line, i) => {
+      ctx.fillText(line, ax, y + 42 * s + i * 50 * s);
+    });
+
+    return (allLines.length * 50 + 10) * s;
   },
 
   subtitle_descriptor(ctx, p, x, y, w, h, pal, s) {
+    if (!p.text) return 0;
     ctx.font = `400 ${16 * s}px ${TK.font.body}`;
     ctx.fillStyle = TK.c.txtS;
     ctx.textAlign = "center";
-    ctx.fillText(p.text || "", x + w / 2, y + 18 * s);
-    return 30 * s;
+    const maxW = w * 0.9;
+    const words = (p.text as string).split(" ");
+    let line = "";
+    let lineCount = 0;
+    words.forEach((word: string) => {
+      const test = line + word + " ";
+      if (ctx.measureText(test).width > maxW && line) {
+        ctx.fillText(line.trim(), x + w / 2, y + 18 * s + lineCount * 22 * s);
+        line = word + " ";
+        lineCount++;
+      } else {
+        line = test;
+      }
+    });
+    if (line) {
+      ctx.fillText(line.trim(), x + w / 2, y + 18 * s + lineCount * 22 * s);
+      lineCount++;
+    }
+    return (lineCount * 22 + 10) * s;
   },
 
   hero_stat(ctx, p, x, y, w, h, pal, s) {

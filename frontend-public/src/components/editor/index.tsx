@@ -121,13 +121,17 @@ export default function InfographicEditor() {
     bgFn.r(ctx, sz.w, sz.h, pal);
     renderDoc(ctx, doc, sz.w, sz.h, pal);
 
-    // Ensure paint is flushed before toDataURL
+    // toBlob is async + memory-efficient (vs. toDataURL ~40MB base64 for Story@DPR3)
     requestAnimationFrame(() => {
-      const dataUrl = exportCvs.toDataURL("image/png");
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = `summa-${doc.templateId}-${doc.page.size}.png`;
-      a.click();
+      exportCvs.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `summa-${doc.templateId}-${doc.page.size}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+      }, "image/png");
     });
   }, [doc, pal, sz]);
 

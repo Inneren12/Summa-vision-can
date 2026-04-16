@@ -146,3 +146,11 @@ export interface PermissionSet {
   editBlock: (reg: BlockRegistryEntry, key: string) => boolean;
   toggleVisibility: (reg: BlockRegistryEntry) => boolean;
 }
+
+export interface KPIItem {
+  label: string;
+  value: string;
+  delta: string;
+  direction: Direction;
+  _id?: string;
+}

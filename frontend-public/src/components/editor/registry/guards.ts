@@ -1,12 +1,17 @@
 import type { CanonicalDocument, WorkflowState } from '../types';
 import { BREG } from './blocks';
-import { CURRENT_SCHEMA } from './templates';
+
+export const SUPPORTED_SCHEMA_VERSIONS = [1] as const;
+export const CURRENT_SCHEMA = 1;
 
 export function validateImport(doc: unknown): string | null {
   // Phase 1: Shape
   if (!doc || typeof doc !== "object") return "Not an object";
   const d = doc as any;
   if (typeof d.schemaVersion !== "number") return "Missing schemaVersion";
+  if (!SUPPORTED_SCHEMA_VERSIONS.includes(d.schemaVersion)) {
+    return `Unsupported schemaVersion: ${d.schemaVersion}. Supported: ${SUPPORTED_SCHEMA_VERSIONS.join(", ")}`;
+  }
   if (typeof d.templateId !== "string") return "Missing templateId";
   if (!d.page || typeof d.page !== "object") return "Missing page";
   if (!d.page.size || !d.page.background || !d.page.palette) return "Incomplete page config";
@@ -30,6 +35,14 @@ export function validateImport(doc: unknown): string | null {
     if (!allRefIds.has(bid)) return `Orphan block "${bid}" not referenced by any section`;
   }
 
+  // Build a section-type lookup map (avoid O(n^2) scans in Phase 3)
+  const blockToSectionType = new Map<string, string>();
+  for (const sec of d.sections) {
+    for (const bid of sec.blockIds) {
+      blockToSectionType.set(bid, sec.type);
+    }
+  }
+
   // Phase 3: Registry constraints + explicit block.id uniqueness
   const seenIds = new Set<string>();
   for (const [id, block] of Object.entries(d.blocks)) {
@@ -41,9 +54,45 @@ export function validateImport(doc: unknown): string | null {
     if (!reg) return `Unknown block type: "${b.type}" (${id})`;
     if (reg.guard && !reg.guard(b.props)) return `Invalid props for ${b.type} (${id})`;
     // Check block is in allowed section
-    const parentSec = d.sections.find((s: any) => s.blockIds.includes(id));
-    if (parentSec && !reg.allowedSections.includes(parentSec.type)) {
-      return `Block "${b.type}" not allowed in section type "${parentSec.type}"`;
+    const parentSecType = blockToSectionType.get(id);
+    if (parentSecType && !reg.allowedSections.includes(parentSecType)) {
+      return `Block "${b.type}" not allowed in section type "${parentSecType}"`;
+    }
+  }
+
+  // Phase 4: Section cardinality + required blocks
+  const blockTypesByType: Record<string, number> = {};
+  const blockTypesBySection: Record<string, Record<string, number>> = {};
+
+  for (const sec of d.sections) {
+    blockTypesBySection[sec.id] = {};
+    for (const bid of sec.blockIds) {
+      const b = d.blocks[bid];
+      if (!b) continue;
+      blockTypesByType[b.type] = (blockTypesByType[b.type] || 0) + 1;
+      blockTypesBySection[sec.id][b.type] = (blockTypesBySection[sec.id][b.type] || 0) + 1;
+    }
+  }
+
+  // Check maxPerSection per section
+  for (const sec of d.sections) {
+    const counts = blockTypesBySection[sec.id];
+    for (const [type, count] of Object.entries(counts)) {
+      const reg = BREG[type];
+      if (reg?.maxPerSection && count > reg.maxPerSection) {
+        return `Section "${sec.id}" has ${count}x "${type}", max allowed is ${reg.maxPerSection}`;
+      }
+    }
+  }
+
+  // Check required blocks present at document level
+  const requiredTypes = Object.entries(BREG)
+    .filter(([, reg]) => reg.status === "required_locked" || reg.status === "required_editable")
+    .map(([type]) => type);
+
+  for (const reqType of requiredTypes) {
+    if (!blockTypesByType[reqType]) {
+      return `Required block "${reqType}" is missing from document`;
     }
   }
 

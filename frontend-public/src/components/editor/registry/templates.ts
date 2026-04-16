@@ -1,7 +1,6 @@
 import type { CanonicalDocument, TemplateEntry, BlockProps } from '../types';
 import { BREG } from './blocks';
-
-export const CURRENT_SCHEMA = 1;
+import { CURRENT_SCHEMA } from './guards';
 
 export function mkDoc(tid: string, tpl: TemplateEntry, over: Record<string, BlockProps> = {}): CanonicalDocument {
   const blocks: CanonicalDocument['blocks'] = {};
