@@ -7,6 +7,7 @@ export type TextAlign = 'left' | 'center' | 'right';
 export type WorkflowState = 'draft' | 'in_review' | 'approved' | 'exported' | 'published';
 export type BlockStatus = 'required_locked' | 'required_editable' | 'optional_default' | 'optional_available';
 export type BlockCategory = 'text' | 'data' | 'chart' | 'struct';
+export type PageKey = 'size' | 'background' | 'palette';
 
 export interface BlockProps {
   [key: string]: any;
@@ -124,19 +125,23 @@ export interface EditorState {
   redoStack: CanonicalDocument[];
   selectedBlockId: string | null;
   dirty: boolean;
+  // Mode lives in reducer state so the permission gate has a single source of
+  // truth for every dispatched action (see store/reducer.ts isActionAllowed).
+  mode: EditorMode;
 }
 
 export type EditorAction =
   | { type: 'UPDATE_PROP'; blockId: string; key: string; value: any }
   | { type: 'UPDATE_DATA'; blockId: string; data: Record<string, any> }
   | { type: 'TOGGLE_VIS'; blockId: string }
-  | { type: 'CHANGE_PAGE'; key: string; value: string }
+  | { type: 'CHANGE_PAGE'; key: PageKey; value: string }
   | { type: 'SWITCH_TPL'; tid: string }
   | { type: 'IMPORT'; doc: CanonicalDocument }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'SELECT'; blockId: string | null }
-  | { type: 'SAVED' };
+  | { type: 'SAVED' }
+  | { type: 'SET_MODE'; mode: EditorMode };
 
 export interface PermissionSet {
   switchTemplate: boolean;

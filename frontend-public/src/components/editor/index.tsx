@@ -24,10 +24,12 @@ export default function InfographicEditor() {
   const [ltab, setLtab] = useState<LeftTab>("templates");
   const [qaOpen, setQaOpen] = useState(true);
   const [qaMode, setQaMode] = useState<QAMode>("publish");
-  const [mode, setMode] = useState<EditorMode>("design");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const { doc, selectedBlockId: selId, undoStack, redoStack, dirty } = state;
+  const { doc, selectedBlockId: selId, undoStack, redoStack, dirty, mode } = state;
+  // Mode lives in reducer state (single source of truth for permission gate).
+  // setMode is a thin wrapper that dispatches SET_MODE.
+  const setMode = useCallback((m: EditorMode) => dispatch({ type: "SET_MODE", mode: m }), []);
   const pal = PALETTES[doc.page.palette] || PALETTES.housing;
   const sz = SIZES[doc.page.size] || SIZES.instagram_1080;
   const selB = selId ? doc.blocks[selId] : null;
