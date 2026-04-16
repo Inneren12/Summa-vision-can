@@ -70,10 +70,14 @@ Sync uses dedupe_key `catalog_sync:{date}` — same-day requests return existing
 **Behaviour:**
 - All endpoints sit behind `AuthMiddleware` (`X-API-KEY` required) — missing key returns 401.
 - `POST /` accepts `PublicationCreate`. Returns **201 Created** with the full `PublicationResponse` (status forced to `DRAFT`).
-- `PATCH /{id}` accepts `PublicationUpdate`. Only fields explicitly set in the request body are mutated (`exclude_unset=True`); explicit `null`/`None` values are skipped, so PATCHing one field preserves all others.
-- `visual_config` is persisted as a JSON string in the database. The router serialises a `VisualConfig` Pydantic model on the way in and parses it back into a `VisualConfig` on the way out. Parse failures are logged (`publication_visual_config_parse_failed`) and surface as `null` rather than 500.
+- `PATCH /{id}` accepts `PublicationUpdate` (`extra='forbid'` — typos rejected with 422). PATCH semantics:
+  - Field **omitted** from the body → column unchanged.
+  - Field sent as **`null`** → column is **cleared** (`None` in DB). Applies to nullable editorial fields (`eyebrow`, `description`, `source_text`, `footnote`, `visual_config`).
+  - Field sent with a value → column updated.
+  - Driven by `model.model_dump(exclude_unset=True)` + a repository `update_fields` that applies every key present in the dict (including explicit `None`).
+- `visual_config` is persisted as a JSON string in the database. The router serialises a `VisualConfig` Pydantic model on the way in and parses it back into a `VisualConfig` on the way out. Parse failures are logged (`publication_visual_config_parse_failed`) and surface as `null` rather than 500. `VisualConfig.branding` is a typed `BrandingConfig` (`show_top_accent: bool`, `show_corner_mark: bool`, `accent_color: str`).
 - `POST /{id}/publish` writes an `AuditEvent` of type `EventType.PUBLICATION_PUBLISHED` (`entity_type="publication"`, `entity_id={id}`, `actor="admin_api"`, `metadata={"headline": ...}`). Stamps `published_at = func.now()`.
-- `POST /{id}/unpublish` does **not** clear `published_at` — the original publish timestamp is preserved for audit history.
+- `POST /{id}/unpublish` writes a symmetric `AuditEvent` of type `EventType.PUBLICATION_PUBLISHED` with `metadata={"action": "unpublish", "new_status": "DRAFT", "headline": ...}` (the enum has no dedicated `PUBLICATION_UNPUBLISHED` member). Does **not** clear `published_at` — the original publish timestamp is preserved for audit history.
 - Missing IDs → 404 `{"detail": "Publication not found"}`.
 - Sensitive S3 keys (`s3_key_lowres`, `s3_key_highres`) are **never** included in the admin response — only `cdn_url` (currently always `null` until CDN integration lands).
 - Dependencies: `PublicationRepository` and `AuditWriter` are injected via `_get_repo` / `_get_audit` (ARCH-DPEN-001).
@@ -231,11 +235,12 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 
 | Schema | Module | Fields |
 |--------|--------|--------|
-| `PublicationResponse` (public) | `routers/public_graphics.py` | `id: int`, `headline: str`, `chart_type: str`, `virality_score: float`, `preview_url: str`, `created_at: datetime`, `eyebrow?`, `description?`, `source_text?`, `footnote?`, `updated_at?`, `published_at?` (no `visual_config`, no S3 keys) |
-| `PaginatedGraphicsResponse` | `routers/public_graphics.py` | `items: list[PublicationResponse]`, `limit: int`, `offset: int` |
-| `VisualConfig` | `schemas/publication.py` | `layout: str`, `palette: str`, `background: str`, `size: str`, `custom_primary?: str`, `branding: BrandingConfig` (editor visual layer config) |
+| `PublicationPublicResponse` (public) | `schemas/publication.py` | Single source of truth for the public gallery. `id: int`, `headline`, `chart_type`, `virality_score?`, `preview_url?`, `status` (`default="PUBLISHED"`), `cdn_url?`, `created_at`, editorial fields (`eyebrow?`, `description?`, `source_text?`, `footnote?`), lifecycle timestamps (`updated_at?`, `published_at?`). **No** `visual_config`, **no** S3 keys. Re-exported from `routers/public_graphics.py` as `PublicationResponse` for backward-compat imports. |
+| `PaginatedGraphicsResponse` | `routers/public_graphics.py` | `items: list[PublicationPublicResponse]`, `limit: int`, `offset: int` |
+| `BrandingConfig` | `schemas/publication.py` | `show_top_accent: bool = True`, `show_corner_mark: bool = True`, `accent_color: str = "#FBBF24"` — typed branding block inside `VisualConfig`. |
+| `VisualConfig` | `schemas/publication.py` | `layout: str`, `palette: str`, `background: str`, `size: str`, `custom_primary?: str`, `branding: BrandingConfig` (typed — replaces loose dict). |
 | `PublicationCreate` | `schemas/publication.py` | `headline: str` (req), `chart_type: str` (req), `eyebrow?`, `description?`, `source_text?`, `footnote?`, `visual_config?: VisualConfig`, `virality_score?: float` |
-| `PublicationUpdate` | `schemas/publication.py` | All fields optional — partial PATCH payload |
+| `PublicationUpdate` | `schemas/publication.py` | All fields optional; `model_config = ConfigDict(extra="forbid")`. PATCH contract: omitted field → unchanged; explicit `null` → cleared; value → updated. Driven by `model_dump(exclude_unset=True)`. |
 | `PublicationResponse` (admin) | `schemas/publication.py` | Full record — `id: str`, lifecycle (`status`, `created_at`, `updated_at`, `published_at`), editorial fields, `visual_config: VisualConfig?`, `cdn_url?` |
 | `LeadCaptureRequest` | `schemas/public_leads.py` | `email: EmailStr`, `asset_id: int`, `turnstile_token: str` |
 | `LeadCaptureResponse` | `schemas/public_leads.py` | `message: str` |
@@ -264,7 +269,7 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 | `core.storage.StorageInterface` | — |
 | `core.security.ip_rate_limiter.InMemoryRateLimiter` | — |
 | `repositories.publication_repository.PublicationRepository` | — |
-| `schemas.publication.{PublicationCreate, PublicationUpdate, PublicationResponse, VisualConfig}` (admin_publications) | — |
+| `schemas.publication.{PublicationCreate, PublicationUpdate, PublicationResponse, PublicationPublicResponse, VisualConfig, BrandingConfig}` (admin_publications + public_graphics) | — |
 | `repositories.lead_repository.LeadRepository` | — |
 | `repositories.download_token_repository.DownloadTokenRepository` | — |
 | `services.email.interface.EmailServiceInterface` | — |

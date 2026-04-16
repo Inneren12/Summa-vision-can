@@ -30,6 +30,24 @@ from pydantic import BaseModel, ConfigDict, Field
 # ---------------------------------------------------------------------------
 
 
+class BrandingConfig(BaseModel):
+    """Typed branding block for :class:`VisualConfig`.
+
+    Replaces the loose ``dict`` previously accepted under
+    ``VisualConfig.branding`` so the editor contract is fully typed.
+
+    Attributes:
+        show_top_accent: Whether to render the top accent stripe.
+        show_corner_mark: Whether to render the corner brand mark.
+        accent_color: Hex colour used for the brand accent
+            (default ``"#FBBF24"``).
+    """
+
+    show_top_accent: bool = True
+    show_corner_mark: bool = True
+    accent_color: str = "#FBBF24"
+
+
 class VisualConfig(BaseModel):
     """Editor layer configuration.
 
@@ -49,9 +67,8 @@ class VisualConfig(BaseModel):
             ``linkedin``, ``story``).
         custom_primary: Optional hex colour overriding the palette
             primary, e.g. ``"#22D3EE"``.
-        branding: Branding flags & colour. ``show_top_accent`` and
-            ``show_corner_mark`` toggle visual brand marks; ``accent_color``
-            is the brand accent hex.
+        branding: Typed :class:`BrandingConfig` block with accent flags
+            and colour.
     """
 
     layout: str = "single_stat"
@@ -59,13 +76,7 @@ class VisualConfig(BaseModel):
     background: str = "gradient_warm"
     size: str = "instagram"
     custom_primary: Optional[str] = None
-    branding: dict = Field(
-        default_factory=lambda: {
-            "show_top_accent": True,
-            "show_corner_mark": True,
-            "accent_color": "#FBBF24",
-        }
-    )
+    branding: BrandingConfig = Field(default_factory=BrandingConfig)
 
 
 # ---------------------------------------------------------------------------
@@ -94,8 +105,23 @@ class PublicationCreate(BaseModel):
 class PublicationUpdate(BaseModel):
     """Request body for ``PATCH /api/v1/admin/publications/{id}``.
 
-    All fields are optional; ``None`` means "do not change".
+    PATCH semantics:
+
+    * Field omitted from request body → not changed.
+    * Field explicitly set to ``null`` → cleared (column set to ``None``
+      in the database).
+    * Field set to a value → updated.
+
+    To drive these semantics the router calls
+    ``model.model_dump(exclude_unset=True)`` — only keys the client
+    actually sent end up in the update dict; a key with value ``None``
+    means "clear this field".
+
+    ``extra='forbid'`` rejects unknown fields with HTTP 422 to prevent
+    silent typos (e.g. ``"eybrow"`` instead of ``"eyebrow"``).
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     headline: Optional[str] = Field(None, min_length=1, max_length=500)
     chart_type: Optional[str] = Field(None, min_length=1, max_length=50)
@@ -155,16 +181,18 @@ class PublicationResponse(BaseModel):
 
 
 class PublicationPublicResponse(BaseModel):
-    """Public gallery response — same as :class:`PublicationResponse`
+    """Public gallery response — same shape as :class:`PublicationResponse`
     but with ``visual_config`` deliberately omitted.
 
     The editor's layer configuration is admin-only and must NOT be
-    exposed on the public surface.
+    exposed on the public surface. ``preview_url`` is a short-lived
+    presigned URL for the low-resolution thumbnail populated by the
+    public gallery endpoint at serialization time.
     """
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
+    id: int
     headline: str
     chart_type: str
     eyebrow: Optional[str] = None
@@ -172,7 +200,8 @@ class PublicationPublicResponse(BaseModel):
     source_text: Optional[str] = None
     footnote: Optional[str] = None
     virality_score: Optional[float] = None
-    status: str
+    preview_url: Optional[str] = None
+    status: str = "PUBLISHED"
     cdn_url: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None

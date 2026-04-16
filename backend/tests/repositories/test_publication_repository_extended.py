@@ -87,7 +87,14 @@ class TestUpdateFields:
     async def test_partial_update_only_changes_provided_fields(
         self, db_session: AsyncSession
     ) -> None:
-        """A patch with one field should leave the rest untouched."""
+        """A patch with one field should leave the rest untouched.
+
+        PATCH contract (see :meth:`PublicationRepository.update_fields`):
+        only keys *present* in the dict are applied; omitted keys are
+        left alone. The router drives this via
+        ``PublicationUpdate.model_dump(exclude_unset=True)`` — so omitted
+        JSON fields never appear in the dict passed here.
+        """
         repo = PublicationRepository(db_session)
         pub = await repo.create_full(
             {
@@ -98,17 +105,50 @@ class TestUpdateFields:
         )
         await db_session.commit()
 
-        updated = await repo.update_fields(
-            pub.id, {"headline": "Patched", "chart_type": None}
-        )
+        updated = await repo.update_fields(pub.id, {"headline": "Patched"})
         await db_session.commit()
 
         assert updated is not None
         assert updated.headline == "Patched"
-        # chart_type was None in the patch — must NOT be cleared
+        # chart_type not in patch — must persist (omitted → unchanged)
         assert updated.chart_type == "bar"
         # description not in patch — must persist
         assert updated.description == "original description"
+
+    async def test_explicit_none_clears_nullable_editorial_field(
+        self, db_session: AsyncSession
+    ) -> None:
+        """An explicit ``None`` in the patch dict clears the column.
+
+        Verifies the PATCH-semantics fix: the router's
+        ``model_dump(exclude_unset=True)`` produces ``{"footnote": None}``
+        when the client sends ``{"footnote": null}``, and that dict must
+        actually clear the database column.
+        """
+        repo = PublicationRepository(db_session)
+        pub = await repo.create_full(
+            {
+                "headline": "Clearable",
+                "chart_type": "bar",
+                "footnote": "Seasonally adjusted",
+                "eyebrow": "STATCAN",
+                "description": "desc",
+            }
+        )
+        await db_session.commit()
+        assert pub.footnote == "Seasonally adjusted"
+
+        # Explicit None clears only the fields listed in the dict.
+        updated = await repo.update_fields(
+            pub.id, {"footnote": None, "eyebrow": None}
+        )
+        await db_session.commit()
+
+        assert updated is not None
+        assert updated.footnote is None
+        assert updated.eyebrow is None
+        # Untouched key remains
+        assert updated.description == "desc"
 
     async def test_update_with_visual_config_object(
         self, db_session: AsyncSession

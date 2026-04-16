@@ -298,14 +298,34 @@ async def publish_publication(
 async def unpublish_publication(
     publication_id: int,
     repo: PublicationRepository = Depends(_get_repo),
+    audit: AuditWriter = Depends(_get_audit),
 ) -> PublicationResponse:
-    """Revert the publication to DRAFT status."""
+    """Revert the publication to DRAFT status and record an audit event.
+
+    The audit trail must be symmetric with :func:`publish_publication` —
+    there is currently no dedicated ``PUBLICATION_UNPUBLISHED`` member in
+    :class:`EventType`, so we reuse :attr:`EventType.PUBLICATION_PUBLISHED`
+    and distinguish the reversal via ``metadata.action = "unpublish"``
+    (with ``new_status`` for dashboard filtering).
+    """
     publication = await repo.unpublish(publication_id)
     if publication is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Publication not found",
         )
+
+    await audit.log_event(
+        event_type=EventType.PUBLICATION_PUBLISHED,
+        entity_type="publication",
+        entity_id=str(publication.id),
+        metadata={
+            "action": "unpublish",
+            "new_status": "DRAFT",
+            "headline": publication.headline,
+        },
+        actor="admin_api",
+    )
     logger.info("publication_unpublished", publication_id=publication.id)
     return _serialize(publication)
 
