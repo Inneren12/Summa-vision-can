@@ -30,23 +30,71 @@ export function validate(doc: CanonicalDocument): ValidationResult {
     Object.entries(counts).forEach(([t, c]) => { const reg = BREG[t]; if (reg?.maxPerSection && c > reg.maxPerSection) R.warnings.push(`${reg.name}: ${c}x in ${sec.type} (max ${reg.maxPerSection})`); });
   });
 
-  // CHART-AWARE VALIDATION (Stage 2 Polish)
+  // CHART-AWARE VALIDATION (Stage 2 Polish + iter 4: length mismatches are errors)
   blocks.forEach(b => {
     if (b.type === "bar_horizontal") {
-      const items = b.props.items || [];
-      if (!items.length) R.errors.push("Ranked Bars: no data items");
-      if (items.some((i: any) => typeof i.value !== "number" || isNaN(i.value))) R.errors.push("Ranked Bars: NaN value detected");
-      if (items.some((i: any) => !i.label?.trim())) R.warnings.push("Ranked Bars: item missing label");
-      if (items.length > 25) R.warnings.push(`Ranked Bars: ${items.length} items \u2014 may be dense`);
-      if (items.length > 30) R.errors.push(`Ranked Bars: ${items.length} items exceeds max 30`);
-      // Layout density for small sizes
-      if (items.length > 10 && (sz.h < 800)) R.warnings.push("Ranked Bars: too many items for this canvas height");
+      const props = b.props;
+      if (!Array.isArray(props.items) || props.items.length === 0) {
+        R.errors.push("Ranked Bars: at least one item required");
+      } else {
+        props.items.forEach((it: any, i: number) => {
+          if (typeof it.label !== "string" || !it.label.trim()) {
+            R.errors.push(`Ranked Bars: item[${i}] missing label`);
+          }
+          if (typeof it.value !== "number" || !Number.isFinite(it.value)) {
+            R.errors.push(`Ranked Bars: item[${i}] value is not a finite number`);
+          }
+        });
+        if (props.items.length > 30) {
+          R.errors.push(`Ranked Bars: ${props.items.length} items exceeds max 30`);
+        } else if (props.items.length > 25) {
+          R.warnings.push(`Ranked Bars: ${props.items.length} items \u2014 may be dense`);
+        }
+        // Layout density for small sizes
+        if (props.items.length > 10 && sz.h < 800) {
+          R.warnings.push("Ranked Bars: too many items for this canvas height");
+        }
+      }
     }
     if (b.type === "line_editorial") {
-      const sr = b.props.series || [], xl = b.props.xLabels || [];
-      if (!sr.length) R.errors.push("Line Chart: no series data");
-      sr.forEach((s: any) => { if (!s.data?.length) R.errors.push(`Line Chart: series "${s.label}" has no data`); if (s.data?.some((v: any) => typeof v !== "number" || isNaN(v))) R.errors.push(`Line Chart: NaN in "${s.label}"`); if (s.data?.length !== xl.length) R.warnings.push(`Line Chart: "${s.label}" has ${s.data?.length} points but ${xl.length} labels`); });
-      if (xl.length > 12) R.warnings.push(`Line Chart: ${xl.length} x-labels \u2014 may overlap`);
+      const props = b.props;
+      if (!Array.isArray(props.xLabels)) {
+        R.errors.push("Line Chart: xLabels must be an array");
+      } else if (props.xLabels.length === 0) {
+        R.errors.push("Line Chart: xLabels cannot be empty");
+      } else if (!props.xLabels.every((l: any) => typeof l === "string")) {
+        R.errors.push("Line Chart: all xLabels must be strings");
+      }
+      if (!Array.isArray(props.series)) {
+        R.errors.push("Line Chart: series must be an array");
+      } else if (props.series.length === 0) {
+        R.errors.push("Line Chart: at least one series required");
+      } else {
+        const validRoles = ["primary", "benchmark", "secondary"];
+        const xlLen = Array.isArray(props.xLabels) ? props.xLabels.length : 0;
+        props.series.forEach((s: any, i: number) => {
+          if (typeof s.label !== "string") {
+            R.errors.push(`Line Chart: series[${i}] label must be string`);
+          }
+          if (!validRoles.includes(s.role)) {
+            R.errors.push(`Line Chart: series[${i}] has invalid role "${s.role}" (must be ${validRoles.join("/")})`);
+          }
+          if (!Array.isArray(s.data)) {
+            R.errors.push(`Line Chart: series[${i}] data must be an array`);
+            return;
+          }
+          // Length mismatch is an ERROR (was warning), not warning
+          if (xlLen > 0 && s.data.length !== xlLen) {
+            R.errors.push(`Line Chart: series "${s.label}" has ${s.data.length} points but xLabels has ${xlLen}`);
+          }
+          if (!s.data.every((v: any) => typeof v === "number" && Number.isFinite(v))) {
+            R.errors.push(`Line Chart: series "${s.label}" contains non-finite values (NaN/Infinity)`);
+          }
+        });
+      }
+      if (Array.isArray(props.xLabels) && props.xLabels.length > 12) {
+        R.warnings.push(`Line Chart: ${props.xLabels.length} x-labels \u2014 may overlap`);
+      }
     }
     if (b.type === "comparison_kpi") {
       const items = b.props.items || [];

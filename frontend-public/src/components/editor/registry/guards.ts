@@ -18,42 +18,59 @@ export function validateImport(doc: unknown): string | null {
   if (!Array.isArray(d.sections)) return "Missing sections array";
   if (!d.blocks || typeof d.blocks !== "object") return "Missing blocks object";
 
-  // Phase 2: Referential integrity
+  // Phase 2: Referential integrity (must be complete BEFORE Phase 3)
   const allRefIds = new Set<string>();
   const sectionIds = new Set<string>();
+  const blockToSectionType = new Map<string, string>();
+
   for (const sec of d.sections) {
-    if (!sec.id || !sec.type || !Array.isArray(sec.blockIds)) return `Invalid section structure: ${JSON.stringify(sec?.id)}`;
+    if (!sec.id || !sec.type || !Array.isArray(sec.blockIds)) {
+      return `Invalid section structure: ${JSON.stringify(sec?.id)}`;
+    }
     if (sectionIds.has(sec.id)) return `Duplicate section id: "${sec.id}"`;
     sectionIds.add(sec.id);
-    for (const bid of sec.blockIds) {
-      if (!d.blocks[bid]) return `Section "${sec.id}" references missing block "${bid}"`;
-      if (allRefIds.has(bid)) return `Block "${bid}" referenced in multiple sections`;
-      allRefIds.add(bid);
-    }
-  }
-  for (const bid of Object.keys(d.blocks)) {
-    if (!allRefIds.has(bid)) return `Orphan block "${bid}" not referenced by any section`;
-  }
 
-  // Build a section-type lookup map (avoid O(n^2) scans in Phase 3)
-  const blockToSectionType = new Map<string, string>();
-  for (const sec of d.sections) {
     for (const bid of sec.blockIds) {
+      if (typeof bid !== "string") return `Non-string blockId in section "${sec.id}"`;
+      // Every blockId referenced by section must exist in blocks
+      if (!d.blocks[bid]) {
+        return `Section "${sec.id}" references missing block "${bid}"`;
+      }
+      // No duplicate references across sections
+      if (allRefIds.has(bid)) {
+        return `Block "${bid}" is referenced in multiple sections`;
+      }
+      allRefIds.add(bid);
       blockToSectionType.set(bid, sec.type);
     }
   }
 
+  // Orphan check: every block in doc.blocks must be referenced by some section
+  for (const bid of Object.keys(d.blocks)) {
+    if (!allRefIds.has(bid)) {
+      return `Orphan block "${bid}" not referenced by any section`;
+    }
+  }
+
   // Phase 3: Registry constraints + explicit block.id uniqueness
-  const seenIds = new Set<string>();
+  const seenInternalIds = new Set<string>();
   for (const [id, block] of Object.entries(d.blocks)) {
     const b = block as any;
-    if (seenIds.has(b.id)) return `Duplicate block.id value: "${b.id}"`;
-    seenIds.add(b.id);
+    if (!b || typeof b !== "object") return `Block "${id}" is not an object`;
+
+    // Key-id consistency invariant (hydrator enforces this, but we re-check)
     if (b.id !== id) return `Block id mismatch: key="${id}" but block.id="${b.id}"`;
+    if (seenInternalIds.has(b.id)) return `Duplicate block.id value: "${b.id}"`;
+    seenInternalIds.add(b.id);
+
+    if (typeof b.type !== "string") return `Block "${id}" has no type`;
+    if (!b.props || typeof b.props !== "object") return `Block "${id}" has no props`;
+
     const reg = BREG[b.type];
     if (!reg) return `Unknown block type: "${b.type}" (${id})`;
     if (reg.guard && !reg.guard(b.props)) return `Invalid props for ${b.type} (${id})`;
-    // Check block is in allowed section
+
+    // O(1) section-type lookup (built in Phase 2)
     const parentSecType = blockToSectionType.get(id);
     if (parentSecType && !reg.allowedSections.includes(parentSecType)) {
       return `Block "${b.type}" not allowed in section type "${parentSecType}"`;
@@ -100,8 +117,52 @@ export function validateImport(doc: unknown): string | null {
 }
 
 /**
+ * Sanitize a raw props object against a block's default-prop shape.
+ * Unknown keys are dropped; type-mismatched values are replaced with defaults.
+ * Ensures hydrated blocks never carry string-when-boolean or NaN-when-number values.
+ */
+function sanitizeBlockProps(type: string, rawProps: any): Record<string, any> {
+  const reg = BREG[type];
+  if (!reg) return rawProps || {};
+  const defaults = reg.dp || {};
+  const result: Record<string, any> = { ...defaults };
+
+  if (!rawProps || typeof rawProps !== "object") return result;
+
+  // For each default key, coerce raw value to match default's type
+  for (const [key, defaultVal] of Object.entries(defaults)) {
+    if (!(key in rawProps)) continue;
+    const rawVal = rawProps[key];
+
+    if (Array.isArray(defaultVal)) {
+      // Keep array as-is if it's an array, else use default
+      result[key] = Array.isArray(rawVal) ? rawVal : defaultVal;
+      continue;
+    }
+
+    const defaultType = typeof defaultVal;
+    if (defaultType === "boolean") {
+      result[key] = typeof rawVal === "boolean" ? rawVal : defaultVal;
+    } else if (defaultType === "number") {
+      result[key] = typeof rawVal === "number" && Number.isFinite(rawVal) ? rawVal : defaultVal;
+    } else if (defaultType === "string") {
+      result[key] = typeof rawVal === "string" ? rawVal : defaultVal;
+    } else if (defaultType === "object") {
+      // Object defaults — pass through if raw is object, else default
+      result[key] = rawVal && typeof rawVal === "object" ? rawVal : defaultVal;
+    } else {
+      result[key] = rawVal;
+    }
+  }
+
+  // Unknown keys (not in defaults) are dropped — strict mode
+  return result;
+}
+
+/**
  * Hydrates a raw imported document into a structurally complete CanonicalDocument.
  * Fills defaults for any missing fields, normalizes block structure.
+ * Rejects documents with unsupported schemaVersion (throws).
  * NOTE: This is not a versioned migration pipeline yet. It is structural hydration.
  * True schema migrations (v1 -> v2 -> v3) will be added here in the future via a MIGRATIONS map.
  */
@@ -110,10 +171,19 @@ export function hydrateImportedDoc(raw: any): CanonicalDocument {
     throw new Error("Cannot hydrate non-object document");
   }
 
+  // Reject unsupported schema versions BEFORE any hydration work
+  const rawVersion = typeof raw.schemaVersion === "number" ? raw.schemaVersion : CURRENT_SCHEMA;
+  if (!SUPPORTED_SCHEMA_VERSIONS.includes(rawVersion)) {
+    throw new Error(
+      `Unsupported schemaVersion: ${rawVersion}. Supported: ${SUPPORTED_SCHEMA_VERSIONS.join(", ")}. ` +
+      `If this is a newer version, please update the editor.`,
+    );
+  }
+
   const now = new Date().toISOString();
 
   const doc: CanonicalDocument = {
-    schemaVersion: typeof raw.schemaVersion === "number" ? raw.schemaVersion : CURRENT_SCHEMA,
+    schemaVersion: rawVersion, // guaranteed supported
     templateId: typeof raw.templateId === "string" ? raw.templateId : "single_stat_hero",
     page: {
       size: typeof raw.page?.size === "string" ? raw.page.size : "instagram_1080",
@@ -135,17 +205,15 @@ export function hydrateImportedDoc(raw: any): CanonicalDocument {
     },
   };
 
-  // Normalize each block: ensure id/type/props/visible exist, fill defaults from registry
+  // Normalize each block: force id = key (invariant), sanitize props by registry schema
   if (raw.blocks && typeof raw.blocks === "object") {
-    for (const [id, block] of Object.entries(raw.blocks)) {
+    for (const [key, block] of Object.entries(raw.blocks)) {
       const b = block as any;
       if (!b || typeof b !== "object") continue;
-      const reg = BREG[b.type];
-      const defaults = reg?.dp || {};
-      doc.blocks[id] = {
-        id: String(b.id ?? id),
+      doc.blocks[key] = {
+        id: key, // FORCE id to match object key — cannot drift out of sync
         type: String(b.type ?? ""),
-        props: { ...defaults, ...(b.props || {}) },
+        props: sanitizeBlockProps(String(b.type ?? ""), b.props),
         visible: typeof b.visible === "boolean" ? b.visible : true,
       };
     }

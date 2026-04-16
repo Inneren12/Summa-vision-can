@@ -15,10 +15,14 @@ interface LineSeriesEditorProps {
   series: SeriesItem[];
   xLabels: string[];
   onChange: (data: { series: SeriesItem[]; xLabels: string[] }) => void;
-  editable: boolean;
+  // canEditValues: user can edit series label/role/data-values within existing structure
+  canEditValues: boolean;
+  // canEditStructure: user can add/remove series AND edit xLabels
+  //   (xLabels is structural because changing it alters the shape of every series)
+  canEditStructure: boolean;
 }
 
-export function LineSeriesEditor({ series, xLabels, onChange, editable }: LineSeriesEditorProps) {
+export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, canEditStructure }: LineSeriesEditorProps) {
   const [seriesDrafts, setSeriesDrafts] = useState<Record<number, string>>({});
 
   const updSeries = <K extends keyof SeriesItem>(idx: number, key: K, val: SeriesItem[K]) => {
@@ -28,7 +32,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, editable }: LineSe
   };
 
   const updXLabels = (rawStr: string) => {
-    if (!editable) return;
+    if (!canEditStructure) return;
     const newLabels = rawStr.split(",").map(s => s.trim()).filter(Boolean);
     if (newLabels.length === 0) return;
 
@@ -47,7 +51,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, editable }: LineSe
   };
 
   const updSeriesData = (idx: number, rawStr: string) => {
-    if (!editable) return;
+    if (!canEditValues) return;
     setSeriesDrafts(prev => ({ ...prev, [idx]: rawStr }));
 
     // Parse strictly — reject if any value is empty, NaN, or non-finite
@@ -69,7 +73,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, editable }: LineSe
   };
 
   const addSeries = () => {
-    if (!editable) return;
+    if (!canEditStructure) return;
     const newData = new Array(xLabels.length).fill(0);
     onChange({
       series: [...series, {
@@ -83,7 +87,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, editable }: LineSe
   };
 
   const removeSeries = (idx: number) => {
-    if (!editable) return;
+    if (!canEditStructure) return;
     if (series.length <= 1) return; // need at least 1 series
     onChange({
       series: series.filter((_, i) => i !== idx),
@@ -95,11 +99,13 @@ export function LineSeriesEditor({ series, xLabels, onChange, editable }: LineSe
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
       <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase" }}>X LABELS</div>
-      <input value={xLabels.join(", ")} onChange={e => updXLabels(e.target.value)} style={{ ...sty, width: "100%" }} disabled={!editable} title="Comma-separated labels" />
+      {/* xLabels is structural: template mode can edit series values but not axis shape */}
+      <input value={xLabels.join(", ")} onChange={e => updXLabels(e.target.value)} style={{ ...sty, width: "100%" }} disabled={!canEditStructure} title="Comma-separated labels" />
       <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginTop: "4px" }}>SERIES ({series.length})</div>
       {series.map((s, i) => (
         <div key={s._id || i} style={{ padding: "4px", border: `1px solid ${TK.c.brd}`, borderRadius: "3px", position: "relative" }}>
-          {editable && series.length > 1 && (
+          {/* Remove button — only in structural-edit mode (Design) */}
+          {canEditStructure && series.length > 1 && (
             <button
               onClick={() => removeSeries(i)}
               style={{
@@ -117,8 +123,8 @@ export function LineSeriesEditor({ series, xLabels, onChange, editable }: LineSe
             >{"\u00D7"}</button>
           )}
           <div style={{ display: "flex", gap: "2px", marginBottom: "2px" }}>
-            <input value={s.label} onChange={e => editable && updSeries(i, "label", e.target.value)} style={{ ...sty, flex: 1 }} disabled={!editable} placeholder="Series name" />
-            <select value={s.role} onChange={e => editable && updSeries(i, "role", e.target.value)} style={{ ...sty, width: "70px" }} disabled={!editable}>
+            <input value={s.label} onChange={e => canEditValues && updSeries(i, "label", e.target.value)} style={{ ...sty, flex: 1 }} disabled={!canEditValues} placeholder="Series name" />
+            <select value={s.role} onChange={e => canEditValues && updSeries(i, "role", e.target.value)} style={{ ...sty, width: "70px" }} disabled={!canEditValues}>
               <option value="primary">Primary</option><option value="benchmark">Benchmark</option><option value="secondary">Secondary</option>
             </select>
           </div>
@@ -127,12 +133,13 @@ export function LineSeriesEditor({ series, xLabels, onChange, editable }: LineSe
             onChange={e => updSeriesData(i, e.target.value)}
             onBlur={() => commitSeriesDraft(i)}
             style={{ ...sty, width: "100%" }}
-            disabled={!editable}
+            disabled={!canEditValues}
             title="Comma-separated values"
           />
         </div>
       ))}
-      {editable && (
+      {/* Add button — only in structural-edit mode (Design) */}
+      {canEditStructure && (
         <button
           onClick={addSeries}
           style={{

@@ -47,7 +47,12 @@ export function TopBar({ doc, dispatch, undoStack, redoStack, dirty, mode, setMo
         <button onClick={() => fileRef.current?.click()} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.txtS, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", cursor: "pointer" }}>IMPORT</button>
         <button onClick={exportJSON} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.txtS, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", cursor: "pointer" }}>JSON</button>
         <button onClick={markSaved} disabled={!dirty} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: dirty ? TK.c.pos : TK.c.bgSurf, color: dirty ? TK.c.bgApp : TK.c.txtM, border: `1px solid ${dirty ? TK.c.pos : TK.c.brd}`, borderRadius: "2px", cursor: dirty ? "pointer" : "default", fontWeight: dirty ? 700 : 400, opacity: dirty ? 1 : .5 }} title="Ctrl+S">SAVE</button>
-        <button onClick={exportPNG} disabled={!canExp} style={{ padding: "3px 7px", fontSize: "8px", fontFamily: TK.font.data, background: canExp ? TK.c.acc : TK.c.txtM, color: TK.c.bgApp, border: "none", borderRadius: "2px", cursor: canExp ? "pointer" : "not-allowed", fontWeight: 700, opacity: canExp ? 1 : .5 }}>EXPORT</button>
+        <button
+          onClick={exportPNG}
+          disabled={!canExp}
+          title={canExp ? "Export as PNG" : `Cannot export: ${errs} error${errs === 1 ? "" : "s"}`}
+          style={{ padding: "3px 7px", fontSize: "8px", fontFamily: TK.font.data, background: canExp ? TK.c.acc : TK.c.txtM, color: TK.c.bgApp, border: "none", borderRadius: "2px", cursor: canExp ? "pointer" : "not-allowed", fontWeight: 700, opacity: canExp ? 1 : .5 }}
+        >EXPORT</button>
       </div>
     </div>
   );

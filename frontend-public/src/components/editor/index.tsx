@@ -96,19 +96,37 @@ export default function InfographicEditor() {
     if (!f) return;
     const r = new FileReader();
     r.onload = ev => {
+      let raw: unknown;
       try {
-        const raw = JSON.parse(ev.target?.result as string);
-        const hydrated = hydrateImportedDoc(raw);
-        const err = validateImport(hydrated);
-        if (err) { alert(`Import error: ${err}`); return; }
-        dispatch({ type: "IMPORT", doc: hydrated });
-      } catch { alert("Invalid JSON"); }
+        raw = JSON.parse(ev.target?.result as string);
+      } catch {
+        alert("Invalid JSON file");
+        return;
+      }
+      let hydrated;
+      try {
+        hydrated = hydrateImportedDoc(raw);
+      } catch (hydrationErr: any) {
+        alert(`Import error: ${hydrationErr?.message ?? "hydration failed"}`);
+        return;
+      }
+      const err = validateImport(hydrated);
+      if (err) {
+        alert(`Import error: ${err}`);
+        return;
+      }
+      dispatch({ type: "IMPORT", doc: hydrated });
     };
     r.readAsText(f);
     e.target.value = "";
   };
 
   const exportPNG = useCallback(() => {
+    // QA gate: never produce broken output. PNG export is blocked when there
+    // are validation errors; JSON export and SAVE are always allowed so users
+    // can checkpoint work-in-progress.
+    if (!canExp) return;
+
     // Render to an offscreen canvas at canonical preset size (no DPR scaling)
     const exportCvs = document.createElement("canvas");
     exportCvs.width = sz.w;
@@ -133,7 +151,7 @@ export default function InfographicEditor() {
         setTimeout(() => URL.revokeObjectURL(url), 100);
       }, "image/png");
     });
-  }, [doc, pal, sz]);
+  }, [doc, pal, sz, canExp]);
 
   const canEdit = (reg: typeof selR, k: string) => reg ? perms.editBlock(reg, k) : false;
 

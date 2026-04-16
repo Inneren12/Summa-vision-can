@@ -192,9 +192,11 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.fillText(`${it.value}${unit}`, cL + bW + 8 * s, by + bH / 2 + 4 * s);
     });
 
-    if (p.showBenchmark && p.benchmarkValue) {
-      const bv = parseFloat(p.benchmarkValue) || 0;
-      const bx2 = cL + (bv / mx) * cW * .82;
+    // FIX: benchmarkValue = 0 is valid; check presence, not truthiness
+    const bvRaw = p.benchmarkValue;
+    const bvNum = typeof bvRaw === "number" ? bvRaw : typeof bvRaw === "string" ? parseFloat(bvRaw) : NaN;
+    if (p.showBenchmark && Number.isFinite(bvNum)) {
+      const bx2 = cL + (bvNum / mx) * cW * .82;
       ctx.setLineDash([4 * s, 4 * s]);
       ctx.strokeStyle = TK.c.acc + "80";
       ctx.lineWidth = 1.5 * s;

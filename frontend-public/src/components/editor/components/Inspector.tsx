@@ -3,6 +3,7 @@
 import React from 'react';
 import type { Block, BlockRegistryEntry, EditorAction, EditorMode } from '../types';
 import { TK } from '../config/tokens';
+import { canEditStructure as permCanEditStructure } from '../store/permissions';
 import { BarItemsEditor } from './data-editors/BarItemsEditor';
 import { KPIItemsEditor } from './data-editors/KPIItemsEditor';
 import { LineSeriesEditor } from './data-editors/LineSeriesEditor';
@@ -55,16 +56,51 @@ export function Inspector({ selB, selR, selId, mode, canEdit, dispatch }: Inspec
               );
             })}
 
-            {/* STRUCTURED DATA EDITORS (Stage 2 Polish) */}
-            {selB.type === "bar_horizontal" && (
-              <BarItemsEditor items={selB.props.items || []} onChange={items => canEdit(selR, "items") && dispatch({ type: "UPDATE_DATA", blockId: selId, data: { items } })} editable={canEdit(selR, "items")} />
-            )}
-            {selB.type === "comparison_kpi" && (
-              <KPIItemsEditor items={selB.props.items || []} onChange={items => canEdit(selR, "items") && dispatch({ type: "UPDATE_DATA", blockId: selId, data: { items } })} editable={canEdit(selR, "items")} />
-            )}
-            {selB.type === "line_editorial" && (
-              <LineSeriesEditor series={selB.props.series || []} xLabels={selB.props.xLabels || []} onChange={data => canEdit(selR, "series") && dispatch({ type: "UPDATE_DATA", blockId: selId, data })} editable={canEdit(selR, "series")} />
-            )}
+            {/* STRUCTURED DATA EDITORS (Stage 2 Polish)
+                Permission model: canEditValues lets users edit values within
+                existing structure; canEditStructure lets users add/remove items
+                (and edit xLabels for line chart). Template mode restricts the
+                latter — shape is template-owned. */}
+            {(() => {
+              // canEditValues: individual cell/field edits within the block's
+              // existing structure are allowed whenever the block itself is
+              // not identity-locked (only required_locked bars value/text editing,
+              // and no required_locked block has structured editors today).
+              const canValues = selR.status !== "required_locked";
+              const canStruct = permCanEditStructure(selR, mode);
+              if (selB.type === "bar_horizontal") {
+                return (
+                  <BarItemsEditor
+                    items={selB.props.items || []}
+                    onChange={items => dispatch({ type: "UPDATE_DATA", blockId: selId, data: { items } })}
+                    canEditValues={canValues}
+                    canEditStructure={canStruct}
+                  />
+                );
+              }
+              if (selB.type === "comparison_kpi") {
+                return (
+                  <KPIItemsEditor
+                    items={selB.props.items || []}
+                    onChange={items => dispatch({ type: "UPDATE_DATA", blockId: selId, data: { items } })}
+                    canEditValues={canValues}
+                    canEditStructure={canStruct}
+                  />
+                );
+              }
+              if (selB.type === "line_editorial") {
+                return (
+                  <LineSeriesEditor
+                    series={selB.props.series || []}
+                    xLabels={selB.props.xLabels || []}
+                    onChange={data => dispatch({ type: "UPDATE_DATA", blockId: selId, data })}
+                    canEditValues={canValues}
+                    canEditStructure={canStruct}
+                  />
+                );
+              }
+              return null;
+            })()}
 
             <div style={{ marginTop: "4px", padding: "5px 7px", background: TK.c.bgSurf, borderRadius: "3px", fontSize: "7px", fontFamily: TK.font.data, color: TK.c.txtM, lineHeight: 1.6 }}>
               <span style={{ color: TK.c.txtS }}>TYPE</span> {selB.type} <span style={{ color: TK.c.txtS }}>STATUS</span> {selR.status}<br />
