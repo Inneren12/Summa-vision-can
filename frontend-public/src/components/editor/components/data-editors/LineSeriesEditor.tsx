@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { SeriesItem, SeriesRole } from '../../types';
+import { isSeriesRole } from '../../types';
 import { TK } from '../../config/tokens';
 import { makeId } from '../../utils/ids';
 
@@ -17,10 +18,18 @@ interface LineSeriesEditorProps {
 }
 
 export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, canEditStructure }: LineSeriesEditorProps) {
-  const [seriesDrafts, setSeriesDrafts] = useState<Record<number, string>>({});
+  // Backfill _id for series loaded from legacy docs that lack one. Drafts key
+  // off _id so mid-edit state survives row removal/reorder (index-keyed drafts
+  // would stick to the wrong row after mutation).
+  const seriesWithIds = useMemo(
+    () => series.map(s => (s._id ? s : { ...s, _id: makeId() })),
+    [series],
+  );
+
+  const [seriesDrafts, setSeriesDrafts] = useState<Record<string, string>>({});
 
   const updSeries = <K extends keyof SeriesItem>(idx: number, key: K, val: SeriesItem[K]) => {
-    const next = [...series];
+    const next = [...seriesWithIds];
     next[idx] = { ...next[idx], [key]: val };
     onChange({ series: next, xLabels });
   };
@@ -31,7 +40,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
     if (newLabels.length === 0) return;
 
     // Auto-sync: truncate or pad each series.data to match newLabels.length
-    const syncedSeries = series.map(s => {
+    const syncedSeries = seriesWithIds.map(s => {
       const data = [...s.data];
       if (data.length < newLabels.length) {
         while (data.length < newLabels.length) data.push(0);
@@ -44,9 +53,9 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
     onChange({ series: syncedSeries, xLabels: newLabels });
   };
 
-  const updSeriesData = (idx: number, rawStr: string) => {
+  const updSeriesData = (id: string, rawStr: string) => {
     if (!canEditValues) return;
-    setSeriesDrafts(prev => ({ ...prev, [idx]: rawStr }));
+    setSeriesDrafts(prev => ({ ...prev, [id]: rawStr }));
 
     // Parse strictly — reject if any value is empty, NaN, or non-finite
     const parts = rawStr.split(",").map(v => v.trim());
@@ -55,13 +64,14 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
     const parsed = parts.map(Number);
     if (parsed.some(v => !Number.isFinite(v))) return; // reject NaN/Infinity
 
-    updSeries(idx, "data", parsed);
+    const idx = seriesWithIds.findIndex(s => s._id === id);
+    if (idx >= 0) updSeries(idx, "data", parsed);
   };
 
-  const commitSeriesDraft = (idx: number) => {
+  const commitSeriesDraft = (id: string) => {
     setSeriesDrafts(prev => {
       const next = { ...prev };
-      delete next[idx];
+      delete next[id];
       return next;
     });
   };
@@ -70,7 +80,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
     if (!canEditStructure) return;
     const newData = new Array(xLabels.length).fill(0);
     onChange({
-      series: [...series, {
+      series: [...seriesWithIds, {
         label: "New Series",
         role: "secondary" as SeriesRole,
         data: newData,
@@ -82,9 +92,9 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
 
   const removeSeries = (idx: number) => {
     if (!canEditStructure) return;
-    if (series.length <= 1) return; // need at least 1 series
+    if (seriesWithIds.length <= 1) return; // need at least 1 series
     onChange({
-      series: series.filter((_, i) => i !== idx),
+      series: seriesWithIds.filter((_, i) => i !== idx),
       xLabels,
     });
   };
@@ -95,11 +105,11 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
       <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase" }}>X LABELS</div>
       {/* xLabels is structural: template mode can edit series values but not axis shape */}
       <input value={xLabels.join(", ")} onChange={e => updXLabels(e.target.value)} style={{ ...sty, width: "100%" }} disabled={!canEditStructure} title="Comma-separated labels" />
-      <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginTop: "4px" }}>SERIES ({series.length})</div>
-      {series.map((s, i) => (
-        <div key={s._id || i} style={{ padding: "4px", border: `1px solid ${TK.c.brd}`, borderRadius: "3px", position: "relative" }}>
+      <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginTop: "4px" }}>SERIES ({seriesWithIds.length})</div>
+      {seriesWithIds.map((s, i) => (
+        <div key={s._id} style={{ padding: "4px", border: `1px solid ${TK.c.brd}`, borderRadius: "3px", position: "relative" }}>
           {/* Remove button — only in structural-edit mode (Design) */}
-          {canEditStructure && series.length > 1 && (
+          {canEditStructure && seriesWithIds.length > 1 && (
             <button
               type="button"
               onClick={() => removeSeries(i)}
@@ -119,14 +129,25 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
           )}
           <div style={{ display: "flex", gap: "2px", marginBottom: "2px" }}>
             <input value={s.label} onChange={e => canEditValues && updSeries(i, "label", e.target.value)} style={{ ...sty, flex: 1 }} disabled={!canEditValues} placeholder="Series name" />
-            <select value={s.role} onChange={e => canEditValues && updSeries(i, "role", e.target.value as SeriesRole)} style={{ ...sty, width: "70px" }} disabled={!canEditValues}>
+            <select
+              value={s.role}
+              onChange={e => {
+                if (!canEditValues) return;
+                const raw = e.target.value;
+                // Runtime guard: reject unknown roles instead of trusting the DOM value.
+                const role: SeriesRole = isSeriesRole(raw) ? raw : "secondary";
+                updSeries(i, "role", role);
+              }}
+              style={{ ...sty, width: "70px" }}
+              disabled={!canEditValues}
+            >
               <option value="primary">Primary</option><option value="benchmark">Benchmark</option><option value="secondary">Secondary</option>
             </select>
           </div>
           <input
-            value={seriesDrafts[i] ?? s.data.join(", ")}
-            onChange={e => updSeriesData(i, e.target.value)}
-            onBlur={() => commitSeriesDraft(i)}
+            value={seriesDrafts[s._id!] ?? s.data.join(", ")}
+            onChange={e => updSeriesData(s._id!, e.target.value)}
+            onBlur={() => commitSeriesDraft(s._id!)}
             style={{ ...sty, width: "100%" }}
             disabled={!canEditValues}
             title="Comma-separated values"

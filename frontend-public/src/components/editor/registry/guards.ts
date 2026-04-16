@@ -4,12 +4,12 @@ import { BREG } from './blocks';
 export const SUPPORTED_SCHEMA_VERSIONS = [1] as const;
 export const CURRENT_SCHEMA = 1;
 
-const VALID_WORKFLOW_STATES: WorkflowState[] = [
+const VALID_WORKFLOW_STATES: ReadonlySet<WorkflowState> = new Set<WorkflowState>([
   "draft", "in_review", "approved", "exported", "published",
-];
+]);
 
 function normalizeWorkflow(raw: unknown): WorkflowState {
-  if (typeof raw === "string" && VALID_WORKFLOW_STATES.includes(raw as WorkflowState)) {
+  if (typeof raw === "string" && VALID_WORKFLOW_STATES.has(raw as WorkflowState)) {
     return raw as WorkflowState;
   }
   return "draft";

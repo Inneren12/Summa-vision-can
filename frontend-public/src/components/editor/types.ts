@@ -160,7 +160,12 @@ export interface KPIItem {
   _id?: string;
 }
 
-export type SeriesRole = 'primary' | 'benchmark' | 'secondary';
+export const SERIES_ROLES = ['primary', 'benchmark', 'secondary'] as const;
+export type SeriesRole = typeof SERIES_ROLES[number];
+
+export function isSeriesRole(v: unknown): v is SeriesRole {
+  return typeof v === 'string' && (SERIES_ROLES as readonly string[]).includes(v);
+}
 
 export interface SeriesItem {
   label: string;

@@ -12,6 +12,7 @@ import { reducer, initState } from './store/reducer';
 import { PERMS } from './store/permissions';
 import { renderDoc } from './renderer/engine';
 import { validate } from './validation/validate';
+import { deferRevoke } from './utils/download';
 import { TopBar } from './components/TopBar';
 import { LeftPanel } from './components/LeftPanel';
 import { Canvas } from './components/Canvas';
@@ -63,8 +64,7 @@ export default function InfographicEditor() {
     a.href = url;
     a.download = `summa-${doc.templateId}-v${doc.meta.version}.json`;
     a.click();
-    // Revoke URL after click to free memory
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    deferRevoke(url);
   }, [doc]);
 
   // TODO: Replace local JSON backup with POST /api/v1/admin/publications
@@ -78,7 +78,7 @@ export default function InfographicEditor() {
     a.href = url;
     a.download = `summa-${doc.templateId}-draft-v${doc.meta.version}.json`;
     a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    deferRevoke(url);
     // Mark clean
     dispatch({ type: "SAVED" });
   }, [dirty, doc]);
@@ -178,7 +178,7 @@ export default function InfographicEditor() {
         a.href = url;
         a.download = `summa-${doc.templateId}-${doc.page.size}.png`;
         a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 0);
+        deferRevoke(url);
       }, "image/png");
     });
   }, [doc, pal, sz, canExp]);

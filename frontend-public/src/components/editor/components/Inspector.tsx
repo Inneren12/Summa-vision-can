@@ -33,6 +33,17 @@ function getBoolProp(block: Block, key: string): boolean {
   return typeof v === "boolean" ? v : false;
 }
 
+// Dev-mode warning helper: surfaces malformed props from corrupted imports
+// before they reach data editors that assume arrays.
+function warnIfInvalidShape(blockType: string, key: string, value: unknown, expected: string): void {
+  if (process.env.NODE_ENV !== "development") return;
+  const actualType = Array.isArray(value) ? "array" : typeof value;
+  if (actualType !== expected && value !== undefined) {
+    // eslint-disable-next-line no-console
+    console.warn(`[editor] ${blockType}.${key} expected ${expected}, got ${actualType}`);
+  }
+}
+
 export function Inspector({ selB, selR, selId, mode, canEdit, dispatch }: InspectorProps) {
   const statusBadge = selR ? badge(selR.status) : null;
 
@@ -47,28 +58,32 @@ export function Inspector({ selB, selR, selId, mode, canEdit, dispatch }: Inspec
   let dataEditor: React.ReactNode = null;
   if (selB && selR && selId) {
     if (selB.type === "bar_horizontal") {
+      warnIfInvalidShape("bar_horizontal", "items", selB.props.items, "array");
       dataEditor = (
         <BarItemsEditor
-          items={selB.props.items || []}
+          items={Array.isArray(selB.props.items) ? selB.props.items : []}
           onChange={items => dispatch({ type: "UPDATE_DATA", blockId: selId, data: { items } })}
           canEditValues={canValues}
           canEditStructure={canStruct}
         />
       );
     } else if (selB.type === "comparison_kpi") {
+      warnIfInvalidShape("comparison_kpi", "items", selB.props.items, "array");
       dataEditor = (
         <KPIItemsEditor
-          items={selB.props.items || []}
+          items={Array.isArray(selB.props.items) ? selB.props.items : []}
           onChange={items => dispatch({ type: "UPDATE_DATA", blockId: selId, data: { items } })}
           canEditValues={canValues}
           canEditStructure={canStruct}
         />
       );
     } else if (selB.type === "line_editorial") {
+      warnIfInvalidShape("line_editorial", "series", selB.props.series, "array");
+      warnIfInvalidShape("line_editorial", "xLabels", selB.props.xLabels, "array");
       dataEditor = (
         <LineSeriesEditor
-          series={selB.props.series || []}
-          xLabels={selB.props.xLabels || []}
+          series={Array.isArray(selB.props.series) ? selB.props.series : []}
+          xLabels={Array.isArray(selB.props.xLabels) ? selB.props.xLabels : []}
           onChange={data => dispatch({ type: "UPDATE_DATA", blockId: selId, data })}
           canEditValues={canValues}
           canEditStructure={canStruct}
