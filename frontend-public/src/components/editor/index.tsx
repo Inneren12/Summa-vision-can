@@ -12,6 +12,7 @@ import { reducer, initState } from './store/reducer';
 import { PERMS } from './store/permissions';
 import { renderDoc } from './renderer/engine';
 import { validate } from './validation/validate';
+import { deferRevoke } from './utils/download';
 import { TopBar } from './components/TopBar';
 import { LeftPanel } from './components/LeftPanel';
 import { Canvas } from './components/Canvas';
@@ -63,8 +64,7 @@ export default function InfographicEditor() {
     a.href = url;
     a.download = `summa-${doc.templateId}-v${doc.meta.version}.json`;
     a.click();
-    // Revoke URL after click to free memory
-    setTimeout(() => URL.revokeObjectURL(url), 100);
+    deferRevoke(url);
   }, [doc]);
 
   // TODO: Replace local JSON backup with POST /api/v1/admin/publications
@@ -78,49 +78,87 @@ export default function InfographicEditor() {
     a.href = url;
     a.download = `summa-${doc.templateId}-draft-v${doc.meta.version}.json`;
     a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 100);
+    deferRevoke(url);
     // Mark clean
     dispatch({ type: "SAVED" });
   }, [dirty, doc]);
 
   useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); dispatch({ type: "UNDO" }); }
-      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) { e.preventDefault(); dispatch({ type: "REDO" }); }
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); markSavedAndBackup(); }
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isEditable =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target?.isContentEditable === true;
+
+      // Inside editable fields: only Ctrl+S still fires (save is always useful).
+      // Undo/redo fall through to native behavior in text inputs.
+      if (isEditable) {
+        if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+          e.preventDefault();
+          markSavedAndBackup();
+        }
+        return;
+      }
+
+      // Outside editable fields: editor-level shortcuts
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        dispatch({ type: "UNDO" });
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+        e.preventDefault();
+        dispatch({ type: "REDO" });
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        markSavedAndBackup();
+      }
     };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [markSavedAndBackup]);
 
   const importJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
+    const input = e.target;
     const r = new FileReader();
     r.onload = ev => {
-      let raw: unknown;
       try {
-        raw = JSON.parse(ev.target?.result as string);
-      } catch {
-        alert("Invalid JSON file");
-        return;
+        let raw: unknown;
+        try {
+          raw = JSON.parse(ev.target?.result as string);
+        } catch {
+          alert("Invalid JSON file");
+          return;
+        }
+        let result;
+        try {
+          result = hydrateImportedDoc(raw);
+        } catch (hydrationErr: any) {
+          alert(`Import error: ${hydrationErr?.message ?? "hydration failed"}`);
+          return;
+        }
+        const err = validateImport(result.doc);
+        if (err) {
+          alert(`Import error: ${err}`);
+          return;
+        }
+        // Surface what the hydrator had to normalize so the user knows their
+        // document was modified on import, not silently mutated.
+        if (result.warnings.length > 0) {
+          alert(`Imported with warnings:\n\n\u2022 ${result.warnings.join("\n\u2022 ")}`);
+        }
+        dispatch({ type: "IMPORT", doc: result.doc });
+      } finally {
+        // Reset so re-selecting the same file re-fires change event
+        input.value = "";
       }
-      let hydrated;
-      try {
-        hydrated = hydrateImportedDoc(raw);
-      } catch (hydrationErr: any) {
-        alert(`Import error: ${hydrationErr?.message ?? "hydration failed"}`);
-        return;
-      }
-      const err = validateImport(hydrated);
-      if (err) {
-        alert(`Import error: ${err}`);
-        return;
-      }
-      dispatch({ type: "IMPORT", doc: hydrated });
     };
     r.readAsText(f);
-    e.target.value = "";
   };
 
   const exportPNG = useCallback(() => {
@@ -150,7 +188,7 @@ export default function InfographicEditor() {
         a.href = url;
         a.download = `summa-${doc.templateId}-${doc.page.size}.png`;
         a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 100);
+        deferRevoke(url);
       }, "image/png");
     });
   }, [doc, pal, sz, canExp]);

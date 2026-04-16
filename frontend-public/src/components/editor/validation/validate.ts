@@ -2,12 +2,20 @@ import type { CanonicalDocument, ValidationResult } from '../types';
 import { BREG } from '../registry/blocks';
 import { SIZES } from '../config/sizes';
 import { PALETTES } from '../config/palettes';
+import { BGS } from '../config/backgrounds';
+import { validateBlockData } from './block-data';
 
 export function validate(doc: CanonicalDocument): ValidationResult {
   const R: ValidationResult = { errors: [], warnings: [], info: [], passed: [] };
   const blocks = Object.values(doc.blocks).filter(b => b.visible);
   const types = blocks.map(b => b.type);
   const sz = SIZES[doc.page.size] || SIZES.instagram_1080;
+
+  // Page config validity — reject unknown palette/background/size so the doc
+  // can't silently render with fallback styling the author never asked for.
+  if (!PALETTES[doc.page.palette]) R.errors.push(`Unknown palette: "${doc.page.palette}"`);
+  if (!BGS[doc.page.background]) R.errors.push(`Unknown background: "${doc.page.background}"`);
+  if (!SIZES[doc.page.size]) R.errors.push(`Unknown size: "${doc.page.size}"`);
 
   // Required blocks
   (["source_footer", "brand_stamp", "headline_editorial"] as string[]).forEach(req => {
@@ -22,6 +30,29 @@ export function validate(doc: CanonicalDocument): ValidationResult {
   // Char/line limits
   blocks.forEach(b => { const reg = BREG[b.type]; if (!reg?.cst?.maxChars) return; const txt = (b.props.text || b.props.value || "").replace(/\n/g, ""), mx = reg.cst.maxChars; if (txt.length > mx) R.errors.push(`${reg.name}: ${txt.length}/${mx} OVERFLOW`); else if (txt.length > mx * .9) R.warnings.push(`${reg.name}: ${txt.length}/${mx} chars`); });
   blocks.forEach(b => { const reg = BREG[b.type]; if (!reg?.cst?.maxLines) return; const lines = (b.props.text || "").split("\n").length; if (lines > reg.cst.maxLines) R.warnings.push(`${reg.name}: ${lines}/${reg.cst.maxLines} lines`); });
+
+  // Structural integrity: duplicate section.id (global) and duplicate
+  // blockId within any section's blockIds array. validateImport() enforces
+  // these at import time, but validate() also runs on live state mutated
+  // by the reducer — check again here to catch regressions from unfamiliar
+  // code paths (tests, devtools, future bulk actions).
+  const seenSectionIds = new Set<string>();
+  doc.sections.forEach(sec => {
+    if (seenSectionIds.has(sec.id)) {
+      R.errors.push(`Duplicate section id: "${sec.id}"`);
+    } else {
+      seenSectionIds.add(sec.id);
+    }
+    const seenBlockIdsInSection = new Set<string>();
+    sec.blockIds.forEach(bid => {
+      if (seenBlockIdsInSection.has(bid)) {
+        R.errors.push(`Section "${sec.id}" has duplicate blockId: "${bid}"`);
+      } else {
+        seenBlockIdsInSection.add(bid);
+      }
+    });
+  });
+
   // Slot compatibility
   doc.sections.forEach(sec => {
     sec.blockIds.forEach(bid => { const b = doc.blocks[bid]; if (!b) return; const reg = BREG[b.type]; if (reg && !reg.allowedSections.includes(sec.type)) R.errors.push(`${reg.name} not allowed in ${sec.type}`); });
@@ -30,89 +61,41 @@ export function validate(doc: CanonicalDocument): ValidationResult {
     Object.entries(counts).forEach(([t, c]) => { const reg = BREG[t]; if (reg?.maxPerSection && c > reg.maxPerSection) R.warnings.push(`${reg.name}: ${c}x in ${sec.type} (max ${reg.maxPerSection})`); });
   });
 
-  // CHART-AWARE VALIDATION (Stage 2 Polish + iter 4: length mismatches are errors)
+  // STRUCTURED DATA VALIDATION — delegate to the per-type validators in
+  // validation/block-data.ts. Keeps the semantic rules in one place (also
+  // consumed by registry guards).
+  blocks.forEach(b => {
+    const dv = validateBlockData(b.type, b.props);
+    if (!dv.valid) {
+      const name = BREG[b.type]?.name || b.type;
+      dv.errors.forEach(err => R.errors.push(`${name}: ${err}`));
+    }
+  });
+
+  // Density / layout warnings that are presentation-specific (not data-semantic)
+  // remain outside the shared validator: they depend on canvas size + overall
+  // doc context, not the block's own props.
   blocks.forEach(b => {
     if (b.type === "bar_horizontal") {
-      const props = b.props;
-      if (!Array.isArray(props.items) || props.items.length === 0) {
-        R.errors.push("Ranked Bars: at least one item required");
-      } else {
-        props.items.forEach((it: any, i: number) => {
-          if (typeof it.label !== "string" || !it.label.trim()) {
-            R.errors.push(`Ranked Bars: item[${i}] missing label`);
-          }
-          if (typeof it.value !== "number" || !Number.isFinite(it.value)) {
-            R.errors.push(`Ranked Bars: item[${i}] value is not a finite number`);
-          }
-        });
-        if (props.items.length > 30) {
-          R.errors.push(`Ranked Bars: ${props.items.length} items exceeds max 30`);
-        } else if (props.items.length > 25) {
-          R.warnings.push(`Ranked Bars: ${props.items.length} items \u2014 may be dense`);
-        }
-        // Layout density for small sizes
-        if (props.items.length > 10 && sz.h < 800) {
-          R.warnings.push("Ranked Bars: too many items for this canvas height");
-        }
-      }
+      const n = Array.isArray(b.props.items) ? b.props.items.length : 0;
+      if (n > 25 && n <= 30) R.warnings.push(`Ranked Bars: ${n} items \u2014 may be dense`);
+      if (n > 10 && sz.h < 800) R.warnings.push("Ranked Bars: too many items for this canvas height");
     }
     if (b.type === "line_editorial") {
-      const props = b.props;
-      if (!Array.isArray(props.xLabels)) {
-        R.errors.push("Line Chart: xLabels must be an array");
-      } else if (props.xLabels.length === 0) {
-        R.errors.push("Line Chart: xLabels cannot be empty");
-      } else if (!props.xLabels.every((l: any) => typeof l === "string")) {
-        R.errors.push("Line Chart: all xLabels must be strings");
-      }
-      if (!Array.isArray(props.series)) {
-        R.errors.push("Line Chart: series must be an array");
-      } else if (props.series.length === 0) {
-        R.errors.push("Line Chart: at least one series required");
-      } else {
-        const validRoles = ["primary", "benchmark", "secondary"];
-        const xlLen = Array.isArray(props.xLabels) ? props.xLabels.length : 0;
-        props.series.forEach((s: any, i: number) => {
-          if (typeof s.label !== "string") {
-            R.errors.push(`Line Chart: series[${i}] label must be string`);
-          }
-          if (!validRoles.includes(s.role)) {
-            R.errors.push(`Line Chart: series[${i}] has invalid role "${s.role}" (must be ${validRoles.join("/")})`);
-          }
-          if (!Array.isArray(s.data)) {
-            R.errors.push(`Line Chart: series[${i}] data must be an array`);
-            return;
-          }
-          // Length mismatch is an ERROR (was warning), not warning
-          if (xlLen > 0 && s.data.length !== xlLen) {
-            R.errors.push(`Line Chart: series "${s.label}" has ${s.data.length} points but xLabels has ${xlLen}`);
-          }
-          if (!s.data.every((v: any) => typeof v === "number" && Number.isFinite(v))) {
-            R.errors.push(`Line Chart: series "${s.label}" contains non-finite values (NaN/Infinity)`);
-          }
-        });
-      }
-      if (Array.isArray(props.xLabels) && props.xLabels.length > 12) {
-        R.warnings.push(`Line Chart: ${props.xLabels.length} x-labels \u2014 may overlap`);
-      }
+      const xl = Array.isArray(b.props.xLabels) ? b.props.xLabels.length : 0;
+      if (xl > 12) R.warnings.push(`Line Chart: ${xl} x-labels \u2014 may overlap`);
     }
     if (b.type === "comparison_kpi") {
-      const items = b.props.items || [];
-      if (items.length < 2) R.errors.push("KPI Compare: need at least 2 items");
-      if (items.length > 4) R.warnings.push("KPI Compare: more than 4 items may be cramped");
-      items.forEach((it: any, i: number) => { if (!it.value?.trim()) R.warnings.push(`KPI #${i + 1}: empty value`); if (!it.label?.trim()) R.warnings.push(`KPI #${i + 1}: empty label`); });
+      const n = Array.isArray(b.props.items) ? b.props.items.length : 0;
+      if (n > 4) R.warnings.push("KPI Compare: more than 4 items may be cramped");
     }
     if (b.type === "table_enriched") {
-      const cols = b.props.columns || [], rows = b.props.rows || [];
-      if (!rows.length) R.errors.push("Visual Table: no rows");
-      rows.forEach((r: any, i: number) => { if (r.vals?.length !== cols.length - 1) R.warnings.push(`Table row ${i + 1}: ${r.vals?.length} values, expected ${cols.length - 1}`); });
-      if (rows.length > 12) R.warnings.push(`Visual Table: ${rows.length} rows \u2014 may overflow on ${sz.n}`);
+      const n = Array.isArray(b.props.rows) ? b.props.rows.length : 0;
+      if (n > 12) R.warnings.push(`Visual Table: ${n} rows \u2014 may overflow on ${sz.n}`);
     }
     if (b.type === "small_multiple") {
-      const items = b.props.items || [];
-      if (!items.length) R.errors.push("Small Multiples: no items");
-      items.forEach((it: any, i: number) => { if (!it.data?.length) R.errors.push(`Small Mult #${i + 1}: no data`); if (!it.label?.trim()) R.warnings.push(`Small Mult #${i + 1}: no label`); });
-      if (items.length > 9) R.warnings.push("Small Multiples: more than 9 cells may be too dense");
+      const n = Array.isArray(b.props.items) ? b.props.items.length : 0;
+      if (n > 9) R.warnings.push("Small Multiples: more than 9 cells may be too dense");
     }
   });
 

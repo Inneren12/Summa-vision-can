@@ -50,6 +50,7 @@ export function KPIItemsEditor({ items, onChange, canEditValues, canEditStructur
           {/* Remove button — only in structural-edit mode (Design) */}
           {canEditStructure && items.length > 2 && (
             <button
+              type="button"
               onClick={() => remove(i)}
               style={{
                 position: "absolute",
@@ -78,6 +79,7 @@ export function KPIItemsEditor({ items, onChange, canEditValues, canEditStructur
       {/* Add button — only in structural-edit mode (Design) */}
       {canEditStructure && items.length < 4 && (
         <button
+          type="button"
           onClick={add}
           style={{
             fontSize: "8px",

@@ -23,7 +23,75 @@ function badge(st: string) {
   return { color: c[st] || TK.c.txtM, label: l[st] || st };
 }
 
+// Helper: read an arbitrary prop value with a fallback if it isn't the expected type.
+function getStringProp(block: Block, key: string): string {
+  const v = block.props[key];
+  return typeof v === "string" ? v : "";
+}
+function getBoolProp(block: Block, key: string): boolean {
+  const v = block.props[key];
+  return typeof v === "boolean" ? v : false;
+}
+
+// Dev-mode warning helper: surfaces malformed props from corrupted imports
+// before they reach data editors that assume arrays.
+function warnIfInvalidShape(blockType: string, key: string, value: unknown, expected: string): void {
+  if (process.env.NODE_ENV !== "development") return;
+  const actualType = Array.isArray(value) ? "array" : typeof value;
+  if (actualType !== expected && value !== undefined) {
+    // eslint-disable-next-line no-console
+    console.warn(`[editor] ${blockType}.${key} expected ${expected}, got ${actualType}`);
+  }
+}
+
 export function Inspector({ selB, selR, selId, mode, canEdit, dispatch }: InspectorProps) {
+  const statusBadge = selR ? badge(selR.status) : null;
+
+  // Structured-data editor decisions (hoisted out of inline IIFE for clarity).
+  // canValues: individual cell/field edits within the block's existing structure
+  // are allowed whenever the block itself is not identity-locked.
+  // canStruct: add/remove items (and edit xLabels for line chart). Template
+  // mode restricts the latter — shape is template-owned.
+  const canValues = selR ? selR.status !== "required_locked" : false;
+  const canStruct = selR ? permCanEditStructure(selR, mode) : false;
+
+  let dataEditor: React.ReactNode = null;
+  if (selB && selR && selId) {
+    if (selB.type === "bar_horizontal") {
+      warnIfInvalidShape("bar_horizontal", "items", selB.props.items, "array");
+      dataEditor = (
+        <BarItemsEditor
+          items={Array.isArray(selB.props.items) ? selB.props.items : []}
+          onChange={items => dispatch({ type: "UPDATE_DATA", blockId: selId, data: { items } })}
+          canEditValues={canValues}
+          canEditStructure={canStruct}
+        />
+      );
+    } else if (selB.type === "comparison_kpi") {
+      warnIfInvalidShape("comparison_kpi", "items", selB.props.items, "array");
+      dataEditor = (
+        <KPIItemsEditor
+          items={Array.isArray(selB.props.items) ? selB.props.items : []}
+          onChange={items => dispatch({ type: "UPDATE_DATA", blockId: selId, data: { items } })}
+          canEditValues={canValues}
+          canEditStructure={canStruct}
+        />
+      );
+    } else if (selB.type === "line_editorial") {
+      warnIfInvalidShape("line_editorial", "series", selB.props.series, "array");
+      warnIfInvalidShape("line_editorial", "xLabels", selB.props.xLabels, "array");
+      dataEditor = (
+        <LineSeriesEditor
+          series={Array.isArray(selB.props.series) ? selB.props.series : []}
+          xLabels={Array.isArray(selB.props.xLabels) ? selB.props.xLabels : []}
+          onChange={data => dispatch({ type: "UPDATE_DATA", blockId: selId, data })}
+          canEditValues={canValues}
+          canEditStructure={canStruct}
+        />
+      );
+    }
+  }
+
   return (
     <div style={{ width: "250px", minWidth: "250px", borderLeft: `1px solid ${TK.c.brd}`, display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "7px 10px", borderBottom: `1px solid ${TK.c.brd}`, fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtS, textTransform: "uppercase", letterSpacing: "0.3px", display: "flex", justifyContent: "space-between" }}>
@@ -34,24 +102,28 @@ export function Inspector({ selB, selR, selId, mode, canEdit, dispatch }: Inspec
         {!selB && <div style={{ fontSize: "10px", color: TK.c.txtM, padding: "20px 0", textAlign: "center", lineHeight: 1.6 }}>Select a block<br />from Blocks tab</div>}
         {selB && selR && selId && (
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {(() => { const statusBadge = badge(selR.status); return (
-            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-              <span style={{ fontSize: "8px", fontFamily: TK.font.data, color: statusBadge.color, padding: "2px 6px", background: TK.c.bgAct, borderRadius: "2px" }}>{statusBadge.label}</span>
-              {!selB.visible && <span style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM }}>HIDDEN</span>}
-            </div>); })()}
+            {statusBadge && (
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                <span style={{ fontSize: "8px", fontFamily: TK.font.data, color: statusBadge.color, padding: "2px 6px", background: TK.c.bgAct, borderRadius: "2px" }}>{statusBadge.label}</span>
+                {!selB.visible && <span style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM }}>HIDDEN</span>}
+              </div>
+            )}
 
             {/* Standard controls */}
             {selR.ctrl.map(c => {
               const ed = canEdit(selR, c.k);
+              const strVal = getStringProp(selB, c.k);
+              const boolVal = getBoolProp(selB, c.k);
+              const charLen = strVal.replace(/\n/g, "").length;
               return (
                 <div key={c.k} style={{ opacity: ed ? 1 : .4 }}>
                   <label style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", letterSpacing: "0.3px", display: "block", marginBottom: "2px" }}>
-                    {c.l}{c.ml && <span style={{ float: "right", color: ((selB.props[c.k] || "") + "").replace(/\n/g, "").length > c.ml * .9 ? TK.c.acc : TK.c.txtM }}>{((selB.props[c.k] || "") + "").replace(/\n/g, "").length}/{c.ml}</span>}
+                    {c.l}{c.ml && <span style={{ float: "right", color: charLen > c.ml * .9 ? TK.c.acc : TK.c.txtM }}>{charLen}/{c.ml}</span>}
                   </label>
-                  {c.t === "text" && <input type="text" value={selB.props[c.k] ?? ""} onChange={e => ed && dispatch({ type: "UPDATE_PROP", blockId: selId, key: c.k, value: e.target.value })} maxLength={c.ml} disabled={!ed} style={{ width: "100%", padding: "5px 7px", fontSize: "10px", fontFamily: TK.font.body, background: TK.c.bgSurf, color: TK.c.txtP, border: `1px solid ${TK.c.brd}`, borderRadius: "3px", outline: "none", boxSizing: "border-box" }} />}
-                  {c.t === "textarea" && <textarea value={selB.props[c.k] ?? ""} onChange={e => ed && dispatch({ type: "UPDATE_PROP", blockId: selId, key: c.k, value: e.target.value })} maxLength={c.ml} rows={2} disabled={!ed} style={{ width: "100%", padding: "5px 7px", fontSize: "10px", fontFamily: TK.font.body, background: TK.c.bgSurf, color: TK.c.txtP, border: `1px solid ${TK.c.brd}`, borderRadius: "3px", outline: "none", resize: "vertical", boxSizing: "border-box" }} />}
-                  {c.t === "seg" && <div style={{ display: "flex", gap: "1px", background: TK.c.bgSurf, borderRadius: "3px", padding: "1px", border: `1px solid ${TK.c.brd}` }}>{c.opts!.map(o => <button key={o} onClick={() => ed && dispatch({ type: "UPDATE_PROP", blockId: selId, key: c.k, value: o })} disabled={!ed} style={{ flex: 1, padding: "3px 2px", fontSize: "8px", fontFamily: TK.font.data, background: selB.props[c.k] === o ? TK.c.bgAct : "transparent", color: selB.props[c.k] === o ? TK.c.acc : TK.c.txtM, border: "none", borderRadius: "2px", cursor: ed ? "pointer" : "not-allowed", textTransform: "uppercase" }}>{o}</button>)}</div>}
-                  {c.t === "toggle" && <button onClick={() => ed && dispatch({ type: "UPDATE_PROP", blockId: selId, key: c.k, value: !selB.props[c.k] })} disabled={!ed} style={{ padding: "4px 8px", fontSize: "9px", fontFamily: TK.font.data, background: selB.props[c.k] ? TK.c.acc + "20" : TK.c.bgSurf, color: selB.props[c.k] ? TK.c.acc : TK.c.txtM, border: `1px solid ${selB.props[c.k] ? TK.c.acc + "40" : TK.c.brd}`, borderRadius: "3px", cursor: ed ? "pointer" : "not-allowed", width: "100%", textAlign: "left" }}>{selB.props[c.k] ? "\u2713 On" : "\u25CB Off"}</button>}
+                  {c.t === "text" && <input type="text" value={strVal} onChange={e => ed && dispatch({ type: "UPDATE_PROP", blockId: selId, key: c.k, value: e.target.value })} maxLength={c.ml} disabled={!ed} style={{ width: "100%", padding: "5px 7px", fontSize: "10px", fontFamily: TK.font.body, background: TK.c.bgSurf, color: TK.c.txtP, border: `1px solid ${TK.c.brd}`, borderRadius: "3px", outline: "none", boxSizing: "border-box" }} />}
+                  {c.t === "textarea" && <textarea value={strVal} onChange={e => ed && dispatch({ type: "UPDATE_PROP", blockId: selId, key: c.k, value: e.target.value })} maxLength={c.ml} rows={2} disabled={!ed} style={{ width: "100%", padding: "5px 7px", fontSize: "10px", fontFamily: TK.font.body, background: TK.c.bgSurf, color: TK.c.txtP, border: `1px solid ${TK.c.brd}`, borderRadius: "3px", outline: "none", resize: "vertical", boxSizing: "border-box" }} />}
+                  {c.t === "seg" && <div style={{ display: "flex", gap: "1px", background: TK.c.bgSurf, borderRadius: "3px", padding: "1px", border: `1px solid ${TK.c.brd}` }}>{c.opts!.map(o => <button type="button" key={o} onClick={() => ed && dispatch({ type: "UPDATE_PROP", blockId: selId, key: c.k, value: o })} disabled={!ed} style={{ flex: 1, padding: "3px 2px", fontSize: "8px", fontFamily: TK.font.data, background: strVal === o ? TK.c.bgAct : "transparent", color: strVal === o ? TK.c.acc : TK.c.txtM, border: "none", borderRadius: "2px", cursor: ed ? "pointer" : "not-allowed", textTransform: "uppercase" }}>{o}</button>)}</div>}
+                  {c.t === "toggle" && <button type="button" onClick={() => ed && dispatch({ type: "UPDATE_PROP", blockId: selId, key: c.k, value: !boolVal })} disabled={!ed} style={{ padding: "4px 8px", fontSize: "9px", fontFamily: TK.font.data, background: boolVal ? TK.c.acc + "20" : TK.c.bgSurf, color: boolVal ? TK.c.acc : TK.c.txtM, border: `1px solid ${boolVal ? TK.c.acc + "40" : TK.c.brd}`, borderRadius: "3px", cursor: ed ? "pointer" : "not-allowed", width: "100%", textAlign: "left" }}>{boolVal ? "\u2713 On" : "\u25CB Off"}</button>}
                 </div>
               );
             })}
@@ -61,46 +133,7 @@ export function Inspector({ selB, selR, selId, mode, canEdit, dispatch }: Inspec
                 existing structure; canEditStructure lets users add/remove items
                 (and edit xLabels for line chart). Template mode restricts the
                 latter — shape is template-owned. */}
-            {(() => {
-              // canEditValues: individual cell/field edits within the block's
-              // existing structure are allowed whenever the block itself is
-              // not identity-locked (only required_locked bars value/text editing,
-              // and no required_locked block has structured editors today).
-              const canValues = selR.status !== "required_locked";
-              const canStruct = permCanEditStructure(selR, mode);
-              if (selB.type === "bar_horizontal") {
-                return (
-                  <BarItemsEditor
-                    items={selB.props.items || []}
-                    onChange={items => dispatch({ type: "UPDATE_DATA", blockId: selId, data: { items } })}
-                    canEditValues={canValues}
-                    canEditStructure={canStruct}
-                  />
-                );
-              }
-              if (selB.type === "comparison_kpi") {
-                return (
-                  <KPIItemsEditor
-                    items={selB.props.items || []}
-                    onChange={items => dispatch({ type: "UPDATE_DATA", blockId: selId, data: { items } })}
-                    canEditValues={canValues}
-                    canEditStructure={canStruct}
-                  />
-                );
-              }
-              if (selB.type === "line_editorial") {
-                return (
-                  <LineSeriesEditor
-                    series={selB.props.series || []}
-                    xLabels={selB.props.xLabels || []}
-                    onChange={data => dispatch({ type: "UPDATE_DATA", blockId: selId, data })}
-                    canEditValues={canValues}
-                    canEditStructure={canStruct}
-                  />
-                );
-              }
-              return null;
-            })()}
+            {dataEditor}
 
             <div style={{ marginTop: "4px", padding: "5px 7px", background: TK.c.bgSurf, borderRadius: "3px", fontSize: "7px", fontFamily: TK.font.data, color: TK.c.txtM, lineHeight: 1.6 }}>
               <span style={{ color: TK.c.txtS }}>TYPE</span> {selB.type} <span style={{ color: TK.c.txtS }}>STATUS</span> {selR.status}<br />
