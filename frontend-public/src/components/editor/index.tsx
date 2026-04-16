@@ -1,14 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'react';
-import type { CanonicalDocument } from './types';
+import type { EditorMode, QAMode, LeftTab } from './types';
 import { TK } from './config/tokens';
 import { PALETTES } from './config/palettes';
 import { BGS } from './config/backgrounds';
 import { SIZES } from './config/sizes';
 import { BREG } from './registry/blocks';
-import { TPLS } from './registry/templates';
-import { validateImport } from './registry/guards';
+import { validateImport, migrateDoc } from './registry/guards';
 import { reducer, initState } from './store/reducer';
 import { PERMS } from './store/permissions';
 import { renderDoc } from './renderer/engine';
@@ -22,10 +21,10 @@ import { QAPanel } from './components/QAPanel';
 export default function InfographicEditor() {
   const cvs = useRef<HTMLCanvasElement>(null);
   const [state, dispatch] = useReducer(reducer, null, initState);
-  const [ltab, setLtab] = useState("templates");
+  const [ltab, setLtab] = useState<LeftTab>("templates");
   const [qaOpen, setQaOpen] = useState(true);
-  const [qaMode, setQaMode] = useState("publish");
-  const [mode, setMode] = useState("design");
+  const [qaMode, setQaMode] = useState<QAMode>("publish");
+  const [mode, setMode] = useState<EditorMode>("design");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { doc, selectedBlockId: selId, undoStack, redoStack, dirty } = state;
@@ -44,28 +43,29 @@ export default function InfographicEditor() {
   const render = useCallback(() => {
     const c = cvs.current;
     if (!c) return;
-    c.width = sz.w * 2;
-    c.height = sz.h * 2;
+    const dpr = window.devicePixelRatio || 2;
+    c.width = sz.w * dpr;
+    c.height = sz.h * dpr;
     c.style.width = "100%";
     c.style.height = "auto";
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    ctx.setTransform(2, 0, 0, 2, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     (BGS[doc.page.background] || BGS.solid_dark).r(ctx, sz.w, sz.h, pal);
     renderDoc(ctx, doc, sz.w, sz.h, pal);
   }, [doc, pal, sz]);
   useEffect(() => { render(); }, [render]);
 
-  const saveDraft = useCallback(() => { if (!dirty) return; dispatch({ type: "SAVED" }); }, [dirty]);
+  const markSaved = useCallback(() => { if (!dirty) return; dispatch({ type: "SAVED" }); }, [dirty]);
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); dispatch({ type: "UNDO" }); }
       if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) { e.preventDefault(); dispatch({ type: "REDO" }); }
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); saveDraft(); }
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); markSaved(); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [saveDraft]);
+  }, [markSaved]);
 
   const exportJSON = () => {
     const bl = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
@@ -80,10 +80,11 @@ export default function InfographicEditor() {
     const r = new FileReader();
     r.onload = ev => {
       try {
-        const p = JSON.parse(ev.target?.result as string) as CanonicalDocument;
-        const err = validateImport(p);
+        const raw = JSON.parse(ev.target?.result as string);
+        const migrated = migrateDoc(raw);
+        const err = validateImport(migrated);
         if (err) { alert(`Import error: ${err}`); return; }
-        dispatch({ type: "IMPORT", doc: p });
+        dispatch({ type: "IMPORT", doc: migrated });
       } catch { alert("Invalid JSON"); }
     };
     r.readAsText(f);
@@ -101,7 +102,7 @@ export default function InfographicEditor() {
   const canEdit = (reg: typeof selR, k: string) => reg ? perms.editBlock(reg, k) : false;
 
   return (
-    <div style={{ fontFamily: TK.font.body, background: TK.c.bgApp, color: TK.c.txtP, height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ fontFamily: TK.font.body, background: TK.c.bgApp, color: TK.c.txtP, height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <TopBar
         doc={doc}
         dispatch={dispatch}
@@ -117,7 +118,7 @@ export default function InfographicEditor() {
         fileRef={fileRef}
         importJSON={importJSON}
         exportJSON={exportJSON}
-        saveDraft={saveDraft}
+        markSaved={markSaved}
         exportPNG={exportPNG}
       />
 

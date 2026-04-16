@@ -1,13 +1,15 @@
 'use client';
 
 import React from 'react';
+import type { Direction } from '../../types';
 import { TK } from '../../config/tokens';
 
 interface KPIItem {
   label: string;
   value: string;
   delta: string;
-  direction: string;
+  direction: Direction;
+  _id?: string;
 }
 
 interface KPIItemsEditorProps {
@@ -23,7 +25,7 @@ export function KPIItemsEditor({ items, onChange, editable }: KPIItemsEditorProp
     <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
       <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase" }}>KPI CARDS ({items.length})</div>
       {items.map((it, i) => (
-        <div key={i} style={{ padding: "4px", border: `1px solid ${TK.c.brd}`, borderRadius: "3px", marginBottom: "3px" }}>
+        <div key={it._id || i} style={{ padding: "4px", border: `1px solid ${TK.c.brd}`, borderRadius: "3px", marginBottom: "3px" }}>
           <input value={it.label} onChange={e => editable && upd(i, "label", e.target.value)} placeholder="Label" style={{ ...sty, width: "100%", marginBottom: "2px" }} disabled={!editable} />
           <div style={{ display: "flex", gap: "2px" }}>
             <input value={it.value} onChange={e => editable && upd(i, "value", e.target.value)} placeholder="Value" style={{ ...sty, flex: 1 }} disabled={!editable} />

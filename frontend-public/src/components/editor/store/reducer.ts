@@ -1,7 +1,6 @@
 import type { EditorState, EditorAction, CanonicalDocument } from '../types';
 import { BREG } from '../registry/blocks';
 import { TPLS, mkDoc } from '../registry/templates';
-import { validateImport, migrateDoc } from '../registry/guards';
 
 export const MAX_UNDO = 50;
 
@@ -41,12 +40,11 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       const { tid } = action;
       const t = TPLS[tid];
       if (!t) return state;
-      return { ...state, doc: mkDoc(tid, t, t.overrides), undoStack: [...state.undoStack, state.doc].slice(-MAX_UNDO), redoStack: [], selectedBlockId: null, dirty: true };
+      return { ...state, doc: mkDoc(tid, t), undoStack: [...state.undoStack, state.doc].slice(-MAX_UNDO), redoStack: [], selectedBlockId: null, dirty: true };
     }
     case "IMPORT": {
-      const err = validateImport(action.doc);
-      if (err) { console.error("Import validation:", err); return state; }
-      return { ...state, doc: migrateDoc(action.doc), undoStack: [], redoStack: [], selectedBlockId: null, dirty: false };
+      // Caller (index.tsx) is responsible for migrateDoc + validateImport before dispatching
+      return { ...state, doc: action.doc, undoStack: [], redoStack: [], selectedBlockId: null, dirty: false };
     }
     case "UNDO": {
       if (!state.undoStack.length) return state;

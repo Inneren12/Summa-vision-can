@@ -11,20 +11,32 @@ export const SECTION_LAYOUT: Record<string, (w: number, h: number, s: number, p:
 };
 
 export function renderDoc(ctx: CanvasRenderingContext2D, doc: CanonicalDocument, w: number, h: number, pal: Palette): void {
-  const s = w / 1080, pad = 64 * s;
+  const s = w / 1080;
+  const pad = 64 * s;
   ctx.fillStyle = TK.c.acc;
   ctx.fillRect(0, 0, w, 4 * s);
+
   doc.sections.forEach(sec => {
-    const lf = SECTION_LAYOUT[sec.type];
-    if (!lf) return;
-    const la = lf(w, h, s, pad);
+    const layoutFn = SECTION_LAYOUT[sec.type];
+    if (!layoutFn) return;
+    const la = layoutFn(w, h, s, pad);
     let cy = 0;
+
+    // Clip to section bounds to prevent overflow
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(la.x, la.y, la.w, la.h);
+    ctx.clip();
+
     sec.blockIds.forEach(bid => {
-      const b = doc.blocks[bid];
-      if (!b || !b.visible) return;
-      const fn = BR[b.type];
+      const block = doc.blocks[bid];
+      if (!block || !block.visible) return;
+      const fn = BR[block.type];
       if (!fn) return;
-      cy += fn(ctx, b.props, la.x, la.y + cy, la.w, la.h, pal, s);
+      const consumed = fn(ctx, block.props, la.x, la.y + cy, la.w, la.h - cy, pal, s);
+      cy += consumed;
     });
+
+    ctx.restore(); // remove clip
   });
 }

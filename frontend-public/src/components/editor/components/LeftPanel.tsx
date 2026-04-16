@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import type { CanonicalDocument, EditorAction, PermissionSet, BlockRegistryEntry } from '../types';
+import React, { useMemo } from 'react';
+import type { CanonicalDocument, EditorAction, PermissionSet, BlockRegistryEntry, LeftTab, TemplateEntry } from '../types';
 import { TK } from '../config/tokens';
 import { PALETTES } from '../config/palettes';
 import { BGS } from '../config/backgrounds';
@@ -13,8 +13,8 @@ interface LeftPanelProps {
   doc: CanonicalDocument;
   dispatch: React.Dispatch<EditorAction>;
   selId: string | null;
-  ltab: string;
-  setLtab: (t: string) => void;
+  ltab: LeftTab;
+  setLtab: (t: LeftTab) => void;
   perms: PermissionSet;
 }
 
@@ -27,8 +27,14 @@ function badge(st: string) {
 const tb = (a: boolean): React.CSSProperties => ({ padding: "5px 7px", fontSize: "8px", fontFamily: TK.font.data, textTransform: "uppercase", letterSpacing: "0.4px", cursor: "pointer", background: a ? TK.c.bgAct : "transparent", color: a ? TK.c.acc : TK.c.txtM, border: "none", borderBottom: a ? `2px solid ${TK.c.acc}` : "2px solid transparent", whiteSpace: "nowrap" });
 
 export function LeftPanel({ doc, dispatch, selId, ltab, setLtab, perms }: LeftPanelProps) {
-  const fams: Record<string, Array<{ id: string } & typeof TPLS[string]>> = {};
-  Object.entries(TPLS).forEach(([id, t]) => { if (!fams[t.fam]) fams[t.fam] = []; fams[t.fam].push({ id, ...t }); });
+  const fams = useMemo(() => {
+    const result: Record<string, Array<{ id: string } & TemplateEntry>> = {};
+    Object.entries(TPLS).forEach(([id, t]) => {
+      if (!result[t.fam]) result[t.fam] = [];
+      result[t.fam].push({ id, ...t });
+    });
+    return result;
+  }, []); // TPLS is static, never changes
 
   const canToggle = (reg: BlockRegistryEntry) => perms.toggleVisibility(reg);
 
@@ -53,7 +59,9 @@ export function LeftPanel({ doc, dispatch, selId, ltab, setLtab, perms }: LeftPa
             {sec.blockIds.map(bid => {
               const b = doc.blocks[bid];
               if (!b) return null;
-              const r = BREG[b.type], bd = badge(r.status);
+              const r = BREG[b.type];
+              if (!r) return null;
+              const bd = badge(r.status);
               return (
                 <div key={bid} style={{ display: "flex", alignItems: "center", gap: "3px", marginBottom: "1px" }}>
                   <button onClick={() => dispatch({ type: "SELECT", blockId: bid })} style={{ flex: 1, display: "flex", alignItems: "center", gap: "4px", textAlign: "left", padding: "4px 6px", fontSize: "9px", background: selId === bid ? TK.c.bgAct : "transparent", border: selId === bid ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: "pointer", color: b.visible ? TK.c.txtP : TK.c.txtM, textDecoration: b.visible ? "none" : "line-through", opacity: b.visible ? 1 : .5 }}>
@@ -77,7 +85,7 @@ export function LeftPanel({ doc, dispatch, selId, ltab, setLtab, perms }: LeftPa
             </div>
             <div>
               <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginBottom: "3px" }}>Size</div>
-              {Object.entries(SIZES).map(([k, v]) => <button key={k} onClick={() => dispatch({ type: "CHANGE_PAGE", key: "size", value: k })} style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.size === k ? TK.c.bgAct : "transparent", border: doc.page.size === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: "pointer", color: TK.c.txtP }}>{v.n} <span style={{ color: TK.c.txtM }}>{v.w}{"\u00D7"}{v.h}</span></button>)}
+              {Object.entries(SIZES).map(([k, v]) => <button key={k} onClick={() => perms.changeSize && dispatch({ type: "CHANGE_PAGE", key: "size", value: k })} disabled={!perms.changeSize} style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.size === k ? TK.c.bgAct : "transparent", border: doc.page.size === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: perms.changeSize ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: perms.changeSize ? 1 : 0.5 }}>{v.n} <span style={{ color: TK.c.txtM }}>{v.w}{"\u00D7"}{v.h}</span></button>)}
             </div>
           </>
         )}

@@ -1,14 +1,14 @@
 'use client';
 
 import React from 'react';
-import type { ValidationResult } from '../types';
+import type { ValidationResult, QAMode } from '../types';
 import { TK } from '../config/tokens';
 
 interface QAPanelProps {
   qaOpen: boolean;
   setQaOpen: (v: boolean) => void;
-  qaMode: string;
-  setQaMode: (m: string) => void;
+  qaMode: QAMode;
+  setQaMode: (m: QAMode) => void;
   vr: ValidationResult;
   dispErr: string[];
   si: string;
@@ -26,7 +26,7 @@ export function QAPanel({ qaOpen, setQaOpen, qaMode, setQaMode, vr, dispErr, si 
       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "3px" }}>
         <span style={{ fontSize: "7px", fontFamily: TK.font.data, color: TK.c.txtS, textTransform: "uppercase" }}>QA</span>
         <div style={{ display: "flex", gap: "1px", background: TK.c.bgApp, borderRadius: "2px", padding: "1px" }}>
-          {["draft", "publish"].map(m => <button key={m} onClick={() => setQaMode(m)} style={{ padding: "1px 6px", fontSize: "7px", fontFamily: TK.font.data, textTransform: "uppercase", background: qaMode === m ? TK.c.bgAct : "transparent", color: qaMode === m ? TK.c.acc : TK.c.txtM, border: "none", borderRadius: "2px", cursor: "pointer" }}>{m}</button>)}
+          {(["draft", "publish"] as const).map(m => <button key={m} onClick={() => setQaMode(m)} style={{ padding: "1px 6px", fontSize: "7px", fontFamily: TK.font.data, textTransform: "uppercase", background: qaMode === m ? TK.c.bgAct : "transparent", color: qaMode === m ? TK.c.acc : TK.c.txtM, border: "none", borderRadius: "2px", cursor: "pointer" }}>{m}</button>)}
         </div>
         <button onClick={() => setQaOpen(false)} style={{ marginLeft: "auto", background: "none", border: "none", color: TK.c.txtM, cursor: "pointer", fontSize: "9px" }}>{"\u2715"}</button>
       </div>

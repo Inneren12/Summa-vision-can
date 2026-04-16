@@ -1,3 +1,13 @@
+export type EditorMode = 'template' | 'design';
+export type QAMode = 'draft' | 'publish';
+export type LeftTab = 'templates' | 'blocks' | 'theme';
+export type Direction = 'positive' | 'negative' | 'neutral';
+export type BrandPosition = 'bottom-left' | 'bottom-right';
+export type TextAlign = 'left' | 'center' | 'right';
+export type WorkflowState = 'draft' | 'in_review' | 'approved' | 'exported' | 'published';
+export type BlockStatus = 'required_locked' | 'required_editable' | 'optional_default' | 'optional_available';
+export type BlockCategory = 'text' | 'data' | 'chart' | 'struct';
+
 export interface BlockProps {
   [key: string]: any;
 }
@@ -40,7 +50,7 @@ export interface CanonicalDocument {
   page: PageConfig;
   sections: Section[];
   blocks: Record<string, Block>;
-  workflow: 'draft' | 'in_review' | 'approved' | 'exported' | 'published';
+  workflow: WorkflowState;
   meta: DocMeta;
 }
 
@@ -53,9 +63,9 @@ export interface ControlDef {
 }
 
 export interface BlockRegistryEntry {
-  cat: string;
+  cat: BlockCategory;
   name: string;
-  status: string;
+  status: BlockStatus;
   allowedSections: string[];
   maxPerSection: number;
   dp: BlockProps;

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { Block, BlockRegistryEntry, EditorAction } from '../types';
+import type { Block, BlockRegistryEntry, EditorAction, EditorMode } from '../types';
 import { TK } from '../config/tokens';
 import { BarItemsEditor } from './data-editors/BarItemsEditor';
 import { KPIItemsEditor } from './data-editors/KPIItemsEditor';
@@ -11,7 +11,7 @@ interface InspectorProps {
   selB: Block | null;
   selR: BlockRegistryEntry | null;
   selId: string | null;
-  mode: string;
+  mode: EditorMode;
   canEdit: (reg: BlockRegistryEntry, k: string) => boolean;
   dispatch: React.Dispatch<EditorAction>;
 }
@@ -33,10 +33,11 @@ export function Inspector({ selB, selR, selId, mode, canEdit, dispatch }: Inspec
         {!selB && <div style={{ fontSize: "10px", color: TK.c.txtM, padding: "20px 0", textAlign: "center", lineHeight: 1.6 }}>Select a block<br />from Blocks tab</div>}
         {selB && selR && selId && (
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {(() => { const statusBadge = badge(selR.status); return (
             <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-              {(() => { const b = badge(selR.status); return <span style={{ fontSize: "8px", fontFamily: TK.font.data, color: b.color, padding: "2px 6px", background: TK.c.bgAct, borderRadius: "2px" }}>{b.label}</span>; })()}
+              <span style={{ fontSize: "8px", fontFamily: TK.font.data, color: statusBadge.color, padding: "2px 6px", background: TK.c.bgAct, borderRadius: "2px" }}>{statusBadge.label}</span>
               {!selB.visible && <span style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM }}>HIDDEN</span>}
-            </div>
+            </div>); })()}
 
             {/* Standard controls */}
             {selR.ctrl.map(c => {

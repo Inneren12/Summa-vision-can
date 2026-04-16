@@ -1,6 +1,12 @@
-import type { PermissionSet, BlockRegistryEntry } from '../types';
+import type { PermissionSet, BlockRegistryEntry, EditorMode } from '../types';
 
-export const PERMS: Record<string, PermissionSet> = {
+const CONTENT_KEYS = [
+  "text", "value", "methodology", "label", "direction",
+  "items", "series", "xLabels", "columns", "rows",
+  "benchmarkValue", "benchmarkLabel", "yUnit",
+] as const;
+
+export const PERMS: Record<EditorMode, PermissionSet> = {
   template: {
     switchTemplate: false,
     changePalette: false,
@@ -8,9 +14,8 @@ export const PERMS: Record<string, PermissionSet> = {
     changeSize: true,
     editBlock: (reg: BlockRegistryEntry, key: string): boolean => {
       // Template mode: text/value content always editable, style/structure never
-      const contentKeys = ["text", "value", "methodology", "label", "direction", "items", "series", "xLabels", "columns", "rows"];
       if (reg.status === "required_locked") return ["text", "value", "methodology"].includes(key);
-      return contentKeys.includes(key);
+      return (CONTENT_KEYS as readonly string[]).includes(key);
     },
     toggleVisibility: (reg: BlockRegistryEntry): boolean => reg.status === "optional_default" || reg.status === "optional_available",
   },

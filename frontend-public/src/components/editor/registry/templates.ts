@@ -1,20 +1,36 @@
 import type { CanonicalDocument, TemplateEntry, BlockProps } from '../types';
 import { BREG } from './blocks';
 
-const SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA = 1;
 
 export function mkDoc(tid: string, tpl: TemplateEntry, over: Record<string, BlockProps> = {}): CanonicalDocument {
   const blocks: CanonicalDocument['blocks'] = {};
   let seq = 0;
+  const now = new Date().toISOString();
+
   const sections = tpl.sections.map(sec => {
-    const bids = sec.blockTypes.map(bt => {
+    const blockIds = sec.blockTypes.map(bt => {
       const id = `blk_${String(++seq).padStart(3, "0")}`;
-      blocks[id] = { id, type: bt, props: { ...BREG[bt].dp, ...(over[bt] || {}) }, visible: true };
+      blocks[id] = {
+        id,
+        type: bt,
+        props: { ...BREG[bt].dp, ...(tpl.overrides?.[bt] || {}), ...(over[bt] || {}) },
+        visible: true,
+      };
       return id;
     });
-    return { id: sec.id, type: sec.type, blockIds: bids };
+    return { id: sec.id, type: sec.type, blockIds };
   });
-  return { schemaVersion: SCHEMA_VERSION, templateId: tid, page: { size: tpl.defaultSize || "instagram_1080", background: tpl.defaultBg || "gradient_warm", palette: tpl.defaultPal || "housing" }, sections, blocks, workflow: "draft", meta: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1, history: [] } };
+
+  return {
+    schemaVersion: CURRENT_SCHEMA,
+    templateId: tid,
+    page: { size: tpl.defaultSize || "instagram_1080", background: tpl.defaultBg || "gradient_warm", palette: tpl.defaultPal || "housing" },
+    sections,
+    blocks,
+    workflow: "draft" as const,
+    meta: { createdAt: now, updatedAt: now, version: 1, history: [] },
+  };
 }
 
 export const TPLS: Record<string, TemplateEntry> = {
