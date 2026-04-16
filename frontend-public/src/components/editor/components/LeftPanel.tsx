@@ -40,20 +40,37 @@ const tb = (a: boolean): React.CSSProperties => ({ padding: "5px 7px", fontSize:
 
 export function LeftPanel({ doc, dispatch, selId, ltab, setLtab, perms }: LeftPanelProps) {
   const canToggle = (reg: BlockRegistryEntry) => perms.toggleVisibility(reg);
+  const tabIds = {
+    templates: "left-tab-templates",
+    blocks: "left-tab-blocks",
+    theme: "left-tab-theme",
+  } as const;
+  const panelIds = {
+    templates: "left-panel-templates",
+    blocks: "left-panel-blocks",
+    theme: "left-panel-theme",
+  } as const;
 
   return (
     <div style={{ width: "220px", minWidth: "220px", borderRight: `1px solid ${TK.c.brd}`, display: "flex", flexDirection: "column" }}>
       <div role="tablist" aria-label="Left panel sections" style={{ display: "flex", borderBottom: `1px solid ${TK.c.brd}` }}>
-        {([["templates", "Tpl"], ["blocks", "Blk"], ["theme", "Thm"]] as const).map(([k, l]) => <button type="button" key={k} role="tab" aria-selected={ltab === k} aria-label={`${k} tab`} onClick={() => setLtab(k)} style={tb(ltab === k)}>{l}</button>)}
+        {([["templates", "Tpl"], ["blocks", "Blk"], ["theme", "Thm"]] as const).map(([k, l]) => <button type="button" key={k} id={tabIds[k]} role="tab" aria-selected={ltab === k} aria-controls={panelIds[k]} aria-label={`${k} tab`} onClick={() => setLtab(k)} style={tb(ltab === k)}>{l}</button>)}
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
+      <div
+        id={panelIds[ltab]}
+        role="tabpanel"
+        aria-labelledby={tabIds[ltab]}
+        style={{ flex: 1, overflowY: "auto", padding: "8px" }}
+      >
         {ltab === "templates" && Object.entries(TEMPLATE_FAMILIES).map(([f, ts]) => (
           <div key={f} style={{ marginBottom: "10px" }}>
             <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: "3px" }}>{f}</div>
-            {ts.map(t => <button type="button" key={t.id} onClick={() => perms.switchTemplate && dispatch({ type: "SWITCH_TPL", tid: t.id })} disabled={!perms.switchTemplate} aria-label={`Template ${t.vr} — ${t.desc}`} aria-pressed={doc.templateId === t.id} style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 8px", marginBottom: "2px", background: doc.templateId === t.id ? TK.c.bgAct : TK.c.bgSurf, border: `1px solid ${doc.templateId === t.id ? TK.c.acc + "40" : TK.c.brd}`, borderRadius: "4px", cursor: perms.switchTemplate ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: (!perms.switchTemplate && doc.templateId !== t.id) ? 0.4 : 1 }}>
-              <div style={{ fontSize: "10px", fontWeight: 500 }}>{t.vr}</div>
-              <div style={{ fontSize: "8px", color: TK.c.txtM, marginTop: "1px" }}>{t.desc}</div>
-            </button>)}
+            <div role="radiogroup" aria-label={`${f} templates`}>
+              {ts.map(t => <button type="button" role="radio" key={t.id} onClick={() => perms.switchTemplate && dispatch({ type: "SWITCH_TPL", tid: t.id })} disabled={!perms.switchTemplate} aria-label={`Template ${t.vr} — ${t.desc}`} aria-checked={doc.templateId === t.id} style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 8px", marginBottom: "2px", background: doc.templateId === t.id ? TK.c.bgAct : TK.c.bgSurf, border: `1px solid ${doc.templateId === t.id ? TK.c.acc + "40" : TK.c.brd}`, borderRadius: "4px", cursor: perms.switchTemplate ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: (!perms.switchTemplate && doc.templateId !== t.id) ? 0.4 : 1 }}>
+                <div style={{ fontSize: "10px", fontWeight: 500 }}>{t.vr}</div>
+                <div style={{ fontSize: "8px", color: TK.c.txtM, marginTop: "1px" }}>{t.desc}</div>
+              </button>)}
+            </div>
           </div>
         ))}
         {ltab === "blocks" && doc.sections.map(sec => (

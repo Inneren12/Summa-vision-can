@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import type { SeriesItem, SeriesRole } from '../../types';
 import { isSeriesRole } from '../../types';
 import { TK } from '../../config/tokens';
@@ -18,18 +18,10 @@ interface LineSeriesEditorProps {
 }
 
 export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, canEditStructure }: LineSeriesEditorProps) {
-  // Backfill _id for series loaded from legacy docs that lack one. Drafts key
-  // off _id so mid-edit state survives row removal/reorder (index-keyed drafts
-  // would stick to the wrong row after mutation).
-  const seriesWithIds = useMemo(
-    () => series.map(s => (s._id ? s : { ...s, _id: makeId() })),
-    [series],
-  );
-
   const [seriesDrafts, setSeriesDrafts] = useState<Record<string, string>>({});
 
   const updSeries = <K extends keyof SeriesItem>(idx: number, key: K, val: SeriesItem[K]) => {
-    const next = [...seriesWithIds];
+    const next = [...series];
     next[idx] = { ...next[idx], [key]: val };
     onChange({ series: next, xLabels });
   };
@@ -40,7 +32,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
     if (newLabels.length === 0) return;
 
     // Auto-sync: truncate or pad each series.data to match newLabels.length
-    const syncedSeries = seriesWithIds.map(s => {
+    const syncedSeries = series.map(s => {
       const data = [...s.data];
       if (data.length < newLabels.length) {
         while (data.length < newLabels.length) data.push(0);
@@ -64,7 +56,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
     const parsed = parts.map(Number);
     if (parsed.some(v => !Number.isFinite(v))) return; // reject NaN/Infinity
 
-    const idx = seriesWithIds.findIndex(s => s._id === id);
+    const idx = series.findIndex(s => s._id === id);
     if (idx >= 0) updSeries(idx, "data", parsed);
   };
 
@@ -80,7 +72,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
     if (!canEditStructure) return;
     const newData = new Array(xLabels.length).fill(0);
     onChange({
-      series: [...seriesWithIds, {
+      series: [...series, {
         label: "New Series",
         role: "secondary" as SeriesRole,
         data: newData,
@@ -92,9 +84,9 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
 
   const removeSeries = (idx: number) => {
     if (!canEditStructure) return;
-    if (seriesWithIds.length <= 1) return; // need at least 1 series
+    if (series.length <= 1) return; // need at least 1 series
     onChange({
-      series: seriesWithIds.filter((_, i) => i !== idx),
+      series: series.filter((_, i) => i !== idx),
       xLabels,
     });
   };
@@ -105,11 +97,11 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
       <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase" }}>X LABELS</div>
       {/* xLabels is structural: template mode can edit series values but not axis shape */}
       <input value={xLabels.join(", ")} onChange={e => updXLabels(e.target.value)} style={{ ...sty, width: "100%" }} disabled={!canEditStructure} title="Comma-separated labels" />
-      <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginTop: "4px" }}>SERIES ({seriesWithIds.length})</div>
-      {seriesWithIds.map((s, i) => (
+      <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginTop: "4px" }}>SERIES ({series.length})</div>
+      {series.map((s, i) => (
         <div key={s._id} style={{ padding: "4px", border: `1px solid ${TK.c.brd}`, borderRadius: "3px", position: "relative" }}>
           {/* Remove button — only in structural-edit mode (Design) */}
-          {canEditStructure && seriesWithIds.length > 1 && (
+          {canEditStructure && series.length > 1 && (
             <button
               type="button"
               onClick={() => removeSeries(i)}
@@ -145,9 +137,9 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
             </select>
           </div>
           <input
-            value={seriesDrafts[s._id!] ?? s.data.join(", ")}
-            onChange={e => updSeriesData(s._id!, e.target.value)}
-            onBlur={() => commitSeriesDraft(s._id!)}
+            value={seriesDrafts[s._id] ?? s.data.join(", ")}
+            onChange={e => updSeriesData(s._id, e.target.value)}
+            onBlur={() => commitSeriesDraft(s._id)}
             style={{ ...sty, width: "100%" }}
             disabled={!canEditValues}
             title="Comma-separated values"

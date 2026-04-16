@@ -12,6 +12,10 @@ function goodDoc() {
   return JSON.parse(JSON.stringify(mkDoc("single_stat_hero", TPLS.single_stat_hero)));
 }
 
+function docForTemplate(tid: keyof typeof TPLS) {
+  return JSON.parse(JSON.stringify(mkDoc(tid, TPLS[tid])));
+}
+
 describe("hydrateImportedDoc", () => {
   test("returns { doc, warnings } with no warnings for a clean input", () => {
     const d = goodDoc();
@@ -86,6 +90,64 @@ describe("hydrateImportedDoc", () => {
     const result = hydrateImportedDoc(d);
     expect(result.doc.schemaVersion).toBe(CURRENT_SCHEMA);
     expect(result.warnings.some(w => /schemaVersion/i.test(w))).toBe(true);
+  });
+
+  test("normalizes deterministic nested _id for legacy bar/line/kpi data", () => {
+    const barDoc: any = docForTemplate("ranked_bar_simple");
+    const lineDoc: any = docForTemplate("line_area");
+    const kpiDoc: any = docForTemplate("single_stat_hero");
+    const barId = Object.keys(barDoc.blocks).find(id => barDoc.blocks[id].type === "bar_horizontal");
+    const lineId = Object.keys(lineDoc.blocks).find(id => lineDoc.blocks[id].type === "line_editorial");
+    const kpiId = Object.keys(kpiDoc.blocks)[0];
+    kpiDoc.blocks[kpiId].type = "comparison_kpi";
+    kpiDoc.blocks[kpiId].props = {
+      items: [
+        { label: "A", value: "1", delta: "+1", direction: "positive" },
+        { label: "B", value: "2", delta: "+2", direction: "neutral" },
+      ],
+    };
+    if (!barId || !lineId || !kpiId) throw new Error("missing fixture blocks");
+    barDoc.blocks[barId].props.items.forEach((it: any) => { delete it._id; });
+    lineDoc.blocks[lineId].props.series.forEach((it: any) => { delete it._id; });
+    kpiDoc.blocks[kpiId].props.items.forEach((it: any) => { delete it._id; });
+
+    const barResult = hydrateImportedDoc(barDoc);
+    const lineResult = hydrateImportedDoc(lineDoc);
+    const kpiResult = hydrateImportedDoc(kpiDoc);
+
+    expect(barResult.doc.blocks[barId].props.items[0]._id).toBe(`${barId}_items_0`);
+    expect(lineResult.doc.blocks[lineId].props.series[0]._id).toBe(`${lineId}_series_0`);
+    expect(kpiResult.doc.blocks[kpiId].props.items[0]._id).toBe(`${kpiId}_items_0`);
+    expect(barResult.warnings.some(w => /missing _id/.test(w))).toBe(true);
+  });
+
+  test("re-importing same legacy JSON keeps deterministic nested ids stable", () => {
+    const d: any = docForTemplate("ranked_bar_simple");
+    const barId = Object.keys(d.blocks).find(id => d.blocks[id].type === "bar_horizontal");
+    if (!barId) throw new Error("missing bar block");
+    d.blocks[barId].props.items.forEach((it: any) => { delete it._id; });
+
+    const first = hydrateImportedDoc(JSON.parse(JSON.stringify(d)));
+    const second = hydrateImportedDoc(JSON.parse(JSON.stringify(d)));
+
+    const firstIds = first.doc.blocks[barId].props.items.map((it: any) => it._id);
+    const secondIds = second.doc.blocks[barId].props.items.map((it: any) => it._id);
+    expect(firstIds).toEqual(secondIds);
+  });
+
+  test("normalizes malformed scalar props and emits warnings", () => {
+    const d: any = docForTemplate("ranked_bar_simple");
+    const barId = Object.keys(d.blocks).find(id => d.blocks[id].type === "bar_horizontal");
+    if (!barId) throw new Error("missing bar block");
+    d.blocks[barId].props.showBenchmark = "yes";
+    d.blocks[barId].props.benchmarkValue = "5";
+
+    const result = hydrateImportedDoc(d);
+
+    expect(result.doc.blocks[barId].props.showBenchmark).toBe(true);
+    expect(result.doc.blocks[barId].props.benchmarkValue).toBe(5);
+    expect(result.warnings.some(w => /showBenchmark expected boolean/.test(w))).toBe(true);
+    expect(result.warnings.some(w => /benchmarkValue expected finite number/.test(w))).toBe(true);
   });
 });
 

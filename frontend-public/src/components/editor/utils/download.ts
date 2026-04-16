@@ -6,7 +6,13 @@
  * download commit before we free the blob.
  */
 export function deferRevoke(url: string): void {
-  requestAnimationFrame(() => {
+  const revoke = () => {
     setTimeout(() => URL.revokeObjectURL(url), 100);
-  });
+  };
+  const raf = typeof window !== "undefined" ? window.requestAnimationFrame : undefined;
+  if (typeof raf === "function") {
+    raf(revoke);
+    return;
+  }
+  setTimeout(revoke, 0);
 }
