@@ -1,15 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
+import type { SeriesItem, SeriesRole } from '../../types';
 import { TK } from '../../config/tokens';
 import { makeId } from '../../utils/ids';
-
-interface SeriesItem {
-  label: string;
-  data: number[];
-  role: string;
-  _id?: string;
-}
 
 interface LineSeriesEditorProps {
   series: SeriesItem[];
@@ -78,7 +72,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
     onChange({
       series: [...series, {
         label: "New Series",
-        role: "secondary",
+        role: "secondary" as SeriesRole,
         data: newData,
         _id: makeId(),
       }],
@@ -107,6 +101,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
           {/* Remove button — only in structural-edit mode (Design) */}
           {canEditStructure && series.length > 1 && (
             <button
+              type="button"
               onClick={() => removeSeries(i)}
               style={{
                 position: "absolute",
@@ -124,7 +119,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
           )}
           <div style={{ display: "flex", gap: "2px", marginBottom: "2px" }}>
             <input value={s.label} onChange={e => canEditValues && updSeries(i, "label", e.target.value)} style={{ ...sty, flex: 1 }} disabled={!canEditValues} placeholder="Series name" />
-            <select value={s.role} onChange={e => canEditValues && updSeries(i, "role", e.target.value)} style={{ ...sty, width: "70px" }} disabled={!canEditValues}>
+            <select value={s.role} onChange={e => canEditValues && updSeries(i, "role", e.target.value as SeriesRole)} style={{ ...sty, width: "70px" }} disabled={!canEditValues}>
               <option value="primary">Primary</option><option value="benchmark">Benchmark</option><option value="secondary">Secondary</option>
             </select>
           </div>
@@ -141,6 +136,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
       {/* Add button — only in structural-edit mode (Design) */}
       {canEditStructure && (
         <button
+          type="button"
           onClick={addSeries}
           style={{
             fontSize: "8px",

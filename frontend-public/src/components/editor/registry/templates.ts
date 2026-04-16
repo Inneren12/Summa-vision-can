@@ -9,11 +9,17 @@ export function mkDoc(tid: string, tpl: TemplateEntry, over: Record<string, Bloc
 
   const sections = tpl.sections.map(sec => {
     const blockIds = sec.blockTypes.map(bt => {
+      const reg = BREG[bt];
+      if (!reg) {
+        // Surface template config errors at construction time instead of
+        // crashing cryptically later when the renderer tries to read props.
+        throw new Error(`Unknown block type "${bt}" referenced in template "${tid}"`);
+      }
       const id = `blk_${String(++seq).padStart(3, "0")}`;
       blocks[id] = {
         id,
         type: bt,
-        props: { ...BREG[bt].dp, ...(tpl.overrides?.[bt] || {}), ...(over[bt] || {}) },
+        props: { ...reg.dp, ...(tpl.overrides?.[bt] || {}), ...(over[bt] || {}) },
         visible: true,
       };
       return id;

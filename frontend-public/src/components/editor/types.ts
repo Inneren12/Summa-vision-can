@@ -159,3 +159,20 @@ export interface KPIItem {
   direction: Direction;
   _id?: string;
 }
+
+export type SeriesRole = 'primary' | 'benchmark' | 'secondary';
+
+export interface SeriesItem {
+  label: string;
+  role: SeriesRole;
+  data: number[];
+  _id?: string;
+}
+
+export interface BarItem {
+  label: string;
+  value: number;
+  flag: string;
+  highlight: boolean;
+  _id?: string;
+}

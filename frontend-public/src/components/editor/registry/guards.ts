@@ -4,6 +4,17 @@ import { BREG } from './blocks';
 export const SUPPORTED_SCHEMA_VERSIONS = [1] as const;
 export const CURRENT_SCHEMA = 1;
 
+const VALID_WORKFLOW_STATES: WorkflowState[] = [
+  "draft", "in_review", "approved", "exported", "published",
+];
+
+function normalizeWorkflow(raw: unknown): WorkflowState {
+  if (typeof raw === "string" && VALID_WORKFLOW_STATES.includes(raw as WorkflowState)) {
+    return raw as WorkflowState;
+  }
+  return "draft";
+}
+
 export function validateImport(doc: unknown): string | null {
   // Phase 1: Shape
   if (!doc || typeof doc !== "object") return "Not an object";
@@ -196,7 +207,7 @@ export function hydrateImportedDoc(raw: any): CanonicalDocument {
       blockIds: Array.isArray(sec.blockIds) ? sec.blockIds.map(String) : [],
     })) : [],
     blocks: {},
-    workflow: typeof raw.workflow === "string" ? (raw.workflow as WorkflowState) : "draft",
+    workflow: normalizeWorkflow(raw.workflow),
     meta: {
       createdAt: raw.meta?.createdAt ?? now,
       updatedAt: raw.meta?.updatedAt ?? now,
