@@ -46,7 +46,7 @@ export function KPIItemsEditor({ items, onChange, canEditValues, canEditStructur
     <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
       <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase" }}>KPI CARDS ({items.length})</div>
       {items.map((it, i) => (
-        <div key={it._id || i} style={{ padding: "4px", border: `1px solid ${TK.c.brd}`, borderRadius: "3px", marginBottom: "3px", position: "relative" }}>
+        <div key={it._id} style={{ padding: "4px", border: `1px solid ${TK.c.brd}`, borderRadius: "3px", marginBottom: "3px", position: "relative" }}>
           {/* Remove button — only in structural-edit mode (Design) */}
           {canEditStructure && items.length > 2 && (
             <button

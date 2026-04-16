@@ -1,6 +1,7 @@
 import type { CanonicalDocument, TemplateEntry, BlockProps } from '../types';
 import { BREG } from './blocks';
 import { CURRENT_SCHEMA } from './guards';
+import { normalizeBlockData } from '../validation/block-data';
 
 export function mkDoc(tid: string, tpl: TemplateEntry, over: Record<string, BlockProps> = {}): CanonicalDocument {
   const blocks: CanonicalDocument['blocks'] = {};
@@ -16,10 +17,12 @@ export function mkDoc(tid: string, tpl: TemplateEntry, over: Record<string, Bloc
         throw new Error(`Unknown block type "${bt}" referenced in template "${tid}"`);
       }
       const id = `blk_${String(++seq).padStart(3, "0")}`;
+      const rawProps = { ...reg.dp, ...(tpl.overrides?.[bt] || {}), ...(over[bt] || {}) };
+      const normalized = normalizeBlockData(bt, rawProps, id);
       blocks[id] = {
         id,
         type: bt,
-        props: { ...reg.dp, ...(tpl.overrides?.[bt] || {}), ...(over[bt] || {}) },
+        props: normalized.props,
         visible: true,
       };
       return id;

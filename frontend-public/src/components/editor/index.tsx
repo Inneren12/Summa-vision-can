@@ -13,6 +13,7 @@ import { PERMS } from './store/permissions';
 import { renderDoc } from './renderer/engine';
 import { validate } from './validation/validate';
 import { deferRevoke } from './utils/download';
+import { shouldSkipGlobalShortcut } from './utils/shortcuts';
 import { TopBar } from './components/TopBar';
 import { LeftPanel } from './components/LeftPanel';
 import { Canvas } from './components/Canvas';
@@ -25,6 +26,8 @@ export default function InfographicEditor() {
   const [ltab, setLtab] = useState<LeftTab>("templates");
   const [qaOpen, setQaOpen] = useState(true);
   const [qaMode, setQaMode] = useState<QAMode>("publish");
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [importError, setImportError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { doc, selectedBlockId: selId, undoStack, redoStack, dirty, mode } = state;
@@ -85,13 +88,7 @@ export default function InfographicEditor() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName;
-      const isEditable =
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        tag === "SELECT" ||
-        target?.isContentEditable === true;
+      const isEditable = shouldSkipGlobalShortcut(e);
 
       // Inside editable fields: only Ctrl+S still fires (save is always useful).
       // Undo/redo fall through to native behavior in text inputs.
@@ -132,26 +129,26 @@ export default function InfographicEditor() {
         try {
           raw = JSON.parse(ev.target?.result as string);
         } catch {
-          alert("Invalid JSON file");
+          setImportError("Invalid JSON file");
+          setImportWarnings([]);
           return;
         }
         let result;
         try {
           result = hydrateImportedDoc(raw);
         } catch (hydrationErr: any) {
-          alert(`Import error: ${hydrationErr?.message ?? "hydration failed"}`);
+          setImportError(`Import error: ${hydrationErr?.message ?? "hydration failed"}`);
+          setImportWarnings([]);
           return;
         }
         const err = validateImport(result.doc);
         if (err) {
-          alert(`Import error: ${err}`);
+          setImportError(`Import error: ${err}`);
+          setImportWarnings(result.warnings);
           return;
         }
-        // Surface what the hydrator had to normalize so the user knows their
-        // document was modified on import, not silently mutated.
-        if (result.warnings.length > 0) {
-          alert(`Imported with warnings:\n\n\u2022 ${result.warnings.join("\n\u2022 ")}`);
-        }
+        setImportError(null);
+        setImportWarnings(result.warnings);
         dispatch({ type: "IMPORT", doc: result.doc });
       } finally {
         // Reset so re-selecting the same file re-fires change event
@@ -215,6 +212,45 @@ export default function InfographicEditor() {
         markSaved={markSavedAndBackup}
         exportPNG={exportPNG}
       />
+      {(importError || importWarnings.length > 0) && (
+        <div
+          role={importError ? "alert" : "status"}
+          aria-live="polite"
+          style={{
+            borderBottom: `1px solid ${TK.c.brd}`,
+            background: importError ? `${TK.c.err}14` : `${TK.c.acc}14`,
+            color: importError ? TK.c.err : TK.c.txtP,
+            padding: "6px 12px",
+            display: "flex",
+            gap: "8px",
+            alignItems: "flex-start",
+          }}
+        >
+          <div style={{ fontSize: "8px", fontFamily: TK.font.data, textTransform: "uppercase", minWidth: "90px" }}>
+            {importError ? "Import error" : "Import warnings"}
+          </div>
+          <div style={{ fontSize: "9px", lineHeight: 1.4, flex: 1 }}>
+            {importError && <div>{importError}</div>}
+            {importWarnings.length > 0 && (
+              <ul style={{ margin: 0, paddingLeft: "16px" }}>
+                {importWarnings.map((w, i) => <li key={`${w}_${i}`}>{w}</li>)}
+              </ul>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setImportError(null);
+              setImportWarnings([]);
+            }}
+            style={{ background: "none", border: "none", color: TK.c.txtM, cursor: "pointer", fontSize: "10px", padding: 0 }}
+            aria-label="Dismiss import notices"
+            title="Dismiss import notices"
+          >
+            {"\u2715"}
+          </button>
+        </div>
+      )}
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <LeftPanel

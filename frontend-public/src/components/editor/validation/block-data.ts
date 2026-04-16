@@ -11,11 +11,22 @@ import { SERIES_ROLES } from '../types';
  * Keeping the rules here, rather than duplicated between registry/blocks.ts
  * and validation/validate.ts, means a tightened invariant can't drift between
  * the two layers.
+ *
+ * Validation strictness policy:
+ * - Structural identifiers (label, role, type, country): non-empty string required
+ * - Display-only text (delta, benchmarkLabel, flag, methodology): empty string allowed
+ * - Numeric values (value, data[], rank): finite number required
+ * - Arrays (items, series, xLabels, rows): non-empty, correct length
  */
 
 export interface BlockDataValidation {
   valid: boolean;
   errors: string[];
+}
+
+export interface BlockDataNormalization {
+  props: any;
+  warnings: string[];
 }
 
 const VALID_DIRECTIONS: readonly Direction[] = ["positive", "negative", "neutral"];
@@ -25,6 +36,10 @@ const OK: BlockDataValidation = { valid: true, errors: [] };
 
 function result(errors: string[]): BlockDataValidation {
   return { valid: errors.length === 0, errors };
+}
+
+function deterministicNestedId(blockId: string, key: string, idx: number): string {
+  return `${blockId}_${key}_${idx}`;
 }
 
 export function validateBarHorizontalData(props: any): BlockDataValidation {
@@ -70,8 +85,8 @@ export function validateLineEditorialData(props: any): BlockDataValidation {
   }
   if (props.series.length === 0) errors.push("at least one series required");
   if (props.xLabels.length === 0) errors.push("xLabels cannot be empty");
-  if (!props.xLabels.every((l: any) => typeof l === "string")) {
-    errors.push("all xLabels must be strings");
+  if (!props.xLabels.every((l: any) => typeof l === "string" && l.trim() !== "")) {
+    errors.push("all xLabels must be non-empty strings");
   }
 
   props.series.forEach((s: any, i: number) => {
@@ -195,4 +210,60 @@ export function validateBlockData(type: string, props: any): BlockDataValidation
     case "small_multiple": return validateSmallMultipleData(props);
     default: return OK;
   }
+}
+
+/**
+ * Normalize nested structured data that requires stable identity for editor
+ * draft state. Deterministic IDs are derived from block id + array key + index
+ * so repeated imports of the same legacy JSON are stable.
+ * NOTE: table_enriched.rows and small_multiple.items are not currently edited
+ * via row-level draft inputs keyed by item id, so they intentionally do not
+ * receive synthesized `_id` fields.
+ */
+export function normalizeBlockData(
+  type: string,
+  props: any,
+  blockId: string,
+): BlockDataNormalization {
+  if (!props || typeof props !== "object") {
+    return { props, warnings: [] };
+  }
+
+  if (type === "bar_horizontal" && Array.isArray(props.items)) {
+    const warnings: string[] = [];
+    const items = props.items.map((it: any, idx: number) => {
+      if (it && typeof it === "object" && typeof it._id === "string" && it._id.trim()) {
+        return it;
+      }
+      warnings.push(`bar_horizontal.items[${idx}] missing _id — assigned deterministic id`);
+      return { ...it, _id: deterministicNestedId(blockId, "items", idx) };
+    });
+    return { props: { ...props, items }, warnings };
+  }
+
+  if (type === "line_editorial" && Array.isArray(props.series)) {
+    const warnings: string[] = [];
+    const series = props.series.map((it: any, idx: number) => {
+      if (it && typeof it === "object" && typeof it._id === "string" && it._id.trim()) {
+        return it;
+      }
+      warnings.push(`line_editorial.series[${idx}] missing _id — assigned deterministic id`);
+      return { ...it, _id: deterministicNestedId(blockId, "series", idx) };
+    });
+    return { props: { ...props, series }, warnings };
+  }
+
+  if (type === "comparison_kpi" && Array.isArray(props.items)) {
+    const warnings: string[] = [];
+    const items = props.items.map((it: any, idx: number) => {
+      if (it && typeof it === "object" && typeof it._id === "string" && it._id.trim()) {
+        return it;
+      }
+      warnings.push(`comparison_kpi.items[${idx}] missing _id — assigned deterministic id`);
+      return { ...it, _id: deterministicNestedId(blockId, "items", idx) };
+    });
+    return { props: { ...props, items }, warnings };
+  }
+
+  return { props, warnings: [] };
 }

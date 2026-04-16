@@ -1,5 +1,6 @@
 import type { CanonicalDocument, WorkflowState } from '../types';
 import { BREG } from './blocks';
+import { validateBlockData, normalizeBlockData } from '../validation/block-data';
 
 export const SUPPORTED_SCHEMA_VERSIONS = [1] as const;
 export const CURRENT_SCHEMA = 1;
@@ -80,6 +81,10 @@ export function validateImport(doc: unknown): string | null {
     const reg = BREG[b.type];
     if (!reg) return `Unknown block type: "${b.type}" (${id})`;
     if (reg.guard && !reg.guard(b.props)) return `Invalid props for ${b.type} (${id})`;
+    const blockDataValidation = validateBlockData(b.type, b.props);
+    if (!blockDataValidation.valid) {
+      return `Invalid props for ${b.type} (${id}): ${blockDataValidation.errors.join("; ")}`;
+    }
 
     // O(1) section-type lookup (built in Phase 2)
     const parentSecType = blockToSectionType.get(id);
@@ -133,13 +138,23 @@ export function validateImport(doc: unknown): string | null {
  * Unknown keys are dropped; type-mismatched values are replaced with defaults.
  * Ensures hydrated blocks never carry string-when-boolean or NaN-when-number values.
  */
-function sanitizeBlockProps(type: string, rawProps: any): Record<string, any> {
+function sanitizeBlockProps(
+  type: string,
+  blockId: string,
+  rawProps: any,
+  warnings: string[],
+): Record<string, any> {
   const reg = BREG[type];
   if (!reg) return rawProps || {};
   const defaults = reg.dp || {};
   const result: Record<string, any> = { ...defaults };
 
-  if (!rawProps || typeof rawProps !== "object") return result;
+  if (!rawProps || typeof rawProps !== "object") {
+    warnings.push(`Block "${blockId}" (${type}) props were malformed — replaced with defaults`);
+    const normalized = normalizeBlockData(type, result, blockId);
+    warnings.push(...normalized.warnings.map(w => `Block "${blockId}" (${type}): ${w}`));
+    return normalized.props;
+  }
 
   // For each default key, coerce raw value to match default's type
   for (const [key, defaultVal] of Object.entries(defaults)) {
@@ -148,19 +163,34 @@ function sanitizeBlockProps(type: string, rawProps: any): Record<string, any> {
 
     if (Array.isArray(defaultVal)) {
       // Keep array as-is if it's an array, else use default
+      if (!Array.isArray(rawVal)) {
+        warnings.push(`Block "${blockId}" (${type}).${key} expected array — defaulted`);
+      }
       result[key] = Array.isArray(rawVal) ? rawVal : defaultVal;
       continue;
     }
 
     const defaultType = typeof defaultVal;
     if (defaultType === "boolean") {
+      if (typeof rawVal !== "boolean") {
+        warnings.push(`Block "${blockId}" (${type}).${key} expected boolean — defaulted`);
+      }
       result[key] = typeof rawVal === "boolean" ? rawVal : defaultVal;
     } else if (defaultType === "number") {
+      if (!(typeof rawVal === "number" && Number.isFinite(rawVal))) {
+        warnings.push(`Block "${blockId}" (${type}).${key} expected finite number — defaulted`);
+      }
       result[key] = typeof rawVal === "number" && Number.isFinite(rawVal) ? rawVal : defaultVal;
     } else if (defaultType === "string") {
+      if (typeof rawVal !== "string") {
+        warnings.push(`Block "${blockId}" (${type}).${key} expected string — defaulted`);
+      }
       result[key] = typeof rawVal === "string" ? rawVal : defaultVal;
     } else if (defaultType === "object") {
       // Object defaults — pass through if raw is object, else default
+      if (!(rawVal && typeof rawVal === "object")) {
+        warnings.push(`Block "${blockId}" (${type}).${key} expected object — defaulted`);
+      }
       result[key] = rawVal && typeof rawVal === "object" ? rawVal : defaultVal;
     } else {
       result[key] = rawVal;
@@ -168,7 +198,9 @@ function sanitizeBlockProps(type: string, rawProps: any): Record<string, any> {
   }
 
   // Unknown keys (not in defaults) are dropped — strict mode
-  return result;
+  const normalized = normalizeBlockData(type, result, blockId);
+  warnings.push(...normalized.warnings.map(w => `Block "${blockId}" (${type}): ${w}`));
+  return normalized.props;
 }
 
 /**
@@ -267,7 +299,7 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
       doc.blocks[key] = {
         id: key, // FORCE id to match object key — cannot drift out of sync
         type,
-        props: sanitizeBlockProps(type, b.props),
+        props: sanitizeBlockProps(type, key, b.props, warnings),
         visible: typeof b.visible === "boolean" ? b.visible : true,
       };
     }

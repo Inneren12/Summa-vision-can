@@ -157,7 +157,7 @@ export interface KPIItem {
   value: string;
   delta: string;
   direction: Direction;
-  _id?: string;
+  _id: string;
 }
 
 export const SERIES_ROLES = ['primary', 'benchmark', 'secondary'] as const;
@@ -171,7 +171,7 @@ export interface SeriesItem {
   label: string;
   role: SeriesRole;
   data: number[];
-  _id?: string;
+  _id: string;
 }
 
 export interface BarItem {
@@ -179,5 +179,5 @@ export interface BarItem {
   value: number;
   flag: string;
   highlight: boolean;
-  _id?: string;
+  _id: string;
 }
