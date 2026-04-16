@@ -17,7 +17,7 @@ interface QAPanelProps {
 export function QAPanel({ qaOpen, setQaOpen, qaMode, setQaMode, vr, dispErr, si }: QAPanelProps) {
   if (!qaOpen) {
     return (
-      <button onClick={() => setQaOpen(true)} style={{ padding: "2px 12px", borderTop: `1px solid ${TK.c.brd}`, background: TK.c.bgSurf, border: "none", color: TK.c.txtM, cursor: "pointer", fontSize: "7px", fontFamily: TK.font.data, textAlign: "left", flexShrink: 0 }}>{si} QA</button>
+      <button onClick={() => setQaOpen(true)} style={{ padding: "2px 12px", border: 0, borderTop: `1px solid ${TK.c.brd}`, background: TK.c.bgSurf, color: TK.c.txtM, cursor: "pointer", fontSize: "7px", fontFamily: TK.font.data, textAlign: "left", flexShrink: 0 }}>{si} QA</button>
     );
   }
 

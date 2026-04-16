@@ -1,5 +1,6 @@
-import type { CanonicalDocument } from '../types';
+import type { CanonicalDocument, WorkflowState } from '../types';
 import { BREG } from './blocks';
+import { CURRENT_SCHEMA } from './templates';
 
 export function validateImport(doc: unknown): string | null {
   // Phase 1: Shape
@@ -29,9 +30,12 @@ export function validateImport(doc: unknown): string | null {
     if (!allRefIds.has(bid)) return `Orphan block "${bid}" not referenced by any section`;
   }
 
-  // Phase 3: Registry constraints
+  // Phase 3: Registry constraints + explicit block.id uniqueness
+  const seenIds = new Set<string>();
   for (const [id, block] of Object.entries(d.blocks)) {
     const b = block as any;
+    if (seenIds.has(b.id)) return `Duplicate block.id value: "${b.id}"`;
+    seenIds.add(b.id);
     if (b.id !== id) return `Block id mismatch: key="${id}" but block.id="${b.id}"`;
     const reg = BREG[b.type];
     if (!reg) return `Unknown block type: "${b.type}" (${id})`;
@@ -46,33 +50,60 @@ export function validateImport(doc: unknown): string | null {
   return null;
 }
 
-export function migrateDoc(raw: any): CanonicalDocument {
+/**
+ * Hydrates a raw imported document into a structurally complete CanonicalDocument.
+ * Fills defaults for any missing fields, normalizes block structure.
+ * NOTE: This is not a versioned migration pipeline yet. It is structural hydration.
+ * True schema migrations (v1 -> v2 -> v3) will be added here in the future via a MIGRATIONS map.
+ */
+export function hydrateImportedDoc(raw: any): CanonicalDocument {
+  if (!raw || typeof raw !== "object") {
+    throw new Error("Cannot hydrate non-object document");
+  }
+
   const now = new Date().toISOString();
-  const doc = {
-    ...raw,
-    workflow: raw.workflow ?? "draft",
+
+  const doc: CanonicalDocument = {
+    schemaVersion: typeof raw.schemaVersion === "number" ? raw.schemaVersion : CURRENT_SCHEMA,
+    templateId: typeof raw.templateId === "string" ? raw.templateId : "single_stat_hero",
+    page: {
+      size: typeof raw.page?.size === "string" ? raw.page.size : "instagram_1080",
+      background: typeof raw.page?.background === "string" ? raw.page.background : "gradient_warm",
+      palette: typeof raw.page?.palette === "string" ? raw.page.palette : "housing",
+    },
+    sections: Array.isArray(raw.sections) ? raw.sections.map((sec: any) => ({
+      id: String(sec.id || ""),
+      type: String(sec.type || ""),
+      blockIds: Array.isArray(sec.blockIds) ? sec.blockIds.map(String) : [],
+    })) : [],
+    blocks: {},
+    workflow: typeof raw.workflow === "string" ? (raw.workflow as WorkflowState) : "draft",
     meta: {
       createdAt: raw.meta?.createdAt ?? now,
       updatedAt: raw.meta?.updatedAt ?? now,
-      version: raw.meta?.version ?? 1,
+      version: typeof raw.meta?.version === "number" ? raw.meta.version : 1,
       history: Array.isArray(raw.meta?.history) ? [...raw.meta.history] : [],
     },
-    page: {
-      size: raw.page?.size ?? "instagram_1080",
-      background: raw.page?.background ?? "gradient_warm",
-      palette: raw.page?.palette ?? "housing",
-    },
-    blocks: { ...raw.blocks },
   };
 
-  // Per-block: fill missing props from registry defaults
-  for (const [id, block] of Object.entries(doc.blocks)) {
-    const b = block as any;
-    const reg = BREG[b.type];
-    if (!reg) continue;
-    const filledProps = { ...reg.dp, ...b.props };
-    doc.blocks[id] = { ...b, props: filledProps, visible: b.visible ?? true };
+  // Normalize each block: ensure id/type/props/visible exist, fill defaults from registry
+  if (raw.blocks && typeof raw.blocks === "object") {
+    for (const [id, block] of Object.entries(raw.blocks)) {
+      const b = block as any;
+      if (!b || typeof b !== "object") continue;
+      const reg = BREG[b.type];
+      const defaults = reg?.dp || {};
+      doc.blocks[id] = {
+        id: String(b.id ?? id),
+        type: String(b.type ?? ""),
+        props: { ...defaults, ...(b.props || {}) },
+        visible: typeof b.visible === "boolean" ? b.visible : true,
+      };
+    }
   }
 
-  return doc as CanonicalDocument;
+  return doc;
 }
+
+// Keep old name as alias during transition
+export const migrateDoc = hydrateImportedDoc;

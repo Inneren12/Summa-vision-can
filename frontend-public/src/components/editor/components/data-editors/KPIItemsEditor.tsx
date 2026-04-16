@@ -19,7 +19,11 @@ interface KPIItemsEditorProps {
 }
 
 export function KPIItemsEditor({ items, onChange, editable }: KPIItemsEditorProps) {
-  const upd = (idx: number, key: keyof KPIItem, val: string) => { const next = [...items]; next[idx] = { ...next[idx], [key]: val }; onChange(next); };
+  const upd = <K extends keyof KPIItem>(idx: number, key: K, val: KPIItem[K]) => {
+    const next = [...items];
+    next[idx] = { ...next[idx], [key]: val };
+    onChange(next);
+  };
   const sty: React.CSSProperties = { fontSize: "9px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.txtP, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", padding: "3px 5px", outline: "none", boxSizing: "border-box" };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
@@ -30,7 +34,7 @@ export function KPIItemsEditor({ items, onChange, editable }: KPIItemsEditorProp
           <div style={{ display: "flex", gap: "2px" }}>
             <input value={it.value} onChange={e => editable && upd(i, "value", e.target.value)} placeholder="Value" style={{ ...sty, flex: 1 }} disabled={!editable} />
             <input value={it.delta} onChange={e => editable && upd(i, "delta", e.target.value)} placeholder="Delta" style={{ ...sty, flex: 1 }} disabled={!editable} />
-            <select value={it.direction} onChange={e => editable && upd(i, "direction", e.target.value)} style={{ ...sty, width: "50px" }} disabled={!editable}>
+            <select value={it.direction} onChange={e => editable && upd(i, "direction", e.target.value as Direction)} style={{ ...sty, width: "50px" }} disabled={!editable}>
               <option value="positive">{"\u2191"}</option><option value="negative">{"\u2193"}</option><option value="neutral">{"\u2013"}</option>
             </select>
           </div>

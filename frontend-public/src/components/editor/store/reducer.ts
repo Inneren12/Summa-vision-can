@@ -43,7 +43,7 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, doc: mkDoc(tid, t), undoStack: [...state.undoStack, state.doc].slice(-MAX_UNDO), redoStack: [], selectedBlockId: null, dirty: true };
     }
     case "IMPORT": {
-      // Caller (index.tsx) is responsible for migrateDoc + validateImport before dispatching
+      // Caller (index.tsx) is responsible for hydrateImportedDoc + validateImport before dispatching
       return { ...state, doc: action.doc, undoStack: [], redoStack: [], selectedBlockId: null, dirty: false };
     }
     case "UNDO": {

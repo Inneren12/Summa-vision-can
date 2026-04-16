@@ -7,7 +7,7 @@ import { PALETTES } from './config/palettes';
 import { BGS } from './config/backgrounds';
 import { SIZES } from './config/sizes';
 import { BREG } from './registry/blocks';
-import { validateImport, migrateDoc } from './registry/guards';
+import { validateImport, hydrateImportedDoc } from './registry/guards';
 import { reducer, initState } from './store/reducer';
 import { PERMS } from './store/permissions';
 import { renderDoc } from './renderer/engine';
@@ -46,8 +46,6 @@ export default function InfographicEditor() {
     const dpr = window.devicePixelRatio || 2;
     c.width = sz.w * dpr;
     c.height = sz.h * dpr;
-    c.style.width = "100%";
-    c.style.height = "auto";
     const ctx = c.getContext("2d");
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -56,24 +54,43 @@ export default function InfographicEditor() {
   }, [doc, pal, sz]);
   useEffect(() => { render(); }, [render]);
 
-  const markSaved = useCallback(() => { if (!dirty) return; dispatch({ type: "SAVED" }); }, [dirty]);
+  const exportJSON = useCallback(() => {
+    const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `summa-${doc.templateId}-v${doc.meta.version}.json`;
+    a.click();
+    // Revoke URL after click to free memory
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  }, [doc]);
+
+  // TODO: Replace local JSON backup with POST /api/v1/admin/publications
+  // once backend endpoint exists. Current impl serves as temp persistence.
+  const markSavedAndBackup = useCallback(() => {
+    if (!dirty) return;
+    // Save local backup as JSON
+    const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `summa-${doc.templateId}-draft-v${doc.meta.version}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+    // Mark clean
+    dispatch({ type: "SAVED" });
+  }, [dirty, doc]);
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); dispatch({ type: "UNDO" }); }
       if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) { e.preventDefault(); dispatch({ type: "REDO" }); }
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); markSaved(); }
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); markSavedAndBackup(); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [markSaved]);
+  }, [markSavedAndBackup]);
 
-  const exportJSON = () => {
-    const bl = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(bl);
-    a.download = `summa-${doc.templateId}-v${doc.meta.version}.json`;
-    a.click();
-  };
   const importJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -81,23 +98,38 @@ export default function InfographicEditor() {
     r.onload = ev => {
       try {
         const raw = JSON.parse(ev.target?.result as string);
-        const migrated = migrateDoc(raw);
-        const err = validateImport(migrated);
+        const hydrated = hydrateImportedDoc(raw);
+        const err = validateImport(hydrated);
         if (err) { alert(`Import error: ${err}`); return; }
-        dispatch({ type: "IMPORT", doc: migrated });
+        dispatch({ type: "IMPORT", doc: hydrated });
       } catch { alert("Invalid JSON"); }
     };
     r.readAsText(f);
     e.target.value = "";
   };
-  const exportPNG = () => {
-    const c = cvs.current;
-    if (!c) return;
-    const a = document.createElement("a");
-    a.href = c.toDataURL("image/png");
-    a.download = `summa-${doc.templateId}-${doc.page.size}.png`;
-    a.click();
-  };
+
+  const exportPNG = useCallback(() => {
+    // Render to an offscreen canvas at canonical preset size (no DPR scaling)
+    const exportCvs = document.createElement("canvas");
+    exportCvs.width = sz.w;
+    exportCvs.height = sz.h;
+    const ctx = exportCvs.getContext("2d");
+    if (!ctx) return;
+
+    // Render at 1:1 (no DPR transform)
+    const bgFn = BGS[doc.page.background] || BGS.solid_dark;
+    bgFn.r(ctx, sz.w, sz.h, pal);
+    renderDoc(ctx, doc, sz.w, sz.h, pal);
+
+    // Ensure paint is flushed before toDataURL
+    requestAnimationFrame(() => {
+      const dataUrl = exportCvs.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `summa-${doc.templateId}-${doc.page.size}.png`;
+      a.click();
+    });
+  }, [doc, pal, sz]);
 
   const canEdit = (reg: typeof selR, k: string) => reg ? perms.editBlock(reg, k) : false;
 
@@ -118,7 +150,7 @@ export default function InfographicEditor() {
         fileRef={fileRef}
         importJSON={importJSON}
         exportJSON={exportJSON}
-        markSaved={markSaved}
+        markSaved={markSavedAndBackup}
         exportPNG={exportPNG}
       />
 
