@@ -17,116 +17,115 @@ function normalizeWorkflow(raw: unknown): WorkflowState {
 }
 
 export function validateImport(doc: unknown): string | null {
-  // Phase 1: Shape
-  if (!doc || typeof doc !== "object") return "Not an object";
-  const d = doc as any;
-  if (typeof d.schemaVersion !== "number") return "Missing schemaVersion";
-  if (!SUPPORTED_SCHEMA_VERSIONS.includes(d.schemaVersion)) {
-    return `Unsupported schemaVersion: ${d.schemaVersion}. Supported: ${SUPPORTED_SCHEMA_VERSIONS.join(", ")}`;
-  }
-  if (typeof d.templateId !== "string") return "Missing templateId";
-  if (!d.page || typeof d.page !== "object") return "Missing page";
-  if (!d.page.size || !d.page.background || !d.page.palette) return "Incomplete page config";
-  if (!Array.isArray(d.sections)) return "Missing sections array";
-  if (!d.blocks || typeof d.blocks !== "object") return "Missing blocks object";
+  // Phase 1: shape — required top-level fields exist with correct types.
+  const shapeErr = validateDocumentShape(doc);
+  if (shapeErr) return shapeErr;
 
-  // Phase 2: Referential integrity (must be complete BEFORE Phase 3)
+  // Phase 2: references — all blockIds resolve, no duplicates, no orphans.
+  const refErr = validateSectionReferences(doc as CanonicalDocument);
+  if (refErr) return refErr;
+
+  // Phase 3: registry — known block types, guards, slot rules, required blocks.
+  const regErr = validateRegistryConstraints(doc as CanonicalDocument);
+  if (regErr) return regErr;
+
+  return null;
+}
+
+function validateDocumentShape(doc: any): string | null {
+  if (!doc || typeof doc !== "object") return "Not an object";
+  if (typeof doc.schemaVersion !== "number") return "Missing schemaVersion";
+  if (!SUPPORTED_SCHEMA_VERSIONS.includes(doc.schemaVersion)) {
+    return `Unsupported schemaVersion: ${doc.schemaVersion}. Supported: ${SUPPORTED_SCHEMA_VERSIONS.join(", ")}`;
+  }
+
+  if (!doc.templateId || typeof doc.templateId !== "string") return "Missing templateId";
+  if (!doc.page || typeof doc.page !== "object") return "Missing page config";
+  if (!doc.sections || !Array.isArray(doc.sections)) return "Missing sections array";
+  if (!doc.blocks || typeof doc.blocks !== "object" || Array.isArray(doc.blocks)) return "Missing blocks object";
+  if (!doc.meta || typeof doc.meta !== "object") return "Missing meta";
+
+  if (!doc.page.size || !doc.page.background || !doc.page.palette) return "Incomplete page config";
+  if (typeof doc.meta.createdAt !== "string" || typeof doc.meta.updatedAt !== "string") return "Invalid meta timestamps";
+  if (typeof doc.meta.version !== "number" || !Array.isArray(doc.meta.history)) return "Invalid meta version/history";
+
+  if (typeof doc.workflow !== "string" || !VALID_WORKFLOW_STATES.has(doc.workflow as WorkflowState)) {
+    return "Invalid workflow state";
+  }
+
+  return null;
+}
+
+function validateSectionReferences(doc: CanonicalDocument): string | null {
   const allRefIds = new Set<string>();
   const sectionIds = new Set<string>();
-  const blockToSectionType = new Map<string, string>();
 
-  for (const sec of d.sections) {
+  for (const sec of doc.sections) {
     if (!sec.id || !sec.type || !Array.isArray(sec.blockIds)) {
-      return `Invalid section structure: ${JSON.stringify(sec?.id)}`;
+      return `Invalid section: ${sec?.id ?? "unknown"}`;
     }
     if (sectionIds.has(sec.id)) return `Duplicate section id: "${sec.id}"`;
     sectionIds.add(sec.id);
 
     for (const bid of sec.blockIds) {
-      if (typeof bid !== "string") return `Non-string blockId in section "${sec.id}"`;
-      // Every blockId referenced by section must exist in blocks
-      if (!d.blocks[bid]) {
-        return `Section "${sec.id}" references missing block "${bid}"`;
-      }
-      // No duplicate references across sections
-      if (allRefIds.has(bid)) {
-        return `Block "${bid}" is referenced in multiple sections`;
-      }
+      if (typeof bid !== "string") return `Invalid blockId in section "${sec.id}"`;
+      if (!doc.blocks[bid]) return `Section "${sec.id}" references missing block "${bid}"`;
+      if (allRefIds.has(bid)) return `Block "${bid}" referenced in multiple sections`;
       allRefIds.add(bid);
-      blockToSectionType.set(bid, sec.type);
     }
   }
 
-  // Orphan check: every block in doc.blocks must be referenced by some section
-  for (const bid of Object.keys(d.blocks)) {
-    if (!allRefIds.has(bid)) {
-      return `Orphan block "${bid}" not referenced by any section`;
-    }
+  for (const bid of Object.keys(doc.blocks)) {
+    if (!allRefIds.has(bid)) return `Orphan block "${bid}" not in any section`;
   }
 
-  // Phase 3: Registry constraints + explicit block.id uniqueness
-  const seenInternalIds = new Set<string>();
-  for (const [id, block] of Object.entries(d.blocks)) {
-    const b = block as any;
-    if (!b || typeof b !== "object") return `Block "${id}" is not an object`;
+  return null;
+}
 
-    // Key-id consistency invariant (hydrator enforces this, but we re-check)
-    if (b.id !== id) return `Block id mismatch: key="${id}" but block.id="${b.id}"`;
-    if (seenInternalIds.has(b.id)) return `Duplicate block.id value: "${b.id}"`;
-    seenInternalIds.add(b.id);
+function validateRegistryConstraints(doc: CanonicalDocument): string | null {
+  const requiredBlockTypes = new Set(["source_footer", "brand_stamp", "headline_editorial"]);
+  const presentRequiredTypes = new Set<string>();
 
-    if (typeof b.type !== "string") return `Block "${id}" has no type`;
-    if (!b.props || typeof b.props !== "object") return `Block "${id}" has no props`;
+  for (const [id, block] of Object.entries(doc.blocks)) {
+    if (!block || typeof block !== "object") return `Block "${id}" is not an object`;
+    if (block.id !== id) return `Block id mismatch: key="${id}" but block.id="${block.id}"`;
+    if (typeof block.type !== "string") return `Block "${id}" has no type`;
+    if (!block.props || typeof block.props !== "object") return `Block "${id}" has no props`;
 
-    const reg = BREG[b.type];
-    if (!reg) return `Unknown block type: "${b.type}" (${id})`;
-    if (reg.guard && !reg.guard(b.props)) return `Invalid props for ${b.type} (${id})`;
-    const blockDataValidation = validateBlockData(b.type, b.props);
+    const reg = BREG[block.type];
+    if (!reg) return `Unknown block type: ${block.type} (${id})`;
+    if (reg.guard && !reg.guard(block.props)) return `Invalid props for ${block.type} (${id})`;
+
+    const blockDataValidation = validateBlockData(block.type, block.props);
     if (!blockDataValidation.valid) {
-      return `Invalid props for ${b.type} (${id}): ${blockDataValidation.errors.join("; ")}`;
+      return `Invalid props for ${block.type} (${id}): ${blockDataValidation.errors.join("; ")}`;
     }
 
-    // O(1) section-type lookup (built in Phase 2)
-    const parentSecType = blockToSectionType.get(id);
-    if (parentSecType && !reg.allowedSections.includes(parentSecType)) {
-      return `Block "${b.type}" not allowed in section type "${parentSecType}"`;
+    if (requiredBlockTypes.has(block.type)) {
+      presentRequiredTypes.add(block.type);
     }
   }
 
-  // Phase 4: Section cardinality + required blocks
-  const blockTypesByType: Record<string, number> = {};
-  const blockTypesBySection: Record<string, Record<string, number>> = {};
-
-  for (const sec of d.sections) {
-    blockTypesBySection[sec.id] = {};
+  for (const sec of doc.sections) {
+    const counts: Record<string, number> = {};
     for (const bid of sec.blockIds) {
-      const b = d.blocks[bid];
-      if (!b) continue;
-      blockTypesByType[b.type] = (blockTypesByType[b.type] || 0) + 1;
-      blockTypesBySection[sec.id][b.type] = (blockTypesBySection[sec.id][b.type] || 0) + 1;
-    }
-  }
+      const b = doc.blocks[bid];
+      const reg = BREG[b.type];
 
-  // Check maxPerSection per section
-  for (const sec of d.sections) {
-    const counts = blockTypesBySection[sec.id];
-    for (const [type, count] of Object.entries(counts)) {
-      const reg = BREG[type];
-      if (reg?.maxPerSection && count > reg.maxPerSection) {
-        return `Section "${sec.id}" has ${count}x "${type}", max allowed is ${reg.maxPerSection}`;
+      if (!reg.allowedSections.includes(sec.type)) {
+        return `Block "${b.type}" not allowed in section "${sec.type}"`;
+      }
+
+      counts[b.type] = (counts[b.type] || 0) + 1;
+      if (reg.maxPerSection && counts[b.type] > reg.maxPerSection) {
+        return `Too many ${b.type} in section "${sec.type}" (max ${reg.maxPerSection})`;
       }
     }
   }
 
-  // Check universally required blocks (present in every template regardless
-  // of chart type). The registry's `required_editable` status is broader than
-  // "universal" — chart blocks (bar_horizontal, line_editorial, etc.) are
-  // required_editable *when used* but are not universal. The narrow universal
-  // set is hardcoded here and mirrors validate.ts's required-block list.
-  const UNIVERSAL_REQUIRED = ["source_footer", "brand_stamp", "headline_editorial"];
-  for (const reqType of UNIVERSAL_REQUIRED) {
-    if (!blockTypesByType[reqType]) {
-      return `Required block "${reqType}" is missing from document`;
+  for (const requiredType of requiredBlockTypes) {
+    if (!presentRequiredTypes.has(requiredType)) {
+      return `Required block "${requiredType}" is missing from document`;
     }
   }
 

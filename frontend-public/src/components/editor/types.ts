@@ -125,6 +125,8 @@ export interface EditorState {
   redoStack: CanonicalDocument[];
   selectedBlockId: string | null;
   dirty: boolean;
+  // Tracks recent editing bursts so reducer can batch keystroke history.
+  _lastAction?: { type: string; blockId?: string; key?: string; at: number };
   // Mode lives in reducer state so the permission gate has a single source of
   // truth for every dispatched action (see store/reducer.ts isActionAllowed).
   mode: EditorMode;

@@ -13,7 +13,6 @@ import { PERMS } from './store/permissions';
 import { renderDoc } from './renderer/engine';
 import { validate } from './validation/validate';
 import { deferRevoke } from './utils/download';
-import { shouldSkipGlobalShortcut } from './utils/shortcuts';
 import { TopBar } from './components/TopBar';
 import { LeftPanel } from './components/LeftPanel';
 import { Canvas } from './components/Canvas';
@@ -88,28 +87,25 @@ export default function InfographicEditor() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const isEditable = shouldSkipGlobalShortcut(e);
-
-      // Inside editable fields: only Ctrl+S still fires (save is always useful).
-      // Undo/redo fall through to native behavior in text inputs.
-      if (isEditable) {
-        if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      // Only intercept Ctrl/Cmd+S inside form controls. Let native text undo/redo work.
+      const tag = (document.activeElement as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
           e.preventDefault();
           markSavedAndBackup();
         }
         return;
       }
 
-      // Outside editable fields: editor-level shortcuts
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
         e.preventDefault();
         dispatch({ type: "UNDO" });
       }
-      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
         e.preventDefault();
         dispatch({ type: "REDO" });
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         markSavedAndBackup();
       }
@@ -164,21 +160,23 @@ export default function InfographicEditor() {
     // can checkpoint work-in-progress.
     if (!canExp) return;
 
-    // Render to an offscreen canvas at canonical preset size (no DPR scaling)
-    const exportCvs = document.createElement("canvas");
-    exportCvs.width = sz.w;
-    exportCvs.height = sz.h;
-    const ctx = exportCvs.getContext("2d");
+    const c = cvs.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
     if (!ctx) return;
 
-    // Render at 1:1 (no DPR transform)
+    // Force an immediate redraw right before export to avoid stale/partial captures.
+    const dpr = window.devicePixelRatio || 2;
+    c.width = sz.w * dpr;
+    c.height = sz.h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const bgFn = BGS[doc.page.background] || BGS.solid_dark;
     bgFn.r(ctx, sz.w, sz.h, pal);
     renderDoc(ctx, doc, sz.w, sz.h, pal);
 
-    // toBlob is async + memory-efficient (vs. toDataURL ~40MB base64 for Story@DPR3)
+    // Wait one animation frame so the browser can flush paint before serializing.
     requestAnimationFrame(() => {
-      exportCvs.toBlob((blob) => {
+      c.toBlob((blob) => {
         if (!blob) return;
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -188,7 +186,7 @@ export default function InfographicEditor() {
         deferRevoke(url);
       }, "image/png");
     });
-  }, [doc, pal, sz, canExp]);
+  }, [canExp, doc, pal, sz]);
 
   const canEdit = (reg: typeof selR, k: string) => reg ? perms.editBlock(reg, k) : false;
 

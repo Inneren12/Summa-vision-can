@@ -276,6 +276,26 @@ describe("validateImport", () => {
     expect(validateImport(d)).toMatch(/Unknown block type/);
   });
 
+  test("rejects block in wrong section type", () => {
+    const d: any = goodDoc();
+    const footer = d.sections.find((s: any) => s.type === "footer");
+    const header = d.sections.find((s: any) => s.type === "header");
+    if (!footer || !header) throw new Error("missing header/footer sections");
+    const sourceId = footer.blockIds.find((bid: string) => d.blocks[bid]?.type === "source_footer");
+    if (!sourceId) throw new Error("missing source block");
+    footer.blockIds = footer.blockIds.filter((bid: string) => bid !== sourceId);
+    header.blockIds.push(sourceId);
+    expect(validateImport(d)).toMatch(/not allowed in section/);
+  });
+
+  test("rejects failed guard validation", () => {
+    const d: any = goodDoc();
+    const brandId = Object.keys(d.blocks).find(id => d.blocks[id].type === "brand_stamp");
+    if (!brandId) throw new Error("missing brand block");
+    d.blocks[brandId].props.position = "center";
+    expect(validateImport(d)).toMatch(/Invalid props for brand_stamp/);
+  });
+
   test("rejects duplicate section id", () => {
     const d: any = goodDoc();
     d.sections[1].id = d.sections[0].id;
