@@ -13,6 +13,7 @@ import { PERMS } from './store/permissions';
 import { renderDoc } from './renderer/engine';
 import { validate } from './validation/validate';
 import { deferRevoke } from './utils/download';
+import { shouldSkipGlobalShortcut } from './utils/shortcuts';
 import { TopBar } from './components/TopBar';
 import { LeftPanel } from './components/LeftPanel';
 import { Canvas } from './components/Canvas';
@@ -87,25 +88,28 @@ export default function InfographicEditor() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Only intercept Ctrl/Cmd+S inside form controls. Let native text undo/redo work.
-      const tag = (document.activeElement as HTMLElement | null)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      const key = e.key.toLowerCase();
+      const isEditable = shouldSkipGlobalShortcut(e);
+
+      // Inside editable fields: only Ctrl+S fires (save is always useful).
+      if (isEditable) {
+        if ((e.ctrlKey || e.metaKey) && key === "s") {
           e.preventDefault();
           markSavedAndBackup();
         }
         return;
       }
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+      // Outside editable fields: editor-level shortcuts.
+      if ((e.ctrlKey || e.metaKey) && key === "z" && !e.shiftKey) {
         e.preventDefault();
         dispatch({ type: "UNDO" });
       }
-      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
+      if ((e.ctrlKey || e.metaKey) && (key === "y" || (key === "z" && e.shiftKey))) {
         e.preventDefault();
         dispatch({ type: "REDO" });
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      if ((e.ctrlKey || e.metaKey) && key === "s") {
         e.preventDefault();
         markSavedAndBackup();
       }
@@ -160,23 +164,21 @@ export default function InfographicEditor() {
     // can checkpoint work-in-progress.
     if (!canExp) return;
 
-    const c = cvs.current;
-    if (!c) return;
-    const ctx = c.getContext("2d");
+    // Create a separate export canvas at canonical preset size.
+    // Preview canvas stays DPR-scaled; export is exact 1:1 dimensions.
+    const exportCvs = document.createElement("canvas");
+    exportCvs.width = sz.w;
+    exportCvs.height = sz.h;
+    const ctx = exportCvs.getContext("2d");
     if (!ctx) return;
 
-    // Force an immediate redraw right before export to avoid stale/partial captures.
-    const dpr = window.devicePixelRatio || 2;
-    c.width = sz.w * dpr;
-    c.height = sz.h * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const bgFn = BGS[doc.page.background] || BGS.solid_dark;
     bgFn.r(ctx, sz.w, sz.h, pal);
     renderDoc(ctx, doc, sz.w, sz.h, pal);
 
-    // Wait one animation frame so the browser can flush paint before serializing.
+    // toBlob keeps exports async/memory-safe and avoids base64 data URL inflation.
     requestAnimationFrame(() => {
-      c.toBlob((blob) => {
+      exportCvs.toBlob((blob) => {
         if (!blob) return;
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
