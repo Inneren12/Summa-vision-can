@@ -149,6 +149,66 @@ describe("hydrateImportedDoc", () => {
     expect(result.warnings.some(w => /showBenchmark expected boolean/.test(w))).toBe(true);
     expect(result.warnings.some(w => /benchmarkValue expected finite number/.test(w))).toBe(true);
   });
+
+  test("normalizes defaults + deterministic ids when chart props are null or non-object", () => {
+    const dNull: any = docForTemplate("ranked_bar_simple");
+    const barId = Object.keys(dNull.blocks).find(id => dNull.blocks[id].type === "bar_horizontal");
+    if (!barId) throw new Error("missing bar block");
+    dNull.blocks[barId].props = null;
+
+    const nullResult = hydrateImportedDoc(dNull);
+    expect(nullResult.doc.blocks[barId].props.items[0]._id).toBe(`${barId}_items_0`);
+
+    const dGarbage: any = docForTemplate("ranked_bar_simple");
+    dGarbage.blocks[barId].props = "garbage";
+    const garbageResult = hydrateImportedDoc(dGarbage);
+    expect(garbageResult.doc.blocks[barId].props.items[0]._id).toBe(`${barId}_items_0`);
+  });
+});
+
+describe("mkDoc nested _id synthesis", () => {
+  test("bar_horizontal items get deterministic _id from mkDoc", () => {
+    const doc = mkDoc("ranked_bar_simple", TPLS.ranked_bar_simple);
+    const barBlock = Object.values(doc.blocks).find(b => b.type === "bar_horizontal");
+    expect(barBlock).toBeDefined();
+    const items = barBlock!.props.items as any[];
+    expect(items.length).toBeGreaterThan(0);
+    items.forEach((it, i) => {
+      expect(it._id).toBe(`${barBlock!.id}_items_${i}`);
+    });
+  });
+
+  test("line_editorial series get deterministic _id from mkDoc", () => {
+    const doc = mkDoc("line_area", TPLS.line_area);
+    const lineBlock = Object.values(doc.blocks).find(b => b.type === "line_editorial");
+    expect(lineBlock).toBeDefined();
+    const series = lineBlock!.props.series as any[];
+    expect(series.length).toBeGreaterThan(0);
+    series.forEach((s, i) => {
+      expect(s._id).toBe(`${lineBlock!.id}_series_${i}`);
+    });
+  });
+
+  test("comparison_kpi items get deterministic _id from mkDoc", () => {
+    const doc = mkDoc("comparison_3kpi", TPLS.comparison_3kpi);
+    const kpiBlock = Object.values(doc.blocks).find(b => b.type === "comparison_kpi");
+    expect(kpiBlock).toBeDefined();
+    const items = kpiBlock!.props.items as any[];
+    expect(items.length).toBeGreaterThan(0);
+    items.forEach((it, i) => {
+      expect(it._id).toBe(`${kpiBlock!.id}_items_${i}`);
+    });
+  });
+
+  test("template switch produces stable ids across calls", () => {
+    const doc1 = mkDoc("ranked_bar_simple", TPLS.ranked_bar_simple);
+    const doc2 = mkDoc("ranked_bar_simple", TPLS.ranked_bar_simple);
+    const bar1 = Object.values(doc1.blocks).find(b => b.type === "bar_horizontal");
+    const bar2 = Object.values(doc2.blocks).find(b => b.type === "bar_horizontal");
+    const ids1 = (bar1!.props.items as any[]).map(it => it._id);
+    const ids2 = (bar2!.props.items as any[]).map(it => it._id);
+    expect(ids1).toEqual(ids2);
+  });
 });
 
 describe("validateImport", () => {

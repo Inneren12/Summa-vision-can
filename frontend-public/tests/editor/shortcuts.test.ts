@@ -23,16 +23,16 @@ describe("isEditableTarget", () => {
 
 describe("shouldSkipGlobalShortcut", () => {
   test("skips when composing", () => {
-    expect(shouldSkipGlobalShortcut({ isComposing: true, target: document.body } as KeyboardEvent)).toBe(true);
+    expect(shouldSkipGlobalShortcut({ isComposing: true, target: document.body })).toBe(true);
   });
 
   test("skips when target is editable", () => {
     const input = document.createElement("input");
-    expect(shouldSkipGlobalShortcut({ isComposing: false, target: input } as KeyboardEvent)).toBe(true);
+    expect(shouldSkipGlobalShortcut({ isComposing: false, target: input })).toBe(true);
   });
 
   test("does not skip for non-editable, non-composition events", () => {
     const div = document.createElement("div");
-    expect(shouldSkipGlobalShortcut({ isComposing: false, target: div } as KeyboardEvent)).toBe(false);
+    expect(shouldSkipGlobalShortcut({ isComposing: false, target: div })).toBe(false);
   });
 });

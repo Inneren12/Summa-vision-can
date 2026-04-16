@@ -151,7 +151,9 @@ function sanitizeBlockProps(
 
   if (!rawProps || typeof rawProps !== "object") {
     warnings.push(`Block "${blockId}" (${type}) props were malformed — replaced with defaults`);
-    return result;
+    const normalized = normalizeBlockData(type, result, blockId);
+    warnings.push(...normalized.warnings.map(w => `Block "${blockId}" (${type}): ${w}`));
+    return normalized.props;
   }
 
   // For each default key, coerce raw value to match default's type

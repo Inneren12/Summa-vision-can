@@ -11,6 +11,12 @@ import { SERIES_ROLES } from '../types';
  * Keeping the rules here, rather than duplicated between registry/blocks.ts
  * and validation/validate.ts, means a tightened invariant can't drift between
  * the two layers.
+ *
+ * Validation strictness policy:
+ * - Structural identifiers (label, role, type, country): non-empty string required
+ * - Display-only text (delta, benchmarkLabel, flag, methodology): empty string allowed
+ * - Numeric values (value, data[], rank): finite number required
+ * - Arrays (items, series, xLabels, rows): non-empty, correct length
  */
 
 export interface BlockDataValidation {
@@ -79,8 +85,8 @@ export function validateLineEditorialData(props: any): BlockDataValidation {
   }
   if (props.series.length === 0) errors.push("at least one series required");
   if (props.xLabels.length === 0) errors.push("xLabels cannot be empty");
-  if (!props.xLabels.every((l: any) => typeof l === "string")) {
-    errors.push("all xLabels must be strings");
+  if (!props.xLabels.every((l: any) => typeof l === "string" && l.trim() !== "")) {
+    errors.push("all xLabels must be non-empty strings");
   }
 
   props.series.forEach((s: any, i: number) => {
