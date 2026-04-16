@@ -124,31 +124,41 @@ export default function InfographicEditor() {
   const importJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
+    const input = e.target;
     const r = new FileReader();
     r.onload = ev => {
-      let raw: unknown;
       try {
-        raw = JSON.parse(ev.target?.result as string);
-      } catch {
-        alert("Invalid JSON file");
-        return;
+        let raw: unknown;
+        try {
+          raw = JSON.parse(ev.target?.result as string);
+        } catch {
+          alert("Invalid JSON file");
+          return;
+        }
+        let result;
+        try {
+          result = hydrateImportedDoc(raw);
+        } catch (hydrationErr: any) {
+          alert(`Import error: ${hydrationErr?.message ?? "hydration failed"}`);
+          return;
+        }
+        const err = validateImport(result.doc);
+        if (err) {
+          alert(`Import error: ${err}`);
+          return;
+        }
+        // Surface what the hydrator had to normalize so the user knows their
+        // document was modified on import, not silently mutated.
+        if (result.warnings.length > 0) {
+          alert(`Imported with warnings:\n\n\u2022 ${result.warnings.join("\n\u2022 ")}`);
+        }
+        dispatch({ type: "IMPORT", doc: result.doc });
+      } finally {
+        // Reset so re-selecting the same file re-fires change event
+        input.value = "";
       }
-      let hydrated;
-      try {
-        hydrated = hydrateImportedDoc(raw);
-      } catch (hydrationErr: any) {
-        alert(`Import error: ${hydrationErr?.message ?? "hydration failed"}`);
-        return;
-      }
-      const err = validateImport(hydrated);
-      if (err) {
-        alert(`Import error: ${err}`);
-        return;
-      }
-      dispatch({ type: "IMPORT", doc: hydrated });
     };
     r.readAsText(f);
-    e.target.value = "";
   };
 
   const exportPNG = useCallback(() => {

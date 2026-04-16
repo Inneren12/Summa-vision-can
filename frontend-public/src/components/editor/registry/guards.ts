@@ -113,12 +113,13 @@ export function validateImport(doc: unknown): string | null {
     }
   }
 
-  // Check required blocks present at document level
-  const requiredTypes = Object.entries(BREG)
-    .filter(([, reg]) => reg.status === "required_locked" || reg.status === "required_editable")
-    .map(([type]) => type);
-
-  for (const reqType of requiredTypes) {
+  // Check universally required blocks (present in every template regardless
+  // of chart type). The registry's `required_editable` status is broader than
+  // "universal" — chart blocks (bar_horizontal, line_editorial, etc.) are
+  // required_editable *when used* but are not universal. The narrow universal
+  // set is hardcoded here and mirrors validate.ts's required-block list.
+  const UNIVERSAL_REQUIRED = ["source_footer", "brand_stamp", "headline_editorial"];
+  for (const reqType of UNIVERSAL_REQUIRED) {
     if (!blockTypesByType[reqType]) {
       return `Required block "${reqType}" is missing from document`;
     }
@@ -171,13 +172,27 @@ function sanitizeBlockProps(type: string, rawProps: any): Record<string, any> {
 }
 
 /**
+ * Result of hydrating a raw imported document. `warnings` captures every
+ * normalization decision the hydrator made, so the UI can surface what was
+ * changed instead of silently mutating the user's document.
+ */
+export interface HydrationResult {
+  doc: CanonicalDocument;
+  warnings: string[];
+}
+
+/**
  * Hydrates a raw imported document into a structurally complete CanonicalDocument.
  * Fills defaults for any missing fields, normalizes block structure.
  * Rejects documents with unsupported schemaVersion (throws).
  * NOTE: This is not a versioned migration pipeline yet. It is structural hydration.
  * True schema migrations (v1 -> v2 -> v3) will be added here in the future via a MIGRATIONS map.
+ *
+ * Returns both the hydrated doc AND a list of human-readable warnings describing
+ * every field that was defaulted, coerced, or dropped. Empty warnings array means
+ * the import was clean.
  */
-export function hydrateImportedDoc(raw: any): CanonicalDocument {
+export function hydrateImportedDoc(raw: any): HydrationResult {
   if (!raw || typeof raw !== "object") {
     throw new Error("Cannot hydrate non-object document");
   }
@@ -191,7 +206,29 @@ export function hydrateImportedDoc(raw: any): CanonicalDocument {
     );
   }
 
+  const warnings: string[] = [];
   const now = new Date().toISOString();
+
+  if (typeof raw.schemaVersion !== "number") {
+    warnings.push(`Missing schemaVersion — assumed ${CURRENT_SCHEMA}`);
+  }
+  if (typeof raw.templateId !== "string") {
+    warnings.push(`Missing templateId — defaulted to "single_stat_hero"`);
+  }
+  if (!raw.page || typeof raw.page !== "object") {
+    warnings.push("Missing page config — filled with defaults");
+  } else {
+    if (typeof raw.page.size !== "string") warnings.push(`Missing page.size — defaulted to "instagram_1080"`);
+    if (typeof raw.page.background !== "string") warnings.push(`Missing page.background — defaulted to "gradient_warm"`);
+    if (typeof raw.page.palette !== "string") warnings.push(`Missing page.palette — defaulted to "housing"`);
+  }
+  if (!Array.isArray(raw.sections)) {
+    warnings.push("Missing sections array — defaulted to []");
+  }
+  if (raw.workflow !== undefined && typeof raw.workflow === "string"
+      && !VALID_WORKFLOW_STATES.has(raw.workflow as WorkflowState)) {
+    warnings.push(`Invalid workflow "${raw.workflow}" — reset to "draft"`);
+  }
 
   const doc: CanonicalDocument = {
     schemaVersion: rawVersion, // guaranteed supported
@@ -217,21 +254,27 @@ export function hydrateImportedDoc(raw: any): CanonicalDocument {
   };
 
   // Normalize each block: force id = key (invariant), sanitize props by registry schema
+  let droppedBlocks = 0;
+  let unknownTypeBlocks = 0;
+  let idRealigned = 0;
   if (raw.blocks && typeof raw.blocks === "object") {
     for (const [key, block] of Object.entries(raw.blocks)) {
       const b = block as any;
-      if (!b || typeof b !== "object") continue;
+      if (!b || typeof b !== "object") { droppedBlocks++; continue; }
+      const type = String(b.type ?? "");
+      if (!BREG[type]) unknownTypeBlocks++;
+      if (typeof b.id === "string" && b.id !== key) idRealigned++;
       doc.blocks[key] = {
         id: key, // FORCE id to match object key — cannot drift out of sync
-        type: String(b.type ?? ""),
-        props: sanitizeBlockProps(String(b.type ?? ""), b.props),
+        type,
+        props: sanitizeBlockProps(type, b.props),
         visible: typeof b.visible === "boolean" ? b.visible : true,
       };
     }
   }
+  if (droppedBlocks > 0) warnings.push(`Dropped ${droppedBlocks} malformed block entr${droppedBlocks === 1 ? "y" : "ies"}`);
+  if (unknownTypeBlocks > 0) warnings.push(`${unknownTypeBlocks} block${unknownTypeBlocks === 1 ? "" : "s"} with unknown type (will fail validation)`);
+  if (idRealigned > 0) warnings.push(`Realigned ${idRealigned} block id${idRealigned === 1 ? "" : "s"} to match object key`);
 
-  return doc;
+  return { doc, warnings };
 }
-
-// Keep old name as alias during transition
-export const migrateDoc = hydrateImportedDoc;

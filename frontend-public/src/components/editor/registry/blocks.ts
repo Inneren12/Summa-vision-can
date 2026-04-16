@@ -1,4 +1,11 @@
 import type { BlockRegistryEntry } from '../types';
+import {
+  validateBarHorizontalData,
+  validateLineEditorialData,
+  validateComparisonKpiData,
+  validateTableEnrichedData,
+  validateSmallMultipleData,
+} from '../validation/block-data';
 
 export const BREG: Record<string, BlockRegistryEntry> = {
   eyebrow_tag:{cat:"text",name:"Eyebrow",status:"optional_default",allowedSections:["header"],maxPerSection:1,dp:{text:"STATISTICS CANADA \u00B7 TABLE 18-10-0004"},cst:{maxChars:60,maxLines:1},ctrl:[{k:"text",t:"text",l:"Tag",ml:60}],
@@ -20,67 +27,21 @@ export const BREG: Record<string, BlockRegistryEntry> = {
   bar_horizontal:{cat:"chart",name:"Ranked Bars",status:"required_editable",allowedSections:["chart"],maxPerSection:1,
     dp:{items:[{label:"Vancouver",value:12.8,flag:"\uD83C\uDDE8\uD83C\uDDE6",highlight:true},{label:"Toronto",value:10.2,flag:"\uD83C\uDDE8\uD83C\uDDE6",highlight:true},{label:"Hamilton",value:7.9,flag:"\uD83C\uDDE8\uD83C\uDDE6"},{label:"Victoria",value:7.6,flag:"\uD83C\uDDE8\uD83C\uDDE6"},{label:"Ottawa",value:5.8,flag:"\uD83C\uDDE8\uD83C\uDDE6"},{label:"Montreal",value:5.4,flag:"\uD83C\uDDE8\uD83C\uDDE6"},{label:"Calgary",value:4.2,flag:"\uD83C\uDDE8\uD83C\uDDE6"},{label:"Edmonton",value:3.5,flag:"\uD83C\uDDE8\uD83C\uDDE6"}],unit:"\u00D7",benchmarkValue:5.0,benchmarkLabel:"Affordable threshold",showBenchmark:true},
     ctrl:[{k:"unit",t:"text",l:"Unit suffix",ml:5},{k:"showBenchmark",t:"toggle",l:"Benchmark line"},{k:"benchmarkValue",t:"text",l:"Bench value",ml:10},{k:"benchmarkLabel",t:"text",l:"Bench label",ml:30}],
-    guard: (p: any) => {
-      if (!Array.isArray(p.items) || p.items.length === 0) return false;
-      return p.items.every((i: any) =>
-        typeof i.label === "string" &&
-        typeof i.value === "number" &&
-        Number.isFinite(i.value)
-      );
-    }},
+    guard: (p: any) => validateBarHorizontalData(p).valid},
   line_editorial:{cat:"chart",name:"Line Chart",status:"required_editable",allowedSections:["chart"],maxPerSection:1,
     dp:{series:[{label:"CPI All Items",data:[1.9,0.7,3.4,6.8,3.9,2.7,2.4,2.1],role:"primary"},{label:"BoC Target",data:[2,2,2,2,2,2,2,2],role:"benchmark"}],xLabels:["2019","2020","2021","2022","2023","2024","2025","2026"],yUnit:"%",showArea:true},
     ctrl:[{k:"yUnit",t:"text",l:"Y unit",ml:5},{k:"showArea",t:"toggle",l:"Area fill"}],
-    guard: (p: any) => {
-      if (!Array.isArray(p.series) || p.series.length === 0) return false;
-      if (!Array.isArray(p.xLabels) || p.xLabels.length === 0) return false;
-      if (!p.xLabels.every((l: any) => typeof l === "string")) return false;
-
-      const validRoles = ["primary", "benchmark", "secondary"];
-      return p.series.every((s: any) =>
-        typeof s.label === "string" &&
-        validRoles.includes(s.role) &&
-        Array.isArray(s.data) &&
-        s.data.length === p.xLabels.length &&
-        s.data.every((v: any) => typeof v === "number" && Number.isFinite(v))
-      );
-    }},
+    guard: (p: any) => validateLineEditorialData(p).valid},
   comparison_kpi:{cat:"data",name:"KPI Compare",status:"required_editable",allowedSections:["chart","hero"],maxPerSection:1,
     dp:{items:[{label:"Population Growth",value:"3.2%",delta:"+1.4pp YoY",direction:"positive"},{label:"Net Immigration",value:"1.2M",delta:"+340K vs 2023",direction:"positive"},{label:"Housing Starts",value:"218K",delta:"\u221212% vs target",direction:"negative"}]},
     ctrl:[],
-    guard: (p: any) => {
-      if (!Array.isArray(p.items) || p.items.length < 2 || p.items.length > 4) return false;
-      const validDir = ["positive", "negative", "neutral"];
-      return p.items.every((i: any) =>
-        typeof i.label === "string" &&
-        typeof i.value === "string" &&
-        typeof i.delta === "string" &&
-        validDir.includes(i.direction)
-      );
-    }},
+    guard: (p: any) => validateComparisonKpiData(p).valid},
   table_enriched:{cat:"chart",name:"Visual Table",status:"required_editable",allowedSections:["chart"],maxPerSection:1,
     dp:{columns:["Country","Individual","Corporate","Property","Consumption","Score"],rows:[{country:"Estonia",flag:"\uD83C\uDDEA\uD83C\uDDEA",vals:[2,2,1,18,100.0],rank:1},{country:"Latvia",flag:"\uD83C\uDDF1\uD83C\uDDFB",vals:[3,1,5,21,92.2],rank:2},{country:"New Zealand",flag:"\uD83C\uDDF3\uD83C\uDDFF",vals:[6,30,8,2,84.2],rank:3},{country:"Switzerland",flag:"\uD83C\uDDE8\uD83C\uDDED",vals:[8,10,36,3,83.6],rank:4},{country:"Lithuania",flag:"\uD83C\uDDF1\uD83C\uDDF9",vals:[10,3,7,27,79.5],rank:5},{country:"Canada",flag:"\uD83C\uDDE8\uD83C\uDDE6",vals:[31,26,25,8,66.8],rank:17},{country:"U.S.",flag:"\uD83C\uDDFA\uD83C\uDDF8",vals:[17,20,28,4,66.5],rank:18},{country:"France",flag:"\uD83C\uDDEB\uD83C\uDDF7",vals:[33,33,31,31,50.2],rank:36}]},
     ctrl:[],
-    guard: (p: any) => {
-      if (!Array.isArray(p.columns) || p.columns.length < 2) return false;
-      if (!Array.isArray(p.rows) || p.rows.length === 0) return false;
-      return p.rows.every((r: any) =>
-        typeof r.country === "string" &&
-        typeof r.rank === "number" &&
-        Array.isArray(r.vals) &&
-        r.vals.length === p.columns.length - 1
-      );
-    }},
+    guard: (p: any) => validateTableEnrichedData(p).valid},
   small_multiple:{cat:"chart",name:"Small Multiples",status:"required_editable",allowedSections:["chart"],maxPerSection:1,
     dp:{items:[{label:"New York",flag:"\uD83C\uDDFA\uD83C\uDDF8",data:[-0.5,-1.2,-3.1,-4.5,-5.8,-6.2,-5.1,-4.8]},{label:"London",flag:"\uD83C\uDDEC\uD83C\uDDE7",data:[-0.3,-0.8,-2.5,-3.8,-5.2,-6.8,-5.5,-4.2]},{label:"Frankfurt",flag:"\uD83C\uDDE9\uD83C\uDDEA",data:[-0.2,-0.5,-1.8,-3.2,-5.5,-8.1,-10.2,-7.5]},{label:"Shanghai",flag:"\uD83C\uDDE8\uD83C\uDDF3",data:[0.1,-0.2,-1.5,-2.8,-3.5,-4.2,-5.8,-4.1]},{label:"Hong Kong",flag:"\uD83C\uDDED\uD83C\uDDF0",data:[-0.4,-1.0,-2.2,-4.1,-5.5,-7.2,-8.5,-6.8]},{label:"Tokyo",flag:"\uD83C\uDDEF\uD83C\uDDF5",data:[-0.1,-0.3,-1.2,-2.5,-4.8,-6.5,-9.8,-8.2]}],yUnit:"%"},
     ctrl:[{k:"yUnit",t:"text",l:"Y unit",ml:5}],
-    guard: (p: any) => {
-      if (!Array.isArray(p.items) || p.items.length === 0) return false;
-      return p.items.every((i: any) =>
-        typeof i.label === "string" &&
-        Array.isArray(i.data) &&
-        i.data.length > 0 &&
-        i.data.every((v: any) => typeof v === "number" && Number.isFinite(v))
-      );
-    }},
+    guard: (p: any) => validateSmallMultipleData(p).valid},
 };
