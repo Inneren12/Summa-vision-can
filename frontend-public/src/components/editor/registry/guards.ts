@@ -123,13 +123,14 @@ function normalizeWorkflow(raw: unknown): WorkflowState {
 
 /**
  * Document-shape validator. Returns null on success, error message on
- * failure. Public entry into the canonical-document shape rules.
+ * failure. Module-internal — `validateImportStrict` is the single public
+ * entry point for import validation. De-exported in the PR 2a follow-up
+ * to prevent call sites from reaching around the migration step.
  *
  * Naming: a future cosmetic rename to `assertCanonicalDocumentV2Shape`
- * is tracked as DEBT-024. Kept as `validateDocumentShape` here to avoid
- * scope churn in PR 2a.
+ * is tracked as DEBT-024.
  */
-export function validateDocumentShape(doc: any): string | null {
+function validateDocumentShape(doc: any): string | null {
   if (!doc || typeof doc !== "object") return "Not an object";
   if (typeof doc.schemaVersion !== "number") return "Missing schemaVersion";
   if (!SUPPORTED_SCHEMA_VERSIONS.includes(doc.schemaVersion)) {

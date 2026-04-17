@@ -115,6 +115,16 @@ In `in_review` only copy edits land; attempting a data/structural/style
 edit returns *"Only copy edits allowed during review — return to draft
 first"*.
 
+**Implementation notes.** Category flags are checked before iterating
+payload keys. Empty payloads (e.g. `UPDATE_DATA` with `data: {}`) are
+rejected in read-only workflows by the category check, not by the loop
+body — preventing a zero-iteration bypass where `Object.keys({}).length
+=== 0` would run no rejection logic and fall through to
+`{ allowed: true }`. The same default-deny shape is used for
+`UPDATE_PROP`, `CHANGE_PAGE`, `TOGGLE_VIS`, and `SWITCH_TPL`: the
+category flag is consulted once, and the action is only permitted if
+that flag is set in the current workflow's `WORKFLOW_PERMISSIONS` row.
+
 **History-stack bypass note.** `in_review` blocks not only content
 edits but also `IMPORT`, `UNDO`, and `REDO`. Two bypass paths motivate
 that rule:

@@ -208,23 +208,17 @@ export function checkWorkflowPermission(
       return { allowed: false, reason: READ_ONLY_REASON };
     }
     case "UPDATE_DATA": {
-      // UPDATE_DATA may carry several keys — every key must pass the
-      // workflow gate for the action to be allowed.
+      // Category-first: UPDATE_DATA is a data-content action as a whole.
+      // Evaluate the category flag once, BEFORE looking at individual
+      // keys — otherwise an empty payload (`data: {}`) would run the
+      // key-iteration loop zero times and fall through to "allowed",
+      // bumping meta.version in a read-only workflow.
       if (workflow === "draft") return { allowed: true };
-      const keys = Object.keys(action.data ?? {});
-      for (const k of keys) {
-        const cat = classifyKey(k);
-        const ok =
-          (cat === "text"       && wp.textContent)  ||
-          (cat === "data"       && wp.dataContent)  ||
-          (cat === "structural" && wp.structural)   ||
-          (cat === "style"      && wp.style);
-        if (!ok) {
-          if (workflow === "in_review") {
-            return { allowed: false, reason: COPY_EDIT_ONLY_REASON };
-          }
-          return { allowed: false, reason: READ_ONLY_REASON };
-        }
+      if (!wp.dataContent) {
+        return {
+          allowed: false,
+          reason: workflow === "in_review" ? COPY_EDIT_ONLY_REASON : READ_ONLY_REASON,
+        };
       }
       return { allowed: true };
     }
