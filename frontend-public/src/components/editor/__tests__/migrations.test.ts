@@ -224,6 +224,62 @@ describe("validateImportStrict — additional shape rejections", () => {
   });
 });
 
+describe("migrateDoc — deterministic timestamp derivation", () => {
+  test("migration v1 → v2 is deterministic for the same input", () => {
+    const fixture = v1Doc({
+      meta: {
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-02-15T12:30:00.000Z",
+        version: 3,
+        history: [],
+      },
+    });
+    const a = migrateDoc(JSON.parse(JSON.stringify(fixture))).doc;
+    const b = migrateDoc(JSON.parse(JSON.stringify(fixture))).doc;
+    expect(a).toEqual(b);
+    expect(a.review.history[0].ts).toBe("2026-02-15T12:30:00.000Z"); // prefers updatedAt
+  });
+
+  test("migration timestamp falls back to createdAt when updatedAt is missing", () => {
+    const fixture = v1Doc({
+      meta: {
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: undefined as unknown as string,
+        version: 0,
+        history: [],
+      },
+    });
+    const result = migrateDoc(fixture).doc;
+    expect(result.review.history[0].ts).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  test("migration timestamp falls back to epoch when both timestamps are missing", () => {
+    const fixture = v1Doc({
+      meta: {
+        createdAt: undefined as unknown as string,
+        updatedAt: undefined as unknown as string,
+        version: 0,
+        history: [],
+      },
+    });
+    const result = migrateDoc(fixture).doc;
+    expect(result.review.history[0].ts).toBe("1970-01-01T00:00:00.000Z");
+  });
+
+  test("migration timestamp falls back to epoch when timestamps are malformed", () => {
+    const fixture = v1Doc({
+      meta: {
+        createdAt: "not-an-iso-string",
+        updatedAt: "also-garbage",
+        version: 0,
+        history: [],
+      },
+    });
+    const result = migrateDoc(fixture).doc;
+    expect(result.review.history[0].ts).toBe("1970-01-01T00:00:00.000Z");
+  });
+});
+
 describe("migrateDoc — defensive branches (MIGRATIONS monkey-patch)", () => {
   afterEach(() => {
     // Restore any temporary keys added to the shared MIGRATIONS map.

@@ -12,6 +12,30 @@ const VALID_WORKFLOW_STATES: ReadonlySet<WorkflowState> = new Set<WorkflowState>
 ]);
 
 /**
+ * Derive the timestamp for the synthetic `"migrated"` audit entry from
+ * existing document fields so the migration is pure relative to its input.
+ *
+ * Using `Date.now()` / `new Date().toISOString()` here would make the same
+ * v1 document produce different v2 outputs across invocations — which
+ * breaks snapshot tests, export diffing, autosave reconciliation, and any
+ * downstream audit-replay workflow that assumes identical inputs yield
+ * identical outputs.
+ *
+ * Precedence: `meta.updatedAt` → `meta.createdAt` → epoch sentinel. The
+ * `"1970-01-01T00:00:00.000Z"` fallback is intentional: it makes the
+ * absence of timestamp information self-evident in any audit log rather
+ * than silently inventing a plausible-looking time.
+ */
+function deriveMigrationTimestamp(doc: LegacyDocumentV1): string {
+  const EPOCH = "1970-01-01T00:00:00.000Z";
+  const isIsoString = (v: unknown): v is string =>
+    typeof v === "string" && !Number.isNaN(Date.parse(v));
+  if (isIsoString(doc.meta?.updatedAt)) return doc.meta.updatedAt;
+  if (isIsoString(doc.meta?.createdAt)) return doc.meta.createdAt;
+  return EPOCH;
+}
+
+/**
  * Migration functions that upgrade a document from version N to N+1.
  * Each migration is PURE: it takes a doc at version N and returns a fresh
  * doc at version N+1. No input mutation; no I/O.
@@ -27,7 +51,7 @@ const MIGRATIONS: Record<number, (doc: any) => any> = {
       typeof workflow === "string" && VALID_WORKFLOW_STATES.has(workflow as WorkflowState)
         ? (workflow as WorkflowState)
         : "draft";
-    const now = new Date().toISOString();
+    const migratedAt = deriveMigrationTimestamp(doc);
     return {
       ...restRoot,
       schemaVersion: 2,
@@ -36,7 +60,7 @@ const MIGRATIONS: Record<number, (doc: any) => any> = {
         workflow: resolvedWorkflow,
         history: [
           {
-            ts: now,
+            ts: migratedAt,
             action: "migrated",
             summary: "Document migrated to schema v2",
             author: "system",
@@ -97,6 +121,11 @@ function normalizeWorkflow(raw: unknown): WorkflowState {
   return "draft";
 }
 
+/**
+ * Legacy validator. Returns null on success, error message on failure.
+ * See `validateImportStrict` for the throwing variant. Direction will
+ * invert in PR 2 (DEBT-022).
+ */
 export function validateImport(doc: unknown): string | null {
   // Phase 1: shape — required top-level fields exist with correct types.
   const shapeErr = validateDocumentShape(doc);
@@ -478,11 +507,17 @@ export function migrateDoc(raw: unknown): MigrationResult {
 }
 
 /**
- * Throwing variant of `validateImport`. Runs migrations first, then asserts
- * every v2 invariant. Returns a typed `CanonicalDocument` on success.
+ * Validates a raw document, runs migrations, and returns a typed
+ * CanonicalDocument. Throws Error on any violation.
  *
- * Call sites that still read the string-returning `validateImport` remain
- * valid for now; tracked under `DEBT-022`.
+ * TEMPORARY (PR 1): This function currently delegates to the legacy
+ * string-returning `validateImport` internally. In PR 2 the direction
+ * will flip — `validateImport` will wrap `validateImportStrict` in a
+ * try/catch and return the error message. Tracked in DEBT-022.
+ *
+ * Call sites that want throwing semantics should use this function.
+ * Call sites that still use `validateImport(doc): string | null`
+ * keep working unchanged until PR 2.
  */
 export function validateImportStrict(raw: unknown): CanonicalDocument {
   const { doc } = migrateDoc(raw);
