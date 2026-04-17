@@ -1,11 +1,22 @@
 import {
   migrateDoc,
-  validateImport,
   validateImportStrict,
   CURRENT_SCHEMA_VERSION,
   MIGRATIONS,
   applyMigrations,
 } from "../registry/guards";
+
+// Test-local string-returning wrapper. The legacy `validateImport`
+// dual-API was removed in PR 2a (DEBT-022 closure). Tests that previously
+// asserted on the message string keep working through this thin shim.
+function runImport(doc: unknown): string | null {
+  try {
+    validateImportStrict(doc);
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
 import { TPLS, mkDoc } from "../registry/templates";
 import type {
   CanonicalDocument,
@@ -192,19 +203,19 @@ describe("validateImportStrict — invariant enforcement", () => {
   });
 });
 
-describe("validateImport — legacy string-returning API still works", () => {
+describe("validateImportStrict (via runImport) — message-shape regressions", () => {
   test("returns null for a valid v2 doc", () => {
-    expect(validateImport(v2Doc())).toBeNull();
+    expect(runImport(v2Doc())).toBeNull();
   });
 
   test("returns a descriptive error for obvious garbage", () => {
-    expect(validateImport(null)).toMatch(/Not an object/);
+    expect(runImport(null)).toMatch(/Cannot migrate|Not an object/);
   });
 
   test("returns a descriptive error for a v2 doc with a missing review section", () => {
     const raw: any = v2Doc();
     delete raw.review;
-    expect(validateImport(raw)).toMatch(/Missing review section/);
+    expect(runImport(raw)).toMatch(/Missing review section/);
   });
 });
 

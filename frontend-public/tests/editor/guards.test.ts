@@ -1,10 +1,23 @@
 import {
-  validateImport,
+  validateImportStrict,
   hydrateImportedDoc,
   SUPPORTED_SCHEMA_VERSIONS,
   CURRENT_SCHEMA,
 } from "../../src/components/editor/registry/guards";
 import { TPLS, mkDoc } from "../../src/components/editor/registry/templates";
+
+// Test-local string-returning wrapper around the throwing strict API.
+// Mirrors the legacy `runImport(doc): string | null` shape so the
+// existing test cases stay compact and grep-friendly. Keeps test
+// assertions focused on the validation outcome, not on try/catch noise.
+function runImport(doc: unknown): string | null {
+  try {
+    validateImportStrict(doc);
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
 
 function goodDoc() {
   // Baseline valid doc, deep-cloned each call so mutating it in one test
@@ -104,7 +117,7 @@ describe("hydrateImportedDoc", () => {
     expect(typeof result.doc.meta.updatedAt).toBe("string");
     expect(result.doc.meta.updatedAt).toBe(new Date(1700000000000).toISOString());
     expect(result.warnings.some(w => /epoch/.test(w))).toBe(true);
-    expect(validateImport(result.doc)).toBeNull();
+    expect(runImport(result.doc)).toBeNull();
   });
 
   test("normalizes deterministic nested _id for legacy bar/line/kpi data", () => {
@@ -226,44 +239,49 @@ describe("mkDoc nested _id synthesis", () => {
   });
 });
 
-describe("validateImport", () => {
+describe("validateImportStrict (via runImport wrapper)", () => {
   test("accepts a freshly-built doc", () => {
-    expect(validateImport(goodDoc())).toBeNull();
+    expect(runImport(goodDoc())).toBeNull();
   });
 
   test("rejects non-object", () => {
-    expect(validateImport(null)).toMatch(/Not an object/);
+    // strict validator routes through migrateDoc first; the non-object
+    // guard fires there with a pipeline-prefixed message.
+    expect(runImport(null)).toMatch(/Cannot migrate/);
   });
 
-  test("rejects missing schemaVersion", () => {
+  test("accepts a v1-shaped doc missing explicit schemaVersion (migrates to v2)", () => {
+    // Behavioural change from the legacy `validateImport`: the strict
+    // pipeline assumes a missing schemaVersion means v1 and migrates
+    // forward. The legacy API used to reject with "Missing schemaVersion".
     const d: any = goodDoc();
     delete d.schemaVersion;
-    expect(validateImport(d)).toMatch(/Missing schemaVersion/);
+    expect(runImport(d)).toBeNull();
   });
 
-  test("rejects unsupported schemaVersion", () => {
+  test("rejects unsupported (future) schemaVersion", () => {
     const d: any = goodDoc();
     d.schemaVersion = 42;
-    expect(validateImport(d)).toMatch(/Unsupported schemaVersion/);
+    expect(runImport(d)).toMatch(/newer than this client supports/);
   });
 
   test("rejects missing sections array", () => {
     const d: any = goodDoc();
     d.sections = "not-an-array";
-    expect(validateImport(d)).toMatch(/Missing sections array/);
+    expect(runImport(d)).toMatch(/Missing sections array/);
   });
 
   test("rejects section referencing missing block", () => {
     const d: any = goodDoc();
     d.sections[0].blockIds.push("nonexistent_block_id");
-    expect(validateImport(d)).toMatch(/references missing block/);
+    expect(runImport(d)).toMatch(/references missing block/);
   });
 
   test("rejects block referenced from multiple sections", () => {
     const d: any = goodDoc();
     const bid = d.sections[0].blockIds[0];
     d.sections[1].blockIds.push(bid);
-    expect(validateImport(d)).toMatch(/referenced in multiple sections/);
+    expect(runImport(d)).toMatch(/referenced in multiple sections/);
   });
 
   test("rejects orphan block (present in blocks, unreferenced by any section)", () => {
@@ -274,21 +292,21 @@ describe("validateImport", () => {
       props: { text: "x" },
       visible: true,
     };
-    expect(validateImport(d)).toMatch(/Orphan block/);
+    expect(runImport(d)).toMatch(/Orphan block/);
   });
 
   test("rejects block.id that doesn't match its key", () => {
     const d: any = goodDoc();
     const key = Object.keys(d.blocks)[0];
     d.blocks[key].id = "WRONG";
-    expect(validateImport(d)).toMatch(/Block id mismatch/);
+    expect(runImport(d)).toMatch(/Block id mismatch/);
   });
 
   test("rejects unknown block type", () => {
     const d: any = goodDoc();
     const key = Object.keys(d.blocks)[0];
     d.blocks[key].type = "this_type_does_not_exist";
-    expect(validateImport(d)).toMatch(/Unknown block type/);
+    expect(runImport(d)).toMatch(/Unknown block type/);
   });
 
   test("rejects block in wrong section type", () => {
@@ -300,7 +318,7 @@ describe("validateImport", () => {
     if (!sourceId) throw new Error("missing source block");
     footer.blockIds = footer.blockIds.filter((bid: string) => bid !== sourceId);
     header.blockIds.push(sourceId);
-    expect(validateImport(d)).toMatch(/not allowed in section/);
+    expect(runImport(d)).toMatch(/not allowed in section/);
   });
 
   test("rejects failed guard validation", () => {
@@ -308,13 +326,13 @@ describe("validateImport", () => {
     const brandId = Object.keys(d.blocks).find(id => d.blocks[id].type === "brand_stamp");
     if (!brandId) throw new Error("missing brand block");
     d.blocks[brandId].props.position = "center";
-    expect(validateImport(d)).toMatch(/Invalid props for brand_stamp/);
+    expect(runImport(d)).toMatch(/Invalid props for brand_stamp/);
   });
 
   test("rejects duplicate section id", () => {
     const d: any = goodDoc();
     d.sections[1].id = d.sections[0].id;
-    expect(validateImport(d)).toMatch(/Duplicate section id/);
+    expect(runImport(d)).toMatch(/Duplicate section id/);
   });
 });
 

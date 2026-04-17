@@ -5,7 +5,7 @@ import { BREG } from '../registry/blocks';
  * Development-only invariant checker for editor state.
  *
  * Defense-in-depth: even with the reducer permission gate (isActionAllowed)
- * and the import validator (validateImport), reducer cases can have subtle
+ * and the import validator (validateImportStrict), reducer cases can have subtle
  * bugs that corrupt state — wrong block.id assignment, missed reference,
  * stale undo entry, etc. This runs after every reducer step in dev so that
  * invariant violations surface immediately at the action that caused them,
