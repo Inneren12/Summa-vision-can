@@ -95,6 +95,10 @@ Rules:
   imprecise.
 - **Resolution:** Rename function + every reference (no behavior change).
 - **Target:** Future cleanup PR.
+> Updated 2026-04-17 (PR 2a follow-up): `validateDocumentShape` is now
+> module-internal again (the temporary `export` was removed to preserve
+> the single-entry-point contract). Only `validateImportStrict` is
+> exposed. Remaining scope for DEBT-024 is the cosmetic rename.
 
 
 ---

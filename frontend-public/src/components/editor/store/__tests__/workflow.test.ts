@@ -526,26 +526,44 @@ describe("fix prompt / P0 — in_review bypass closure", () => {
     expect(result._lastRejection?.type).toBe("REDO");
   });
 
-  test("undoStack is preserved across SUBMIT_FOR_REVIEW (available again after REQUEST_CHANGES)", () => {
+  // 6-step regression guard: if a future refactor simplifies the permission
+  // gate and clears stacks on SUBMIT_FOR_REVIEW, this test will catch the
+  // resulting UNDO/REDO round-trip bypass immediately. Keep all six steps.
+  test("stack preservation: edit → submit → UNDO rejected in_review → REQUEST_CHANGES → UNDO restores", () => {
+    // 1. Capture an edit in the undoStack in draft.
     let s = baseState();
     const bid = findBlockIdByType(s, "headline_editorial");
+    const preEditText = s.doc.blocks[bid].props.text;
     s = reducer(s, { type: "UPDATE_PROP", blockId: bid, key: "text", value: "v1" });
+    expect(s.doc.blocks[bid].props.text).toBe("v1");
     const stackBefore = s.undoStack.length;
     expect(stackBefore).toBeGreaterThan(0);
 
+    // 2. Submit for review.
     s = reducer(s, { type: "SUBMIT_FOR_REVIEW", ts: FIXED_TS });
-    // Not cleared on submit — crucial for the round-trip.
-    expect(s.undoStack.length).toBe(stackBefore);
+    expect(s.doc.review.workflow).toBe("in_review");
 
-    // Reviewer bounces the document back.
+    // 3. UNDO is rejected while in_review — permission gate blocks it
+    //    before the reducer touches the stack.
+    const blocked = reducer(s, { type: "UNDO" });
+    expect(blocked.doc).toBe(s.doc);
+    expect(blocked._lastRejection?.type).toBe("UNDO");
+    expect(blocked._lastRejection?.reason).toMatch(/read-only/i);
+
+    // 4. Stack is preserved (NOT cleared) across the submit.
+    expect(s.undoStack.length).toBe(stackBefore);
+    expect(blocked.undoStack.length).toBe(stackBefore);
+
+    // 5. Reviewer returns the document to draft.
     s = reducer(s, { type: "REQUEST_CHANGES", ts: FIXED_TS });
     expect(s.doc.review.workflow).toBe("draft");
     expect(s.undoStack.length).toBe(stackBefore);
 
-    // UNDO now works again.
-    const result = reducer(s, { type: "UNDO" });
-    expect(result.doc).not.toBe(s.doc);
-    expect(result._lastRejection).toBeUndefined();
+    // 6. UNDO now works and restores the pre-submission state.
+    const restored = reducer(s, { type: "UNDO" });
+    expect(restored._lastRejection).toBeUndefined();
+    expect(restored.doc).not.toBe(s.doc);
+    expect(restored.doc.blocks[bid].props.text).toBe(preEditText);
   });
 });
 
@@ -618,5 +636,108 @@ describe("fix prompt / P1 — invalid IMPORT flows through _lastRejection", () =
     const result = reducer(s0, { type: "IMPORT", doc: fresh });
     expect(result._lastRejection).toBeUndefined();
     expect(result.dirty).toBe(false); // fresh import starts clean
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// 10. Fix prompt 2 — zero-iteration bypass closure + IMPORT null case
+// ────────────────────────────────────────────────────────────────────
+
+describe("fix prompt 2 / category-first gate — empty UPDATE_DATA does not bypass", () => {
+  test("UPDATE_DATA with empty payload is rejected in approved", () => {
+    const state = setWorkflow(baseState(), "approved");
+    const bid = findBlockIdByType(state, "headline_editorial");
+    const versionBefore = state.doc.meta.version;
+    const historyLenBefore = state.doc.meta.history.length;
+    const result = reducer(state, { type: "UPDATE_DATA", blockId: bid, data: {} });
+
+    // Reference-equality: withRejection preserves state.doc, so the rejection
+    // path must not have run push() and bumped meta.version.
+    expect(result.doc).toBe(state.doc);
+    expect(result.doc.meta.version).toBe(versionBefore);
+    expect(result.doc.meta.history.length).toBe(historyLenBefore);
+    expect(result._lastRejection?.type).toBe("UPDATE_DATA");
+    expect(result._lastRejection?.reason).toMatch(/read-only/i);
+  });
+
+  test("UPDATE_DATA with empty payload is rejected in in_review", () => {
+    const state = setWorkflow(baseState(), "in_review");
+    const bid = findBlockIdByType(state, "headline_editorial");
+    const result = reducer(state, { type: "UPDATE_DATA", blockId: bid, data: {} });
+
+    expect(result.doc).toBe(state.doc);
+    expect(result._lastRejection?.type).toBe("UPDATE_DATA");
+    expect(result._lastRejection?.reason).toMatch(/copy edits/i);
+  });
+
+  test("UPDATE_DATA with empty payload is rejected in exported and published", () => {
+    for (const wf of ["exported", "published"] as const) {
+      const state = setWorkflow(baseState(), wf);
+      const bid = findBlockIdByType(state, "headline_editorial");
+      const result = reducer(state, { type: "UPDATE_DATA", blockId: bid, data: {} });
+      expect(result.doc).toBe(state.doc);
+      expect(result._lastRejection?.type).toBe("UPDATE_DATA");
+      expect(result._lastRejection?.reason).toMatch(/read-only/i);
+    }
+  });
+
+  test("UPDATE_DATA with empty payload is allowed in draft (no rejection)", () => {
+    const state = baseState();
+    const bid = findBlockIdByType(state, "headline_editorial");
+    const result = reducer(state, { type: "UPDATE_DATA", blockId: bid, data: {} });
+    // Allowed by gate. The reducer still runs push() — empty spread is a
+    // structural no-op — but the crucial assertion is that the workflow
+    // gate did not reject.
+    expect(result._lastRejection).toBeUndefined();
+  });
+
+  test("UPDATE_DATA with non-empty data in approved is rejected (baseline)", () => {
+    const state = setWorkflow(baseState(), "approved");
+    const bid = findBlockIdByType(state, "headline_editorial");
+    const result = reducer(state, {
+      type: "UPDATE_DATA",
+      blockId: bid,
+      data: { text: "x" },
+    });
+    expect(result.doc).toBe(state.doc);
+    expect(result._lastRejection?.type).toBe("UPDATE_DATA");
+  });
+
+  test("UPDATE_PROP with empty key is rejected in read-only workflows", () => {
+    // UPDATE_PROP's key is a required property on the action shape. We cast
+    // to any to simulate a malformed dispatch (devtools, future automation):
+    // the gate classifies "" as "unknown" and must still deny in read-only.
+    const state = setWorkflow(baseState(), "approved");
+    const bid = findBlockIdByType(state, "headline_editorial");
+    const result = reducer(state, {
+      type: "UPDATE_PROP",
+      blockId: bid,
+      key: "" as any,
+      value: "x",
+    } as any);
+    expect(result.doc).toBe(state.doc);
+    expect(result._lastRejection?.type).toBe("UPDATE_PROP");
+  });
+});
+
+describe("fix prompt 2 / reducer IMPORT rejection signal", () => {
+  test("reducer IMPORT with malformed doc fills _lastRejection via withRejection", () => {
+    const state = baseState();
+    const result = reducer(state, {
+      type: "IMPORT",
+      doc: { garbage: true } as any,
+    });
+    expect(result.doc).toBe(state.doc);
+    expect(result._lastRejection?.type).toBe("IMPORT");
+    expect(typeof result._lastRejection?.reason).toBe("string");
+    expect((result._lastRejection?.reason ?? "").length).toBeGreaterThan(0);
+  });
+
+  test("reducer IMPORT with null doc fills _lastRejection", () => {
+    const state = baseState();
+    const result = reducer(state, { type: "IMPORT", doc: null as any });
+    expect(result.doc).toBe(state.doc);
+    expect(result._lastRejection?.type).toBe("IMPORT");
+    expect((result._lastRejection?.reason ?? "").length).toBeGreaterThan(0);
   });
 });
