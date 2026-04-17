@@ -51,31 +51,6 @@ Rules:
   `settings.temp_upload_ttl_hours` (default 24 h).
 - **Target:** Follow-up PR (not blocking for the upload feature).
 
-### DEBT-023: `validateImportStrict` does not deep-validate `Comment` entries
-
-- **Source:** Stage 3 PR 1 review (`claude/add-review-section-IL0pl`)
-- **Added:** 2026-04-17
-- **Severity:** low
-- **Category:** code-quality
-- **Status:** accepted
-- **Description:** `validateImportStrict` does not deep-validate
-  `review.comments[]` element shape. Currently only array-ness is checked.
-  Element-level checks for `WorkflowHistoryEntry` were added in Stage 3
-  PR 2a; the parallel `Comment` validator (required: `id`, `blockId`,
-  `parentId` nullable, `author`, `text`, `createdAt`, `resolved` boolean,
-  `updatedAt` nullable, `resolvedAt` nullable, `resolvedBy` nullable)
-  lands in PR 2b alongside the comment reducer actions.
-- **Impact:** Low — `mkDoc` seeds `comments: []` and PR 2a does not
-  introduce any reducer action that adds comments. Risk surfaces only
-  when PR 2b lands user-authored comment entries.
-- **Resolution:** Add `validateCommentEntry` in `guards.ts` alongside
-  the new comment reducer actions.
-- **Target:** Stage 3 PR 2b (comment reducer actions).
-> Updated 2026-04-17: scope narrowed to `Comment` only — `WorkflowHistoryEntry`
-> element validation closed by PR 2a.
-
----
-
 ### DEBT-024: Rename `validateDocumentShape` → `assertCanonicalDocumentV2Shape`
 
 - **Source:** Stage 3 PR 2a (`claude/add-workflow-state-machine-mUM3P`)
@@ -126,3 +101,4 @@ Rules:
 | DEBT-019 | Orphaned LLM infrastructure outside services/ai/ | Dead Code Cleanup | 2026-04-12 |
 | DEBT-020 | CMHC and Tasks routers still mounted for deferred features | Dead Code Cleanup | 2026-04-12 |
 | DEBT-022 | `validateImport` dual-signature (string + throwing) | Stage 3 PR 2a (`claude/add-workflow-state-machine-mUM3P`) | 2026-04-17 |
+| DEBT-023 | `validateImportStrict` does not deep-validate `Comment` entries | Stage 3 PR 2b (`claude/recon-comments-subsystem-HwvB1`) | 2026-04-17 |

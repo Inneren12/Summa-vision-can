@@ -125,6 +125,11 @@ export interface WorkflowPermission {
   structural: boolean;
   style: boolean;
   importUndoRedo: boolean;
+  // Whether comment-lifecycle actions (ADD/REPLY/EDIT/RESOLVE/REOPEN/DELETE)
+  // can mutate `doc.review.comments` in this workflow state. Comments stay
+  // writable through `in_review` so reviewers can annotate; read-only states
+  // freeze the comment surface.
+  canComment: boolean;
   // SELECT, SET_MODE, SAVED are always allowed and not represented here.
 }
 
@@ -142,6 +147,7 @@ export const WORKFLOW_PERMISSIONS: Record<WorkflowState, WorkflowPermission> = {
   draft: {
     textContent: true, dataContent: true, structural: true, style: true,
     importUndoRedo: true,
+    canComment: true,
   },
   in_review: {
     textContent: true, dataContent: false, structural: false, style: false,
@@ -155,18 +161,24 @@ export const WORKFLOW_PERMISSIONS: Record<WorkflowState, WorkflowPermission> = {
     // Stacks are PRESERVED across SUBMIT_FOR_REVIEW (no clear) so that
     // REQUEST_CHANGES re-enables undo once the document is back in draft.
     importUndoRedo: false,
+    // Comments stay open during review — annotating the document is the
+    // reviewer's primary action.
+    canComment: true,
   },
   approved: {
     textContent: false, dataContent: false, structural: false, style: false,
     importUndoRedo: false,
+    canComment: false,
   },
   exported: {
     textContent: false, dataContent: false, structural: false, style: false,
     importUndoRedo: false,
+    canComment: false,
   },
   published: {
     textContent: false, dataContent: false, structural: false, style: false,
     importUndoRedo: false,
+    canComment: false,
   },
 };
 
@@ -265,6 +277,20 @@ export function checkWorkflowPermission(
     case "MARK_PUBLISHED":
     case "DUPLICATE_AS_DRAFT":
       return { allowed: true };
+
+    // Comment-lifecycle actions ride their own `canComment` flag, independent
+    // of the content-edit matrix. They are orthogonal to text/data/style
+    // categories — a reviewer can still annotate a document that is otherwise
+    // locked to copy-edits only.
+    case "ADD_COMMENT":
+    case "REPLY_TO_COMMENT":
+    case "EDIT_COMMENT":
+    case "RESOLVE_COMMENT":
+    case "REOPEN_COMMENT":
+    case "DELETE_COMMENT":
+      return wp.canComment
+        ? { allowed: true }
+        : { allowed: false, reason: `Comments are read-only in "${workflow}".` };
 
     default:
       return { allowed: false, reason: `Unknown action type: ${action.type}` };

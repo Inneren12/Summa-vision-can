@@ -216,7 +216,8 @@ export type EditorAction =
   | { type: 'SELECT'; blockId: string | null }
   | { type: 'SAVED' }
   | { type: 'SET_MODE'; mode: EditorMode }
-  | WorkflowAction;
+  | WorkflowAction
+  | CommentAction;
 
 // Workflow lifecycle actions — see store/workflow.ts for state-machine.
 export type WorkflowAction =
@@ -227,6 +228,18 @@ export type WorkflowAction =
   | { type: 'MARK_EXPORTED'; filename: string; actor?: string; ts?: string }
   | { type: 'MARK_PUBLISHED'; channel: string; actor?: string; ts?: string }
   | { type: 'DUPLICATE_AS_DRAFT'; actor?: string; ts?: string };
+
+// Comment lifecycle actions — see store/comments.ts for reducer helpers.
+// Comment mutations do NOT participate in undo/redo (see docs/modules/editor.md
+// "Comments subsystem"). `id` on ADD/REPLY is injectable for test determinism;
+// the reducer falls back to `makeId()` when absent.
+export type CommentAction =
+  | { type: 'ADD_COMMENT'; blockId: string; text: string; actor?: string; ts?: string; id?: string }
+  | { type: 'REPLY_TO_COMMENT'; parentId: string; text: string; actor?: string; ts?: string; id?: string }
+  | { type: 'EDIT_COMMENT'; commentId: string; text: string; actor?: string; ts?: string }
+  | { type: 'RESOLVE_COMMENT'; commentId: string; actor?: string; ts?: string }
+  | { type: 'REOPEN_COMMENT'; commentId: string; actor?: string; ts?: string }
+  | { type: 'DELETE_COMMENT'; commentId: string; actor?: string; ts?: string };
 
 export interface TimestampProvider {
   now(): string;
