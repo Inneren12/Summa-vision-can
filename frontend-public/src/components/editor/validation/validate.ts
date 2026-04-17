@@ -4,6 +4,7 @@ import { SIZES } from '../config/sizes';
 import { PALETTES } from '../config/palettes';
 import { BGS } from '../config/backgrounds';
 import { validateBlockData } from './block-data';
+import { measureLayout } from '../renderer/measure';
 
 export function validate(doc: CanonicalDocument): ValidationResult {
   const R: ValidationResult = { errors: [], warnings: [], info: [], passed: [] };
@@ -125,6 +126,19 @@ export function validate(doc: CanonicalDocument): ValidationResult {
 
   // Empty annotation
   blocks.forEach(b => { if (b.type === "body_annotation" && !(b.props.text || "").trim()) R.warnings.push("Annotation block is empty"); });
+
+
+  const size = SIZES[doc.page.size];
+  if (size) {
+    const layout = measureLayout(doc, size);
+    layout.forEach(sec => {
+      if (sec.overflow) {
+        R.warnings.push(
+          `Section "${sec.sectionType}" may overflow: ~${Math.round(sec.consumedHeight)}px used / ${Math.round(sec.availableHeight)}px available`,
+        );
+      }
+    });
+  }
 
   return R;
 }

@@ -1,6 +1,7 @@
 import type { CanonicalDocument, Palette } from '../types';
 import { TK } from '../config/tokens';
 import { BR } from './blocks';
+import type { RenderResult } from './types';
 
 export const SECTION_LAYOUT: Record<string, (w: number, h: number, s: number, p: number) => { x: number; y: number; w: number; h: number }> = {
   header: (w, h, s, p) => ({ x: p, y: p, w: w - p * 2, h: 130 * s }),
@@ -10,9 +11,17 @@ export const SECTION_LAYOUT: Record<string, (w: number, h: number, s: number, p:
   footer: (w, h, s, p) => ({ x: p, y: h - p - 40 * s, w: w - p * 2, h: 40 * s }),
 };
 
-export function renderDoc(ctx: CanvasRenderingContext2D, doc: CanonicalDocument, w: number, h: number, pal: Palette): void {
+export function renderDoc(
+  ctx: CanvasRenderingContext2D,
+  doc: CanonicalDocument,
+  w: number,
+  h: number,
+  pal: Palette,
+): Array<{ blockId: string; result: RenderResult }> {
   const s = w / 1080;
   const pad = 64 * s;
+  const results: Array<{ blockId: string; result: RenderResult }> = [];
+
   ctx.fillStyle = TK.c.acc;
   ctx.fillRect(0, 0, w, 4 * s);
 
@@ -20,23 +29,26 @@ export function renderDoc(ctx: CanvasRenderingContext2D, doc: CanonicalDocument,
     const layoutFn = SECTION_LAYOUT[sec.type];
     if (!layoutFn) return;
     const la = layoutFn(w, h, s, pad);
-    let cy = 0;
 
-    // Clip to section bounds to prevent overflow
+    // Section-level clip remains as defense against overflow
     ctx.save();
     ctx.beginPath();
     ctx.rect(la.x, la.y, la.w, la.h);
     ctx.clip();
 
+    let cy = 0;
     sec.blockIds.forEach(bid => {
       const block = doc.blocks[bid];
       if (!block || !block.visible) return;
       const fn = BR[block.type];
       if (!fn) return;
-      const consumed = fn(ctx, block.props, la.x, la.y + cy, la.w, la.h - cy, pal, s);
-      cy += consumed;
+      const result = fn(ctx, block.props, la.x, la.y + cy, la.w, la.h - cy, pal, s);
+      results.push({ blockId: bid, result });
+      cy += result.height;
     });
 
-    ctx.restore(); // remove clip
+    ctx.restore();
   });
+
+  return results;
 }

@@ -4,6 +4,7 @@ import { TPLS, mkDoc } from '../registry/templates';
 import { validateImport } from '../registry/guards';
 import { PERMS } from './permissions';
 import { assertStateIntegrity } from './dev-assert';
+import { assertDocumentIntegrity } from '../validation/invariants';
 
 export const MAX_UNDO = 50;
 
@@ -245,6 +246,17 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       break;
     default:
       nextState = state;
+  }
+
+  if (process.env.NODE_ENV === "development" && nextState !== state) {
+    const violations = assertDocumentIntegrity(nextState.doc);
+    const errors = violations.filter(v => v.severity === "error");
+    if (errors.length > 0) {
+      console.error(
+        `[editor] Document integrity violations after ${action.type}:`,
+        errors.map(v => `${v.code}: ${v.message}`),
+      );
+    }
   }
 
   // Dev-only: verify state integrity after mutation

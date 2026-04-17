@@ -5,6 +5,64 @@ import { validateBlockData, normalizeBlockData } from '../validation/block-data'
 export const SUPPORTED_SCHEMA_VERSIONS = [1] as const;
 export const CURRENT_SCHEMA = 1;
 
+/**
+ * Migration functions that upgrade a document from version N to N+1.
+ * Add entries here when schema changes are introduced.
+ *
+ * IMPORTANT: migrations must be PURE (no mutation of input, return new object).
+ * They run BEFORE validateImport, so the output of a migration only needs to be
+ * valid for the NEXT version, not necessarily the current version.
+ *
+ * Example (when schema v2 is introduced):
+ *   1: (doc) => {
+ *     // v1 → v2: rename eyebrow_tag block type to series_tag
+ *     const blocks = { ...doc.blocks };
+ *     for (const [id, block] of Object.entries(blocks)) {
+ *       if (block.type === "eyebrow_tag") {
+ *         blocks[id] = { ...block, type: "series_tag" };
+ *       }
+ *     }
+ *     return { ...doc, blocks, schemaVersion: 2 };
+ *   }
+ */
+const MIGRATIONS: Record<number, (doc: any) => any> = {
+  // No migrations yet — CURRENT_SCHEMA is 1 and v1 is the only supported version
+};
+
+/**
+ * Apply migrations sequentially from the document's current version to CURRENT_SCHEMA.
+ * Called from hydrateImportedDoc BEFORE structural hydration.
+ */
+function applyMigrations(raw: any): { doc: any; warnings: string[] } {
+  const warnings: string[] = [];
+  if (!raw || typeof raw !== "object") return { doc: raw, warnings };
+
+  let current = { ...raw };
+  const startVersion = typeof current.schemaVersion === "number" ? current.schemaVersion : CURRENT_SCHEMA;
+
+  if (startVersion > CURRENT_SCHEMA) {
+    // Future version — we can't migrate forward, reject earlier in the pipeline
+    return { doc: current, warnings };
+  }
+
+  for (let v = startVersion; v < CURRENT_SCHEMA; v++) {
+    const migrateFn = MIGRATIONS[v];
+    if (!migrateFn) {
+      warnings.push(`No migration from schemaVersion ${v} to ${v + 1} — skipping`);
+      continue;
+    }
+    try {
+      current = migrateFn(current);
+      warnings.push(`Migrated schemaVersion ${v} → ${v + 1}`);
+    } catch (err: any) {
+      warnings.push(`Migration ${v} → ${v + 1} failed: ${err?.message ?? "unknown"}`);
+      break;
+    }
+  }
+
+  return { doc: current, warnings };
+}
+
 const VALID_WORKFLOW_STATES: ReadonlySet<WorkflowState> = new Set<WorkflowState>([
   "draft", "in_review", "approved", "exported", "published",
 ]);
@@ -228,73 +286,79 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
     throw new Error("Cannot hydrate non-object document");
   }
 
-  // Reject unsupported schema versions BEFORE any hydration work
+  // Reject unsupported schemaVersion before migration
   const rawVersion = typeof raw.schemaVersion === "number" ? raw.schemaVersion : CURRENT_SCHEMA;
-  if (!SUPPORTED_SCHEMA_VERSIONS.includes(rawVersion)) {
+  if (rawVersion > CURRENT_SCHEMA) {
     throw new Error(
       `Unsupported schemaVersion: ${rawVersion}. Supported: ${SUPPORTED_SCHEMA_VERSIONS.join(", ")}. ` +
-      `If this is a newer version, please update the editor.`,
+      `If this is from a newer version, please update the editor.`,
     );
   }
 
   const warnings: string[] = [];
+
+  // Phase 0: Apply sequential migrations v1 → v2 → ... → CURRENT_SCHEMA
+  const migrated = applyMigrations(raw);
+  warnings.push(...migrated.warnings);
+  const source = migrated.doc;
+
   const now = new Date().toISOString();
 
-  if (typeof raw.schemaVersion !== "number") {
+  if (typeof source.schemaVersion !== "number") {
     warnings.push(`Missing schemaVersion — assumed ${CURRENT_SCHEMA}`);
   }
-  if (typeof raw.templateId !== "string") {
+  if (typeof source.templateId !== "string") {
     warnings.push(`Missing templateId — defaulted to "single_stat_hero"`);
   }
-  if (!raw.page || typeof raw.page !== "object") {
+  if (!source.page || typeof source.page !== "object") {
     warnings.push("Missing page config — filled with defaults");
   } else {
-    if (typeof raw.page.size !== "string") warnings.push(`Missing page.size — defaulted to "instagram_1080"`);
-    if (typeof raw.page.background !== "string") warnings.push(`Missing page.background — defaulted to "gradient_warm"`);
-    if (typeof raw.page.palette !== "string") warnings.push(`Missing page.palette — defaulted to "housing"`);
+    if (typeof source.page.size !== "string") warnings.push(`Missing page.size — defaulted to "instagram_1080"`);
+    if (typeof source.page.background !== "string") warnings.push(`Missing page.background — defaulted to "gradient_warm"`);
+    if (typeof source.page.palette !== "string") warnings.push(`Missing page.palette — defaulted to "housing"`);
   }
-  if (!Array.isArray(raw.sections)) {
+  if (!Array.isArray(source.sections)) {
     warnings.push("Missing sections array — defaulted to []");
   }
-  if (raw.workflow !== undefined && typeof raw.workflow === "string"
-      && !VALID_WORKFLOW_STATES.has(raw.workflow as WorkflowState)) {
-    warnings.push(`Invalid workflow "${raw.workflow}" — reset to "draft"`);
+  if (source.workflow !== undefined && typeof source.workflow === "string"
+      && !VALID_WORKFLOW_STATES.has(source.workflow as WorkflowState)) {
+    warnings.push(`Invalid workflow "${source.workflow}" — reset to "draft"`);
   }
-  if (typeof raw.meta?.createdAt === "number") {
+  if (typeof source.meta?.createdAt === "number") {
     warnings.push("meta.createdAt was numeric (epoch) — converted to ISO string");
   }
-  if (typeof raw.meta?.updatedAt === "number") {
+  if (typeof source.meta?.updatedAt === "number") {
     warnings.push("meta.updatedAt was numeric (epoch) — converted to ISO string");
   }
 
   const doc: CanonicalDocument = {
-    schemaVersion: rawVersion, // guaranteed supported
-    templateId: typeof raw.templateId === "string" ? raw.templateId : "single_stat_hero",
+    schemaVersion: typeof source.schemaVersion === "number" ? source.schemaVersion : CURRENT_SCHEMA,
+    templateId: typeof source.templateId === "string" ? source.templateId : "single_stat_hero",
     page: {
-      size: typeof raw.page?.size === "string" ? raw.page.size : "instagram_1080",
-      background: typeof raw.page?.background === "string" ? raw.page.background : "gradient_warm",
-      palette: typeof raw.page?.palette === "string" ? raw.page.palette : "housing",
+      size: typeof source.page?.size === "string" ? source.page.size : "instagram_1080",
+      background: typeof source.page?.background === "string" ? source.page.background : "gradient_warm",
+      palette: typeof source.page?.palette === "string" ? source.page.palette : "housing",
     },
-    sections: Array.isArray(raw.sections) ? raw.sections.map((sec: any) => ({
+    sections: Array.isArray(source.sections) ? source.sections.map((sec: any) => ({
       id: String(sec.id || ""),
       type: String(sec.type || ""),
       blockIds: Array.isArray(sec.blockIds) ? sec.blockIds.map(String) : [],
     })) : [],
     blocks: {},
-    workflow: normalizeWorkflow(raw.workflow),
+    workflow: normalizeWorkflow(source.workflow),
     meta: {
-      createdAt: typeof raw.meta?.createdAt === "string"
-        ? raw.meta.createdAt
-        : typeof raw.meta?.createdAt === "number"
-          ? new Date(raw.meta.createdAt).toISOString()
+      createdAt: typeof source.meta?.createdAt === "string"
+        ? source.meta.createdAt
+        : typeof source.meta?.createdAt === "number"
+          ? new Date(source.meta.createdAt).toISOString()
           : now,
-      updatedAt: typeof raw.meta?.updatedAt === "string"
-        ? raw.meta.updatedAt
-        : typeof raw.meta?.updatedAt === "number"
-          ? new Date(raw.meta.updatedAt).toISOString()
+      updatedAt: typeof source.meta?.updatedAt === "string"
+        ? source.meta.updatedAt
+        : typeof source.meta?.updatedAt === "number"
+          ? new Date(source.meta.updatedAt).toISOString()
           : now,
-      version: typeof raw.meta?.version === "number" ? raw.meta.version : 1,
-      history: Array.isArray(raw.meta?.history) ? [...raw.meta.history] : [],
+      version: typeof source.meta?.version === "number" ? source.meta.version : 1,
+      history: Array.isArray(source.meta?.history) ? [...source.meta.history] : [],
     },
   };
 
@@ -302,8 +366,8 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
   let droppedBlocks = 0;
   let unknownTypeBlocks = 0;
   let idRealigned = 0;
-  if (raw.blocks && typeof raw.blocks === "object") {
-    for (const [key, block] of Object.entries(raw.blocks)) {
+  if (source.blocks && typeof source.blocks === "object") {
+    for (const [key, block] of Object.entries(source.blocks)) {
       const b = block as any;
       if (!b || typeof b !== "object") { droppedBlocks++; continue; }
       const type = String(b.type ?? "");
@@ -323,3 +387,6 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
 
   return { doc, warnings };
 }
+
+
+export { MIGRATIONS, applyMigrations };

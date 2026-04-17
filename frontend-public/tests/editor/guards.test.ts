@@ -317,3 +317,29 @@ describe("validateImport", () => {
     expect(validateImport(d)).toMatch(/Duplicate section id/);
   });
 });
+
+
+describe("schema migration pipeline", () => {
+  test("empty MIGRATIONS map is valid when CURRENT_SCHEMA is 1", () => {
+    const doc = goodDoc();
+    doc.schemaVersion = 1;
+    const result = hydrateImportedDoc(doc);
+    expect(result.doc.schemaVersion).toBe(CURRENT_SCHEMA);
+    expect(result.warnings.filter(w => /Migrated/.test(w))).toHaveLength(0);
+  });
+
+  test("rejects schemaVersion higher than CURRENT_SCHEMA", () => {
+    const doc = goodDoc();
+    doc.schemaVersion = 999;
+    expect(() => hydrateImportedDoc(doc)).toThrow(/Unsupported schemaVersion/);
+  });
+
+  test("warns when migration function is missing", () => {
+    // Simulate future state: pretend we're upgrading from v0 to v1 with no migration.
+    // This is documented behavior from applyMigrations and does not require mocking CURRENT_SCHEMA yet.
+    const doc: any = goodDoc();
+    doc.schemaVersion = 0;
+    const result = hydrateImportedDoc(doc);
+    expect(result.warnings.some(w => /No migration/.test(w))).toBe(true);
+  });
+});
