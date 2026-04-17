@@ -51,6 +51,27 @@ Rules:
   `settings.temp_upload_ttl_hours` (default 24 h).
 - **Target:** Follow-up PR (not blocking for the upload feature).
 
+### DEBT-022: `validateImport` dual-signature (string + throwing)
+
+- **Source:** Stage 3 PR 1 (`claude/add-review-section-IL0pl`)
+- **Added:** 2026-04-17
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** accepted
+- **Description:** `frontend-public/src/components/editor/registry/guards.ts`
+  exports two parallel import validators: the legacy
+  `validateImport(doc): string | null` used by
+  `components/editor/index.tsx` and `components/editor/store/reducer.ts`,
+  and the new throwing `validateImportStrict(raw): CanonicalDocument`.
+  The two are kept in sync but both paths exist so PR 1 could land
+  data-layer-only without touching reducer/UI call sites.
+- **Impact:** Low — two validation entry points for the editor import
+  pipeline; one can fall out of sync with the other if a future invariant
+  is added to only one.
+- **Resolution:** Migrate reducer / `index.tsx` call sites to
+  `validateImportStrict`, drop the string-returning overload.
+- **Target:** Stage 3 PR 2 (reducer actions).
+
 ---
 
 ## Resolved

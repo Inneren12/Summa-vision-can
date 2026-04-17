@@ -1,32 +1,53 @@
-import type { CanonicalDocument, WorkflowState } from '../types';
+import type { CanonicalDocument, LegacyDocumentV1, WorkflowState } from '../types';
 import { BREG } from './blocks';
 import { validateBlockData, normalizeBlockData } from '../validation/block-data';
 
-export const SUPPORTED_SCHEMA_VERSIONS = [1] as const;
-export const CURRENT_SCHEMA = 1;
+export const SUPPORTED_SCHEMA_VERSIONS = [1, 2] as const;
+export const CURRENT_SCHEMA_VERSION = 2;
+// Kept as an alias for existing call sites (templates.ts, legacy tests).
+export const CURRENT_SCHEMA = CURRENT_SCHEMA_VERSION;
+
+const VALID_WORKFLOW_STATES: ReadonlySet<WorkflowState> = new Set<WorkflowState>([
+  "draft", "in_review", "approved", "exported", "published",
+]);
 
 /**
  * Migration functions that upgrade a document from version N to N+1.
- * Add entries here when schema changes are introduced.
+ * Each migration is PURE: it takes a doc at version N and returns a fresh
+ * doc at version N+1. No input mutation; no I/O.
  *
- * IMPORTANT: migrations must be PURE (no mutation of input, return new object).
- * They run BEFORE validateImport, so the output of a migration only needs to be
- * valid for the NEXT version, not necessarily the current version.
- *
- * Example (when schema v2 is introduced):
- *   1: (doc) => {
- *     // v1 → v2: rename eyebrow_tag block type to series_tag
- *     const blocks = { ...doc.blocks };
- *     for (const [id, block] of Object.entries(blocks)) {
- *       if (block.type === "eyebrow_tag") {
- *         blocks[id] = { ...block, type: "series_tag" };
- *       }
- *     }
- *     return { ...doc, blocks, schemaVersion: 2 };
- *   }
+ * Storage currently contains only v1 documents, so the only real-world
+ * migration is `1 → 2`. The chain infrastructure is retained so future
+ * schema bumps can add `MIGRATIONS[2]` etc. without reshaping this module.
  */
 const MIGRATIONS: Record<number, (doc: any) => any> = {
-  // No migrations yet — CURRENT_SCHEMA is 1 and v1 is the only supported version
+  1: (doc: LegacyDocumentV1): CanonicalDocument => {
+    const { workflow, ...restRoot } = doc;
+    const resolvedWorkflow: WorkflowState =
+      typeof workflow === "string" && VALID_WORKFLOW_STATES.has(workflow as WorkflowState)
+        ? (workflow as WorkflowState)
+        : "draft";
+    const now = new Date().toISOString();
+    return {
+      ...restRoot,
+      schemaVersion: 2,
+      meta: { ...doc.meta },
+      review: {
+        workflow: resolvedWorkflow,
+        history: [
+          {
+            ts: now,
+            action: "migrated",
+            summary: "Document migrated to schema v2",
+            author: "system",
+            fromWorkflow: null,
+            toWorkflow: resolvedWorkflow,
+          },
+        ],
+        comments: [],
+      },
+    };
+  },
 };
 
 /**
@@ -69,10 +90,6 @@ function applyMigrations(raw: any): { doc: any; warnings: string[] } {
   return { doc: current, warnings };
 }
 
-const VALID_WORKFLOW_STATES: ReadonlySet<WorkflowState> = new Set<WorkflowState>([
-  "draft", "in_review", "approved", "exported", "published",
-]);
-
 function normalizeWorkflow(raw: unknown): WorkflowState {
   if (typeof raw === "string" && VALID_WORKFLOW_STATES.has(raw as WorkflowState)) {
     return raw as WorkflowState;
@@ -112,10 +129,18 @@ function validateDocumentShape(doc: any): string | null {
   if (!doc.page.size || !doc.page.background || !doc.page.palette) return "Incomplete page config";
   if (typeof doc.meta.createdAt !== "string" || typeof doc.meta.updatedAt !== "string") return "Invalid meta timestamps";
   if (typeof doc.meta.version !== "number" || !Array.isArray(doc.meta.history)) return "Invalid meta version/history";
+  if ("workflow" in doc.meta) return "meta.workflow is not allowed in v2 (lives in review.workflow)";
+  if ("schemaVersion" in doc.meta) return "meta.schemaVersion is not allowed (root is the single source)";
 
-  if (typeof doc.workflow !== "string" || !VALID_WORKFLOW_STATES.has(doc.workflow as WorkflowState)) {
-    return "Invalid workflow state";
+  if ("workflow" in doc) return "root-level workflow is not allowed in v2 (lives in review.workflow)";
+  if ("comments" in doc) return "root-level comments is not allowed in v2 (lives in review.comments)";
+
+  if (!doc.review || typeof doc.review !== "object") return "Missing review section";
+  if (typeof doc.review.workflow !== "string" || !VALID_WORKFLOW_STATES.has(doc.review.workflow as WorkflowState)) {
+    return "Invalid review.workflow state";
   }
+  if (!Array.isArray(doc.review.history)) return "Invalid review.history (must be array)";
+  if (!Array.isArray(doc.review.comments)) return "Invalid review.comments (must be array)";
 
   return null;
 }
@@ -331,9 +356,10 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
   if (!Array.isArray(source.sections)) {
     warnings.push("Missing sections array — defaulted to []");
   }
-  if (source.workflow !== undefined && typeof source.workflow === "string"
-      && !VALID_WORKFLOW_STATES.has(source.workflow as WorkflowState)) {
-    warnings.push(`Invalid workflow "${source.workflow}" — reset to "draft"`);
+  const rawWorkflow = source.review?.workflow;
+  if (rawWorkflow !== undefined && typeof rawWorkflow === "string"
+      && !VALID_WORKFLOW_STATES.has(rawWorkflow as WorkflowState)) {
+    warnings.push(`Invalid workflow "${rawWorkflow}" — reset to "draft"`);
   }
   if (typeof source.meta?.createdAt === "number") {
     warnings.push("meta.createdAt was numeric (epoch) — converted to ISO string");
@@ -356,7 +382,6 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
       blockIds: Array.isArray(sec.blockIds) ? sec.blockIds.map(String) : [],
     })) : [],
     blocks: {},
-    workflow: normalizeWorkflow(source.workflow),
     meta: {
       createdAt: typeof source.meta?.createdAt === "string"
         ? source.meta.createdAt
@@ -370,6 +395,11 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
           : now,
       version: typeof source.meta?.version === "number" ? source.meta.version : 1,
       history: Array.isArray(source.meta?.history) ? [...source.meta.history] : [],
+    },
+    review: {
+      workflow: normalizeWorkflow(rawWorkflow),
+      history: Array.isArray(source.review?.history) ? [...source.review.history] : [],
+      comments: Array.isArray(source.review?.comments) ? [...source.review.comments] : [],
     },
   };
 
@@ -401,3 +431,73 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
 
 
 export { MIGRATIONS, applyMigrations };
+
+export interface MigrationResult {
+  doc: CanonicalDocument;
+  appliedMigrations: number[];
+}
+
+/**
+ * Pure, throwing migration — walks `MIGRATIONS[n]` from the doc's starting
+ * version up to `CURRENT_SCHEMA_VERSION` and returns the v-current shape.
+ *
+ * Rejects non-objects, future-version docs, and any migration step that
+ * fails to bump `schemaVersion` by exactly one. Idempotent on an
+ * already-current document (returns it unchanged with `appliedMigrations: []`).
+ */
+export function migrateDoc(raw: unknown): MigrationResult {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Cannot migrate: invalid document");
+  }
+
+  let current: any = { ...(raw as Record<string, unknown>) };
+  const startVersion = typeof current.schemaVersion === "number" ? current.schemaVersion : 1;
+
+  if (startVersion > CURRENT_SCHEMA_VERSION) {
+    throw new Error(
+      `Document schema version ${startVersion} is newer than this client supports (max: ${CURRENT_SCHEMA_VERSION})`,
+    );
+  }
+
+  const appliedMigrations: number[] = [];
+  for (let v = startVersion; v < CURRENT_SCHEMA_VERSION; v++) {
+    const fn = MIGRATIONS[v];
+    if (!fn) {
+      throw new Error(`Missing migration from schemaVersion ${v} to ${v + 1}`);
+    }
+    current = fn(current);
+    if (current?.schemaVersion !== v + 1) {
+      throw new Error(
+        `Migration ${v} → ${v + 1} did not bump schemaVersion (got ${current?.schemaVersion})`,
+      );
+    }
+    appliedMigrations.push(v + 1);
+  }
+
+  return { doc: current as CanonicalDocument, appliedMigrations };
+}
+
+/**
+ * Throwing variant of `validateImport`. Runs migrations first, then asserts
+ * every v2 invariant. Returns a typed `CanonicalDocument` on success.
+ *
+ * Call sites that still read the string-returning `validateImport` remain
+ * valid for now; tracked under `DEBT-022`.
+ */
+export function validateImportStrict(raw: unknown): CanonicalDocument {
+  const { doc } = migrateDoc(raw);
+
+  // `meta.schemaVersion` / `meta.workflow` / root `workflow` / root `comments`
+  // checks live inside `validateDocumentShape`; we re-run it here so callers
+  // of the strict API get a single throw path.
+  const err = validateImport(doc);
+  if (err) throw new Error(err);
+
+  if (doc.schemaVersion !== CURRENT_SCHEMA_VERSION) {
+    throw new Error(
+      `Post-migration schemaVersion must be ${CURRENT_SCHEMA_VERSION}, got ${doc.schemaVersion}`,
+    );
+  }
+
+  return doc;
+}

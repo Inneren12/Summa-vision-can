@@ -32,17 +32,59 @@ export interface PageConfig {
   palette: string;
 }
 
-export interface HistoryEntry {
+/**
+ * Edit-history entry — one per save/snapshot. Populated by the reducer's
+ * `push` helper as users edit blocks or page config.
+ *
+ * NOTE: semantically distinct from `WorkflowHistoryEntry`. Edit history
+ * tracks undo/redo-style save snapshots; workflow history tracks review
+ * lifecycle events (submit / approve / comment added). Do not merge them.
+ */
+export interface EditHistoryEntry {
   version: number;
   savedAt: string;
   summary: string;
+}
+
+/**
+ * Workflow-history entry — one per workflow transition or review event.
+ * Populated by the reducer (PR 2) and surfaced by the Review panel (PR 3).
+ * In Stage 3 PR 1 only two actions are ever written: `"migrated"` (from the
+ * v1 → v2 migration) and `"created"` (from `mkDoc`).
+ */
+export interface WorkflowHistoryEntry {
+  ts: string;
+  action: string;
+  summary: string;
+  author: string;
+  fromWorkflow: WorkflowState | null;
+  toWorkflow: WorkflowState | null;
+}
+
+export interface Comment {
+  id: string;
+  blockId: string;
+  parentId: string | null;
+  author: string;
+  text: string;
+  createdAt: string;
+  updatedAt: string | null;
+  resolved: boolean;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+}
+
+export interface Review {
+  workflow: WorkflowState;
+  history: WorkflowHistoryEntry[];
+  comments: Comment[];
 }
 
 export interface DocMeta {
   createdAt: string;
   updatedAt: string;
   version: number;
-  history: HistoryEntry[];
+  history: EditHistoryEntry[];
 }
 
 export interface CanonicalDocument {
@@ -51,8 +93,28 @@ export interface CanonicalDocument {
   page: PageConfig;
   sections: Section[];
   blocks: Record<string, Block>;
-  workflow: WorkflowState;
   meta: DocMeta;
+  review: Review;
+}
+
+/**
+ * Shape of documents written before Stage 3 PR 1. Exported strictly for the
+ * migration signature in `registry/guards.ts`; application code should never
+ * reference this type.
+ */
+export interface LegacyDocumentV1 {
+  schemaVersion: 1;
+  templateId: string;
+  page: PageConfig;
+  sections: Section[];
+  blocks: Record<string, Block>;
+  workflow: WorkflowState;
+  meta: {
+    createdAt: string;
+    updatedAt: string;
+    version: number;
+    history: EditHistoryEntry[];
+  };
 }
 
 export interface ControlDef {
