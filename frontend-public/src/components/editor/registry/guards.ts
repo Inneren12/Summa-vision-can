@@ -171,16 +171,29 @@ function validateDocumentShape(doc: any): string | null {
     if (entryErr) return entryErr;
   }
 
+  // Duplicate id check (must come BEFORE referential integrity, because a
+  // Set built via `new Set(comments.map(c => c.id))` would silently dedup
+  // duplicates and let malformed docs slip through — `buildThreads` keys a
+  // Map by id, and `applyEdit/Resolve/DeleteComment` use `.find(c => c.id
+  // === target)`, both of which would then leave the duplicate as an
+  // unreachable ghost that corrupts the audit trail).
+  const seenIds = new Set<string>();
+  for (let i = 0; i < doc.review.comments.length; i++) {
+    const id = doc.review.comments[i].id;
+    if (seenIds.has(id)) {
+      return `review.comments[${i}].id "${id}" duplicates an earlier comment`;
+    }
+    seenIds.add(id);
+  }
+
   // Referential integrity: every non-null parentId must point to a real
   // comment id in the same document. This closes the last gap of DEBT-023 —
   // without it, a serialized doc could reference a dead parent and break
-  // `buildThreads` orphan handling in the UI.
-  const commentById = new Map<string, any>(
-    doc.review.comments.map((c: any) => [c.id, c]),
-  );
+  // `buildThreads` orphan handling in the UI. Safe to use `seenIds` now
+  // that duplicates have been ruled out above.
   for (let i = 0; i < doc.review.comments.length; i++) {
     const c = doc.review.comments[i];
-    if (c.parentId !== null && !commentById.has(c.parentId)) {
+    if (c.parentId !== null && !seenIds.has(c.parentId)) {
       return `review.comments[${i}].parentId "${c.parentId}" does not match any comment id`;
     }
   }
@@ -190,6 +203,9 @@ function validateDocumentShape(doc: any): string | null {
   // are flat by design; a reply-to-reply would silently misrepresent thread
   // shape in the UI. Enforced both here (on import) and in the reducer (on
   // dispatch) so neither path can introduce nested threads.
+  const commentById = new Map<string, any>(
+    doc.review.comments.map((c: any) => [c.id, c]),
+  );
   for (let i = 0; i < doc.review.comments.length; i++) {
     const c = doc.review.comments[i];
     if (c.parentId !== null) {

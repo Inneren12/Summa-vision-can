@@ -33,6 +33,8 @@ export interface CommentThreadNode extends Comment {
 
 /**
  * Group a flat comment list into root-and-reply threads.
+ * one-level invariant — see `threadUnresolvedCount` for details.
+ *
  * Roots sorted newest-first by `createdAt`; replies sorted oldest-first
  * within each thread. Orphaned replies (parentId points to missing comment)
  * are promoted to roots so they remain visible in the UI.
@@ -56,14 +58,30 @@ export function buildThreads(comments: readonly Comment[]): CommentThreadNode[] 
   return roots;
 }
 
-/** Open items across a thread (root + replies), independent of depth. */
+/**
+ * Counts unresolved nodes in a thread (root + direct replies).
+ *
+ * ONE-LEVEL INVARIANT: This function assumes the thread is at most one level
+ * deep (root + replies). This matches the current data model, which is
+ * enforced by:
+ *   - `applyReplyToComment` (rejects reply-to-reply in the reducer)
+ *   - `validateDocumentShape` (rejects reply-to-reply in imported docs)
+ *
+ * If multi-level threading is ever permitted, this function must be made
+ * recursive. Do not change it in isolation — the enforcement in the reducer
+ * and validator, plus the `CommentThreadNode` shape, and the UI layer all
+ * assume flat one-level threads.
+ */
 export function threadUnresolvedCount(thread: CommentThreadNode): number {
   const root = thread.resolved ? 0 : 1;
   const replies = thread.replies.filter((r) => !r.resolved).length;
   return root + replies;
 }
 
-/** A thread is resolved iff every node in it is resolved. */
+/**
+ * Derived status: thread is resolved iff every node in it is resolved.
+ * one-level invariant — see `threadUnresolvedCount` for details.
+ */
 export function isThreadResolved(thread: CommentThreadNode): boolean {
   return threadUnresolvedCount(thread) === 0;
 }

@@ -490,4 +490,46 @@ describe("validateImportStrict — Comment element shape (DEBT-023 closure)", ()
     const raw = withComments(tombstoned);
     expect(() => validateImportStrict(raw)).not.toThrow();
   });
+
+  // ── Duplicate-id rejection ─────────────────────────────────────────
+  // A Set built from `comments.map(c => c.id)` silently dedupes, so
+  // duplicate ids would slip past referential-integrity and then corrupt
+  // `buildThreads` / `apply{Edit,Resolve,Delete}Comment` downstream.
+
+  test("rejects documents with duplicate comment ids", () => {
+    const first = wellFormedComment({
+      id: "c_1",
+      author: "alice",
+      text: "first",
+      createdAt: "2026-04-17T12:00:00.000Z",
+    });
+    const collision = wellFormedComment({
+      id: "c_1",
+      author: "bob",
+      text: "colliding",
+      createdAt: "2026-04-17T12:01:00.000Z",
+    });
+    const raw = withComments(first, collision);
+    expect(() => validateImportStrict(raw)).toThrow(
+      /duplicates? an earlier comment|duplicate/i,
+    );
+  });
+
+  test("accepts well-formed unique comment ids", () => {
+    const root = wellFormedComment({
+      id: "c_1",
+      author: "alice",
+      text: "root",
+      createdAt: "2026-04-17T12:00:00.000Z",
+    });
+    const reply = wellFormedComment({
+      id: "c_2",
+      parentId: "c_1",
+      author: "bob",
+      text: "reply",
+      createdAt: "2026-04-17T12:01:00.000Z",
+    });
+    const raw = withComments(root, reply);
+    expect(() => validateImportStrict(raw)).not.toThrow();
+  });
 });
