@@ -112,7 +112,31 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
     const nv = (state.doc.meta.version || 0) + 1;
     const now = new Date().toISOString();
     const hist = [...(state.doc.meta.history || []).slice(-9), { version: state.doc.meta.version, savedAt: now, summary: summary || action.type }];
-    return { ...state, doc: { ...newDoc, meta: { ...newDoc.meta, updatedAt: now, version: nv, history: hist } }, undoStack: [...state.undoStack, state.doc].slice(-MAX_UNDO), redoStack: [], dirty: true };
+
+    const isBatchable = action.type === "UPDATE_PROP"
+      && state._lastAction?.type === "UPDATE_PROP"
+      && state._lastAction?.blockId === action.blockId
+      && state._lastAction?.key === action.key
+      && (Date.now() - state._lastAction.at) < 800;
+
+    const undoStack = isBatchable
+      ? state.undoStack
+      : [...state.undoStack, state.doc].slice(-MAX_UNDO);
+
+    return {
+      ...state,
+      doc: { ...newDoc, meta: { ...newDoc.meta, updatedAt: now, version: nv, history: hist } },
+      undoStack,
+      redoStack: [],
+      dirty: true,
+      // Keep action fingerprint for keystroke burst batching.
+      _lastAction: {
+        type: action.type,
+        blockId: action.type === "UPDATE_PROP" ? action.blockId : undefined,
+        key: action.type === "UPDATE_PROP" ? action.key : undefined,
+        at: Date.now(),
+      },
+    };
   };
 
   let nextState: EditorState = state;
@@ -152,7 +176,16 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       const { tid } = action;
       const t = TPLS[tid];
       if (!t) { nextState = state; break; }
-      nextState = { ...state, doc: mkDoc(tid, t), undoStack: [...state.undoStack, state.doc].slice(-MAX_UNDO), redoStack: [], selectedBlockId: null, dirty: true };
+      nextState = {
+        ...state,
+        doc: mkDoc(tid, t, t.overrides),
+        undoStack: [...state.undoStack, state.doc].slice(-MAX_UNDO),
+        // Structural template change invalidates redo chain.
+        redoStack: [],
+        selectedBlockId: null,
+        dirty: true,
+        _lastAction: undefined,
+      };
       break;
     }
     case "IMPORT": {
@@ -167,17 +200,38 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
         nextState = state;
         break;
       }
-      nextState = { ...state, doc: action.doc, undoStack: [], redoStack: [], selectedBlockId: null, dirty: false };
+      nextState = { ...state, doc: action.doc, undoStack: [], redoStack: [], selectedBlockId: null, dirty: false, _lastAction: undefined };
       break;
     }
     case "UNDO": {
       if (!state.undoStack.length) { nextState = state; break; }
-      nextState = { ...state, doc: state.undoStack[state.undoStack.length - 1], undoStack: state.undoStack.slice(0, -1), redoStack: [...state.redoStack, state.doc], dirty: true };
+      const prev = state.undoStack[state.undoStack.length - 1];
+      // Skip invalid snapshots so undo cannot restore broken block references.
+      const valid = prev.sections.every(sec => sec.blockIds.every(bid => prev.blocks[bid] !== undefined));
+      if (!valid) {
+        nextState = { ...state, undoStack: state.undoStack.slice(0, -1), _lastAction: undefined };
+        break;
+      }
+      nextState = {
+        ...state,
+        doc: prev,
+        undoStack: state.undoStack.slice(0, -1),
+        redoStack: [...state.redoStack, state.doc].slice(-MAX_UNDO),
+        dirty: true,
+        _lastAction: undefined,
+      };
       break;
     }
     case "REDO": {
       if (!state.redoStack.length) { nextState = state; break; }
-      nextState = { ...state, doc: state.redoStack[state.redoStack.length - 1], undoStack: [...state.undoStack, state.doc], redoStack: state.redoStack.slice(0, -1), dirty: true };
+      nextState = {
+        ...state,
+        doc: state.redoStack[state.redoStack.length - 1],
+        undoStack: [...state.undoStack, state.doc].slice(-MAX_UNDO),
+        redoStack: state.redoStack.slice(0, -1),
+        dirty: true,
+        _lastAction: undefined,
+      };
       break;
     }
     case "SELECT":
@@ -206,6 +260,7 @@ export function initState(): EditorState {
     redoStack: [],
     selectedBlockId: null,
     dirty: false,
+    _lastAction: undefined,
     mode: "design",
   };
 }

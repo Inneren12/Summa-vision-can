@@ -88,28 +88,28 @@ export default function InfographicEditor() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
       const isEditable = shouldSkipGlobalShortcut(e);
 
-      // Inside editable fields: only Ctrl+S still fires (save is always useful).
-      // Undo/redo fall through to native behavior in text inputs.
+      // Inside editable fields: only Ctrl+S fires (save is always useful).
       if (isEditable) {
-        if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        if ((e.ctrlKey || e.metaKey) && key === "s") {
           e.preventDefault();
           markSavedAndBackup();
         }
         return;
       }
 
-      // Outside editable fields: editor-level shortcuts
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+      // Outside editable fields: editor-level shortcuts.
+      if ((e.ctrlKey || e.metaKey) && key === "z" && !e.shiftKey) {
         e.preventDefault();
         dispatch({ type: "UNDO" });
       }
-      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+      if ((e.ctrlKey || e.metaKey) && (key === "y" || (key === "z" && e.shiftKey))) {
         e.preventDefault();
         dispatch({ type: "REDO" });
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      if ((e.ctrlKey || e.metaKey) && key === "s") {
         e.preventDefault();
         markSavedAndBackup();
       }
@@ -164,19 +164,19 @@ export default function InfographicEditor() {
     // can checkpoint work-in-progress.
     if (!canExp) return;
 
-    // Render to an offscreen canvas at canonical preset size (no DPR scaling)
+    // Create a separate export canvas at canonical preset size.
+    // Preview canvas stays DPR-scaled; export is exact 1:1 dimensions.
     const exportCvs = document.createElement("canvas");
     exportCvs.width = sz.w;
     exportCvs.height = sz.h;
     const ctx = exportCvs.getContext("2d");
     if (!ctx) return;
 
-    // Render at 1:1 (no DPR transform)
     const bgFn = BGS[doc.page.background] || BGS.solid_dark;
     bgFn.r(ctx, sz.w, sz.h, pal);
     renderDoc(ctx, doc, sz.w, sz.h, pal);
 
-    // toBlob is async + memory-efficient (vs. toDataURL ~40MB base64 for Story@DPR3)
+    // toBlob keeps exports async/memory-safe and avoids base64 data URL inflation.
     requestAnimationFrame(() => {
       exportCvs.toBlob((blob) => {
         if (!blob) return;
@@ -188,7 +188,7 @@ export default function InfographicEditor() {
         deferRevoke(url);
       }, "image/png");
     });
-  }, [doc, pal, sz, canExp]);
+  }, [canExp, doc, pal, sz]);
 
   const canEdit = (reg: typeof selR, k: string) => reg ? perms.editBlock(reg, k) : false;
 
