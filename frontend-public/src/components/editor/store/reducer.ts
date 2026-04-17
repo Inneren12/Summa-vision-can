@@ -334,9 +334,28 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
         nextState = { ...state, undoStack: state.undoStack.slice(0, -1), _lastAction: undefined, _lastRejection: undefined };
         break;
       }
+      // Overlay the live `review` section onto the restored snapshot.
+      // Content edits are rewound; comments, workflow, and audit history
+      // live on an independent timeline (see docs/modules/editor.md
+      // "Undo/redo overlay policy") and must survive UNDO.
+      const undoTs = getProvider(state).now();
+      const restored: CanonicalDocument = {
+        ...prev,
+        review: {
+          workflow: state.doc.review.workflow,
+          history: state.doc.review.history,
+          comments: state.doc.review.comments,
+        },
+        meta: {
+          ...prev.meta,
+          // UNDO is itself a mutation event; advance updatedAt to now rather
+          // than reusing the snapshot's original timestamp.
+          updatedAt: undoTs,
+        },
+      };
       nextState = {
         ...state,
-        doc: prev,
+        doc: restored,
         undoStack: state.undoStack.slice(0, -1),
         redoStack: [...state.redoStack, state.doc].slice(-MAX_UNDO),
         dirty: true,
@@ -347,9 +366,25 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
     }
     case "REDO": {
       if (!state.redoStack.length) { nextState = state; break; }
+      const next = state.redoStack[state.redoStack.length - 1];
+      // Same overlay policy as UNDO — comments and audit trail must
+      // survive a redo of an edit that was itself rewound earlier.
+      const redoTs = getProvider(state).now();
+      const restored: CanonicalDocument = {
+        ...next,
+        review: {
+          workflow: state.doc.review.workflow,
+          history: state.doc.review.history,
+          comments: state.doc.review.comments,
+        },
+        meta: {
+          ...next.meta,
+          updatedAt: redoTs,
+        },
+      };
       nextState = {
         ...state,
-        doc: state.redoStack[state.redoStack.length - 1],
+        doc: restored,
         undoStack: [...state.undoStack, state.doc].slice(-MAX_UNDO),
         redoStack: state.redoStack.slice(0, -1),
         dirty: true,

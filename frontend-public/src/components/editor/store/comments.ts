@@ -248,6 +248,16 @@ export function applyReplyToComment(
   if (!parent) {
     return withRejection(state, action.type, `Parent comment "${action.parentId}" not found.`);
   }
+  // One-level threading: replies can only be posted on root comments.
+  // `buildThreads` / `threadUnresolvedCount` / `isThreadResolved` are flat by
+  // design; allowing reply-to-reply would silently misrepresent thread shape.
+  if (parent.parentId !== null) {
+    return withRejection(
+      state,
+      action.type,
+      "Replies can only be posted on root comments (threading depth is one level).",
+    );
+  }
   const text = action.text.trim();
   if (text.length === 0) {
     return withRejection(state, action.type, "Comment text must not be empty.");
@@ -399,6 +409,13 @@ export function applyReopenComment(
   return commitCommentMutation(state, nextDoc, ts);
 }
 
+/** Tombstone marker used when a delete cannot physically remove a comment
+ *  because the subtree contains foreign-authored replies. The marker shape
+ *  preserves every field except `text` / `author` / `updatedAt` so threading,
+ *  resolution status, and block anchoring remain intact. */
+export const TOMBSTONE_AUTHOR = "[deleted]";
+export const TOMBSTONE_TEXT = "[deleted]";
+
 export function applyDeleteComment(
   state: EditorState,
   action: Extract<CommentAction, { type: 'DELETE_COMMENT' }>,
@@ -412,23 +429,49 @@ export function applyDeleteComment(
     return withRejection(state, action.type, "You can delete only your own comments.");
   }
 
-  const subtree = collectDescendantIds(state.doc.review.comments, action.commentId);
-  const extraCount = subtree.size - 1;
-  const remaining = state.doc.review.comments.filter((c) => !subtree.has(c.id));
-
   const ts = action.ts ?? getProvider(state).now();
+  const subtreeIds = collectDescendantIds(state.doc.review.comments, action.commentId);
+  const hasReplies = subtreeIds.size > 1;
+  const subtreeComments = state.doc.review.comments.filter((c) => subtreeIds.has(c.id));
+  // Physical delete is safe iff every node in the subtree is authored by the
+  // actor (or is already a tombstone from a prior delete). Otherwise the
+  // delete would obliterate another user's note, violating the ownership
+  // contract. Previously-tombstoned nodes count as actor-owned because no
+  // live author is losing content.
+  const actorOwnsEntireSubtree = subtreeComments.every(
+    (c) => c.author === actor || c.author === TOMBSTONE_AUTHOR,
+  );
+
   const label = labelFor(state.doc, target.blockId);
-  const summary =
-    extraCount > 0
-      ? `Deleted comment on ${label} (+ ${extraCount} repl${extraCount === 1 ? "y" : "ies"})`
-      : `Deleted comment on ${label}`;
+  let nextComments: Comment[];
+  let summary: string;
+
+  if (!hasReplies || actorOwnsEntireSubtree) {
+    // Physical removal — safe: nothing foreign is being dropped.
+    nextComments = state.doc.review.comments.filter((c) => !subtreeIds.has(c.id));
+    const extraCount = subtreeIds.size - 1;
+    summary =
+      extraCount > 0
+        ? `Deleted comment on ${label} (+ ${extraCount} repl${extraCount === 1 ? "y" : "ies"})`
+        : `Deleted comment on ${label}`;
+  } else {
+    // Tombstone the target in place so foreign replies remain visible and
+    // threaded. Preserve id / blockId / parentId / createdAt / resolved state.
+    nextComments = state.doc.review.comments.map((c) =>
+      c.id === action.commentId
+        ? { ...c, text: TOMBSTONE_TEXT, author: TOMBSTONE_AUTHOR, updatedAt: ts }
+        : c,
+    );
+    summary = `Deleted comment on ${label} (tombstoned — has replies from other authors)`;
+  }
+
   const entry = historyEntry("comment_deleted", summary, ts, actor);
 
   let nextDoc: CanonicalDocument = {
     ...state.doc,
     review: {
       ...state.doc.review,
-      comments: remaining,
+      comments: nextComments,
     },
   };
   nextDoc = appendHistory(nextDoc, entry);

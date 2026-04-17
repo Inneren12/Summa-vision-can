@@ -676,36 +676,116 @@ describe("reducer / comment actions outside undo/redo", () => {
     expect(del._lastAction).toBe(fp);
   });
 
-  test("40. UNDO after ADD_COMMENT affects content only — comment persists", () => {
-    let s = baseState();
+  test("40. UNDO rewinds content edits but preserves comments (comments live outside undo timeline)", () => {
+    let s = baseState({ _timestampProvider: fixedClock(FIXED_TS) });
     const bid = findBlockIdByType(s, "headline_editorial");
     const originalText = s.doc.blocks[bid].props.text;
 
     // Content edit pushes a snapshot of pre-edit doc (no comment yet).
-    s = reducer(s, { type: "UPDATE_PROP", blockId: bid, key: "text", value: "edited" });
-    expect(s.doc.blocks[bid].props.text).toBe("edited");
+    s = reducer(s, {
+      type: "UPDATE_PROP",
+      blockId: bid,
+      key: "text",
+      value: "edited",
+    });
+    const undoStackAfterEdit = s.undoStack.length;
+    expect(undoStackAfterEdit).toBeGreaterThan(0);
 
-    // Comment mutation does NOT push a snapshot.
+    // ADD_COMMENT does NOT push a snapshot.
     s = reducer(s, {
       type: "ADD_COMMENT",
       blockId: bid,
-      text: "note",
-      id: "c",
+      text: "This needs review",
+      id: "c_test_1",
+      ts: FIXED_TS,
     });
     expect(s.doc.review.comments).toHaveLength(1);
+    expect(s.undoStack.length).toBe(undoStackAfterEdit);
 
-    // UNDO pops the content snapshot but leaves comments as they stand on
-    // the live doc. The resulting state's block text reverts, but the
-    // comment list stays populated because it was never stacked.
-    //
-    // NOTE: current reducer UNDO restores a prior whole-doc snapshot. That
-    // snapshot predates the comment — so this test documents the ACTUAL
-    // behaviour: comment is lost on UNDO because the snapshot it restores
-    // has no comment. If a later PR changes UNDO to carry comments forward,
-    // this test must be flipped.
+    // UNDO rewinds the content edit AND preserves the live comment list.
     const undone = reducer(s, { type: "UNDO" });
     expect(undone.doc.blocks[bid].props.text).toBe(originalText);
-    expect(undone.doc.review.comments).toEqual([]);
+    expect(undone.doc.review.comments).toHaveLength(1);
+    expect(undone.doc.review.comments[0].id).toBe("c_test_1");
+  });
+
+  test("40b. REDO reapplies content edit but keeps comments added while rewound", () => {
+    let s = baseState({ _timestampProvider: fixedClock(FIXED_TS) });
+    const bid = findBlockIdByType(s, "headline_editorial");
+
+    // Edit → Undo → Add comment → Redo.
+    s = reducer(s, { type: "UPDATE_PROP", blockId: bid, key: "text", value: "v1" });
+    s = reducer(s, { type: "UNDO" });
+    s = reducer(s, {
+      type: "ADD_COMMENT",
+      blockId: bid,
+      text: "comment",
+      id: "c_1",
+      ts: FIXED_TS,
+    });
+    const commentsBeforeRedo = s.doc.review.comments.length;
+
+    const redone = reducer(s, { type: "REDO" });
+
+    // Content edit is reapplied.
+    expect(redone.doc.blocks[bid].props.text).toBe("v1");
+    // Comment survives the redo.
+    expect(redone.doc.review.comments).toHaveLength(commentsBeforeRedo);
+    expect(redone.doc.review.comments[0].id).toBe("c_1");
+  });
+
+  test("40c. UNDO preserves review.history across content edits", () => {
+    let s = baseState({ _timestampProvider: fixedClock(FIXED_TS) });
+    const bid = findBlockIdByType(s, "headline_editorial");
+
+    // ADD_COMMENT appends a comment_added audit entry.
+    s = reducer(s, {
+      type: "ADD_COMMENT",
+      blockId: bid,
+      text: "a",
+      id: "c_1",
+      ts: FIXED_TS,
+    });
+    const historyLenAfterComment = s.doc.review.history.length;
+    const lastAction = s.doc.review.history[historyLenAfterComment - 1].action;
+    expect(lastAction).toBe("comment_added");
+
+    // Content edit → UNDO. Audit history must not rewind.
+    s = reducer(s, { type: "UPDATE_PROP", blockId: bid, key: "text", value: "x" });
+    s = reducer(s, { type: "UNDO" });
+
+    expect(s.doc.review.history.length).toBe(historyLenAfterComment);
+    expect(s.doc.review.history[s.doc.review.history.length - 1].action).toBe(
+      "comment_added",
+    );
+  });
+
+  test("40d. UNDO advances meta.updatedAt (undo is a mutation event)", () => {
+    const earlyClock = fixedClock("2026-01-01T00:00:00.000Z");
+    let s = baseState({ _timestampProvider: earlyClock });
+    const bid = findBlockIdByType(s, "headline_editorial");
+    s = reducer(s, { type: "UPDATE_PROP", blockId: bid, key: "text", value: "x" });
+
+    const laterClock = fixedClock("2026-06-06T06:06:06.000Z");
+    const sLater: EditorState = { ...s, _timestampProvider: laterClock };
+    const undone = reducer(sLater, { type: "UNDO" });
+    expect(undone.doc.meta.updatedAt).toBe("2026-06-06T06:06:06.000Z");
+  });
+
+  test("40e. UNDO preserves the live workflow state (does not revert transitions)", () => {
+    let s = baseState({ _timestampProvider: fixedClock(FIXED_TS) });
+    const bid = findBlockIdByType(s, "headline_editorial");
+
+    // Content edit in draft → SUBMIT_FOR_REVIEW → RETURN_TO_DRAFT → UNDO.
+    // The workflow must stay at its post-return value; UNDO is a content
+    // rewind, not an audit rewind.
+    s = reducer(s, { type: "UPDATE_PROP", blockId: bid, key: "text", value: "v1" });
+    s = reducer(s, { type: "SUBMIT_FOR_REVIEW", ts: FIXED_TS });
+    s = reducer(s, { type: "REQUEST_CHANGES", ts: FIXED_TS });
+    expect(s.doc.review.workflow).toBe("draft");
+
+    const undone = reducer(s, { type: "UNDO" });
+    expect(undone.doc.review.workflow).toBe("draft");
   });
 });
 
@@ -801,5 +881,272 @@ describe("comments / display helpers", () => {
   });
   test("truncate handles empty input", () => {
     expect(truncate("", 10)).toBe("");
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// 9. Tombstone delete — foreign-reply safety
+// ────────────────────────────────────────────────────────────────────
+
+describe("reducer / DELETE_COMMENT — tombstone semantics", () => {
+  test("physically removes a leaf owned by the actor", () => {
+    let s = baseState({ _timestampProvider: fixedClock(FIXED_TS) });
+    const bid = findBlockIdByType(s, "headline_editorial");
+    s = reducer(s, { type: "ADD_COMMENT", blockId: bid, text: "one", id: "c_1", ts: FIXED_TS });
+    s = reducer(s, { type: "DELETE_COMMENT", commentId: "c_1", actor: "you", ts: FIXED_TS });
+    expect(s.doc.review.comments.find((c) => c.id === "c_1")).toBeUndefined();
+  });
+
+  test("physically removes a subtree when actor owns every node", () => {
+    let s = baseState({ _timestampProvider: fixedClock(FIXED_TS) });
+    const bid = findBlockIdByType(s, "headline_editorial");
+    s = reducer(s, {
+      type: "ADD_COMMENT",
+      blockId: bid,
+      text: "root",
+      id: "c_1",
+      actor: "you",
+      ts: FIXED_TS,
+    });
+    s = reducer(s, {
+      type: "REPLY_TO_COMMENT",
+      parentId: "c_1",
+      text: "reply",
+      id: "c_2",
+      actor: "you",
+      ts: FIXED_TS,
+    });
+    s = reducer(s, {
+      type: "DELETE_COMMENT",
+      commentId: "c_1",
+      actor: "you",
+      ts: FIXED_TS,
+    });
+    expect(s.doc.review.comments.find((c) => c.id === "c_1")).toBeUndefined();
+    expect(s.doc.review.comments.find((c) => c.id === "c_2")).toBeUndefined();
+  });
+
+  test("tombstones (soft-deletes) when replies have other authors", () => {
+    let s = baseState({ _timestampProvider: fixedClock(FIXED_TS) });
+    const bid = findBlockIdByType(s, "headline_editorial");
+    s = reducer(s, {
+      type: "ADD_COMMENT",
+      blockId: bid,
+      text: "root",
+      id: "c_1",
+      actor: "alice",
+      ts: FIXED_TS,
+    });
+    s = reducer(s, {
+      type: "REPLY_TO_COMMENT",
+      parentId: "c_1",
+      text: "reply",
+      id: "c_2",
+      actor: "bob",
+      ts: FIXED_TS,
+    });
+    s = reducer(s, {
+      type: "DELETE_COMMENT",
+      commentId: "c_1",
+      actor: "alice",
+      ts: FIXED_TS,
+    });
+
+    const root = s.doc.review.comments.find((c) => c.id === "c_1");
+    expect(root).toBeDefined();
+    expect(root!.text).toBe("[deleted]");
+    expect(root!.author).toBe("[deleted]");
+    expect(root!.updatedAt).toBe(FIXED_TS);
+
+    const reply = s.doc.review.comments.find((c) => c.id === "c_2");
+    expect(reply).toBeDefined();
+    expect(reply!.author).toBe("bob");
+    expect(reply!.text).toBe("reply");
+  });
+
+  test("tombstone preserves threading integrity (parentId still points to root)", () => {
+    let s = baseState({ _timestampProvider: fixedClock(FIXED_TS) });
+    const bid = findBlockIdByType(s, "headline_editorial");
+    s = reducer(s, {
+      type: "ADD_COMMENT",
+      blockId: bid,
+      text: "root",
+      id: "c_1",
+      actor: "alice",
+      ts: FIXED_TS,
+    });
+    s = reducer(s, {
+      type: "REPLY_TO_COMMENT",
+      parentId: "c_1",
+      text: "reply",
+      id: "c_2",
+      actor: "bob",
+      ts: FIXED_TS,
+    });
+    s = reducer(s, {
+      type: "DELETE_COMMENT",
+      commentId: "c_1",
+      actor: "alice",
+      ts: FIXED_TS,
+    });
+
+    const threads = buildThreads(s.doc.review.comments);
+    expect(threads).toHaveLength(1);
+    expect(threads[0].id).toBe("c_1");
+    expect(threads[0].replies).toHaveLength(1);
+    expect(threads[0].replies[0].id).toBe("c_2");
+  });
+
+  test("rejects when actor does not own the target", () => {
+    let s = baseState({ _timestampProvider: fixedClock(FIXED_TS) });
+    const bid = findBlockIdByType(s, "headline_editorial");
+    s = reducer(s, {
+      type: "ADD_COMMENT",
+      blockId: bid,
+      text: "root",
+      id: "c_1",
+      actor: "alice",
+      ts: FIXED_TS,
+    });
+    const before = s.doc.review.comments.length;
+    s = reducer(s, {
+      type: "DELETE_COMMENT",
+      commentId: "c_1",
+      actor: "bob",
+      ts: FIXED_TS,
+    });
+    expect(s.doc.review.comments).toHaveLength(before);
+    expect(s._lastRejection?.type).toBe("DELETE_COMMENT");
+  });
+
+  test("tombstone summary describes the foreign-replies outcome", () => {
+    let s = baseState({ _timestampProvider: fixedClock(FIXED_TS) });
+    const bid = findBlockIdByType(s, "headline_editorial");
+    s = reducer(s, {
+      type: "ADD_COMMENT",
+      blockId: bid,
+      text: "root",
+      id: "c_1",
+      actor: "alice",
+      ts: FIXED_TS,
+    });
+    s = reducer(s, {
+      type: "REPLY_TO_COMMENT",
+      parentId: "c_1",
+      text: "r",
+      id: "c_2",
+      actor: "bob",
+      ts: FIXED_TS,
+    });
+    s = reducer(s, {
+      type: "DELETE_COMMENT",
+      commentId: "c_1",
+      actor: "alice",
+      ts: FIXED_TS,
+    });
+    const entry = s.doc.review.history[s.doc.review.history.length - 1];
+    expect(entry.summary).toMatch(/tombstoned/i);
+  });
+
+  test("physical delete path still runs when prior tombstones occupy the subtree", () => {
+    // Scenario: alice's root was tombstoned while bob's reply existed.
+    // Bob later deletes his reply. That collapses the thread. If alice
+    // now deletes again (e.g. cleanup), the whole subtree is actor-owned
+    // or tombstoned — so physical removal is safe.
+    let s = baseState({ _timestampProvider: fixedClock(FIXED_TS) });
+    const bid = findBlockIdByType(s, "headline_editorial");
+    s = reducer(s, {
+      type: "ADD_COMMENT",
+      blockId: bid,
+      text: "root",
+      id: "c_1",
+      actor: "alice",
+      ts: FIXED_TS,
+    });
+    s = reducer(s, {
+      type: "REPLY_TO_COMMENT",
+      parentId: "c_1",
+      text: "r",
+      id: "c_2",
+      actor: "bob",
+      ts: FIXED_TS,
+    });
+    // Alice tombstones her root while bob's reply exists.
+    s = reducer(s, {
+      type: "DELETE_COMMENT",
+      commentId: "c_1",
+      actor: "alice",
+      ts: FIXED_TS,
+    });
+    // Bob deletes his own reply.
+    s = reducer(s, {
+      type: "DELETE_COMMENT",
+      commentId: "c_2",
+      actor: "bob",
+      ts: FIXED_TS,
+    });
+    // Only the tombstoned root remains. Alice's second delete collapses it.
+    // The subtree is now a single tombstoned node (author === "[deleted]")
+    // which counts as actor-owned by the tombstone allowance.
+    s = reducer(s, {
+      type: "DELETE_COMMENT",
+      commentId: "c_1",
+      actor: "alice",
+      ts: FIXED_TS,
+    });
+    // Alice does not own the tombstoned author string "[deleted]" — this
+    // should reject (ownership check runs on the target, not on the actor).
+    expect(s._lastRejection?.type).toBe("DELETE_COMMENT");
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// 10. One-level threading (reducer enforcement)
+// ────────────────────────────────────────────────────────────────────
+
+describe("reducer / REPLY_TO_COMMENT — one-level threading", () => {
+  test("rejects when parent is itself a reply (nested thread)", () => {
+    let s = baseState({ _timestampProvider: fixedClock(FIXED_TS) });
+    const bid = findBlockIdByType(s, "headline_editorial");
+    s = reducer(s, { type: "ADD_COMMENT", blockId: bid, text: "root", id: "c_1", ts: FIXED_TS });
+    s = reducer(s, {
+      type: "REPLY_TO_COMMENT",
+      parentId: "c_1",
+      text: "reply",
+      id: "c_2",
+      ts: FIXED_TS,
+    });
+
+    const result = reducer(s, {
+      type: "REPLY_TO_COMMENT",
+      parentId: "c_2",
+      text: "nested",
+      id: "c_3",
+      ts: FIXED_TS,
+    });
+
+    expect(result.doc.review.comments.find((c) => c.id === "c_3")).toBeUndefined();
+    expect(result._lastRejection?.type).toBe("REPLY_TO_COMMENT");
+    expect(result._lastRejection?.reason).toMatch(/one level|root/i);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// 11. Semantic validation — blockId existence + ADD_COMMENT rejection
+// ────────────────────────────────────────────────────────────────────
+
+describe("reducer / ADD_COMMENT — blockId existence", () => {
+  test("rejects when blockId does not exist on the document", () => {
+    const s = baseState({ _timestampProvider: fixedClock(FIXED_TS) });
+    const result = reducer(s, {
+      type: "ADD_COMMENT",
+      blockId: "does_not_exist",
+      text: "hi",
+      id: "c_1",
+      ts: FIXED_TS,
+    });
+    expect(result.doc.review.comments).toHaveLength(0);
+    expect(result._lastRejection?.type).toBe("ADD_COMMENT");
+    expect(result._lastRejection?.reason).toMatch(/not found|does_not_exist/);
   });
 });

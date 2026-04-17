@@ -175,13 +175,37 @@ function validateDocumentShape(doc: any): string | null {
   // comment id in the same document. This closes the last gap of DEBT-023 —
   // without it, a serialized doc could reference a dead parent and break
   // `buildThreads` orphan handling in the UI.
-  const commentIds = new Set<string>(
-    doc.review.comments.map((c: any) => c.id),
+  const commentById = new Map<string, any>(
+    doc.review.comments.map((c: any) => [c.id, c]),
   );
   for (let i = 0; i < doc.review.comments.length; i++) {
     const c = doc.review.comments[i];
-    if (c.parentId !== null && !commentIds.has(c.parentId)) {
+    if (c.parentId !== null && !commentById.has(c.parentId)) {
       return `review.comments[${i}].parentId "${c.parentId}" does not match any comment id`;
+    }
+  }
+
+  // Threading depth: replies may only target root comments. Helpers in
+  // store/comments.ts (buildThreads, threadUnresolvedCount, isThreadResolved)
+  // are flat by design; a reply-to-reply would silently misrepresent thread
+  // shape in the UI. Enforced both here (on import) and in the reducer (on
+  // dispatch) so neither path can introduce nested threads.
+  for (let i = 0; i < doc.review.comments.length; i++) {
+    const c = doc.review.comments[i];
+    if (c.parentId !== null) {
+      const parent = commentById.get(c.parentId);
+      if (parent && parent.parentId !== null) {
+        return `review.comments[${i}] is a reply to a reply (threading depth must be one level)`;
+      }
+    }
+  }
+
+  // Referential integrity: every comment must anchor to a real block.
+  const blockIds = new Set<string>(Object.keys(doc.blocks));
+  for (let i = 0; i < doc.review.comments.length; i++) {
+    const c = doc.review.comments[i];
+    if (!blockIds.has(c.blockId)) {
+      return `review.comments[${i}].blockId "${c.blockId}" does not match any block in doc.blocks`;
     }
   }
 
@@ -204,6 +228,9 @@ function validateCommentEntry(c: any, idx: number): string | null {
   }
   if (typeof c.parentId === "string" && c.parentId.length === 0) {
     return `${path}.parentId must be a non-empty string or null`;
+  }
+  if (c.parentId === c.id) {
+    return `${path}.parentId must not equal the comment's own id (self-reference)`;
   }
 
   if (typeof c.author !== "string" || c.author.length === 0) {

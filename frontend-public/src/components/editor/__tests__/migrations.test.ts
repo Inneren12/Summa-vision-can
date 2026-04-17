@@ -348,11 +348,15 @@ describe("mkDoc — produces a valid v2 document", () => {
 
 describe("validateImportStrict — Comment element shape (DEBT-023 closure)", () => {
   const FIXED = "2026-04-17T12:00:00.000Z";
+  // Pull a real block id from the v2Doc fixture so comments anchor to
+  // something `validateImportStrict` recognises. The referential-integrity
+  // check rejects comments whose blockId is not in `doc.blocks`.
+  const ANCHOR_BLOCK_ID = Object.keys(v2Doc().blocks)[0];
 
   function wellFormedComment(overrides: Record<string, unknown> = {}) {
     return {
       id: "c1",
-      blockId: "b1",
+      blockId: ANCHOR_BLOCK_ID,
       parentId: null,
       author: "you",
       text: "hi",
@@ -445,5 +449,45 @@ describe("validateImportStrict — Comment element shape (DEBT-023 closure)", ()
     expect(() => validateImportStrict(raw)).toThrow(
       /review\.comments\[0\] is not an object/,
     );
+  });
+
+  // ── Issue 4 semantic validation ────────────────────────────────────
+
+  test("rejects a self-referential comment (parentId === id)", () => {
+    const raw = withComments(wellFormedComment({ id: "c_1", parentId: "c_1" }));
+    expect(() => validateImportStrict(raw)).toThrow(
+      /self-reference|parentId must not equal/,
+    );
+  });
+
+  test("rejects a comment anchored to a non-existent block", () => {
+    const raw = withComments(
+      wellFormedComment({ blockId: "ghost_block_id" }),
+    );
+    expect(() => validateImportStrict(raw)).toThrow(
+      /blockId "ghost_block_id" does not match any block in doc\.blocks/,
+    );
+  });
+
+  // ── Issue 3 threading depth ────────────────────────────────────────
+
+  test("rejects a document with reply-to-reply nesting", () => {
+    const root = wellFormedComment({ id: "r" });
+    const reply = wellFormedComment({ id: "r2", parentId: "r" });
+    const nested = wellFormedComment({ id: "r3", parentId: "r2" });
+    const raw = withComments(root, reply, nested);
+    expect(() => validateImportStrict(raw)).toThrow(
+      /reply to a reply|depth must be one level/,
+    );
+  });
+
+  test("accepts a tombstoned comment ('[deleted]' author, empty update)", () => {
+    const tombstoned = wellFormedComment({
+      author: "[deleted]",
+      text: "[deleted]",
+      updatedAt: FIXED,
+    });
+    const raw = withComments(tombstoned);
+    expect(() => validateImportStrict(raw)).not.toThrow();
   });
 });
