@@ -176,3 +176,155 @@ files kept under `docs/editor/` (`infographic-editor-stage3a-v2.jsx`,
 three fields (`doc.meta.workflow`, `doc.meta.history`, `doc.comments`) as a
 compromise during incremental artifact development. Stage 3 PR 1 consolidates
 all three into `doc.review` and removes the dual-write of `schemaVersion`.
+
+## Comments subsystem (Stage 3 PR 2b)
+
+The comments subsystem lives in `store/comments.ts` and feeds six new action
+types through the reducer: `ADD_COMMENT`, `REPLY_TO_COMMENT`, `EDIT_COMMENT`,
+`RESOLVE_COMMENT`, `REOPEN_COMMENT`, `DELETE_COMMENT`.
+
+### `Comment` shape
+
+```ts
+interface Comment {
+  id: string;
+  blockId: string;          // comment anchors to a single block
+  parentId: string | null;  // null for root; string for a reply
+  author: string;
+  text: string;
+  createdAt: string;        // ISO 8601
+  updatedAt: string | null; // set by EDIT_COMMENT
+  resolved: boolean;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+}
+```
+
+`validateImportStrict` deep-validates every comment element (shape + nullability
+rules) and enforces referential integrity: every non-null `parentId` must
+resolve to a comment id in the same document. This closes DEBT-023.
+
+### Action semantics
+
+| Action              | Ownership check | Logs to `review.history` | History `action` label |
+|---------------------|:---------------:|:------------------------:|------------------------|
+| `ADD_COMMENT`       | no              | yes                      | `comment_added`        |
+| `REPLY_TO_COMMENT`  | no              | yes                      | `comment_replied`      |
+| `EDIT_COMMENT`      | **yes**         | no (lean audit)          | —                      |
+| `RESOLVE_COMMENT`   | no              | yes                      | `comment_resolved`     |
+| `REOPEN_COMMENT`    | no              | yes                      | `comment_reopened`     |
+| `DELETE_COMMENT`    | **yes**         | yes                      | `comment_deleted`      |
+
+- **Ownership**: `EDIT` and `DELETE` require `comment.author === resolveActor(action)`.
+  `RESOLVE` / `REOPEN` are deliberately open — any commenter can clear a thread.
+- **No-op resolve / reopen**: dispatching `RESOLVE_COMMENT` on an already-resolved
+  comment (and symmetrically for `REOPEN_COMMENT`) returns the state unchanged,
+  without a history entry and without touching the `dirty` flag.
+- **One-level threading**: replies may only target root comments (`parent.parentId
+  === null`). The reducer rejects reply-to-reply dispatches and `validateImportStrict`
+  rejects imports that carry nested threads. Helpers in `store/comments.ts`
+  (`buildThreads`, `threadUnresolvedCount`, `isThreadResolved`) are flat by design;
+  allowing deeper nesting would silently misrepresent thread shape in the UI.
+- **Delete semantics — tombstone on foreign replies**: `DELETE_COMMENT` runs an
+  ownership check on the target and a subtree check before removing anything.
+  - *Leaf (no replies)* → physical removal.
+  - *Subtree fully authored by the actor (or tombstones)* → physical removal
+    of the whole subtree.
+  - *Subtree contains a reply from a different author* → **tombstone** only.
+    The target's `text` and `author` are replaced with the literal `"[deleted]"`
+    and `updatedAt` is set; `id`, `blockId`, `parentId`, `createdAt`, and
+    `resolved*` fields are preserved so threading and stats stay intact.
+    Foreign-authored replies remain untouched and visible.
+
+  History summary reflects the path taken: `(+ N replies)` when replies were
+  physically removed, `(tombstoned — has replies from other authors)` when the
+  subtree was soft-deleted.
+
+### `canComment` permission dimension
+
+`WorkflowPermission` gains a sixth flag:
+
+| State       | textContent | dataContent | structural | style | importUndoRedo | canComment |
+|-------------|:-----------:|:-----------:|:----------:|:-----:|:--------------:|:----------:|
+| `draft`     | ✓           | ✓           | ✓          | ✓     | ✓              | ✓          |
+| `in_review` | ✓           | ✗           | ✗          | ✗     | ✗              | ✓          |
+| `approved`  | ✗           | ✗           | ✗          | ✗     | ✗              | ✗          |
+| `exported`  | ✗           | ✗           | ✗          | ✗     | ✗              | ✗          |
+| `published` | ✗           | ✗           | ✗          | ✗     | ✗              | ✗          |
+
+`canComment` is orthogonal to the content-edit categories: reviewers can still
+annotate during `in_review` even though every non-text content path is locked.
+The mode axis never restricts comments — a `template`-mode reviewer has the
+same comment surface as a `design`-mode editor.
+
+### Comments are outside undo/redo
+
+Comment mutations **do not participate in the undo/redo timeline**. They:
+
+- do not call the reducer's `push` helper
+- do not modify `undoStack`
+- do not clear `redoStack`
+- do not touch the `_lastAction` burst-batching fingerprint
+
+They do flip `dirty: true` (comments are persisted state) and clear
+`_lastRejection`. Rationale:
+
+- **Ownership**: an EDIT/DELETE gated on the actor being the author becomes
+  meaningless if UNDO can silently restore or obliterate another user's note.
+- **Audit integrity**: comment events are logged in `doc.review.history`,
+  which must not be rewindable by a content-stack UNDO.
+- **Convention**: Figma, Linear, and Google Docs all keep review comments off
+  the document-content undo timeline.
+
+### Undo/redo overlay policy
+
+Undo snapshots are whole-document clones captured by the reducer's `push`
+helper. A naive UNDO that reassigned `state.doc = snapshot` would rewind
+`review.comments`, `review.history`, and `review.workflow` along with the
+content — destroying reviewer annotations, audit trail, and workflow state
+on every content undo.
+
+The reducer solves this by **overlaying the live `review` section onto the
+restored snapshot**. In both `UNDO` and `REDO`:
+
+```ts
+const restored: CanonicalDocument = {
+  ...snapshot,
+  review: {
+    // Preserve the live, non-content timeline.
+    workflow: state.doc.review.workflow,
+    history:  state.doc.review.history,
+    comments: state.doc.review.comments,
+  },
+  meta: { ...snapshot.meta, updatedAt: getProvider(state).now() },
+};
+```
+
+Consequences:
+
+- UNDO rewinds `page`, `sections`, `blocks` (content). Comments, workflow
+  transitions, and the audit trail are preserved.
+- REDO re-applies the content edit while keeping any comments added or
+  resolved while the document was rewound.
+- `meta.updatedAt` advances to the UNDO/REDO event time — the mutation is
+  real, even if the content payload reverts to an earlier state.
+
+Workflow state is explicitly in the overlay so that a content UNDO cannot
+silently revert a `SUBMIT_FOR_REVIEW` or `APPROVE`. Workflow transitions
+move only through the workflow action set (`canTransition` in
+`store/workflow.ts`).
+
+### Thread helpers
+
+`store/comments.ts` also exports pure derivation helpers consumed by the PR 3
+UI layer:
+
+- `buildThreads(comments) → CommentThreadNode[]` — groups flat comments into
+  root-and-reply threads. Roots newest-first by `createdAt`; replies oldest-first.
+  Orphaned replies (parent missing) are promoted to roots so they remain visible.
+- `threadUnresolvedCount(thread) → number` — open items across the thread.
+- `isThreadResolved(thread) → boolean` — `threadUnresolvedCount === 0`.
+- `collectDescendantIds(comments, rootId) → Set<string>` — BFS over `parentId`
+  edges; used by `applyDeleteComment` for recursive delete.
+
+Reference artifact: `docs/editor/infographic-editor-stage3b-v2.jsx`.

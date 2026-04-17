@@ -159,12 +159,107 @@ function validateDocumentShape(doc: any): string | null {
   if (!Array.isArray(doc.review.history)) return "Invalid review.history (must be array)";
   if (!Array.isArray(doc.review.comments)) return "Invalid review.comments (must be array)";
 
-  // Per-element shape check for review.history entries (DEBT-023, partial).
-  // Comment elements are intentionally NOT deep-validated here — that
-  // lands in PR 2b alongside the comment reducer actions.
+  // Per-element shape checks for review.history and review.comments.
+  // `validateWorkflowHistoryEntry` covers audit entries; `validateCommentEntry`
+  // (added in Stage 3 PR 2b, closing DEBT-023) covers comment shape.
   for (let i = 0; i < doc.review.history.length; i++) {
     const entryErr = validateWorkflowHistoryEntry(doc.review.history[i], i);
     if (entryErr) return entryErr;
+  }
+  for (let i = 0; i < doc.review.comments.length; i++) {
+    const entryErr = validateCommentEntry(doc.review.comments[i], i);
+    if (entryErr) return entryErr;
+  }
+
+  // Referential integrity: every non-null parentId must point to a real
+  // comment id in the same document. This closes the last gap of DEBT-023 —
+  // without it, a serialized doc could reference a dead parent and break
+  // `buildThreads` orphan handling in the UI.
+  const commentById = new Map<string, any>(
+    doc.review.comments.map((c: any) => [c.id, c]),
+  );
+  for (let i = 0; i < doc.review.comments.length; i++) {
+    const c = doc.review.comments[i];
+    if (c.parentId !== null && !commentById.has(c.parentId)) {
+      return `review.comments[${i}].parentId "${c.parentId}" does not match any comment id`;
+    }
+  }
+
+  // Threading depth: replies may only target root comments. Helpers in
+  // store/comments.ts (buildThreads, threadUnresolvedCount, isThreadResolved)
+  // are flat by design; a reply-to-reply would silently misrepresent thread
+  // shape in the UI. Enforced both here (on import) and in the reducer (on
+  // dispatch) so neither path can introduce nested threads.
+  for (let i = 0; i < doc.review.comments.length; i++) {
+    const c = doc.review.comments[i];
+    if (c.parentId !== null) {
+      const parent = commentById.get(c.parentId);
+      if (parent && parent.parentId !== null) {
+        return `review.comments[${i}] is a reply to a reply (threading depth must be one level)`;
+      }
+    }
+  }
+
+  // Referential integrity: every comment must anchor to a real block.
+  const blockIds = new Set<string>(Object.keys(doc.blocks));
+  for (let i = 0; i < doc.review.comments.length; i++) {
+    const c = doc.review.comments[i];
+    if (!blockIds.has(c.blockId)) {
+      return `review.comments[${i}].blockId "${c.blockId}" does not match any block in doc.blocks`;
+    }
+  }
+
+  return null;
+}
+
+function validateCommentEntry(c: any, idx: number): string | null {
+  const path = `review.comments[${idx}]`;
+  if (!c || typeof c !== "object") return `${path} is not an object`;
+
+  if (typeof c.id !== "string" || c.id.length === 0) {
+    return `${path}.id must be a non-empty string`;
+  }
+  if (typeof c.blockId !== "string" || c.blockId.length === 0) {
+    return `${path}.blockId must be a non-empty string`;
+  }
+
+  if (c.parentId !== null && typeof c.parentId !== "string") {
+    return `${path}.parentId must be string or null`;
+  }
+  if (typeof c.parentId === "string" && c.parentId.length === 0) {
+    return `${path}.parentId must be a non-empty string or null`;
+  }
+  if (c.parentId === c.id) {
+    return `${path}.parentId must not equal the comment's own id (self-reference)`;
+  }
+
+  if (typeof c.author !== "string" || c.author.length === 0) {
+    return `${path}.author must be a non-empty string`;
+  }
+  if (typeof c.text !== "string") return `${path}.text must be a string`;
+
+  if (typeof c.createdAt !== "string" || Number.isNaN(Date.parse(c.createdAt))) {
+    return `${path}.createdAt must be a valid ISO 8601 string`;
+  }
+
+  if (c.updatedAt !== null) {
+    if (typeof c.updatedAt !== "string" || Number.isNaN(Date.parse(c.updatedAt))) {
+      return `${path}.updatedAt must be null or a valid ISO 8601 string`;
+    }
+  }
+
+  if (typeof c.resolved !== "boolean") return `${path}.resolved must be a boolean`;
+
+  if (c.resolved) {
+    if (typeof c.resolvedAt !== "string" || Number.isNaN(Date.parse(c.resolvedAt))) {
+      return `${path}.resolvedAt must be a valid ISO 8601 string when resolved is true`;
+    }
+    if (typeof c.resolvedBy !== "string" || c.resolvedBy.length === 0) {
+      return `${path}.resolvedBy must be a non-empty string when resolved is true`;
+    }
+  } else {
+    if (c.resolvedAt !== null) return `${path}.resolvedAt must be null when resolved is false`;
+    if (c.resolvedBy !== null) return `${path}.resolvedBy must be null when resolved is false`;
   }
 
   return null;

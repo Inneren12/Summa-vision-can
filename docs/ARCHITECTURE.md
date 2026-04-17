@@ -111,6 +111,14 @@ as `DEBT-021` (24 h TTL via ``temp_upload_ttl_hours``).
   published). Both must pass for an action to mutate the document. Workflow
   transitions are captured in `store/workflow.ts#TRANSITIONS` and written to
   `doc.review.history` as `WorkflowHistoryEntry` records.
+- Comments are first-class review artifacts (`store/comments.ts`, Stage 3
+  PR 2b). They mutate `doc.review.comments` directly and do NOT participate
+  in the undo/redo history — an UNDO cannot silently restore or obliterate
+  another author's note. Comment lifecycle events (add, reply, resolve,
+  reopen, delete) are audited via entries in `doc.review.history` alongside
+  workflow transitions. A `canComment` flag in `WORKFLOW_PERMISSIONS` gates
+  the surface: comments stay open through `draft` and `in_review`, and
+  freeze on `approved|exported|published`.
 
 ## Technology Summary
 

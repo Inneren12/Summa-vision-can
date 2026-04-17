@@ -13,6 +13,14 @@ import {
   transitionTarget,
   type WorkflowActionType,
 } from './workflow';
+import {
+  applyAddComment,
+  applyDeleteComment,
+  applyEditComment,
+  applyReopenComment,
+  applyReplyToComment,
+  applyResolveComment,
+} from './comments';
 
 export const MAX_UNDO = 50;
 
@@ -109,6 +117,16 @@ function checkModePermission(state: EditorState, action: EditorAction): { allowe
       //   SAVED — flag flip
       return { allowed: true };
 
+    case "ADD_COMMENT":
+    case "REPLY_TO_COMMENT":
+    case "EDIT_COMMENT":
+    case "RESOLVE_COMMENT":
+    case "REOPEN_COMMENT":
+    case "DELETE_COMMENT":
+      // Commenting is not gated by editor mode — a template-mode reviewer
+      // needs the same annotation surface as a design-mode editor.
+      return { allowed: true };
+
     default:
       return { allowed: false, reason: "Unknown action type" };
   }
@@ -132,7 +150,7 @@ function isActionAllowed(state: EditorState, action: EditorAction): { allowed: b
   return { allowed: true };
 }
 
-function getProvider(state: EditorState): TimestampProvider {
+export function getProvider(state: EditorState): TimestampProvider {
   return state._timestampProvider ?? systemTimestampProvider;
 }
 
@@ -140,7 +158,12 @@ function resolveTimestamp(state: EditorState, action: WorkflowAction): string {
   return action.ts ?? getProvider(state).now();
 }
 
-function resolveActor(action: WorkflowAction): string {
+/**
+ * Default actor fallback for audit-log entries. Shared by the workflow and
+ * comment reducer paths so every history entry produced by dispatched actions
+ * carries a consistent author string when the caller omits `actor`.
+ */
+export function resolveActor(action: { actor?: string }): string {
   return action.actor ?? "you";
 }
 
@@ -174,7 +197,7 @@ function workflowHistoryAction(actionType: WorkflowActionType): string {
   }
 }
 
-function withRejection(state: EditorState, actionType: string, reason: string): EditorState {
+export function withRejection(state: EditorState, actionType: string, reason: string): EditorState {
   if (process.env.NODE_ENV === "development") {
     console.warn(`[editor] Action blocked: ${actionType} \u2014 ${reason}`);
   }
@@ -311,9 +334,28 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
         nextState = { ...state, undoStack: state.undoStack.slice(0, -1), _lastAction: undefined, _lastRejection: undefined };
         break;
       }
+      // Overlay the live `review` section onto the restored snapshot.
+      // Content edits are rewound; comments, workflow, and audit history
+      // live on an independent timeline (see docs/modules/editor.md
+      // "Undo/redo overlay policy") and must survive UNDO.
+      const undoTs = getProvider(state).now();
+      const restored: CanonicalDocument = {
+        ...prev,
+        review: {
+          workflow: state.doc.review.workflow,
+          history: state.doc.review.history,
+          comments: state.doc.review.comments,
+        },
+        meta: {
+          ...prev.meta,
+          // UNDO is itself a mutation event; advance updatedAt to now rather
+          // than reusing the snapshot's original timestamp.
+          updatedAt: undoTs,
+        },
+      };
       nextState = {
         ...state,
-        doc: prev,
+        doc: restored,
         undoStack: state.undoStack.slice(0, -1),
         redoStack: [...state.redoStack, state.doc].slice(-MAX_UNDO),
         dirty: true,
@@ -324,9 +366,25 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
     }
     case "REDO": {
       if (!state.redoStack.length) { nextState = state; break; }
+      const next = state.redoStack[state.redoStack.length - 1];
+      // Same overlay policy as UNDO — comments and audit trail must
+      // survive a redo of an edit that was itself rewound earlier.
+      const redoTs = getProvider(state).now();
+      const restored: CanonicalDocument = {
+        ...next,
+        review: {
+          workflow: state.doc.review.workflow,
+          history: state.doc.review.history,
+          comments: state.doc.review.comments,
+        },
+        meta: {
+          ...next.meta,
+          updatedAt: redoTs,
+        },
+      };
       nextState = {
         ...state,
-        doc: state.redoStack[state.redoStack.length - 1],
+        doc: restored,
         undoStack: [...state.undoStack, state.doc].slice(-MAX_UNDO),
         redoStack: state.redoStack.slice(0, -1),
         dirty: true,
@@ -354,6 +412,29 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       break;
     case "DUPLICATE_AS_DRAFT":
       nextState = applyDuplicateAsDraft(state, action);
+      break;
+    // Comment-lifecycle actions are OUTSIDE the undo/redo timeline.
+    // Each applyXxx returns a new state with `doc.review.comments` (and
+    // optionally `doc.review.history`) updated, `dirty: true`, and
+    // `_lastRejection: undefined` — but never touches `undoStack`,
+    // `redoStack`, or `_lastAction`.
+    case "ADD_COMMENT":
+      nextState = applyAddComment(state, action);
+      break;
+    case "REPLY_TO_COMMENT":
+      nextState = applyReplyToComment(state, action);
+      break;
+    case "EDIT_COMMENT":
+      nextState = applyEditComment(state, action);
+      break;
+    case "RESOLVE_COMMENT":
+      nextState = applyResolveComment(state, action);
+      break;
+    case "REOPEN_COMMENT":
+      nextState = applyReopenComment(state, action);
+      break;
+    case "DELETE_COMMENT":
+      nextState = applyDeleteComment(state, action);
       break;
     default:
       nextState = state;

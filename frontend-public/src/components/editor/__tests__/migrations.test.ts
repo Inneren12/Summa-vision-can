@@ -341,3 +341,153 @@ describe("mkDoc — produces a valid v2 document", () => {
     expect(doc.review.comments).toEqual([]);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────
+// DEBT-023 closure — Comment element shape + referential integrity
+// ────────────────────────────────────────────────────────────────────
+
+describe("validateImportStrict — Comment element shape (DEBT-023 closure)", () => {
+  const FIXED = "2026-04-17T12:00:00.000Z";
+  // Pull a real block id from the v2Doc fixture so comments anchor to
+  // something `validateImportStrict` recognises. The referential-integrity
+  // check rejects comments whose blockId is not in `doc.blocks`.
+  const ANCHOR_BLOCK_ID = Object.keys(v2Doc().blocks)[0];
+
+  function wellFormedComment(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "c1",
+      blockId: ANCHOR_BLOCK_ID,
+      parentId: null,
+      author: "you",
+      text: "hi",
+      createdAt: FIXED,
+      updatedAt: null,
+      resolved: false,
+      resolvedAt: null,
+      resolvedBy: null,
+      ...overrides,
+    };
+  }
+
+  function withComments(...comments: unknown[]) {
+    const raw: any = v2Doc();
+    raw.review.comments = comments;
+    return raw;
+  }
+
+  test("accepts a v2 doc with a well-formed comment", () => {
+    const raw = withComments(wellFormedComment());
+    expect(() => validateImportStrict(raw)).not.toThrow();
+  });
+
+  test("accepts a v2 doc with a parent + reply thread", () => {
+    const parent = wellFormedComment({ id: "p" });
+    const reply = wellFormedComment({ id: "r", parentId: "p" });
+    const raw = withComments(parent, reply);
+    expect(() => validateImportStrict(raw)).not.toThrow();
+  });
+
+  test("rejects a comment with missing id", () => {
+    const raw = withComments(wellFormedComment({ id: "" }));
+    expect(() => validateImportStrict(raw)).toThrow(
+      /review\.comments\[0\]\.id/,
+    );
+  });
+
+  test("rejects a comment with an invalid createdAt", () => {
+    const raw = withComments(wellFormedComment({ createdAt: "not-iso" }));
+    expect(() => validateImportStrict(raw)).toThrow(
+      /review\.comments\[0\]\.createdAt/,
+    );
+  });
+
+  test("rejects a resolved comment with null resolvedBy", () => {
+    const raw = withComments(
+      wellFormedComment({
+        resolved: true,
+        resolvedAt: FIXED,
+        resolvedBy: null,
+      }),
+    );
+    expect(() => validateImportStrict(raw)).toThrow(
+      /review\.comments\[0\]\.resolvedBy/,
+    );
+  });
+
+  test("rejects an unresolved comment with non-null resolvedAt", () => {
+    const raw = withComments(
+      wellFormedComment({ resolved: false, resolvedAt: FIXED }),
+    );
+    expect(() => validateImportStrict(raw)).toThrow(
+      /review\.comments\[0\]\.resolvedAt/,
+    );
+  });
+
+  test("rejects a comment with parentId pointing to a non-existent id", () => {
+    const raw = withComments(wellFormedComment({ id: "r", parentId: "ghost" }));
+    expect(() => validateImportStrict(raw)).toThrow(
+      /parentId "ghost" does not match any comment id/,
+    );
+  });
+
+  test("rejects a comment with an empty-string parentId", () => {
+    const raw = withComments(wellFormedComment({ parentId: "" }));
+    expect(() => validateImportStrict(raw)).toThrow(
+      /review\.comments\[0\]\.parentId/,
+    );
+  });
+
+  test("rejects a comment whose resolved field is not a boolean", () => {
+    const raw = withComments(wellFormedComment({ resolved: "yes" as any }));
+    expect(() => validateImportStrict(raw)).toThrow(
+      /review\.comments\[0\]\.resolved/,
+    );
+  });
+
+  test("rejects a non-object comment entry", () => {
+    const raw = withComments(null);
+    expect(() => validateImportStrict(raw)).toThrow(
+      /review\.comments\[0\] is not an object/,
+    );
+  });
+
+  // ── Issue 4 semantic validation ────────────────────────────────────
+
+  test("rejects a self-referential comment (parentId === id)", () => {
+    const raw = withComments(wellFormedComment({ id: "c_1", parentId: "c_1" }));
+    expect(() => validateImportStrict(raw)).toThrow(
+      /self-reference|parentId must not equal/,
+    );
+  });
+
+  test("rejects a comment anchored to a non-existent block", () => {
+    const raw = withComments(
+      wellFormedComment({ blockId: "ghost_block_id" }),
+    );
+    expect(() => validateImportStrict(raw)).toThrow(
+      /blockId "ghost_block_id" does not match any block in doc\.blocks/,
+    );
+  });
+
+  // ── Issue 3 threading depth ────────────────────────────────────────
+
+  test("rejects a document with reply-to-reply nesting", () => {
+    const root = wellFormedComment({ id: "r" });
+    const reply = wellFormedComment({ id: "r2", parentId: "r" });
+    const nested = wellFormedComment({ id: "r3", parentId: "r2" });
+    const raw = withComments(root, reply, nested);
+    expect(() => validateImportStrict(raw)).toThrow(
+      /reply to a reply|depth must be one level/,
+    );
+  });
+
+  test("accepts a tombstoned comment ('[deleted]' author, empty update)", () => {
+    const tombstoned = wellFormedComment({
+      author: "[deleted]",
+      text: "[deleted]",
+      updatedAt: FIXED,
+    });
+    const raw = withComments(tombstoned);
+    expect(() => validateImportStrict(raw)).not.toThrow();
+  });
+});

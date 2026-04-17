@@ -115,7 +115,7 @@ Temp Parquet cleanup tracked as DEBT-021.
 |----|-------|--------|--------------|
 | E-3-1 | Stage 3 Domain Model Consolidation (`doc.review`, schema v2) | 🔄 | — |
 | E-3-2a | Stage 3 Reducer Actions — Workflow State Machine | 🔄 | E-3-1 |
-| E-3-2b | Stage 3 Reducer Actions — Comments Subsystem | ⬜ | E-3-2a |
+| E-3-2b | Stage 3 Reducer Actions — Comments Subsystem | 🔄 | E-3-2a |
 | E-3-3 | Stage 3 Review Panel UI | ⬜ | E-3-2b |
 | E-3-4 | Stage 3 End-to-End Tests | ⬜ | E-3-3 |
 
@@ -139,6 +139,21 @@ Read-only transitions clear undo/redo. Deterministic timestamps via injected
 `WorkflowHistoryEntry` half of `DEBT-023` (element shape validation). Adds
 `DEBT-024` (cosmetic rename of `validateDocumentShape`). Comments subsystem
 deferred to E-3-2b; UI to E-3-3.
+
+**E-3-2b status:** Comments subsystem landed. Six new reducer actions
+(`ADD_COMMENT`, `REPLY_TO_COMMENT`, `EDIT_COMMENT`, `RESOLVE_COMMENT`,
+`REOPEN_COMMENT`, `DELETE_COMMENT`) implemented in `store/comments.ts` and
+delegated from the reducer. Comment mutations live OUTSIDE the undo/redo
+timeline — they do not call `push`, do not touch `undoStack`/`redoStack`,
+and do not perturb `_lastAction`. Audit trail for ADD/REPLY/RESOLVE/REOPEN/
+DELETE lands in `doc.review.history` (EDIT is intentionally unaudited).
+New `canComment` dimension in `WORKFLOW_PERMISSIONS` keeps comments open
+through `in_review` and freezes them in `approved|exported|published`.
+Ownership check gates EDIT/DELETE on `comment.author === actor`; RESOLVE
+and REOPEN are open to any commenter. `validateImportStrict` now
+deep-validates every `Comment` element and enforces referential integrity
+for `parentId`. Closes `DEBT-023`. UI surface (indicators, NoteModal,
+Review panel) deferred to E-3-3.
 
 ## Theme #2: Marginal Tax Rate Meatgrinder
 
