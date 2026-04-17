@@ -92,6 +92,21 @@ describe("hydrateImportedDoc", () => {
     expect(result.warnings.some(w => /schemaVersion/i.test(w))).toBe(true);
   });
 
+  test("hydrates numeric epoch timestamps to ISO strings", () => {
+    const d: any = goodDoc();
+    d.meta.createdAt = 1700000000000;
+    d.meta.updatedAt = 1700000000000;
+
+    const result = hydrateImportedDoc(d);
+
+    expect(typeof result.doc.meta.createdAt).toBe("string");
+    expect(result.doc.meta.createdAt).toBe(new Date(1700000000000).toISOString());
+    expect(typeof result.doc.meta.updatedAt).toBe("string");
+    expect(result.doc.meta.updatedAt).toBe(new Date(1700000000000).toISOString());
+    expect(result.warnings.some(w => /epoch/.test(w))).toBe(true);
+    expect(validateImport(result.doc)).toBeNull();
+  });
+
   test("normalizes deterministic nested _id for legacy bar/line/kpi data", () => {
     const barDoc: any = docForTemplate("ranked_bar_simple");
     const lineDoc: any = docForTemplate("line_area");
@@ -274,6 +289,26 @@ describe("validateImport", () => {
     const key = Object.keys(d.blocks)[0];
     d.blocks[key].type = "this_type_does_not_exist";
     expect(validateImport(d)).toMatch(/Unknown block type/);
+  });
+
+  test("rejects block in wrong section type", () => {
+    const d: any = goodDoc();
+    const footer = d.sections.find((s: any) => s.type === "footer");
+    const header = d.sections.find((s: any) => s.type === "header");
+    if (!footer || !header) throw new Error("missing header/footer sections");
+    const sourceId = footer.blockIds.find((bid: string) => d.blocks[bid]?.type === "source_footer");
+    if (!sourceId) throw new Error("missing source block");
+    footer.blockIds = footer.blockIds.filter((bid: string) => bid !== sourceId);
+    header.blockIds.push(sourceId);
+    expect(validateImport(d)).toMatch(/not allowed in section/);
+  });
+
+  test("rejects failed guard validation", () => {
+    const d: any = goodDoc();
+    const brandId = Object.keys(d.blocks).find(id => d.blocks[id].type === "brand_stamp");
+    if (!brandId) throw new Error("missing brand block");
+    d.blocks[brandId].props.position = "center";
+    expect(validateImport(d)).toMatch(/Invalid props for brand_stamp/);
   });
 
   test("rejects duplicate section id", () => {
