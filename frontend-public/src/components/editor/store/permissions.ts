@@ -145,7 +145,16 @@ export const WORKFLOW_PERMISSIONS: Record<WorkflowState, WorkflowPermission> = {
   },
   in_review: {
     textContent: true, dataContent: false, structural: false, style: false,
-    importUndoRedo: true,
+    // IMPORT / UNDO / REDO are blocked in review. Two bypass paths would
+    // otherwise defeat the copy-edit lockdown:
+    //   • IMPORT — swaps the entire document while under review, bypassing
+    //     every per-key lock (validateImportStrict is workflow-blind).
+    //   • UNDO/REDO — the undo stack still carries pre-submission
+    //     structural snapshots, so a single UNDO would apply a structural
+    //     mutation in a state that is supposed to allow only copy edits.
+    // Stacks are PRESERVED across SUBMIT_FOR_REVIEW (no clear) so that
+    // REQUEST_CHANGES re-enables undo once the document is back in draft.
+    importUndoRedo: false,
   },
   approved: {
     textContent: false, dataContent: false, structural: false, style: false,

@@ -107,13 +107,29 @@ truth: `TRANSITIONS` in `store/workflow.ts`.
 | DATA_CONTENT                 |   ✓   |     ✗     |    ✗     |    ✗     |     ✗     |
 | STRUCTURAL (add/remove)      |   ✓   |     ✗     |    ✗     |    ✗     |     ✗     |
 | STYLE (bg, theme, size, tpl) |   ✓   |     ✗     |    ✗     |    ✗     |     ✗     |
-| IMPORT / UNDO / REDO         |   ✓   |     ✓     |    ✗     |    ✗     |     ✗     |
+| IMPORT / UNDO / REDO         |   ✓   |     ✗     |    ✗     |    ✗     |     ✗     |
 | SELECT / SET_MODE / SAVED    |   ✓   |     ✓     |    ✓     |    ✓     |     ✓     |
 | Workflow transitions         | governed by transition table above                 |
 
 In `in_review` only copy edits land; attempting a data/structural/style
 edit returns *"Only copy edits allowed during review — return to draft
 first"*.
+
+**History-stack bypass note.** `in_review` blocks not only content
+edits but also `IMPORT`, `UNDO`, and `REDO`. Two bypass paths motivate
+that rule:
+
+- **IMPORT** — `validateImportStrict` is workflow-blind; allowing
+  IMPORT in review would let the user swap the entire document and
+  bypass every per-key lock.
+- **UNDO / REDO** — stacks are PRESERVED across `SUBMIT_FOR_REVIEW`
+  (so `REQUEST_CHANGES` can restore undo once the document is back in
+  draft). If UNDO were allowed in `in_review`, a single dispatch would
+  replay a pre-submission structural snapshot in a state that is
+  supposed to permit only copy edits.
+
+Blocking these three actions while preserving the stacks is the
+minimum-surface fix — no extra stack-clearing heuristics needed.
 
 ### Determinism
 
@@ -129,6 +145,16 @@ Crossing into `approved | exported | published` clears `undoStack` and
 `redoStack`. Rationale: an undo after APPROVE would silently revert
 approval state. Transitions back to `draft` (`REQUEST_CHANGES`,
 `RETURN_TO_DRAFT`) preserve stacks.
+
+### Transitions mark the document as dirty
+
+Every workflow transition mutates the document — it appends a
+`WorkflowHistoryEntry`, flips `review.workflow`, and advances
+`meta.updatedAt`. These are unsaved changes by definition, so the
+reducer sets `dirty: true` on every transition (including
+`DUPLICATE_AS_DRAFT`, where the new document identity has not been
+persisted anywhere yet). Only `SAVED` or a successful persistence
+round-trip clears the dirty flag.
 
 Reference artifact: `docs/editor/infographic-editor-stage3a-v2.jsx`.
 

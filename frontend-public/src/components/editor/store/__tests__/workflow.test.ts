@@ -323,10 +323,15 @@ describe("permissions / workflow × category gate", () => {
   test("WORKFLOW_PERMISSIONS matrix is exported and shaped correctly", () => {
     expect(WORKFLOW_PERMISSIONS.draft.textContent).toBe(true);
     expect(WORKFLOW_PERMISSIONS.draft.structural).toBe(true);
+    expect(WORKFLOW_PERMISSIONS.draft.importUndoRedo).toBe(true);
     expect(WORKFLOW_PERMISSIONS.in_review.textContent).toBe(true);
     expect(WORKFLOW_PERMISSIONS.in_review.dataContent).toBe(false);
     expect(WORKFLOW_PERMISSIONS.in_review.structural).toBe(false);
     expect(WORKFLOW_PERMISSIONS.in_review.style).toBe(false);
+    // Fix prompt P0: importUndoRedo must be false in in_review — otherwise
+    // IMPORT swaps the doc entirely, and UNDO/REDO replay pre-submission
+    // structural snapshots, bypassing the copy-edit lockdown.
+    expect(WORKFLOW_PERMISSIONS.in_review.importUndoRedo).toBe(false);
     expect(WORKFLOW_PERMISSIONS.approved.importUndoRedo).toBe(false);
     expect(WORKFLOW_PERMISSIONS.published.importUndoRedo).toBe(false);
   });
@@ -471,5 +476,147 @@ describe("DEBT-022 / legacy validateImport is gone", () => {
     const bare = src.match(/validateImport\(/g) || [];
     expect(bare).toHaveLength(0);
     expect(src).toMatch(/validateImportStrict\(/);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// 9. Fix prompt — P0 bypass closure + P1 dirty/rejection consistency
+// ────────────────────────────────────────────────────────────────────
+
+describe("fix prompt / P0 — in_review bypass closure", () => {
+  test("IMPORT is rejected in in_review", () => {
+    const s0 = setWorkflow(baseState(), "in_review");
+    const fresh = JSON.parse(JSON.stringify(baseState().doc));
+    const result = reducer(s0, { type: "IMPORT", doc: fresh });
+    expect(result.doc).toBe(s0.doc);
+    expect(result._lastRejection?.type).toBe("IMPORT");
+    expect(result._lastRejection?.reason).toMatch(/read-only/i);
+  });
+
+  test("UNDO is rejected in in_review even when undoStack is non-empty", () => {
+    // 1. Make an edit in draft so the undo stack has a snapshot.
+    let s = baseState();
+    const bid = findBlockIdByType(s, "headline_editorial");
+    s = reducer(s, { type: "UPDATE_PROP", blockId: bid, key: "text", value: "edited" });
+    expect(s.undoStack.length).toBeGreaterThan(0);
+
+    // 2. Submit for review.
+    s = reducer(s, { type: "SUBMIT_FOR_REVIEW", ts: FIXED_TS });
+    expect(s.doc.review.workflow).toBe("in_review");
+    // Stack preserved across submit (REQUEST_CHANGES must restore undo).
+    expect(s.undoStack.length).toBeGreaterThan(0);
+
+    // 3. UNDO must be rejected — this was the P0 history-stack bypass.
+    const result = reducer(s, { type: "UNDO" });
+    expect(result.doc).toBe(s.doc);
+    expect(result._lastRejection?.type).toBe("UNDO");
+    expect(result._lastRejection?.reason).toMatch(/read-only/i);
+  });
+
+  test("REDO is rejected in in_review", () => {
+    let s = baseState();
+    const bid = findBlockIdByType(s, "headline_editorial");
+    s = reducer(s, { type: "UPDATE_PROP", blockId: bid, key: "text", value: "v1" });
+    s = reducer(s, { type: "UNDO" });
+    expect(s.redoStack.length).toBeGreaterThan(0);
+
+    s = reducer(s, { type: "SUBMIT_FOR_REVIEW", ts: FIXED_TS });
+    const result = reducer(s, { type: "REDO" });
+    expect(result.doc).toBe(s.doc);
+    expect(result._lastRejection?.type).toBe("REDO");
+  });
+
+  test("undoStack is preserved across SUBMIT_FOR_REVIEW (available again after REQUEST_CHANGES)", () => {
+    let s = baseState();
+    const bid = findBlockIdByType(s, "headline_editorial");
+    s = reducer(s, { type: "UPDATE_PROP", blockId: bid, key: "text", value: "v1" });
+    const stackBefore = s.undoStack.length;
+    expect(stackBefore).toBeGreaterThan(0);
+
+    s = reducer(s, { type: "SUBMIT_FOR_REVIEW", ts: FIXED_TS });
+    // Not cleared on submit — crucial for the round-trip.
+    expect(s.undoStack.length).toBe(stackBefore);
+
+    // Reviewer bounces the document back.
+    s = reducer(s, { type: "REQUEST_CHANGES", ts: FIXED_TS });
+    expect(s.doc.review.workflow).toBe("draft");
+    expect(s.undoStack.length).toBe(stackBefore);
+
+    // UNDO now works again.
+    const result = reducer(s, { type: "UNDO" });
+    expect(result.doc).not.toBe(s.doc);
+    expect(result._lastRejection).toBeUndefined();
+  });
+});
+
+describe("fix prompt / P1 — workflow transitions mark state as dirty", () => {
+  test("SUBMIT_FOR_REVIEW sets dirty: true", () => {
+    const s0 = { ...baseState(), dirty: false };
+    const r = reducer(s0, { type: "SUBMIT_FOR_REVIEW", ts: FIXED_TS });
+    expect(r.dirty).toBe(true);
+  });
+
+  test("APPROVE sets dirty: true", () => {
+    const s0 = { ...setWorkflow(baseState(), "in_review"), dirty: false };
+    const r = reducer(s0, { type: "APPROVE", ts: FIXED_TS });
+    expect(r.dirty).toBe(true);
+  });
+
+  test("REQUEST_CHANGES sets dirty: true", () => {
+    const s0 = { ...setWorkflow(baseState(), "in_review"), dirty: false };
+    const r = reducer(s0, { type: "REQUEST_CHANGES", ts: FIXED_TS });
+    expect(r.dirty).toBe(true);
+  });
+
+  test("RETURN_TO_DRAFT sets dirty: true", () => {
+    const s0 = { ...setWorkflow(baseState(), "approved"), dirty: false };
+    const r = reducer(s0, { type: "RETURN_TO_DRAFT", ts: FIXED_TS });
+    expect(r.dirty).toBe(true);
+  });
+
+  test("MARK_EXPORTED sets dirty: true", () => {
+    const s0 = { ...setWorkflow(baseState(), "approved"), dirty: false };
+    const r = reducer(s0, { type: "MARK_EXPORTED", filename: "out.png", ts: FIXED_TS });
+    expect(r.dirty).toBe(true);
+  });
+
+  test("MARK_PUBLISHED sets dirty: true", () => {
+    const s0 = { ...setWorkflow(baseState(), "exported"), dirty: false };
+    const r = reducer(s0, { type: "MARK_PUBLISHED", channel: "twitter", ts: FIXED_TS });
+    expect(r.dirty).toBe(true);
+  });
+
+  test("DUPLICATE_AS_DRAFT produces a dirty state", () => {
+    const s0 = { ...setWorkflow(baseState(), "published"), dirty: false };
+    const r = reducer(s0, { type: "DUPLICATE_AS_DRAFT", ts: FIXED_TS });
+    expect(r.dirty).toBe(true);
+  });
+
+  test("SAVED clears dirty", () => {
+    const s0: EditorState = { ...baseState(), dirty: true };
+    const r = reducer(s0, { type: "SAVED" });
+    expect(r.dirty).toBe(false);
+  });
+});
+
+describe("fix prompt / P1 — invalid IMPORT flows through _lastRejection", () => {
+  test("invalid IMPORT fills _lastRejection (no silent rejection)", () => {
+    const s0 = baseState();
+    const result = reducer(s0, { type: "IMPORT", doc: { garbage: true } as any });
+    expect(result.doc).toBe(s0.doc);
+    expect(result._lastRejection?.type).toBe("IMPORT");
+    expect(typeof result._lastRejection?.reason).toBe("string");
+    expect((result._lastRejection?.reason ?? "").length).toBeGreaterThan(0);
+  });
+
+  test("valid IMPORT clears _lastRejection", () => {
+    const s0: EditorState = {
+      ...baseState(),
+      _lastRejection: { type: "PREVIOUS", reason: "old", at: 1 },
+    };
+    const fresh = JSON.parse(JSON.stringify(baseState().doc));
+    const result = reducer(s0, { type: "IMPORT", doc: fresh });
+    expect(result._lastRejection).toBeUndefined();
+    expect(result.dirty).toBe(false); // fresh import starts clean
   });
 });

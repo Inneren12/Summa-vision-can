@@ -293,10 +293,12 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
           _lastRejection: undefined,
         };
       } catch (err) {
+        const reason = err instanceof Error ? err.message : "Import validation failed";
         if (process.env.NODE_ENV === "development") {
-          console.error(`[editor] IMPORT rejected by reducer: ${err instanceof Error ? err.message : "unknown"}`);
+          console.error(`[editor] IMPORT rejected: ${reason}`);
         }
-        nextState = state;
+        // Route through withRejection so UI can read a uniform signal.
+        nextState = withRejection(state, action.type, reason);
       }
       break;
     }
@@ -408,7 +410,10 @@ function applyWorkflowTransition(state: EditorState, action: WorkflowAction): Ed
   };
 
   // Crossing into a read-only workflow clears undo/redo. Otherwise an
-  // undo after APPROVE would silently revert approval state.
+  // undo after APPROVE would silently revert approval state. Stacks are
+  // deliberately PRESERVED across SUBMIT_FOR_REVIEW so REQUEST_CHANGES can
+  // restore undo once the document is back in draft. UNDO/REDO are blocked
+  // while the workflow itself is `in_review` via WORKFLOW_PERMISSIONS.
   const intoReadOnly = isReadOnlyWorkflow(to);
 
   return {
@@ -416,8 +421,10 @@ function applyWorkflowTransition(state: EditorState, action: WorkflowAction): Ed
     doc: nextDoc,
     undoStack: intoReadOnly ? [] : state.undoStack,
     redoStack: intoReadOnly ? [] : state.redoStack,
-    // Workflow transitions are their own persistence event — clear dirty.
-    dirty: false,
+    // Transitions mutate the document (review.workflow, review.history,
+    // meta.updatedAt) — treat as unsaved content changes. Only SAVED or a
+    // successful persistence round-trip should clear the dirty flag.
+    dirty: true,
     _lastAction: undefined,
     _lastRejection: undefined,
   };
@@ -477,7 +484,9 @@ function applyDuplicateAsDraft(state: EditorState, action: WorkflowAction): Edit
     undoStack: [],
     redoStack: [],
     selectedBlockId: null,
-    dirty: false,
+    // A duplicated document is unsaved by definition — the new identity
+    // has not been persisted anywhere yet.
+    dirty: true,
     _lastAction: undefined,
     _lastRejection: undefined,
   };
