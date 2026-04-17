@@ -48,15 +48,21 @@ function applyMigrations(raw: any): { doc: any; warnings: string[] } {
   for (let v = startVersion; v < CURRENT_SCHEMA; v++) {
     const migrateFn = MIGRATIONS[v];
     if (!migrateFn) {
-      warnings.push(`No migration from schemaVersion ${v} to ${v + 1} — skipping`);
-      continue;
+      // HARD ABORT: cannot safely skip — later migrations would run against older schema shape
+      const msg = `Missing migration from schemaVersion ${v} to ${v + 1} — pipeline aborted`;
+      warnings.push(msg);
+      throw new Error(
+        `Cannot migrate document from schemaVersion ${startVersion} to ${CURRENT_SCHEMA}: ${msg}. ` +
+        `Please add MIGRATIONS[${v}] to registry/guards.ts or use a document at a supported version.`,
+      );
     }
     try {
       current = migrateFn(current);
       warnings.push(`Migrated schemaVersion ${v} → ${v + 1}`);
     } catch (err: any) {
-      warnings.push(`Migration ${v} → ${v + 1} failed: ${err?.message ?? "unknown"}`);
-      break;
+      const msg = `Migration ${v} → ${v + 1} failed: ${err?.message ?? "unknown"}`;
+      warnings.push(msg);
+      throw new Error(`Migration pipeline failed at v${v}: ${msg}`);
     }
   }
 
@@ -298,9 +304,14 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
   const warnings: string[] = [];
 
   // Phase 0: Apply sequential migrations v1 → v2 → ... → CURRENT_SCHEMA
-  const migrated = applyMigrations(raw);
-  warnings.push(...migrated.warnings);
-  const source = migrated.doc;
+  let source: any;
+  try {
+    const migrated = applyMigrations(raw);
+    warnings.push(...migrated.warnings);
+    source = migrated.doc;
+  } catch (err: any) {
+    throw new Error(`Document migration failed: ${err?.message ?? "unknown error"}`);
+  }
 
   const now = new Date().toISOString();
 

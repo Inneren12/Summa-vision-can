@@ -56,7 +56,9 @@ function estimateBlockHeight(blockType: string, props: any, width: number, scale
       return (lines * 20 + 10) * s;
     },
 
-    source_footer: () => (props?.methodology ? 30 : 16) * s,
+    // source_footer renderer always returns 30*s (two-line layout for text + methodology).
+    // Keep this in sync with renderer/blocks.ts if the footer layout changes.
+    source_footer: () => 30 * s,
 
     brand_stamp: () => 20 * s,
 
@@ -78,7 +80,8 @@ function estimateBlockHeight(blockType: string, props: any, width: number, scale
 
     table_enriched: () => {
       const rows = Array.isArray(props?.rows) ? props.rows : [];
-      return (rows.length * 60 + 40) * s;
+      // Match renderer: rowH is capped at 36*s (actual rendering clamps to fit)
+      return (rows.length * 36 + 20) * s;
     },
 
     small_multiple: () => {

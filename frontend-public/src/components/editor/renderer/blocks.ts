@@ -1,9 +1,18 @@
 import { TK } from '../config/tokens';
 import type { BlockRenderer, RenderResult } from './types';
 
-function rr(x: number, y: number, w: number, height: number, overflow = false, warnings: string[] = []): RenderResult {
+function rr(
+  x: number,
+  y: number,
+  w: number,
+  height: number,
+  overflow = false,
+  warnings: string[] = [],
+  intrinsicHeight?: number,
+): RenderResult {
   return {
     height,
+    intrinsicHeight: intrinsicHeight ?? height,
     overflow,
     warnings,
     hitArea: { x, y, w, h: height },
@@ -62,7 +71,7 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.fillText(line, ax, y + 42 * s + i * 50 * s);
     });
 
-    return rr(x, y, w, consumedHeight, overflow, warnings);
+    return rr(x, y, w, consumedHeight, overflow, warnings, consumedHeight);
   },
 
   subtitle_descriptor(ctx, p, x, y, w, h, pal, s) {
@@ -156,7 +165,7 @@ export const BR: Record<string, BlockRenderer> = {
       warnings.push(`Annotation needs ~${Math.round(consumedHeight)}px but only ${Math.round(h)}px available`);
     }
 
-    return rr(x, y, w, consumedHeight, overflow, warnings);
+    return rr(x, y, w, consumedHeight, overflow, warnings, consumedHeight);
   },
 
   source_footer(ctx, p, x, y, w, h, pal, s) {
@@ -238,7 +247,7 @@ export const BR: Record<string, BlockRenderer> = {
       warnings.push(`${items.length} bars need ~${Math.round(neededHeight)}px but only ${Math.round(h)}px available`);
     }
 
-    return rr(x, y, w, h, overflow, warnings);
+    return rr(x, y, w, h, overflow, warnings, neededHeight);
   },
 
   line_editorial(ctx, p, x, y, w, h, pal, s) {
@@ -331,7 +340,7 @@ export const BR: Record<string, BlockRenderer> = {
       warnings.push(`Line chart needs ~${Math.round(neededHeight)}px but only ${Math.round(h)}px available`);
     }
 
-    return rr(x, y, w, h, overflow, warnings);
+    return rr(x, y, w, h, overflow, warnings, neededHeight);
   },
 
   comparison_kpi(ctx, p, x, y, w, h, pal, s) {
@@ -428,7 +437,7 @@ export const BR: Record<string, BlockRenderer> = {
       warnings.push(`${rows.length} rows overflow section by ~${Math.round(neededHeight - h)}px`);
     }
 
-    return rr(x, y, w, h, overflow, warnings);
+    return rr(x, y, w, h, overflow, warnings, neededHeight);
   },
 
   small_multiple(ctx, p, x, y, w, h, pal, s) {
@@ -506,6 +515,6 @@ export const BR: Record<string, BlockRenderer> = {
       warnings.push(`${items.length} cells need ~${Math.round(neededHeight)}px but only ${Math.round(h)}px available`);
     }
 
-    return rr(x, y, w, h, overflow, warnings);
+    return rr(x, y, w, h, overflow, warnings, neededHeight);
   },
 };

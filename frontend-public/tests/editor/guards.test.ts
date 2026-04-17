@@ -335,11 +335,20 @@ describe("schema migration pipeline", () => {
   });
 
   test("warns when migration function is missing", () => {
-    // Simulate future state: pretend we're upgrading from v0 to v1 with no migration.
-    // This is documented behavior from applyMigrations and does not require mocking CURRENT_SCHEMA yet.
+    // Current behavior: aborts via throw, NOT silent skip.
     const doc: any = goodDoc();
     doc.schemaVersion = 0;
-    const result = hydrateImportedDoc(doc);
-    expect(result.warnings.some(w => /No migration/.test(w))).toBe(true);
+    expect(() => hydrateImportedDoc(doc)).toThrow(/Missing migration from schemaVersion 0/);
+  });
+
+  test("migration pipeline abort preserves document integrity", () => {
+    const doc: any = goodDoc();
+    doc.schemaVersion = 0;
+    try {
+      hydrateImportedDoc(doc);
+    } catch {
+      // Expected
+    }
+    expect(doc.schemaVersion).toBe(0);
   });
 });

@@ -8,8 +8,10 @@
  *   - future smart QA (render-time warnings fed back to validate())
  */
 export interface RenderResult {
-  /** Height consumed by this block in canvas units */
+  /** Height consumed by this block in canvas units (clamped to available space when overflow occurs) */
   height: number;
+  /** The height the block WOULD have consumed without clamping. Equal to `height` when no overflow. */
+  intrinsicHeight?: number;
   /** True if content was clipped or truncated during render */
   overflow: boolean;
   /** Warnings produced during render (e.g., "text truncated", "too many items") */

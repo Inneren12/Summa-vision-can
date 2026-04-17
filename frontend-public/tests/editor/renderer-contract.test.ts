@@ -1,12 +1,16 @@
 import { BR } from '../../src/components/editor/renderer/blocks';
 
 function makeCtx() {
+  const gradient = {
+    addColorStop: jest.fn(),
+  };
   return {
     font: '',
     fillStyle: '',
     strokeStyle: '',
     lineWidth: 1,
     textAlign: 'left',
+    globalAlpha: 1,
     setLineDash: jest.fn(),
     beginPath: jest.fn(),
     moveTo: jest.fn(),
@@ -22,7 +26,12 @@ function makeCtx() {
     save: jest.fn(),
     restore: jest.fn(),
     closePath: jest.fn(),
+    arc: jest.fn(),
+    ellipse: jest.fn(),
     measureText: jest.fn((text: string) => ({ width: (text || '').length * 7 })),
+    createLinearGradient: jest.fn(() => gradient),
+    createRadialGradient: jest.fn(() => gradient),
+    createPattern: jest.fn(() => null),
   } as any;
 }
 
