@@ -36,8 +36,21 @@ export function mkDoc(tid: string, tpl: TemplateEntry, over: Record<string, Bloc
     page: { size: tpl.defaultSize || "instagram_1080", background: tpl.defaultBg || "gradient_warm", palette: tpl.defaultPal || "housing" },
     sections,
     blocks,
-    workflow: "draft" as const,
     meta: { createdAt: now, updatedAt: now, version: 1, history: [] },
+    review: {
+      workflow: "draft",
+      history: [
+        {
+          ts: now,
+          action: "created",
+          summary: "Document created",
+          author: "you",
+          fromWorkflow: null,
+          toWorkflow: "draft",
+        },
+      ],
+      comments: [],
+    },
   };
 }
 

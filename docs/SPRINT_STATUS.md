@@ -109,6 +109,24 @@ Temp Parquet cleanup tracked as DEBT-021.
 | D-3 | B2B Scoring + Slack Notifications | ✅ | D-2 |
 | D-4 | Partner Page — Media Kit | ✅ | D-3 |
 
+## Étape E: Editor (Authoring Workflow)
+
+| PR | Title | Status | Dependencies |
+|----|-------|--------|--------------|
+| E-3-1 | Stage 3 Domain Model Consolidation (`doc.review`, schema v2) | 🔄 | — |
+| E-3-2 | Stage 3 Reducer Actions (workflow transitions, comments) | ⬜ | E-3-1 |
+| E-3-3 | Stage 3 Review Panel UI | ⬜ | E-3-2 |
+| E-3-4 | Stage 3 End-to-End Tests | ⬜ | E-3-3 |
+
+**E-3-1 status:** Data-layer only. `CanonicalDocument` now carries a `review`
+section (workflow + workflow history + comments); root-level `workflow` is
+moved under `review.workflow`; `schemaVersion` bumped 1 → 2 with a single
+`v1 → v2` migration in `registry/guards.ts`. Renamed legacy `HistoryEntry`
+(edit log) to `EditHistoryEntry` so the name is free for the new
+`WorkflowHistoryEntry` type. Migration coverage lands in
+`src/components/editor/__tests__/migrations.test.ts`. No reducer actions or UI
+changed in this PR.
+
 ## Theme #2: Marginal Tax Rate Meatgrinder
 
 | PR | Title | Status | Dependencies |

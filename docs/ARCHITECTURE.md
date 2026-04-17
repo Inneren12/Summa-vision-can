@@ -94,6 +94,19 @@ Parquet object in storage. Two paths feed into this contract:
 tell which path the Parquet came from. Temp Parquet cleanup is tracked
 as `DEBT-021` (24 h TTL via ``temp_upload_ttl_hours``).
 
+## Editor (Authoring Workflow)
+
+- Editor document type is `CanonicalDocument` in
+  `frontend-public/src/components/editor/types.ts`. Schema version is tracked
+  exclusively on `doc.schemaVersion` at the root; `meta.schemaVersion` is
+  forbidden.
+- Review-related state (workflow, workflow history, comments) lives in
+  `doc.review`. Edit history remains in `doc.meta.history` with its own
+  `EditHistoryEntry` type — two histories, two purposes, never merged.
+- Schema migrations are declarative in `registry/guards.ts#MIGRATIONS`.
+  Current version is v2; a single `v1 → v2` step moves root-level `workflow`
+  into `doc.review.workflow`. See `docs/modules/editor.md` for the full shape.
+
 ## Technology Summary
 
 | Component | Technology |

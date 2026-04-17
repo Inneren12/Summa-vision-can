@@ -51,6 +51,53 @@ Rules:
   `settings.temp_upload_ttl_hours` (default 24 h).
 - **Target:** Follow-up PR (not blocking for the upload feature).
 
+### DEBT-023: `validateImportStrict` does not deep-validate review entries
+
+- **Source:** Stage 3 PR 1 review (`claude/add-review-section-IL0pl`)
+- **Added:** 2026-04-17
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** accepted
+- **Description:** `validateImportStrict` does not deep-validate
+  `review.history[]` and `review.comments[]` element shape. Currently only
+  array-ness is checked. To be addressed in Stage 3 PR 2 when reducer
+  actions start producing these entries from user input. Add element-level
+  checks for `WorkflowHistoryEntry` (required: `ts`, `action`, `summary`,
+  `author`, `fromWorkflow`, `toWorkflow`) and `Comment` (required: `id`,
+  `blockId`, `parentId` nullable, `author`, `text`, `createdAt`, `resolved`
+  boolean, `updatedAt` nullable, `resolvedAt` nullable, `resolvedBy`
+  nullable).
+- **Impact:** Low — in PR 1 nothing user-authored lands in these arrays
+  (migration writes a single well-formed entry; `mkDoc` seeds a single
+  well-formed `"created"` entry). Risk surfaces only when PR 2 introduces
+  reducer actions that build entries from arbitrary input.
+- **Resolution:** Add element-level validators in `guards.ts` alongside
+  the new reducer actions.
+- **Target:** Stage 3 PR 2 (reducer actions).
+
+---
+
+### DEBT-022: `validateImport` dual-signature (string + throwing)
+
+- **Source:** Stage 3 PR 1 (`claude/add-review-section-IL0pl`)
+- **Added:** 2026-04-17
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** accepted
+- **Description:** `frontend-public/src/components/editor/registry/guards.ts`
+  exports two parallel import validators: the legacy
+  `validateImport(doc): string | null` used by
+  `components/editor/index.tsx` and `components/editor/store/reducer.ts`,
+  and the new throwing `validateImportStrict(raw): CanonicalDocument`.
+  The two are kept in sync but both paths exist so PR 1 could land
+  data-layer-only without touching reducer/UI call sites.
+- **Impact:** Low — two validation entry points for the editor import
+  pipeline; one can fall out of sync with the other if a future invariant
+  is added to only one.
+- **Resolution:** Migrate reducer / `index.tsx` call sites to
+  `validateImportStrict`, drop the string-returning overload.
+- **Target:** Stage 3 PR 2 (reducer actions).
+
 ---
 
 ## Resolved

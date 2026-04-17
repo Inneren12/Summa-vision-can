@@ -64,11 +64,11 @@ describe("hydrateImportedDoc", () => {
     expect(result.warnings.some(w => /Realigned/.test(w))).toBe(true);
   });
 
-  test("defaults workflow to 'draft' when invalid and records warning", () => {
+  test("defaults review.workflow to 'draft' when invalid and records warning", () => {
     const d: any = goodDoc();
-    d.workflow = "not_a_real_state";
+    d.review.workflow = "not_a_real_state";
     const result = hydrateImportedDoc(d);
-    expect(result.doc.workflow).toBe("draft");
+    expect(result.doc.review.workflow).toBe("draft");
     expect(result.warnings.some(w => /workflow/i.test(w))).toBe(true);
   });
 
@@ -320,9 +320,9 @@ describe("validateImport", () => {
 
 
 describe("schema migration pipeline", () => {
-  test("empty MIGRATIONS map is valid when CURRENT_SCHEMA is 1", () => {
+  test("current-version input (v2) passes through without a Migrated warning", () => {
     const doc = goodDoc();
-    doc.schemaVersion = 1;
+    expect(doc.schemaVersion).toBe(CURRENT_SCHEMA);
     const result = hydrateImportedDoc(doc);
     expect(result.doc.schemaVersion).toBe(CURRENT_SCHEMA);
     expect(result.warnings.filter(w => /Migrated/.test(w))).toHaveLength(0);
