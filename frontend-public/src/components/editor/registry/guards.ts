@@ -122,27 +122,14 @@ function normalizeWorkflow(raw: unknown): WorkflowState {
 }
 
 /**
- * Legacy validator. Returns null on success, error message on failure.
- * See `validateImportStrict` for the throwing variant. Direction will
- * invert in PR 2 (DEBT-022).
+ * Document-shape validator. Returns null on success, error message on
+ * failure. Public entry into the canonical-document shape rules.
+ *
+ * Naming: a future cosmetic rename to `assertCanonicalDocumentV2Shape`
+ * is tracked as DEBT-024. Kept as `validateDocumentShape` here to avoid
+ * scope churn in PR 2a.
  */
-export function validateImport(doc: unknown): string | null {
-  // Phase 1: shape — required top-level fields exist with correct types.
-  const shapeErr = validateDocumentShape(doc);
-  if (shapeErr) return shapeErr;
-
-  // Phase 2: references — all blockIds resolve, no duplicates, no orphans.
-  const refErr = validateSectionReferences(doc as CanonicalDocument);
-  if (refErr) return refErr;
-
-  // Phase 3: registry — known block types, guards, slot rules, required blocks.
-  const regErr = validateRegistryConstraints(doc as CanonicalDocument);
-  if (regErr) return regErr;
-
-  return null;
-}
-
-function validateDocumentShape(doc: any): string | null {
+export function validateDocumentShape(doc: any): string | null {
   if (!doc || typeof doc !== "object") return "Not an object";
   if (typeof doc.schemaVersion !== "number") return "Missing schemaVersion";
   if (!SUPPORTED_SCHEMA_VERSIONS.includes(doc.schemaVersion)) {
@@ -171,6 +158,42 @@ function validateDocumentShape(doc: any): string | null {
   if (!Array.isArray(doc.review.history)) return "Invalid review.history (must be array)";
   if (!Array.isArray(doc.review.comments)) return "Invalid review.comments (must be array)";
 
+  // Per-element shape check for review.history entries (DEBT-023, partial).
+  // Comment elements are intentionally NOT deep-validated here — that
+  // lands in PR 2b alongside the comment reducer actions.
+  for (let i = 0; i < doc.review.history.length; i++) {
+    const entryErr = validateWorkflowHistoryEntry(doc.review.history[i], i);
+    if (entryErr) return entryErr;
+  }
+
+  return null;
+}
+
+function validateWorkflowHistoryEntry(entry: any, idx: number): string | null {
+  const path = `review.history[${idx}]`;
+  if (!entry || typeof entry !== "object") return `${path} is not an object`;
+  if (typeof entry.ts !== "string" || entry.ts.length === 0 || Number.isNaN(Date.parse(entry.ts))) {
+    return `${path}.ts is invalid`;
+  }
+  if (typeof entry.action !== "string" || entry.action.length === 0) {
+    return `${path}.action is invalid`;
+  }
+  if (typeof entry.summary !== "string" || entry.summary.length === 0) {
+    return `${path}.summary is invalid`;
+  }
+  if (typeof entry.author !== "string" || entry.author.length === 0) {
+    return `${path}.author is invalid`;
+  }
+  if (entry.fromWorkflow !== null
+      && (typeof entry.fromWorkflow !== "string"
+          || !VALID_WORKFLOW_STATES.has(entry.fromWorkflow as WorkflowState))) {
+    return `${path}.fromWorkflow is invalid`;
+  }
+  if (entry.toWorkflow !== null
+      && (typeof entry.toWorkflow !== "string"
+          || !VALID_WORKFLOW_STATES.has(entry.toWorkflow as WorkflowState))) {
+    return `${path}.toWorkflow is invalid`;
+  }
   return null;
 }
 
@@ -508,25 +531,27 @@ export function migrateDoc(raw: unknown): MigrationResult {
 
 /**
  * Validates a raw document, runs migrations, and returns a typed
- * CanonicalDocument. Throws Error on any violation.
+ * `CanonicalDocument`. Throws on any violation.
  *
- * TEMPORARY (PR 1): This function currently delegates to the legacy
- * string-returning `validateImport` internally. In PR 2 the direction
- * will flip — `validateImport` will wrap `validateImportStrict` in a
- * try/catch and return the error message. Tracked in DEBT-022.
+ * As of Stage 3 PR 2a this is the SOLE import-validation entry point.
+ * The legacy string-returning `validateImport(doc): string | null` was
+ * removed — DEBT-022 closed.
  *
- * Call sites that want throwing semantics should use this function.
- * Call sites that still use `validateImport(doc): string | null`
- * keep working unchanged until PR 2.
+ * Pipeline:
+ *   1. `migrateDoc` — bumps to current schema (idempotent on v2 input)
+ *   2. `validateDocumentShape` — top-level shape + `review.history` element shape
+ *   3. `validateSectionReferences` — block id integrity, no orphans
+ *   4. `validateRegistryConstraints` — types, slot rules, required blocks
  */
 export function validateImportStrict(raw: unknown): CanonicalDocument {
   const { doc } = migrateDoc(raw);
 
-  // `meta.schemaVersion` / `meta.workflow` / root `workflow` / root `comments`
-  // checks live inside `validateDocumentShape`; we re-run it here so callers
-  // of the strict API get a single throw path.
-  const err = validateImport(doc);
-  if (err) throw new Error(err);
+  const shapeErr = validateDocumentShape(doc);
+  if (shapeErr) throw new Error(shapeErr);
+  const refErr = validateSectionReferences(doc);
+  if (refErr) throw new Error(refErr);
+  const regErr = validateRegistryConstraints(doc);
+  if (regErr) throw new Error(regErr);
 
   if (doc.schemaVersion !== CURRENT_SCHEMA_VERSION) {
     throw new Error(

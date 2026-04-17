@@ -1,26 +1,41 @@
-import type { EditorState, EditorAction, CanonicalDocument } from '../types';
+import type { EditorState, EditorAction, CanonicalDocument, WorkflowAction, WorkflowHistoryEntry, TimestampProvider } from '../types';
 import { BREG } from '../registry/blocks';
 import { TPLS, mkDoc } from '../registry/templates';
-import { validateImport } from '../registry/guards';
-import { PERMS } from './permissions';
+import { validateImportStrict } from '../registry/guards';
+import { PERMS, checkWorkflowPermission } from './permissions';
 import { assertStateIntegrity } from './dev-assert';
 import { assertDocumentIntegrity } from '../validation/invariants';
+import {
+  WORKFLOW_ACTION_TYPES,
+  canTransition,
+  isReadOnlyWorkflow,
+  systemTimestampProvider,
+  transitionTarget,
+  type WorkflowActionType,
+} from './workflow';
 
 export const MAX_UNDO = 50;
 
+function isWorkflowAction(action: EditorAction): action is WorkflowAction {
+  return (WORKFLOW_ACTION_TYPES as readonly string[]).includes(action.type);
+}
+
 /**
- * Defense-in-depth permission gate. Runs BEFORE every reducer mutation.
+ * Mode-axis permission gate. Renamed from the original `isActionAllowed`
+ * body in PR 2a; the new top-level `isActionAllowed` runs both this and
+ * `checkWorkflowPermission` (orthogonal axes — both must pass).
  *
  * UI components already disable buttons and hide editors based on the same
  * PERMS table, but UI gating alone is insufficient — keyboard shortcuts,
  * a future command palette, devtools, tests, or bulk-import flows can
  * dispatch actions directly. The reducer is the only place all dispatches
  * funnel through, so policy enforcement here guarantees the invariant.
- *
- * Returns { allowed: false, reason } for blocked actions; the caller
- * (reducer) treats this as a no-op and logs the reason in dev.
  */
-function isActionAllowed(state: EditorState, action: EditorAction): { allowed: boolean; reason?: string } {
+function checkModePermission(state: EditorState, action: EditorAction): { allowed: boolean; reason?: string } {
+  // Workflow actions don't have a mode-axis gate. They are gated by
+  // workflow legality (`canTransition`) inside the reducer body.
+  if (isWorkflowAction(action)) return { allowed: true };
+
   const perms = PERMS[state.mode];
   if (!perms) return { allowed: false, reason: `Unknown mode: ${state.mode}` };
 
@@ -99,19 +114,88 @@ function isActionAllowed(state: EditorState, action: EditorAction): { allowed: b
   }
 }
 
+/**
+ * Orthogonal two-axis permission gate. Mode and workflow are checked
+ * independently; an action must pass both to mutate the document.
+ *
+ * Mode axis (template vs design) was the only gate before PR 2a.
+ * Workflow axis (draft / in_review / approved / exported / published)
+ * was added in PR 2a — see `checkWorkflowPermission`.
+ */
+function isActionAllowed(state: EditorState, action: EditorAction): { allowed: boolean; reason?: string } {
+  const modeCheck = checkModePermission(state, action);
+  if (!modeCheck.allowed) return modeCheck;
+
+  const wfCheck = checkWorkflowPermission(state.doc.review.workflow, action);
+  if (!wfCheck.allowed) return wfCheck;
+
+  return { allowed: true };
+}
+
+function getProvider(state: EditorState): TimestampProvider {
+  return state._timestampProvider ?? systemTimestampProvider;
+}
+
+function resolveTimestamp(state: EditorState, action: WorkflowAction): string {
+  return action.ts ?? getProvider(state).now();
+}
+
+function resolveActor(action: WorkflowAction): string {
+  return action.actor ?? "you";
+}
+
+function workflowSummary(action: WorkflowAction, fromWorkflow: string): string {
+  switch (action.type) {
+    case "SUBMIT_FOR_REVIEW":  return "Submitted for review";
+    case "APPROVE":            return "Approved for export";
+    case "REQUEST_CHANGES":
+      return action.note
+        ? `Changes requested: ${action.note}`
+        : "Changes requested; returned to draft";
+    case "RETURN_TO_DRAFT":
+      return action.note
+        ? `Returned to draft: ${action.note}`
+        : "Approval revoked; returned to draft";
+    case "MARK_EXPORTED":      return `Exported as ${action.filename}`;
+    case "MARK_PUBLISHED":     return `Published to ${action.channel}`;
+    case "DUPLICATE_AS_DRAFT": return `Duplicated from ${fromWorkflow} document`;
+  }
+}
+
+function workflowHistoryAction(actionType: WorkflowActionType): string {
+  switch (actionType) {
+    case "SUBMIT_FOR_REVIEW":  return "submitted";
+    case "APPROVE":            return "approved";
+    case "REQUEST_CHANGES":    return "changes_requested";
+    case "RETURN_TO_DRAFT":    return "returned_to_draft";
+    case "MARK_EXPORTED":      return "exported";
+    case "MARK_PUBLISHED":     return "published";
+    case "DUPLICATE_AS_DRAFT": return "duplicated";
+  }
+}
+
+function withRejection(state: EditorState, actionType: string, reason: string): EditorState {
+  if (process.env.NODE_ENV === "development") {
+    console.warn(`[editor] Action blocked: ${actionType} \u2014 ${reason}`);
+  }
+  return { ...state, _lastRejection: { type: actionType, reason, at: Date.now() } };
+}
+
 export function reducer(state: EditorState, action: EditorAction): EditorState {
-  // Permission gate — runs before any mutation
+  // Permission gate — runs before any mutation. Failures land in
+  // `_lastRejection`; `_lastAction` (burst-batching fingerprint) is
+  // intentionally untouched on rejection.
   const check = isActionAllowed(state, action);
   if (!check.allowed) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn(`[editor] Action blocked: ${action.type} \u2014 ${check.reason}`);
-    }
-    return state; // no-op
+    return withRejection(state, action.type, check.reason ?? "Unknown reason");
   }
 
   const push = (newDoc: CanonicalDocument, summary = ""): EditorState => {
     const nv = (state.doc.meta.version || 0) + 1;
-    const now = new Date().toISOString();
+    // Edit-snapshot timestamp flows through the injected provider so tests
+    // can assert deterministic `meta.updatedAt` / `history[].savedAt` values.
+    // The push helper is the only place an edit snapshot is written.
+    const now = getProvider(state).now();
     const hist = [...(state.doc.meta.history || []).slice(-9), { version: state.doc.meta.version, savedAt: now, summary: summary || action.type }];
 
     const isBatchable = action.type === "UPDATE_PROP"
@@ -137,6 +221,7 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
         key: action.type === "UPDATE_PROP" ? action.key : undefined,
         at: Date.now(),
       },
+      _lastRejection: undefined,
     };
   };
 
@@ -186,22 +271,35 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
         selectedBlockId: null,
         dirty: true,
         _lastAction: undefined,
+        _lastRejection: undefined,
       };
       break;
     }
     case "IMPORT": {
-      // Defense in depth: the index.tsx import handler already runs
-      // hydrateImportedDoc + validateImport, but the reducer cannot trust
-      // every dispatcher (tests, devtools, future automation).
-      const err = validateImport(action.doc);
-      if (err) {
+      // DEBT-022 closure: reducer now uses the throwing strict validator.
+      // Defense in depth: index.tsx already runs hydrateImportedDoc +
+      // validateImportStrict, but the reducer cannot trust every dispatcher
+      // (tests, devtools, future automation), so it re-validates here.
+      try {
+        const validated = validateImportStrict(action.doc);
+        nextState = {
+          ...state,
+          doc: validated,
+          undoStack: [],
+          redoStack: [],
+          selectedBlockId: null,
+          dirty: false,
+          _lastAction: undefined,
+          _lastRejection: undefined,
+        };
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : "Import validation failed";
         if (process.env.NODE_ENV === "development") {
-          console.error(`[editor] IMPORT rejected by reducer: ${err}`);
+          console.error(`[editor] IMPORT rejected: ${reason}`);
         }
-        nextState = state;
-        break;
+        // Route through withRejection so UI can read a uniform signal.
+        nextState = withRejection(state, action.type, reason);
       }
-      nextState = { ...state, doc: action.doc, undoStack: [], redoStack: [], selectedBlockId: null, dirty: false, _lastAction: undefined };
       break;
     }
     case "UNDO": {
@@ -210,7 +308,7 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       // Skip invalid snapshots so undo cannot restore broken block references.
       const valid = prev.sections.every(sec => sec.blockIds.every(bid => prev.blocks[bid] !== undefined));
       if (!valid) {
-        nextState = { ...state, undoStack: state.undoStack.slice(0, -1), _lastAction: undefined };
+        nextState = { ...state, undoStack: state.undoStack.slice(0, -1), _lastAction: undefined, _lastRejection: undefined };
         break;
       }
       nextState = {
@@ -220,6 +318,7 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
         redoStack: [...state.redoStack, state.doc].slice(-MAX_UNDO),
         dirty: true,
         _lastAction: undefined,
+        _lastRejection: undefined,
       };
       break;
     }
@@ -232,17 +331,29 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
         redoStack: state.redoStack.slice(0, -1),
         dirty: true,
         _lastAction: undefined,
+        _lastRejection: undefined,
       };
       break;
     }
     case "SELECT":
-      nextState = { ...state, selectedBlockId: action.blockId };
+      nextState = { ...state, selectedBlockId: action.blockId, _lastRejection: undefined };
       break;
     case "SAVED":
-      nextState = { ...state, dirty: false };
+      nextState = { ...state, dirty: false, _lastRejection: undefined };
       break;
     case "SET_MODE":
-      nextState = { ...state, mode: action.mode };
+      nextState = { ...state, mode: action.mode, _lastRejection: undefined };
+      break;
+    case "SUBMIT_FOR_REVIEW":
+    case "APPROVE":
+    case "REQUEST_CHANGES":
+    case "RETURN_TO_DRAFT":
+    case "MARK_EXPORTED":
+    case "MARK_PUBLISHED":
+      nextState = applyWorkflowTransition(state, action);
+      break;
+    case "DUPLICATE_AS_DRAFT":
+      nextState = applyDuplicateAsDraft(state, action);
       break;
     default:
       nextState = state;
@@ -265,6 +376,122 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
   return nextState;
 }
 
+function applyWorkflowTransition(state: EditorState, action: WorkflowAction): EditorState {
+  const from = state.doc.review.workflow;
+  const to = transitionTarget(action.type);
+  if (to === null) {
+    // Should not happen for the 6 transition actions — DUPLICATE_AS_DRAFT
+    // is handled separately. Defensive guard for refactors.
+    return withRejection(state, action.type, `Action ${action.type} has no transition target`);
+  }
+  if (!canTransition(from, to)) {
+    return withRejection(state, action.type, `Illegal transition: ${from} \u2192 ${to}`);
+  }
+
+  const ts = resolveTimestamp(state, action);
+  const author = resolveActor(action);
+  const entry: WorkflowHistoryEntry = {
+    ts,
+    action: workflowHistoryAction(action.type as WorkflowActionType),
+    summary: workflowSummary(action, from),
+    author,
+    fromWorkflow: from,
+    toWorkflow: to,
+  };
+
+  const nextDoc: CanonicalDocument = {
+    ...state.doc,
+    meta: { ...state.doc.meta, updatedAt: ts },
+    review: {
+      ...state.doc.review,
+      workflow: to,
+      history: [...state.doc.review.history, entry],
+    },
+  };
+
+  // Crossing into a read-only workflow clears undo/redo. Otherwise an
+  // undo after APPROVE would silently revert approval state. Stacks are
+  // deliberately PRESERVED across SUBMIT_FOR_REVIEW so REQUEST_CHANGES can
+  // restore undo once the document is back in draft. UNDO/REDO are blocked
+  // while the workflow itself is `in_review` via WORKFLOW_PERMISSIONS.
+  const intoReadOnly = isReadOnlyWorkflow(to);
+
+  return {
+    ...state,
+    doc: nextDoc,
+    undoStack: intoReadOnly ? [] : state.undoStack,
+    redoStack: intoReadOnly ? [] : state.redoStack,
+    // Transitions mutate the document (review.workflow, review.history,
+    // meta.updatedAt) — treat as unsaved content changes. Only SAVED or a
+    // successful persistence round-trip should clear the dirty flag.
+    dirty: true,
+    _lastAction: undefined,
+    _lastRejection: undefined,
+  };
+}
+
+function applyDuplicateAsDraft(state: EditorState, action: WorkflowAction): EditorState {
+  const from = state.doc.review.workflow;
+  if (from !== "exported" && from !== "published") {
+    return withRejection(
+      state,
+      action.type,
+      `Duplicate is only allowed from exported or published (current: ${from})`,
+    );
+  }
+
+  const ts = resolveTimestamp(state, action);
+  const author = resolveActor(action);
+
+  // Deep-clone the document so the duplicate cannot alias the original's
+  // sections/blocks. JSON round-trip is safe here because CanonicalDocument
+  // is data-only (no functions, dates, or non-JSON values).
+  const cloned = JSON.parse(JSON.stringify({
+    templateId: state.doc.templateId,
+    page: state.doc.page,
+    sections: state.doc.sections,
+    blocks: state.doc.blocks,
+  })) as Pick<CanonicalDocument, "templateId" | "page" | "sections" | "blocks">;
+
+  const newDoc: CanonicalDocument = {
+    schemaVersion: state.doc.schemaVersion,
+    ...cloned,
+    meta: {
+      createdAt: ts,
+      updatedAt: ts,
+      version: 0,
+      history: [],
+    },
+    review: {
+      workflow: "draft",
+      history: [
+        {
+          ts,
+          action: "duplicated",
+          summary: `Duplicated from ${from} document`,
+          author,
+          fromWorkflow: null,
+          toWorkflow: "draft",
+        },
+      ],
+      comments: [],
+    },
+  };
+
+  return {
+    ...state,
+    doc: newDoc,
+    undoStack: [],
+    redoStack: [],
+    selectedBlockId: null,
+    // A duplicated document is unsaved by definition — the new identity
+    // has not been persisted anywhere yet.
+    dirty: true,
+    _lastAction: undefined,
+    _lastRejection: undefined,
+  };
+}
+
 export function initState(): EditorState {
   return {
     doc: mkDoc("single_stat_hero", TPLS.single_stat_hero),
@@ -273,6 +500,8 @@ export function initState(): EditorState {
     selectedBlockId: null,
     dirty: false,
     _lastAction: undefined,
+    _lastRejection: undefined,
     mode: "design",
+    _timestampProvider: systemTimestampProvider,
   };
 }

@@ -1,7 +1,16 @@
 import { validate } from "../../src/components/editor/validation/validate";
 import { TPLS, mkDoc } from "../../src/components/editor/registry/templates";
 import type { CanonicalDocument } from "../../src/components/editor/types";
-import { validateImport } from "../../src/components/editor/registry/guards";
+import { validateImportStrict } from "../../src/components/editor/registry/guards";
+
+function importMessage(doc: unknown): string | null {
+  try {
+    validateImportStrict(doc);
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
 
 function cloneDoc(tid: keyof typeof TPLS): CanonicalDocument {
   // Deep clone a fresh template doc so test mutations don't leak.
@@ -88,11 +97,11 @@ describe("validate / delegates to validateBlockData", () => {
     expect(r.errors.some(e => /Ranked Bars.*at least one item/.test(e))).toBe(true);
   });
 
-  test("validateImport and validate agree on block-data rules", () => {
+  test("validateImportStrict and validate agree on block-data rules", () => {
     const doc = cloneDoc("line_area");
     const bid = findBlockIdByType(doc, "line_editorial");
     doc.blocks[bid].props.series[0].data = [1]; // mismatch xLabels length
-    const importErr = validateImport(doc);
+    const importErr = importMessage(doc);
     const validation = validate(doc);
     expect(importErr).toMatch(/Invalid props for line_editorial/);
     expect(validation.errors.some(e => /Line Chart.*points but/.test(e))).toBe(true);

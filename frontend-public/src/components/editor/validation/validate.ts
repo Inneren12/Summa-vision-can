@@ -33,8 +33,8 @@ export function validate(doc: CanonicalDocument): ValidationResult {
   blocks.forEach(b => { const reg = BREG[b.type]; if (!reg?.cst?.maxLines) return; const lines = (b.props.text || "").split("\n").length; if (lines > reg.cst.maxLines) R.warnings.push(`${reg.name}: ${lines}/${reg.cst.maxLines} lines`); });
 
   // Structural integrity: duplicate section.id (global) and duplicate
-  // blockId within any section's blockIds array. validateImport() enforces
-  // these at import time, but validate() also runs on live state mutated
+  // blockId within any section's blockIds array. validateImportStrict()
+  // enforces these at import time, but validate() also runs on live state mutated
   // by the reducer — check again here to catch regressions from unfamiliar
   // code paths (tests, devtools, future bulk actions).
   const seenSectionIds = new Set<string>();

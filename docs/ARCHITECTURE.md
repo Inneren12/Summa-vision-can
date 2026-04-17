@@ -106,6 +106,11 @@ as `DEBT-021` (24 h TTL via ``temp_upload_ttl_hours``).
 - Schema migrations are declarative in `registry/guards.ts#MIGRATIONS`.
   Current version is v2; a single `v1 → v2` step moves root-level `workflow`
   into `doc.review.workflow`. See `docs/modules/editor.md` for the full shape.
+- Editor reducer enforces permissions along two orthogonal axes: `mode`
+  (template|design) and `workflow` (draft|in_review|approved|exported|
+  published). Both must pass for an action to mutate the document. Workflow
+  transitions are captured in `store/workflow.ts#TRANSITIONS` and written to
+  `doc.review.history` as `WorkflowHistoryEntry` records.
 
 ## Technology Summary
 

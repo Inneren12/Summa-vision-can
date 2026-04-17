@@ -40,8 +40,10 @@ describe("reducer / UPDATE_PROP", () => {
   test("no-op when blockId does not exist", () => {
     const s0 = initState();
     const s1 = reducer(s0, { type: "UPDATE_PROP", blockId: "blk_nope", key: "text", value: "x" });
-    // Permission gate rejects first (block not found)
-    expect(s1).toBe(s0);
+    // Permission gate rejects. Doc reference unchanged; rejection recorded
+    // on `_lastRejection` (PR 2a — was `s1 === s0` before the field existed).
+    expect(s1.doc).toBe(s0.doc);
+    expect(s1._lastRejection?.type).toBe("UPDATE_PROP");
   });
 });
 
@@ -150,6 +152,10 @@ describe("reducer / IMPORT", () => {
     const s0 = initState();
     const bad: any = { schemaVersion: 1, templateId: "x", page: { size: "a", background: "b", palette: "c" }, sections: "bad", blocks: {} };
     const s1 = reducer(s0, { type: "IMPORT", doc: bad });
-    expect(s1).toBe(s0);
+    // Doc unchanged; rejection now flows through withRejection so UI has a
+    // uniform signal (PR 2a fix prompt — Issue 4).
+    expect(s1.doc).toBe(s0.doc);
+    expect(s1._lastRejection?.type).toBe("IMPORT");
+    expect(s1._lastRejection?.reason.length).toBeGreaterThan(0);
   });
 });

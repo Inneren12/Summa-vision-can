@@ -189,9 +189,19 @@ export interface EditorState {
   dirty: boolean;
   // Tracks recent editing bursts so reducer can batch keystroke history.
   _lastAction?: { type: string; blockId?: string; key?: string; at: number };
+  // Last rejection emitted by the permission gate. Set whenever an action
+  // is blocked by mode or workflow checks; cleared on every successful
+  // mutation. Distinct from `_lastAction` so the burst-batching fingerprint
+  // is not perturbed by rejected dispatches. Read by tests and (PR 3) the
+  // future Review panel toast surface.
+  _lastRejection?: { type: string; reason: string; at: number };
   // Mode lives in reducer state so the permission gate has a single source of
   // truth for every dispatched action (see store/reducer.ts isActionAllowed).
   mode: EditorMode;
+  // Optional injected ISO-timestamp provider. Defaults to the system clock
+  // in `initState`; tests inject a mock to keep workflow transitions
+  // deterministic across runs. Never serialized.
+  _timestampProvider?: TimestampProvider;
 }
 
 export type EditorAction =
@@ -205,7 +215,22 @@ export type EditorAction =
   | { type: 'REDO' }
   | { type: 'SELECT'; blockId: string | null }
   | { type: 'SAVED' }
-  | { type: 'SET_MODE'; mode: EditorMode };
+  | { type: 'SET_MODE'; mode: EditorMode }
+  | WorkflowAction;
+
+// Workflow lifecycle actions — see store/workflow.ts for state-machine.
+export type WorkflowAction =
+  | { type: 'SUBMIT_FOR_REVIEW'; actor?: string; ts?: string }
+  | { type: 'APPROVE'; actor?: string; ts?: string }
+  | { type: 'REQUEST_CHANGES'; note?: string; actor?: string; ts?: string }
+  | { type: 'RETURN_TO_DRAFT'; note?: string; actor?: string; ts?: string }
+  | { type: 'MARK_EXPORTED'; filename: string; actor?: string; ts?: string }
+  | { type: 'MARK_PUBLISHED'; channel: string; actor?: string; ts?: string }
+  | { type: 'DUPLICATE_AS_DRAFT'; actor?: string; ts?: string };
+
+export interface TimestampProvider {
+  now(): string;
+}
 
 export interface PermissionSet {
   switchTemplate: boolean;

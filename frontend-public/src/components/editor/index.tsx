@@ -7,7 +7,7 @@ import { PALETTES } from './config/palettes';
 import { BGS } from './config/backgrounds';
 import { SIZES } from './config/sizes';
 import { BREG } from './registry/blocks';
-import { validateImport, hydrateImportedDoc } from './registry/guards';
+import { validateImportStrict, hydrateImportedDoc } from './registry/guards';
 import { reducer, initState } from './store/reducer';
 import { PERMS } from './store/permissions';
 import { renderDoc } from './renderer/engine';
@@ -141,15 +141,17 @@ export default function InfographicEditor() {
           setImportWarnings([]);
           return;
         }
-        const err = validateImport(result.doc);
-        if (err) {
-          setImportError(`Import error: ${err}`);
+        let validated;
+        try {
+          validated = validateImportStrict(result.doc);
+        } catch (validationErr: any) {
+          setImportError(`Import error: ${validationErr?.message ?? "validation failed"}`);
           setImportWarnings(result.warnings);
           return;
         }
         setImportError(null);
         setImportWarnings(result.warnings);
-        dispatch({ type: "IMPORT", doc: result.doc });
+        dispatch({ type: "IMPORT", doc: validated });
       } finally {
         // Reset so re-selecting the same file re-fires change event
         input.value = "";

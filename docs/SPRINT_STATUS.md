@@ -114,8 +114,9 @@ Temp Parquet cleanup tracked as DEBT-021.
 | PR | Title | Status | Dependencies |
 |----|-------|--------|--------------|
 | E-3-1 | Stage 3 Domain Model Consolidation (`doc.review`, schema v2) | 🔄 | — |
-| E-3-2 | Stage 3 Reducer Actions (workflow transitions, comments) | ⬜ | E-3-1 |
-| E-3-3 | Stage 3 Review Panel UI | ⬜ | E-3-2 |
+| E-3-2a | Stage 3 Reducer Actions — Workflow State Machine | 🔄 | E-3-1 |
+| E-3-2b | Stage 3 Reducer Actions — Comments Subsystem | ⬜ | E-3-2a |
+| E-3-3 | Stage 3 Review Panel UI | ⬜ | E-3-2b |
 | E-3-4 | Stage 3 End-to-End Tests | ⬜ | E-3-3 |
 
 **E-3-1 status:** Data-layer only. `CanonicalDocument` now carries a `review`
@@ -126,6 +127,18 @@ moved under `review.workflow`; `schemaVersion` bumped 1 → 2 with a single
 `WorkflowHistoryEntry` type. Migration coverage lands in
 `src/components/editor/__tests__/migrations.test.ts`. No reducer actions or UI
 changed in this PR.
+
+**E-3-2a status:** Workflow state machine landed in the reducer. Seven new
+actions (`SUBMIT_FOR_REVIEW`, `APPROVE`, `REQUEST_CHANGES`, `RETURN_TO_DRAFT`,
+`MARK_EXPORTED`, `MARK_PUBLISHED`, `DUPLICATE_AS_DRAFT`) gated by
+`canTransition` in `store/workflow.ts`. Permission gate is now two-axis:
+existing `mode` axis (template|design) AND new `workflow` axis; both must
+pass for any mutation to land. Copy-edit lockdown enforced in `in_review`.
+Read-only transitions clear undo/redo. Deterministic timestamps via injected
+`TimestampProvider`. Closes `DEBT-022` (validator unification) and the
+`WorkflowHistoryEntry` half of `DEBT-023` (element shape validation). Adds
+`DEBT-024` (cosmetic rename of `validateDocumentShape`). Comments subsystem
+deferred to E-3-2b; UI to E-3-3.
 
 ## Theme #2: Marginal Tax Rate Meatgrinder
 
