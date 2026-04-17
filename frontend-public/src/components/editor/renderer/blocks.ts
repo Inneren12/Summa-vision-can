@@ -1,11 +1,23 @@
-import type { BlockProps, Palette } from '../types';
 import { TK } from '../config/tokens';
+import type { BlockRenderer, RenderResult } from './types';
 
-export type BlockRenderer = (
-  ctx: CanvasRenderingContext2D, p: BlockProps,
-  x: number, y: number, w: number, h: number,
-  pal: Palette, s: number,
-) => number;
+function rr(
+  x: number,
+  y: number,
+  w: number,
+  height: number,
+  overflow = false,
+  warnings: string[] = [],
+  intrinsicHeight?: number,
+): RenderResult {
+  return {
+    height,
+    intrinsicHeight: intrinsicHeight ?? height,
+    overflow,
+    warnings,
+    hitArea: { x, y, w, h: height },
+  };
+}
 
 export const BR: Record<string, BlockRenderer> = {
 
@@ -14,7 +26,7 @@ export const BR: Record<string, BlockRenderer> = {
     ctx.fillStyle = TK.c.txtM;
     ctx.textAlign = "left";
     ctx.fillText(p.text || "", x, y + 14 * s);
-    return 20 * s;
+    return rr(x, y, w, 20 * s);
   },
 
   headline_editorial(ctx, p, x, y, w, h, pal, s) {
@@ -24,7 +36,6 @@ export const BR: Record<string, BlockRenderer> = {
     ctx.textAlign = al;
     const ax = al === "center" ? x + w / 2 : al === "right" ? x + w : x;
 
-    // Use explicit \n breaks, then auto-wrap each segment if too long
     const maxW = w * 0.95;
     const manualLines = (p.text || "").split("\n");
     const allLines: string[] = [];
@@ -34,7 +45,6 @@ export const BR: Record<string, BlockRenderer> = {
         allLines.push(line);
         return;
       }
-      // Auto-wrap this line
       const words = line.split(" ");
       let buffer = "";
       words.forEach((word: string) => {
@@ -49,15 +59,23 @@ export const BR: Record<string, BlockRenderer> = {
       if (buffer) allLines.push(buffer);
     });
 
+    const warnings: string[] = [];
+    let overflow = false;
+    const consumedHeight = (allLines.length * 50 + 10) * s;
+    if (consumedHeight > h) {
+      overflow = true;
+      warnings.push(`Headline needs ~${Math.round(consumedHeight)}px but only ${Math.round(h)}px available`);
+    }
+
     allLines.forEach((line, i) => {
       ctx.fillText(line, ax, y + 42 * s + i * 50 * s);
     });
 
-    return (allLines.length * 50 + 10) * s;
+    return rr(x, y, w, consumedHeight, overflow, warnings, consumedHeight);
   },
 
   subtitle_descriptor(ctx, p, x, y, w, h, pal, s) {
-    if (!p.text) return 0;
+    if (!p.text) return rr(x, y, w, 0);
     ctx.font = `400 ${16 * s}px ${TK.font.body}`;
     ctx.fillStyle = TK.c.txtS;
     ctx.textAlign = "center";
@@ -79,11 +97,11 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.fillText(line.trim(), x + w / 2, y + 18 * s + lineCount * 22 * s);
       lineCount++;
     }
-    return (lineCount * 22 + 10) * s;
+    return rr(x, y, w, (lineCount * 22 + 10) * s);
   },
 
   hero_stat(ctx, p, x, y, w, h, pal, s) {
-    if (!p.value) return 0;
+    if (!p.value) return rr(x, y, w, 0);
     ctx.strokeStyle = pal.p + "30";
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -103,26 +121,27 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.textAlign = "center";
       ctx.fillText(p.label, x + w / 2, y + 140 * s);
     }
-    return 150 * s;
+    return rr(x, y, w, 150 * s);
   },
 
   delta_badge(ctx, p, x, y, w, h, pal, s) {
-    if (!p.value) return 0;
+    if (!p.value) return rr(x, y, w, 0);
     ctx.font = `700 ${14 * s}px ${TK.font.data}`;
     ctx.fillStyle = p.direction === "negative" ? pal.neg : p.direction === "positive" ? pal.pos : TK.c.txtS;
     ctx.textAlign = "center";
     ctx.fillText(p.value, x + w / 2, y + 16 * s);
-    return 24 * s;
+    return rr(x, y, w, 24 * s);
   },
 
   body_annotation(ctx, p, x, y, w, h, pal, s) {
-    if (!p.text) return 0;
+    if (!p.text) return rr(x, y, w, 0);
     ctx.font = `400 ${13 * s}px ${TK.font.body}`;
     ctx.fillStyle = TK.c.txtS;
     ctx.textAlign = "center";
     const mw = w * .8;
     const words = (p.text as string).split(" ");
-    let ln = "", lc = 0;
+    let ln = "";
+    let lc = 0;
     words.forEach((wd: string) => {
       const t = ln + wd + " ";
       if (ctx.measureText(t).width > mw && ln) {
@@ -137,7 +156,16 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.fillText(ln.trim(), x + w / 2, y + 16 * s + lc * 20 * s);
       lc++;
     }
-    return (lc * 20 + 10) * s;
+
+    const warnings: string[] = [];
+    let overflow = false;
+    const consumedHeight = (lc * 20 + 10) * s;
+    if (consumedHeight > h) {
+      overflow = true;
+      warnings.push(`Annotation needs ~${Math.round(consumedHeight)}px but only ${Math.round(h)}px available`);
+    }
+
+    return rr(x, y, w, consumedHeight, overflow, warnings, consumedHeight);
   },
 
   source_footer(ctx, p, x, y, w, h, pal, s) {
@@ -146,7 +174,7 @@ export const BR: Record<string, BlockRenderer> = {
     ctx.textAlign = "left";
     if (p.text) ctx.fillText(p.text, x, y + 12 * s);
     if (p.methodology) ctx.fillText(p.methodology, x, y + 26 * s);
-    return 30 * s;
+    return rr(x, y, w, 30 * s);
   },
 
   brand_stamp(ctx, p, x, y, w, h, pal, s) {
@@ -160,15 +188,18 @@ export const BR: Record<string, BlockRenderer> = {
     ctx.font = `400 ${16 * s}px ${TK.font.display}`;
     ctx.fillStyle = TK.c.txtS;
     ctx.fillText("VISION", bx + (pos === "bottom-left" ? sw + 4 * s : -(sw + 4 * s)), y + 16 * s);
-    return 20 * s;
+    return rr(x, y, w, 20 * s);
   },
 
   bar_horizontal(ctx, p, x, y, w, h, pal, s) {
     const items = p.items || [];
-    if (!items.length) return 0;
+    if (!items.length) return rr(x, y, w, 0);
+
+    const warnings: string[] = [];
+    let overflow = false;
 
     const unit = p.unit || "";
-    const mx = Math.max(...items.map((i: any) => i.value), 0.001); // prevent div/0
+    const mx = Math.max(...items.map((i: any) => i.value), 0.001);
     const lW = 110 * s;
     const cL = x + lW;
     const cW = w - lW;
@@ -192,7 +223,6 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.fillText(`${it.value}${unit}`, cL + bW + 8 * s, by + bH / 2 + 4 * s);
     });
 
-    // FIX: benchmarkValue = 0 is valid; check presence, not truthiness
     const bvRaw = p.benchmarkValue;
     const bvNum = typeof bvRaw === "number" ? bvRaw : typeof bvRaw === "string" ? parseFloat(bvRaw) : NaN;
     if (p.showBenchmark && Number.isFinite(bvNum)) {
@@ -211,27 +241,35 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.fillText(p.benchmarkLabel || "", bx2, y - 14 * s);
     }
 
-    return h;
+    const neededHeight = items.length * 35 * s;
+    if (neededHeight > h) {
+      overflow = true;
+      warnings.push(`${items.length} bars need ~${Math.round(neededHeight)}px but only ${Math.round(h)}px available`);
+    }
+
+    return rr(x, y, w, h, overflow, warnings, neededHeight);
   },
 
   line_editorial(ctx, p, x, y, w, h, pal, s) {
     const sr = p.series || [];
     const xl = p.xLabels || [];
     const yu = p.yUnit || "%";
-    if (!sr.length) return 0;
+    if (!sr.length) return rr(x, y, w, 0);
+
+    const warnings: string[] = [];
+    let overflow = false;
 
     const cL = x;
     const cR = x + w - 70 * s;
     const cB = y + h - 30 * s;
     const cW = cR - cL;
-    const cH = cB - y; // cT = y
+    const cH = cB - y;
 
     const av = sr.flatMap((l: any) => l.data);
     const yMn = Math.floor(Math.min(...av) - 1);
     const yMx = Math.ceil(Math.max(...av) + 1);
-    const yR = Math.max(yMx - yMn, 0.1); // prevent div/0
+    const yR = Math.max(yMx - yMn, 0.1);
 
-    // Grid lines + Y axis labels
     for (let i = 0; i <= 5; i++) {
       const v = yMn + (yR * i / 5);
       const ly = cB - (i / 5) * cH;
@@ -247,14 +285,12 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.fillText(`${v.toFixed(1)}${yu}`, cL - 6 * s, ly + 4 * s);
     }
 
-    // X axis labels
     ctx.textAlign = "center";
     xl.forEach((lb: string, i: number) => {
       const xPos = xl.length > 1 ? i / (xl.length - 1) : 0;
       ctx.fillText(lb, cL + xPos * cW, cB + 18 * s);
     });
 
-    // Series
     sr.forEach((line: any) => {
       const col = line.role === "primary" ? pal.p : line.role === "benchmark" ? TK.c.acc : pal.s;
       ctx.strokeStyle = col;
@@ -272,7 +308,6 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Area fill
       if (line.role === "primary" && p.showArea) {
         ctx.fillStyle = col + "15";
         ctx.beginPath();
@@ -288,7 +323,6 @@ export const BR: Record<string, BlockRenderer> = {
         ctx.fill();
       }
 
-      // End label
       const lv = line.data[line.data.length - 1];
       const elx = cR + 8 * s;
       const ely = cB - ((lv - yMn) / yR) * cH;
@@ -300,12 +334,18 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.fillText(line.label, elx, ely + 10 * s);
     });
 
-    return h;
+    const neededHeight = sr.length > 0 ? 250 * s : 0;
+    if (neededHeight > h) {
+      overflow = true;
+      warnings.push(`Line chart needs ~${Math.round(neededHeight)}px but only ${Math.round(h)}px available`);
+    }
+
+    return rr(x, y, w, h, overflow, warnings, neededHeight);
   },
 
   comparison_kpi(ctx, p, x, y, w, h, pal, s) {
     const items = p.items || [];
-    if (!items.length) return 0;
+    if (!items.length) return rr(x, y, w, 0);
 
     const colW = w / items.length;
     items.forEach((st: any, i: number) => {
@@ -333,18 +373,19 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.fillText(st.delta, cx, y + 112 * s);
     });
 
-    return h;
+    return rr(x, y, w, h);
   },
 
   table_enriched(ctx, p, x, y, w, h, pal, s) {
     const cols = p.columns || [];
     const rows = p.rows || [];
-    if (!rows.length) return 0;
+    if (!rows.length) return rr(x, y, w, 0);
+
+    const warnings: string[] = [];
 
     const colW = w / (cols.length + 1);
     const rowH = Math.min(36 * s, h / (rows.length + 1));
 
-    // Header
     ctx.font = `600 ${9 * s}px ${TK.font.data}`;
     ctx.fillStyle = TK.c.txtS;
     ctx.textAlign = "center";
@@ -352,29 +393,24 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.fillText(c, x + colW * (i + 1) + colW / 2, y + 12 * s)
     );
 
-    // Rows
     rows.forEach((row: any, ri: number) => {
       const ry = y + 20 * s + ri * rowH;
 
-      // Zebra stripe
       if (ri % 2 === 0) {
         ctx.fillStyle = "rgba(255,255,255,0.02)";
         ctx.fillRect(x, ry, w, rowH);
       }
 
-      // Rank
       ctx.font = `700 ${11 * s}px ${TK.font.data}`;
       ctx.fillStyle = pal.p;
       ctx.textAlign = "right";
       ctx.fillText(`${row.rank}`, x + 18 * s, ry + rowH / 2 + 4 * s);
 
-      // Country
       ctx.font = `500 ${11 * s}px ${TK.font.body}`;
       ctx.fillStyle = TK.c.txtP;
       ctx.textAlign = "left";
       ctx.fillText(`${row.flag} ${row.country}`, x + 24 * s, ry + rowH / 2 + 4 * s);
 
-      // Values
       row.vals.forEach((v: any, ci: number) => {
         const ccx = x + colW * (ci + 1) + colW / 2;
         const isScore = ci === row.vals.length - 1;
@@ -395,13 +431,21 @@ export const BR: Record<string, BlockRenderer> = {
       });
     });
 
-    return h;
+    const neededHeight = rows.length * rowH + 20 * s;
+    const overflow = neededHeight > h;
+    if (overflow) {
+      warnings.push(`${rows.length} rows overflow section by ~${Math.round(neededHeight - h)}px`);
+    }
+
+    return rr(x, y, w, h, overflow, warnings, neededHeight);
   },
 
   small_multiple(ctx, p, x, y, w, h, pal, s) {
     const items = p.items || [];
     const yU = p.yUnit || "%";
-    if (!items.length) return 0;
+    if (!items.length) return rr(x, y, w, 0);
+
+    const warnings: string[] = [];
 
     const gc = 3;
     const gr = Math.ceil(items.length / gc);
@@ -412,7 +456,7 @@ export const BR: Record<string, BlockRenderer> = {
     const aV = items.flatMap((i: any) => i.data);
     const yMn = Math.min(...aV) - 1;
     const yMx = Math.max(0, ...aV) + .5;
-    const yR = Math.max(yMx - yMn, 0.1); // prevent div/0
+    const yR = Math.max(yMx - yMn, 0.1);
 
     items.forEach((it: any, idx: number) => {
       const col = idx % gc;
@@ -425,12 +469,10 @@ export const BR: Record<string, BlockRenderer> = {
       const chW2 = chR - chL;
       const chH2 = chB - (cy + 28 * s);
 
-      // Border
       ctx.strokeStyle = TK.c.brd;
       ctx.lineWidth = 1;
       ctx.strokeRect(cx + 3 * s, cy + 3 * s, cW - 6 * s, cH - 6 * s);
 
-      // Label + flag
       ctx.font = `600 ${13 * s}px ${TK.font.body}`;
       ctx.fillStyle = TK.c.txtP;
       ctx.textAlign = "left";
@@ -438,7 +480,6 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.textAlign = "right";
       ctx.fillText(it.flag, chR, cy + 20 * s);
 
-      // Zero line
       const zY = chB - ((0 - yMn) / yR) * chH2;
       ctx.strokeStyle = "rgba(255,255,255,0.1)";
       ctx.beginPath();
@@ -450,7 +491,6 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.textAlign = "right";
       ctx.fillText("0%", chL - 3 * s, zY + 3 * s);
 
-      // Data line
       ctx.strokeStyle = pal.p;
       ctx.lineWidth = 2 * s;
       ctx.beginPath();
@@ -462,7 +502,6 @@ export const BR: Record<string, BlockRenderer> = {
       });
       ctx.stroke();
 
-      // End value
       const lv = it.data[it.data.length - 1];
       ctx.font = `700 ${9 * s}px ${TK.font.data}`;
       ctx.fillStyle = pal.neg;
@@ -470,6 +509,12 @@ export const BR: Record<string, BlockRenderer> = {
       ctx.fillText(`${lv.toFixed(1)}${yU}`, chR, chB - ((lv - yMn) / yR) * chH2 - 6 * s);
     });
 
-    return h;
+    const neededHeight = Math.ceil(items.length / 3) * 160 * s;
+    const overflow = neededHeight > h;
+    if (overflow) {
+      warnings.push(`${items.length} cells need ~${Math.round(neededHeight)}px but only ${Math.round(h)}px available`);
+    }
+
+    return rr(x, y, w, h, overflow, warnings, neededHeight);
   },
 };

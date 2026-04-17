@@ -317,3 +317,38 @@ describe("validateImport", () => {
     expect(validateImport(d)).toMatch(/Duplicate section id/);
   });
 });
+
+
+describe("schema migration pipeline", () => {
+  test("empty MIGRATIONS map is valid when CURRENT_SCHEMA is 1", () => {
+    const doc = goodDoc();
+    doc.schemaVersion = 1;
+    const result = hydrateImportedDoc(doc);
+    expect(result.doc.schemaVersion).toBe(CURRENT_SCHEMA);
+    expect(result.warnings.filter(w => /Migrated/.test(w))).toHaveLength(0);
+  });
+
+  test("rejects schemaVersion higher than CURRENT_SCHEMA", () => {
+    const doc = goodDoc();
+    doc.schemaVersion = 999;
+    expect(() => hydrateImportedDoc(doc)).toThrow(/Unsupported schemaVersion/);
+  });
+
+  test("warns when migration function is missing", () => {
+    // Current behavior: aborts via throw, NOT silent skip.
+    const doc: any = goodDoc();
+    doc.schemaVersion = 0;
+    expect(() => hydrateImportedDoc(doc)).toThrow(/Missing migration from schemaVersion 0/);
+  });
+
+  test("migration pipeline abort preserves document integrity", () => {
+    const doc: any = goodDoc();
+    doc.schemaVersion = 0;
+    try {
+      hydrateImportedDoc(doc);
+    } catch {
+      // Expected
+    }
+    expect(doc.schemaVersion).toBe(0);
+  });
+});
