@@ -68,7 +68,10 @@ export default function InfographicEditor() {
   // when mode would allow them. editBlock / toggleVisibility are functions —
   // intercept those to also return false in read-only workflows so the
   // Inspector reflects the workflow lockdown.
-  const perms = useMemo(() => ({
+  // `effectivePerms`: the mode × workflow permission overlay, the single
+  // source of truth for UI-side disable state. Distinct name from the raw
+  // module-level `PERMS[mode]` so future greps find the combined version.
+  const effectivePerms = useMemo(() => ({
     ...basePerms,
     switchTemplate: basePerms.switchTemplate && workflowPerms.style,
     changePalette: basePerms.changePalette && workflowPerms.style,
@@ -232,7 +235,7 @@ export default function InfographicEditor() {
     });
   }, [canExp, doc, pal, sz]);
 
-  const canEdit = (reg: typeof selR, k: string) => reg ? perms.editBlock(reg, k) : false;
+  const canEdit = (reg: typeof selR, k: string) => reg ? effectivePerms.editBlock(reg, k) : false;
 
   return (
     <div style={{ fontFamily: TK.font.body, background: TK.c.bgApp, color: TK.c.txtP, height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -269,7 +272,7 @@ export default function InfographicEditor() {
           selId={selId}
           ltab={ltab}
           setLtab={setLtab}
-          perms={perms}
+          effectivePerms={effectivePerms}
         />
 
         {/* CENTER */}

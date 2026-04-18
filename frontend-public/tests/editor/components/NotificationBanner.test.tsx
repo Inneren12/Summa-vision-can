@@ -100,4 +100,82 @@ describe("NotificationBanner", () => {
     renderWith({ state });
     expect(screen.getByTestId("notification-banner")).toHaveTextContent("MYSTERY_ACTION");
   });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Priority-isolation tests
+  // Close Gate 8 non-blocker: these two scenarios were previously only
+  // covered structurally (by the "single banner at a time" render code).
+  // Explicit unit assertions so regressions surface as test failures.
+  // ──────────────────────────────────────────────────────────────────
+
+  test("dismissing importWarnings does not suppress a later _lastRejection", () => {
+    const warnings = ["Partial import warning A", "Partial import warning B"];
+    const { rerender } = renderWith({ importWarnings: warnings });
+
+    // Warnings banner visible.
+    const warningBanner = screen.getByTestId("notification-banner");
+    expect(warningBanner).toHaveAttribute("data-kind", "import-warnings");
+    expect(warningBanner).toHaveTextContent(/Partial import warning/);
+
+    // User dismisses the warnings — callback invoked; parent clears warnings.
+    fireEvent.click(screen.getByRole("button", { name: /dismiss/i }));
+
+    // Later rerender: warnings cleared by parent, a rejection arrives from reducer.
+    const stateWithRejection: EditorState = {
+      ...baseState(),
+      _lastRejection: {
+        type: "APPROVE",
+        reason: "Illegal transition: draft \u2192 approved",
+        at: 1000,
+      },
+    };
+    rerender(
+      <NotificationBanner
+        state={stateWithRejection}
+        importError={null}
+        importWarnings={[]}
+        onClearImportError={() => {}}
+        onClearImportWarnings={() => {}}
+      />,
+    );
+
+    // Rejection banner surfaces — the earlier warnings dismissal does not
+    // carry over to the rejection tier.
+    const rejectionBanner = screen.getByTestId("notification-banner");
+    expect(rejectionBanner).toHaveAttribute("data-kind", "rejection");
+    expect(rejectionBanner).toHaveTextContent(/Illegal transition/i);
+  });
+
+  test("clears rejection banner automatically when _lastRejection becomes undefined", () => {
+    const stateRejected: EditorState = {
+      ...baseState(),
+      _lastRejection: {
+        type: "APPROVE",
+        reason: "Illegal transition: draft \u2192 approved",
+        at: 1000,
+      },
+    };
+    const { rerender } = renderWith({ state: stateRejected });
+
+    // Banner visible.
+    expect(screen.getByTestId("notification-banner")).toHaveTextContent(/Illegal transition/i);
+
+    // Reducer clears `_lastRejection` on the next successful action.
+    const stateCleared: EditorState = {
+      ...baseState(),
+      _lastRejection: undefined,
+    };
+    rerender(
+      <NotificationBanner
+        state={stateCleared}
+        importError={null}
+        importWarnings={[]}
+        onClearImportError={() => {}}
+        onClearImportWarnings={() => {}}
+      />,
+    );
+
+    // Banner disappears without any user interaction.
+    expect(screen.queryByTestId("notification-banner")).not.toBeInTheDocument();
+  });
 });

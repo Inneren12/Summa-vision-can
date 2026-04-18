@@ -32,7 +32,10 @@ interface LeftPanelProps {
   selId: string | null;
   ltab: LeftTab;
   setLtab: (t: LeftTab) => void;
-  perms: PermissionSet;
+  // Combined mode × workflow permission set computed at the parent
+  // (index.tsx). LeftPanel drives button disable state off this alone —
+  // raw PERMS[mode] is insufficient because it ignores workflow lockdown.
+  effectivePerms: PermissionSet;
 }
 
 function badge(st: string) {
@@ -43,8 +46,8 @@ function badge(st: string) {
 
 const tb = (a: boolean): React.CSSProperties => ({ padding: "5px 7px", fontSize: "8px", fontFamily: TK.font.data, textTransform: "uppercase", letterSpacing: "0.4px", cursor: "pointer", background: a ? TK.c.bgAct : "transparent", color: a ? TK.c.acc : TK.c.txtM, border: "none", borderBottom: a ? `2px solid ${TK.c.acc}` : "2px solid transparent", whiteSpace: "nowrap" });
 
-export function LeftPanel({ doc, dispatch, selId, ltab, setLtab, perms }: LeftPanelProps) {
-  const canToggle = (reg: BlockRegistryEntry) => perms.toggleVisibility(reg);
+export function LeftPanel({ doc, dispatch, selId, ltab, setLtab, effectivePerms }: LeftPanelProps) {
+  const canToggle = (reg: BlockRegistryEntry) => effectivePerms.toggleVisibility(reg);
 
   const unresolvedByBlock = useMemo(() => {
     const threads = buildThreads(doc.review.comments);
@@ -81,7 +84,7 @@ export function LeftPanel({ doc, dispatch, selId, ltab, setLtab, perms }: LeftPa
           <div key={f} style={{ marginBottom: "10px" }}>
             <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: "3px" }}>{f}</div>
             <div role="radiogroup" aria-label={`${f} templates`}>
-              {ts.map(t => <button type="button" role="radio" key={t.id} onClick={() => perms.switchTemplate && dispatch({ type: "SWITCH_TPL", tid: t.id })} disabled={!perms.switchTemplate} aria-label={`Template ${t.vr} — ${t.desc}`} aria-checked={doc.templateId === t.id} style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 8px", marginBottom: "2px", background: doc.templateId === t.id ? TK.c.bgAct : TK.c.bgSurf, border: `1px solid ${doc.templateId === t.id ? TK.c.acc + "40" : TK.c.brd}`, borderRadius: "4px", cursor: perms.switchTemplate ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: (!perms.switchTemplate && doc.templateId !== t.id) ? 0.4 : 1 }}>
+              {ts.map(t => <button type="button" role="radio" key={t.id} onClick={() => effectivePerms.switchTemplate && dispatch({ type: "SWITCH_TPL", tid: t.id })} disabled={!effectivePerms.switchTemplate} aria-label={`Template ${t.vr} — ${t.desc}`} aria-checked={doc.templateId === t.id} style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 8px", marginBottom: "2px", background: doc.templateId === t.id ? TK.c.bgAct : TK.c.bgSurf, border: `1px solid ${doc.templateId === t.id ? TK.c.acc + "40" : TK.c.brd}`, borderRadius: "4px", cursor: effectivePerms.switchTemplate ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: (!effectivePerms.switchTemplate && doc.templateId !== t.id) ? 0.4 : 1 }}>
                 <div style={{ fontSize: "10px", fontWeight: 500 }}>{t.vr}</div>
                 <div style={{ fontSize: "8px", color: TK.c.txtM, marginTop: "1px" }}>{t.desc}</div>
               </button>)}
@@ -121,15 +124,15 @@ export function LeftPanel({ doc, dispatch, selId, ltab, setLtab, perms }: LeftPa
           <>
             <div style={{ marginBottom: "10px" }}>
               <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginBottom: "3px" }}>Palette</div>
-              {Object.entries(PALETTES).map(([k, v]) => <button type="button" key={k} onClick={() => perms.changePalette && dispatch({ type: "CHANGE_PAGE", key: "palette", value: k })} disabled={!perms.changePalette} aria-label={`Palette: ${v.n}`} aria-pressed={doc.page.palette === k} style={{ display: "flex", alignItems: "center", gap: "6px", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.palette === k ? TK.c.bgAct : "transparent", border: doc.page.palette === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: perms.changePalette ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: perms.changePalette ? 1 : 0.5 }}><div style={{ width: "10px", height: "10px", borderRadius: "2px", background: v.p }} />{v.n}</button>)}
+              {Object.entries(PALETTES).map(([k, v]) => <button type="button" key={k} onClick={() => effectivePerms.changePalette && dispatch({ type: "CHANGE_PAGE", key: "palette", value: k })} disabled={!effectivePerms.changePalette} aria-label={`Palette: ${v.n}`} aria-pressed={doc.page.palette === k} style={{ display: "flex", alignItems: "center", gap: "6px", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.palette === k ? TK.c.bgAct : "transparent", border: doc.page.palette === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: effectivePerms.changePalette ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: effectivePerms.changePalette ? 1 : 0.5 }}><div style={{ width: "10px", height: "10px", borderRadius: "2px", background: v.p }} />{v.n}</button>)}
             </div>
             <div style={{ marginBottom: "10px" }}>
               <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginBottom: "3px" }}>Background</div>
-              {Object.entries(BGS).map(([k, v]) => <button type="button" key={k} onClick={() => perms.changeBackground && dispatch({ type: "CHANGE_PAGE", key: "background", value: k })} disabled={!perms.changeBackground} aria-label={`Background: ${v.n}`} aria-pressed={doc.page.background === k} style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.background === k ? TK.c.bgAct : "transparent", border: doc.page.background === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: perms.changeBackground ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: perms.changeBackground ? 1 : 0.5 }}>{v.n}</button>)}
+              {Object.entries(BGS).map(([k, v]) => <button type="button" key={k} onClick={() => effectivePerms.changeBackground && dispatch({ type: "CHANGE_PAGE", key: "background", value: k })} disabled={!effectivePerms.changeBackground} aria-label={`Background: ${v.n}`} aria-pressed={doc.page.background === k} style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.background === k ? TK.c.bgAct : "transparent", border: doc.page.background === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: effectivePerms.changeBackground ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: effectivePerms.changeBackground ? 1 : 0.5 }}>{v.n}</button>)}
             </div>
             <div>
               <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginBottom: "3px" }}>Size</div>
-              {Object.entries(SIZES).map(([k, v]) => <button type="button" key={k} onClick={() => perms.changeSize && dispatch({ type: "CHANGE_PAGE", key: "size", value: k })} disabled={!perms.changeSize} aria-label={`Size: ${v.n} ${v.w}x${v.h}`} aria-pressed={doc.page.size === k} style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.size === k ? TK.c.bgAct : "transparent", border: doc.page.size === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: perms.changeSize ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: perms.changeSize ? 1 : 0.5 }}>{v.n} <span style={{ color: TK.c.txtM }}>{v.w}{"\u00D7"}{v.h}</span></button>)}
+              {Object.entries(SIZES).map(([k, v]) => <button type="button" key={k} onClick={() => effectivePerms.changeSize && dispatch({ type: "CHANGE_PAGE", key: "size", value: k })} disabled={!effectivePerms.changeSize} aria-label={`Size: ${v.n} ${v.w}x${v.h}`} aria-pressed={doc.page.size === k} style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.size === k ? TK.c.bgAct : "transparent", border: doc.page.size === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: effectivePerms.changeSize ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: effectivePerms.changeSize ? 1 : 0.5 }}>{v.n} <span style={{ color: TK.c.txtM }}>{v.w}{"\u00D7"}{v.h}</span></button>)}
             </div>
           </>
         )}

@@ -18,7 +18,7 @@ function renderLeftPanel(doc: CanonicalDocument, selId: string | null) {
         selId={selId}
         ltab="blocks"
         setLtab={setLtab}
-        perms={PERMS.design}
+        effectivePerms={PERMS.design}
       />,
     ),
   };
@@ -59,7 +59,7 @@ describe("LeftPanel — comment count pill sync", () => {
         selId={null}
         ltab="blocks"
         setLtab={setLtab}
-        perms={PERMS.design}
+        effectivePerms={PERMS.design}
       />,
     );
     expect(screen.queryAllByTestId("block-unresolved-pill")).toHaveLength(0);

@@ -172,9 +172,10 @@ modifications: `<StatusBadge>` after the template chip; `unresolvedByBlock`
 memo + count pill in block rows. `index.tsx` now computes
 `effectivePerms` (mode × workflow overlay) so disabled buttons never
 silently dispatch into a reducer rejection. Canvas stays clean — no
-overlay layer (deferred). 343 editor tests pass (54 new component tests
-+ 5 ui.test.tsx integration tests + 1 NotificationBanner suite); ≥97% line
-coverage on every new component.
+overlay layer (deferred). Editor test suite passes with ≥ 95% line
+coverage on every new Stage 3 component (NoteModal, StatusBadge,
+RightRail, ReviewPanel, ReadOnlyBanner, NotificationBanner) — see CI
+for exact counts.
 
 ## Theme #2: Marginal Tax Rate Meatgrinder
 
