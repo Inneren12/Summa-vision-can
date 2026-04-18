@@ -9,8 +9,7 @@ import { SIZES } from './config/sizes';
 import { BREG } from './registry/blocks';
 import { validateImportStrict, hydrateImportedDoc } from './registry/guards';
 import { reducer, initState } from './store/reducer';
-import { PERMS, WORKFLOW_PERMISSIONS } from './store/permissions';
-import { isReadOnlyWorkflow } from './store/workflow';
+import { PERMS, WORKFLOW_PERMISSIONS, canEditKeyInWorkflow } from './store/permissions';
 import { renderDoc } from './renderer/engine';
 import { validate } from './validation/validate';
 import { deferRevoke } from './utils/download';
@@ -62,15 +61,16 @@ export default function InfographicEditor() {
   const selB = selId ? doc.blocks[selId] : null;
   const selR = selB ? BREG[selB.type] : null;
   const basePerms = PERMS[mode] || PERMS.design;
-  const workflowPerms = WORKFLOW_PERMISSIONS[doc.review.workflow];
-  const isReadOnly = isReadOnlyWorkflow(doc.review.workflow);
-  // Effective permissions overlay: workflow gate disables capabilities even
-  // when mode would allow them. editBlock / toggleVisibility are functions —
-  // intercept those to also return false in read-only workflows so the
-  // Inspector reflects the workflow lockdown.
+  const workflow = doc.review.workflow;
+  const workflowPerms = WORKFLOW_PERMISSIONS[workflow];
   // `effectivePerms`: the mode × workflow permission overlay, the single
   // source of truth for UI-side disable state. Distinct name from the raw
   // module-level `PERMS[mode]` so future greps find the combined version.
+  // `editBlock` consults both the mode-axis base and the workflow-key-category
+  // helper so the Inspector's disable state tracks exactly what the reducer's
+  // checkWorkflowPermission would allow for an UPDATE_PROP action. The
+  // style-axis booleans gate on `workflowPerms.style` explicitly — it's false
+  // in every non-draft workflow, including `in_review`.
   const effectivePerms = useMemo(() => ({
     ...basePerms,
     switchTemplate: basePerms.switchTemplate && workflowPerms.style,
@@ -78,10 +78,10 @@ export default function InfographicEditor() {
     changeBackground: basePerms.changeBackground && workflowPerms.style,
     changeSize: basePerms.changeSize && workflowPerms.style,
     editBlock: (reg: BlockRegistryEntry, k: string): boolean =>
-      !isReadOnly && basePerms.editBlock(reg, k),
+      canEditKeyInWorkflow(workflow, k) && basePerms.editBlock(reg, k),
     toggleVisibility: (reg: BlockRegistryEntry): boolean =>
-      !isReadOnly && workflowPerms.structural && basePerms.toggleVisibility(reg),
-  }), [basePerms, workflowPerms, isReadOnly]);
+      workflowPerms.structural && basePerms.toggleVisibility(reg),
+  }), [basePerms, workflow, workflowPerms]);
 
   const vr = useMemo(() => validate(doc), [doc]);
   const dispErr = qaMode === "publish" ? vr.errors : [];

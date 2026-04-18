@@ -119,6 +119,29 @@ export function classifyKey(key: string): PropCategory {
   return "unknown";
 }
 
+/**
+ * Returns true if a prop key is editable under the given workflow state.
+ * Mirrors the reducer's checkWorkflowPermission for UPDATE_PROP actions,
+ * so UI affordances and reducer decisions stay in sync.
+ *
+ * Usage: combine with mode-axis permission (PERMS[mode].editBlock) to get
+ * the final effective permission on a given key.
+ */
+export function canEditKeyInWorkflow(workflow: WorkflowState, key: string): boolean {
+  const category = classifyKey(key);
+  const wp = WORKFLOW_PERMISSIONS[workflow];
+  switch (category) {
+    case "text":       return wp.textContent;
+    case "data":       return wp.dataContent;
+    case "structural": return wp.structural;
+    case "style":      return wp.style;
+    case "unknown":
+      // Conservative default: unknown keys allowed in draft, rejected elsewhere.
+      // Matches the reducer's category-first policy (PR 2a fix 2).
+      return workflow === "draft";
+  }
+}
+
 export interface WorkflowPermission {
   textContent: boolean;
   dataContent: boolean;

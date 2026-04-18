@@ -141,6 +141,44 @@ describe("Stage 3 PR 3 — full-tree integration", () => {
     });
   });
 
+  test("Inspector disables data fields in in_review (matches reducer gate)", async () => {
+    render(<InfographicEditor />);
+
+    // Select the Delta Badge block — it exposes both a text-category key
+    // (`value`, the delta copy) and a data-category key (`direction`, the
+    // positive/negative/neutral selector). In `in_review` the reducer
+    // allows the former and rejects the latter; the Inspector must reflect
+    // that asymmetry.
+    fireEvent.click(screen.getByRole("tab", { name: /blocks tab/i }));
+    const blocksTabpanel = screen.getByRole("tabpanel", { name: /blocks tab/i });
+    const deltaBtn = within(blocksTabpanel).getByRole("button", {
+      name: /select block: delta badge/i,
+    });
+    fireEvent.click(deltaBtn);
+
+    // Baseline (draft): the direction segmented control is enabled.
+    const negativeBtn = screen.getByRole("button", { name: /^negative$/i });
+    expect(negativeBtn).not.toBeDisabled();
+
+    // Transition to in_review via ReviewPanel.
+    fireEvent.click(screen.getByRole("tab", { name: /review/i }));
+    fireEvent.click(screen.getByTestId("transition-SUBMIT_FOR_REVIEW"));
+
+    // Re-focus the Inspector tab so its controls are in the tree again.
+    fireEvent.click(screen.getByRole("tab", { name: /inspector/i }));
+
+    // Data-category control (direction) is disabled — reducer would reject.
+    const negativeBtnAfter = await screen.findByRole("button", {
+      name: /^negative$/i,
+    });
+    expect(negativeBtnAfter).toBeDisabled();
+
+    // Text-category control (value / Delta) stays enabled — copy edits
+    // remain legal in_review.
+    const deltaInput = screen.getByDisplayValue(/bps since jan/i);
+    expect(deltaInput).not.toBeDisabled();
+  });
+
   test("approved → exported: exported banner offers Duplicate (direct) and Return-to-draft (via NoteModal)", async () => {
     const user = userEvent.setup();
     render(<InfographicEditor />);
