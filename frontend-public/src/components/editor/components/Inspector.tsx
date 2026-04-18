@@ -82,7 +82,7 @@ export function Inspector({ selB, selR, selId, mode, canEdit, dispatch }: Inspec
   }
 
   return (
-    <div style={{ width: "250px", minWidth: "250px", borderLeft: `1px solid ${TK.c.brd}`, display: "flex", flexDirection: "column" }}>
+    <div style={{ width: "100%", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "7px 10px", borderBottom: `1px solid ${TK.c.brd}`, fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtS, textTransform: "uppercase", letterSpacing: "0.3px", display: "flex", justifyContent: "space-between" }}>
         <span>Inspector {selR ? `\u00B7 ${selR.name}` : ""}</span>
         {mode === "template" && <span style={{ color: TK.c.acc, fontSize: "7px" }}>TPL</span>}

@@ -119,6 +119,17 @@ as `DEBT-021` (24 h TTL via ``temp_upload_ttl_hours``).
   workflow transitions. A `canComment` flag in `WORKFLOW_PERMISSIONS` gates
   the surface: comments stay open through `draft` and `in_review`, and
   freeze on `approved|exported|published`.
+- Editor UI surface (Stage 3 PR 3) — the right rail is tabbed:
+  Inspector + Review. Notifications use a single in-app banner with a
+  resolution priority (hard error > soft rejection > warnings); there is
+  no toast provider. `NoteModal` is the sole modal input for free-text
+  user input in the editor (comment composition, transition notes); the
+  editor surface contains zero `window.prompt` / `alert` / `confirm`
+  call sites. The canvas remains a single `<canvas>` element with no
+  overlay; comment indicators live in the LeftPanel block rows and the
+  Review panel only. Mode and workflow gates are combined into an
+  `effectivePerms` overlay at the parent so disabled buttons never
+  silently dispatch into a reducer rejection.
 
 ## Technology Summary
 

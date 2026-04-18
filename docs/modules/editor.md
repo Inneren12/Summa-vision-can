@@ -328,3 +328,140 @@ UI layer:
   edges; used by `applyDeleteComment` for recursive delete.
 
 Reference artifact: `docs/editor/infographic-editor-stage3b-v2.jsx`.
+
+## UI surface for Stage 3 (PR 3)
+
+PR 3 wires the Stage 3 reducer surface (workflow, comments, `_lastRejection`)
+into the editor UI. It is a pure UI layer; no reducer/registry/renderer changes.
+
+### Right rail — tabbed Inspector | Review
+
+The right column is owned by `components/RightRail.tsx`. It hosts two
+sibling tabs:
+
+- **Inspector** (existing `components/Inspector.tsx`, now width-flexible) —
+  per-block prop editor.
+- **Review** (`components/ReviewPanel.tsx`) — workflow header with current
+  badge and available transitions, comment threads, workflow history.
+
+Tab semantics use `role="tablist" / role="tab" / role="tabpanel"` with
+`aria-selected` and `aria-controls`. Inactive panels are kept unmounted so
+heavy children (Inspector's per-block data editors) do not run while hidden.
+
+A count pill on the Review tab shows `unresolvedTotal` derived from
+`buildThreads(state.doc.review.comments)` and `threadUnresolvedCount(...)`.
+Pill is hidden when zero.
+
+### `<NoteModal>` — single input surface
+
+`components/NoteModal.tsx` is the only modal in the editor. Hand-rolled
+(no portal, no library), state-gated conditional render with an inline
+`TK`-token style. It is the sole route for free-text input that previously
+would have used `window.prompt` — both for comment composition (add / reply
+/ edit) and for workflow transition notes (`REQUEST_CHANGES`,
+`RETURN_TO_DRAFT`).
+
+Behaviour invariants:
+
+- `role="dialog"` + `aria-modal="true"` + `aria-labelledby` heading.
+- Backdrop click → `onCancel`. Inside-dialog clicks do not propagate.
+- Escape → `onCancel`. Ctrl/Meta+Enter → submit if not disabled.
+- Focus trap: Tab / Shift+Tab wrap inside the dialog using a per-event
+  `querySelectorAll` of focusable nodes (no mutation observer).
+- Focuses the textarea on open; restores focus to the previously active
+  element on unmount.
+- Submit disabled when `required && trimmed.length === 0`, or when
+  `value.length > maxLength`. Counter turns `TK.c.err` past the limit.
+- `id` for new comments is **never** generated client-side; the reducer
+  produces ids via `makeId()` so persistence + audit history get one
+  source of truth.
+
+### Workflow status badge
+
+`components/StatusBadge.tsx` (`compact` for TopBar, `regular` for the
+ReviewPanel header). Compact instance lives in TopBar's left cluster,
+immediately after the template chip. There are **no workflow transition
+buttons in TopBar** — transitions live in ReviewPanel where context
+(notes, history) is colocated.
+
+### LeftPanel comment-count pill
+
+`components/LeftPanel.tsx` derives `unresolvedByBlock` once per render via
+`useMemo` over `state.doc.review.comments`, summing
+`threadUnresolvedCount` per `blockId` for non-resolved threads. Block rows
+in the Blocks tab render a small `data-testid="block-unresolved-pill"`
+when the block has unresolved comments. The same `accM`/`acc` palette is
+used as the Review tab pill for visual consistency.
+
+### `<ReadOnlyBanner>`
+
+`components/ReadOnlyBanner.tsx` shows above the canvas when
+`isReadOnlyWorkflow(state.doc.review.workflow)` is true. Renders the
+human-readable workflow state and a "Return to draft" affordance when
+that transition is in `availableTransitions(...)`. Not dismissable —
+the banner reflects the truth of the read-only state.
+
+### `<NotificationBanner>`
+
+`components/NotificationBanner.tsx` consolidates three signals into one
+in-app banner positioned directly under TopBar:
+
+| Priority | Source            | role     | Tone               |
+|----------|-------------------|----------|--------------------|
+| 1        | `importError`     | `alert`  | error tint         |
+| 2        | `state._lastRejection` | `status` | error tint        |
+| 3        | `importWarnings`  | `status` | accent (warn) tint |
+
+Only the top-priority active signal is rendered. `_lastRejection` reset
+behaviour: a local `rejectionDismissed` flag is reset to `false` whenever
+`_lastRejection.at` changes, so a fresh rejection always re-surfaces even
+after the user dismissed the previous one. The reducer already clears
+`_lastRejection` on any successful action, so the banner disappears
+automatically once the next action lands. **No toast provider** —
+intentional; the in-app banner is the project's convention.
+
+### Effective permissions (mode × workflow overlay)
+
+`PERMS[mode]` is mode-axis only. The reducer's `checkWorkflowPermission`
+runs orthogonally on the workflow axis. To prevent buttons looking
+enabled then dispatching into a silent rejection, `index.tsx` computes
+`effectivePerms = useMemo(...)` that overlays `WORKFLOW_PERMISSIONS[wf]`
+onto the mode perms:
+
+- `switchTemplate`, `changePalette`, `changeBackground`, `changeSize`
+  → ANDed with `workflowPerms.style`.
+- `editBlock(reg, k)` → wrapped to return `false` whenever
+  `isReadOnlyWorkflow(wf)`.
+- `toggleVisibility(reg)` → wrapped to require both `workflowPerms.structural`
+  and not-read-only.
+
+LeftPanel and Inspector receive `effectivePerms`; in `approved` /
+`exported` / `published` the Theme tab buttons disable visibly.
+`canEdit` is derived from `effectivePerms.editBlock` so Inspector
+property fields disable too.
+
+### Canvas stays clean — no overlay
+
+PR 3 does **not** introduce a canvas overlay layer. Comment indicators
+appear only in (a) the LeftPanel block-row pills and (b) the Review
+panel. `Canvas.tsx` is unchanged; the canvas remains a single
+`<canvas>` DOM element. Rationale: keeping the rendering surface clean
+preserves export/PNG fidelity and avoids reflowing the PR 3 scope into
+the renderer engine. Adding a canvas overlay is tracked as a deferred
+enhancement (see `DEBT.md`).
+
+### Component file map
+
+| File                                              | Purpose                                          |
+|---------------------------------------------------|--------------------------------------------------|
+| `components/NoteModal.tsx`                        | Modal text input (replaces `window.prompt`)      |
+| `components/StatusBadge.tsx`                      | Workflow state pill (compact / regular)          |
+| `components/RightRail.tsx`                        | Tabbed parent for Inspector + Review             |
+| `components/ReviewPanel.tsx`                      | Workflow header + threads + history              |
+| `components/ReadOnlyBanner.tsx`                   | Above-canvas banner when workflow is read-only   |
+| `components/NotificationBanner.tsx`               | Priority-resolved in-app notice surface          |
+| `components/Inspector.tsx`                        | Modified — drops outer width/border              |
+| `components/LeftPanel.tsx`                        | Modified — adds `unresolvedByBlock` count pills  |
+| `components/TopBar.tsx`                           | Modified — inserts `<StatusBadge size="compact">` |
+| `index.tsx`                                       | Modified — `effectivePerms`, RightRail wiring    |
+

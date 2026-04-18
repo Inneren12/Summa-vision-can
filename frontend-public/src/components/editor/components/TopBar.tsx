@@ -4,6 +4,7 @@ import React from 'react';
 import type { CanonicalDocument, EditorAction, EditorMode } from '../types';
 import { TK } from '../config/tokens';
 import { TPLS } from '../registry/templates';
+import { StatusBadge } from './StatusBadge';
 
 interface TopBarProps {
   doc: CanonicalDocument;
@@ -31,6 +32,7 @@ export function TopBar({ doc, dispatch, undoStack, redoStack, dirty, mode, setMo
         <span style={{ fontFamily: TK.font.display, fontWeight: 700, color: TK.c.acc, fontSize: "12px" }}>SUMMA</span>
         <span style={{ fontFamily: TK.font.display, fontWeight: 400, color: TK.c.txtS, fontSize: "12px" }}>VISION</span>
         <span style={{ fontSize: "8px", color: TK.c.txtM, fontFamily: TK.font.data, padding: "2px 5px", background: TK.c.bgAct, borderRadius: "2px", marginLeft: "4px" }}>{TPLS[doc.templateId]?.fam} {"\u2014"} {TPLS[doc.templateId]?.vr}</span>
+        <StatusBadge workflow={doc.review.workflow} size="compact" />
         <div role="tablist" aria-label="Editor mode" style={{ display: "flex", gap: "1px", background: TK.c.bgSurf, borderRadius: "3px", padding: "1px", border: `1px solid ${TK.c.brd}`, marginLeft: "6px" }}>
           {(["template", "design"] as const).map(m => <button type="button" key={m} role="tab" aria-selected={mode === m} onClick={() => setMode(m)} aria-label={`Switch to ${m} mode`} style={{ padding: "2px 7px", fontSize: "8px", fontFamily: TK.font.data, textTransform: "uppercase", background: mode === m ? TK.c.bgAct : "transparent", color: mode === m ? TK.c.acc : TK.c.txtM, border: "none", borderRadius: "2px", cursor: "pointer" }}>{m}</button>)}
         </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'react';
-import type { EditorMode, QAMode, LeftTab } from './types';
+import type { EditorMode, QAMode, LeftTab, BlockRegistryEntry } from './types';
 import { TK } from './config/tokens';
 import { PALETTES } from './config/palettes';
 import { BGS } from './config/backgrounds';
@@ -9,7 +9,8 @@ import { SIZES } from './config/sizes';
 import { BREG } from './registry/blocks';
 import { validateImportStrict, hydrateImportedDoc } from './registry/guards';
 import { reducer, initState } from './store/reducer';
-import { PERMS } from './store/permissions';
+import { PERMS, WORKFLOW_PERMISSIONS } from './store/permissions';
+import { isReadOnlyWorkflow } from './store/workflow';
 import { renderDoc } from './renderer/engine';
 import { validate } from './validation/validate';
 import { deferRevoke } from './utils/download';
@@ -17,8 +18,10 @@ import { shouldSkipGlobalShortcut } from './utils/shortcuts';
 import { TopBar } from './components/TopBar';
 import { LeftPanel } from './components/LeftPanel';
 import { Canvas } from './components/Canvas';
-import { Inspector } from './components/Inspector';
+import { RightRail } from './components/RightRail';
 import { QAPanel } from './components/QAPanel';
+import { ReadOnlyBanner } from './components/ReadOnlyBanner';
+import { NotificationBanner } from './components/NotificationBanner';
 
 export default function InfographicEditor() {
   const cvs = useRef<HTMLCanvasElement>(null);
@@ -38,7 +41,24 @@ export default function InfographicEditor() {
   const sz = SIZES[doc.page.size] || SIZES.instagram_1080;
   const selB = selId ? doc.blocks[selId] : null;
   const selR = selB ? BREG[selB.type] : null;
-  const perms = PERMS[mode] || PERMS.design;
+  const basePerms = PERMS[mode] || PERMS.design;
+  const workflowPerms = WORKFLOW_PERMISSIONS[doc.review.workflow];
+  const isReadOnly = isReadOnlyWorkflow(doc.review.workflow);
+  // Effective permissions overlay: workflow gate disables capabilities even
+  // when mode would allow them. editBlock / toggleVisibility are functions —
+  // intercept those to also return false in read-only workflows so the
+  // Inspector reflects the workflow lockdown.
+  const perms = useMemo(() => ({
+    ...basePerms,
+    switchTemplate: basePerms.switchTemplate && workflowPerms.style,
+    changePalette: basePerms.changePalette && workflowPerms.style,
+    changeBackground: basePerms.changeBackground && workflowPerms.style,
+    changeSize: basePerms.changeSize && workflowPerms.style,
+    editBlock: (reg: BlockRegistryEntry, k: string): boolean =>
+      !isReadOnly && basePerms.editBlock(reg, k),
+    toggleVisibility: (reg: BlockRegistryEntry): boolean =>
+      !isReadOnly && workflowPerms.structural && basePerms.toggleVisibility(reg),
+  }), [basePerms, workflowPerms, isReadOnly]);
 
   const vr = useMemo(() => validate(doc), [doc]);
   const dispErr = qaMode === "publish" ? vr.errors : [];
@@ -214,45 +234,13 @@ export default function InfographicEditor() {
         markSaved={markSavedAndBackup}
         exportPNG={exportPNG}
       />
-      {(importError || importWarnings.length > 0) && (
-        <div
-          role={importError ? "alert" : "status"}
-          aria-live="polite"
-          style={{
-            borderBottom: `1px solid ${TK.c.brd}`,
-            background: importError ? `${TK.c.err}14` : `${TK.c.acc}14`,
-            color: importError ? TK.c.err : TK.c.txtP,
-            padding: "6px 12px",
-            display: "flex",
-            gap: "8px",
-            alignItems: "flex-start",
-          }}
-        >
-          <div style={{ fontSize: "8px", fontFamily: TK.font.data, textTransform: "uppercase", minWidth: "90px" }}>
-            {importError ? "Import error" : "Import warnings"}
-          </div>
-          <div style={{ fontSize: "9px", lineHeight: 1.4, flex: 1 }}>
-            {importError && <div>{importError}</div>}
-            {importWarnings.length > 0 && (
-              <ul style={{ margin: 0, paddingLeft: "16px" }}>
-                {importWarnings.map((w, i) => <li key={`${w}_${i}`}>{w}</li>)}
-              </ul>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setImportError(null);
-              setImportWarnings([]);
-            }}
-            style={{ background: "none", border: "none", color: TK.c.txtM, cursor: "pointer", fontSize: "10px", padding: 0 }}
-            aria-label="Dismiss import notices"
-            title="Dismiss import notices"
-          >
-            {"\u2715"}
-          </button>
-        </div>
-      )}
+      <NotificationBanner
+        state={state}
+        importError={importError}
+        importWarnings={importWarnings}
+        onClearImportError={() => setImportError(null)}
+        onClearImportWarnings={() => setImportWarnings([])}
+      />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <LeftPanel
@@ -266,6 +254,7 @@ export default function InfographicEditor() {
 
         {/* CENTER */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <ReadOnlyBanner workflow={doc.review.workflow} dispatch={dispatch} />
           <Canvas canvasRef={cvs} />
           <QAPanel
             qaOpen={qaOpen}
@@ -278,13 +267,14 @@ export default function InfographicEditor() {
           />
         </div>
 
-        <Inspector
+        <RightRail
+          state={state}
+          dispatch={dispatch}
           selB={selB}
           selR={selR ?? null}
           selId={selId}
           mode={mode}
           canEdit={(reg, k) => canEdit(reg, k)}
-          dispatch={dispatch}
         />
       </div>
     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { CanonicalDocument, EditorAction, PermissionSet, BlockRegistryEntry, LeftTab, TemplateEntry } from '../types';
 import { TK } from '../config/tokens';
 import { PALETTES } from '../config/palettes';
@@ -8,6 +8,11 @@ import { BGS } from '../config/backgrounds';
 import { SIZES } from '../config/sizes';
 import { BREG } from '../registry/blocks';
 import { TPLS } from '../registry/templates';
+import {
+  buildThreads,
+  isThreadResolved,
+  threadUnresolvedCount,
+} from '../store/comments';
 
 // TPLS is a module-level constant, so the family grouping is too. If Stage 3+
 // makes templates runtime-loaded, this should move back into a useMemo keyed
@@ -40,6 +45,16 @@ const tb = (a: boolean): React.CSSProperties => ({ padding: "5px 7px", fontSize:
 
 export function LeftPanel({ doc, dispatch, selId, ltab, setLtab, perms }: LeftPanelProps) {
   const canToggle = (reg: BlockRegistryEntry) => perms.toggleVisibility(reg);
+
+  const unresolvedByBlock = useMemo(() => {
+    const threads = buildThreads(doc.review.comments);
+    const m = new Map<string, number>();
+    for (const t of threads) {
+      if (isThreadResolved(t)) continue;
+      m.set(t.blockId, (m.get(t.blockId) ?? 0) + threadUnresolvedCount(t));
+    }
+    return m;
+  }, [doc.review.comments]);
   const tabIds = {
     templates: "left-tab-templates",
     blocks: "left-tab-blocks",
@@ -82,10 +97,19 @@ export function LeftPanel({ doc, dispatch, selId, ltab, setLtab, perms }: LeftPa
               const r = BREG[b.type];
               if (!r) return null;
               const bd = badge(r.status);
+              const unresolved = unresolvedByBlock.get(bid) ?? 0;
               return (
                 <div key={bid} style={{ display: "flex", alignItems: "center", gap: "3px", marginBottom: "1px" }}>
                   <button type="button" onClick={() => dispatch({ type: "SELECT", blockId: bid })} aria-label={`Select block: ${r.name}`} aria-pressed={selId === bid} style={{ flex: 1, display: "flex", alignItems: "center", gap: "4px", textAlign: "left", padding: "4px 6px", fontSize: "9px", background: selId === bid ? TK.c.bgAct : "transparent", border: selId === bid ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: "pointer", color: b.visible ? TK.c.txtP : TK.c.txtM, textDecoration: b.visible ? "none" : "line-through", opacity: b.visible ? 1 : .5 }}>
                     <span style={{ fontSize: "6px", color: bd.color }}>{bd.label}</span><span>{r.name}</span>
+                    {unresolved > 0 && (
+                      <span
+                        data-testid="block-unresolved-pill"
+                        data-block-id={bid}
+                        title={`${unresolved} unresolved comment${unresolved === 1 ? "" : "s"}`}
+                        style={{ marginLeft: "auto", padding: "1px 5px", background: TK.c.accM, color: TK.c.acc, borderRadius: "2px", fontFamily: TK.font.data, fontSize: "8px" }}
+                      >{unresolved}</span>
+                    )}
                   </button>
                   {canToggle(r) && <button type="button" onClick={() => dispatch({ type: "TOGGLE_VIS", blockId: bid })} aria-label={b.visible ? `Hide ${r.name}` : `Show ${r.name}`} aria-pressed={b.visible} title={b.visible ? "Hide block" : "Show block"} style={{ background: "none", border: "none", color: b.visible ? TK.c.pos : TK.c.txtM, cursor: "pointer", fontSize: "10px", padding: "2px 4px" }}>{b.visible ? "\u25C9" : "\u25CB"}</button>}
                 </div>
