@@ -9,7 +9,16 @@ import {
   isReadOnlyWorkflow,
   WORKFLOW_ACTION_TYPES,
 } from "../workflow";
-import { WORKFLOW_PERMISSIONS, classifyKey } from "../permissions";
+import {
+  WORKFLOW_PERMISSIONS,
+  classifyKey,
+  canEditKeyInWorkflow,
+  checkWorkflowPermission,
+  TEXT_CONTENT_KEYS,
+  DATA_CONTENT_KEYS,
+  STRUCTURAL_KEYS,
+  STYLE_KEYS,
+} from "../permissions";
 import { validateImportStrict } from "../../registry/guards";
 
 // ────────────────────────────────────────────────────────────────────
@@ -739,5 +748,77 @@ describe("fix prompt 2 / reducer IMPORT rejection signal", () => {
     expect(result.doc).toBe(state.doc);
     expect(result._lastRejection?.type).toBe("IMPORT");
     expect((result._lastRejection?.reason ?? "").length).toBeGreaterThan(0);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// 11. canEditKeyInWorkflow — UI gate parity with reducer
+//
+// Closes the editBlock gap (Inspector showed every field editable in
+// `in_review` even though the reducer only accepted text edits). The
+// parity test is the important one — it locks the helper to the
+// reducer's exact behavior.
+// ────────────────────────────────────────────────────────────────────
+
+describe("canEditKeyInWorkflow", () => {
+  // Pick one representative key per category from the production arrays.
+  const textKey = TEXT_CONTENT_KEYS[0];
+  const dataKey = DATA_CONTENT_KEYS[0];
+  const structuralKey = STRUCTURAL_KEYS[0];
+  const styleKey = STYLE_KEYS[0];
+
+  test("draft: every category allowed", () => {
+    expect(canEditKeyInWorkflow("draft", textKey)).toBe(true);
+    expect(canEditKeyInWorkflow("draft", dataKey)).toBe(true);
+    expect(canEditKeyInWorkflow("draft", structuralKey)).toBe(true);
+    expect(canEditKeyInWorkflow("draft", styleKey)).toBe(true);
+    // Unknown keys permitted only in draft — matches the reducer.
+    expect(canEditKeyInWorkflow("draft", "bogus_unknown_key")).toBe(true);
+  });
+
+  test("in_review: only text allowed", () => {
+    expect(canEditKeyInWorkflow("in_review", textKey)).toBe(true);
+    expect(canEditKeyInWorkflow("in_review", dataKey)).toBe(false);
+    expect(canEditKeyInWorkflow("in_review", structuralKey)).toBe(false);
+    expect(canEditKeyInWorkflow("in_review", styleKey)).toBe(false);
+    expect(canEditKeyInWorkflow("in_review", "bogus_unknown_key")).toBe(false);
+  });
+
+  test.each(["approved", "exported", "published"] as const)(
+    "%s: no category allowed",
+    (wf) => {
+      expect(canEditKeyInWorkflow(wf, textKey)).toBe(false);
+      expect(canEditKeyInWorkflow(wf, dataKey)).toBe(false);
+      expect(canEditKeyInWorkflow(wf, structuralKey)).toBe(false);
+      expect(canEditKeyInWorkflow(wf, styleKey)).toBe(false);
+    },
+  );
+
+  test("matches reducer checkWorkflowPermission for UPDATE_PROP (parity smoke)", () => {
+    // For a sample of keys across categories, the helper's verdict must
+    // match what checkWorkflowPermission would return for an UPDATE_PROP
+    // action on the same key. Regression guard against UI/reducer drift.
+    const sampleKeys: string[] = [textKey, dataKey, structuralKey, styleKey];
+    const workflows: WorkflowState[] = [
+      "draft",
+      "in_review",
+      "approved",
+      "exported",
+      "published",
+    ];
+    for (const wf of workflows) {
+      for (const key of sampleKeys) {
+        const helperVerdict = canEditKeyInWorkflow(wf, key);
+        const reducerVerdict = checkWorkflowPermission(wf, {
+          type: "UPDATE_PROP",
+          key,
+        }).allowed;
+        expect({ wf, key, helperVerdict }).toEqual({
+          wf,
+          key,
+          helperVerdict: reducerVerdict,
+        });
+      }
+    }
   });
 });

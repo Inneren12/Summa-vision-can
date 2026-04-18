@@ -495,10 +495,23 @@ onto the mode perms:
 
 - `switchTemplate`, `changePalette`, `changeBackground`, `changeSize`
   → ANDed with `workflowPerms.style`.
-- `editBlock(reg, k)` → wrapped to return `false` whenever
-  `isReadOnlyWorkflow(wf)`.
-- `toggleVisibility(reg)` → wrapped to require both `workflowPerms.structural`
-  and not-read-only.
+- `editBlock(reg, key)` is the combination of three gates:
+  block-registry editability (registry-level), mode-axis permission
+  (`PERMS[mode].editBlock`), and workflow-key-category
+  (`canEditKeyInWorkflow(workflow, key)`). All three must return `true`.
+  This mirrors the reducer's `checkModePermission` +
+  `checkWorkflowPermission` pair so UI affordances and reducer
+  decisions stay in sync.
+- `toggleVisibility(reg)` → ANDed with `workflowPerms.structural`
+  (structural is `false` in every non-draft workflow, so this covers
+  both read-only states and `in_review`).
+
+`in_review` is a copy-edits-only state: text-category keys remain
+editable, data/style/structural keys are disabled. Without the
+`canEditKeyInWorkflow` gate the Inspector would show every field as
+editable and the reducer would silently reject non-text
+`UPDATE_PROP` actions, surfacing a rejection banner instead of a
+correctly-disabled input.
 
 LeftPanel and Inspector receive `effectivePerms`; in `approved` /
 `exported` / `published` the Theme tab buttons disable visibly.
