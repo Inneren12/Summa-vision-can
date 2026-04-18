@@ -130,6 +130,21 @@ as `DEBT-021` (24 h TTL via ``temp_upload_ttl_hours``).
   Review panel only. Mode and workflow gates are combined into an
   `effectivePerms` overlay at the parent so disabled buttons never
   silently dispatch into a reducer rejection.
+- Workflow transitions carrying a note (`RETURN_TO_DRAFT`,
+  `REQUEST_CHANGES`) are always routed through the shared NoteModal,
+  regardless of the UI surface initiating them. There is a single
+  NoteModal instance in the editor, owned by `index.tsx` and driven by
+  a `NoteRequestConfig` callback (`onRequestNote`) passed to every
+  surface that needs to collect free-text input. This keeps the audit
+  path (`doc.review.history`) identical whether the transition was
+  initiated from the Review panel header or the above-canvas read-only
+  banner. Direct dispatches from the UI are reserved for transitions
+  that carry no note (notably `DUPLICATE_AS_DRAFT`).
+- Editor right-rail tabs implement the W3C ARIA Authoring Practices
+  tabs pattern: `ArrowLeft`/`ArrowRight` / `Home`/`End` move focus and
+  activate tabs; inactive tabs carry `tabIndex={-1}` (roving focus) so
+  `Tab` from outside the tablist advances into the active tabpanel
+  rather than cycling every tab.
 
 ## Technology Summary
 

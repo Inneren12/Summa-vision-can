@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useId, useMemo, useState } from 'react';
+import React, { useId, useMemo, useRef, useState } from 'react';
 import type {
   Block,
   BlockRegistryEntry,
@@ -16,8 +16,10 @@ import {
 } from '../store/comments';
 import { Inspector } from './Inspector';
 import { ReviewPanel } from './ReviewPanel';
+import type { NoteRequestConfig } from './noteRequest';
 
 type RightRailTab = 'inspector' | 'review';
+const TAB_ORDER: readonly RightRailTab[] = ['inspector', 'review'] as const;
 
 export interface RightRailProps {
   state: EditorState;
@@ -27,6 +29,7 @@ export interface RightRailProps {
   selId: string | null;
   mode: EditorMode;
   canEdit: (reg: BlockRegistryEntry, k: string) => boolean;
+  onRequestNote: (config: NoteRequestConfig) => void;
 }
 
 export function RightRail({
@@ -37,12 +40,14 @@ export function RightRail({
   selId,
   mode,
   canEdit,
+  onRequestNote,
 }: RightRailProps) {
   const [tab, setTab] = useState<RightRailTab>('inspector');
   const inspectorTabId = useId();
   const reviewTabId = useId();
   const inspectorPanelId = useId();
   const reviewPanelId = useId();
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([null, null]);
 
   const unresolvedTotal = useMemo(() => {
     const threads = buildThreads(state.doc.review.comments);
@@ -52,6 +57,31 @@ export function RightRail({
     }
     return total;
   }, [state.doc.review.comments]);
+
+  const handleTabKey = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const currentIdx = TAB_ORDER.indexOf(tab);
+    let nextIdx = currentIdx;
+    switch (e.key) {
+      case 'ArrowRight':
+        nextIdx = (currentIdx + 1) % TAB_ORDER.length;
+        break;
+      case 'ArrowLeft':
+        nextIdx = (currentIdx - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+        break;
+      case 'Home':
+        nextIdx = 0;
+        break;
+      case 'End':
+        nextIdx = TAB_ORDER.length - 1;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    const nextTab = TAB_ORDER[nextIdx];
+    setTab(nextTab);
+    tabRefs.current[nextIdx]?.focus();
+  };
 
   return (
     <aside
@@ -73,9 +103,12 @@ export function RightRail({
           type="button"
           id={inspectorTabId}
           role="tab"
+          ref={(el) => { tabRefs.current[0] = el; }}
           aria-selected={tab === 'inspector'}
           aria-controls={inspectorPanelId}
+          tabIndex={tab === 'inspector' ? 0 : -1}
           onClick={() => setTab('inspector')}
+          onKeyDown={handleTabKey}
           style={tabButtonStyle(tab === 'inspector')}
         >
           Inspector
@@ -84,9 +117,12 @@ export function RightRail({
           type="button"
           id={reviewTabId}
           role="tab"
+          ref={(el) => { tabRefs.current[1] = el; }}
           aria-selected={tab === 'review'}
           aria-controls={reviewPanelId}
+          tabIndex={tab === 'review' ? 0 : -1}
           onClick={() => setTab('review')}
+          onKeyDown={handleTabKey}
           style={tabButtonStyle(tab === 'review')}
         >
           Review
@@ -134,7 +170,11 @@ export function RightRail({
         style={{ flex: tab === 'review' ? 1 : 0, display: 'flex', minHeight: 0 }}
       >
         {tab === 'review' && (
-          <ReviewPanel state={state} dispatch={dispatch} />
+          <ReviewPanel
+            state={state}
+            dispatch={dispatch}
+            onRequestNote={onRequestNote}
+          />
         )}
       </div>
     </aside>

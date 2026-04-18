@@ -44,9 +44,20 @@ export function NoteModal({
   const previousActiveRef = useRef<HTMLElement | null>(null);
   const [value, setValue] = useState<string>(initialValue);
 
+  // Seed value on each open transition. Guard on isOpen so prop changes to
+  // initialValue while closed do not leak into the next open's initial state.
   useEffect(() => {
     if (!isOpen) return;
     setValue(initialValue);
+    // initialValue is intentionally a one-shot seed per open cycle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // Capture previously-focused element + focus textarea on open.
+  // DOM-safe focus restore on close: only restore if the target still lives
+  // in the document (it may have unmounted between open and close).
+  useEffect(() => {
+    if (!isOpen) return;
     previousActiveRef.current =
       typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
         ? document.activeElement
@@ -57,13 +68,64 @@ export function NoteModal({
     });
     return () => {
       const prev = previousActiveRef.current;
-      if (prev && typeof prev.focus === 'function') {
+      if (
+        prev &&
+        typeof prev.focus === 'function' &&
+        typeof document !== 'undefined' &&
+        document.contains(prev)
+      ) {
         prev.focus();
       }
     };
-    // initialValue intentionally only seeds on open transition.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
+
+  // Body scroll lock while modal is open. Restores original overflow on close.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (typeof document === 'undefined') return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
+
+  // Document-level keydown handler with explicit cleanup. Covers Escape and
+  // focus-trap Tab / Shift+Tab for the duration the modal is mounted.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (typeof document === 'undefined') return;
+
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel();
+        return;
+      }
+      if (e.key === 'Tab' && dialogRef.current) {
+        const items = focusables(dialogRef.current);
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+        if (e.shiftKey) {
+          if (active === first || !dialogRef.current.contains(active)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (active === last || !dialogRef.current.contains(active)) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => {
+      document.removeEventListener('keydown', handler);
+    };
+  }, [isOpen, onCancel]);
 
   if (!isOpen) return null;
 
@@ -81,32 +143,6 @@ export function NoteModal({
     onCancel();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      onCancel();
-      return;
-    }
-    if (e.key === 'Tab' && dialogRef.current) {
-      const items = focusables(dialogRef.current);
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      const active = document.activeElement as HTMLElement | null;
-      if (e.shiftKey) {
-        if (active === first || !dialogRef.current.contains(active)) {
-          e.preventDefault();
-          last.focus();
-        }
-      } else {
-        if (active === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    }
-  };
-
   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
@@ -117,7 +153,6 @@ export function NoteModal({
   return (
     <div
       onClick={handleBackdropClick}
-      onKeyDown={handleKeyDown}
       style={{
         position: 'fixed',
         top: 0,

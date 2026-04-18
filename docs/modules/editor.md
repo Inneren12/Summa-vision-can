@@ -348,11 +348,23 @@ Tab semantics use `role="tablist" / role="tab" / role="tabpanel"` with
 `aria-selected` and `aria-controls`. Inactive panels are kept unmounted so
 heavy children (Inspector's per-block data editors) do not run while hidden.
 
+**Keyboard navigation** follows the W3C ARIA Authoring Practices tabs
+pattern:
+
+- `ArrowLeft` / `ArrowRight` move between tabs (circular).
+- `Home` / `End` jump to first / last tab.
+- **Roving tabIndex**: the active tab has `tabIndex={0}`, inactive tabs
+  have `tabIndex={-1}`. This removes inactive tabs from the sequential
+  tab order, so `Tab` from outside the tablist lands on the currently
+  active tab, and subsequent `Tab` jumps into the active tabpanel rather
+  than cycling every tab.
+- Focus moves to the newly active tab on activation (`tabRefs.current[nextIdx]?.focus()`).
+
 A count pill on the Review tab shows `unresolvedTotal` derived from
 `buildThreads(state.doc.review.comments)` and `threadUnresolvedCount(...)`.
 Pill is hidden when zero.
 
-### `<NoteModal>` — single input surface
+### `<NoteModal>` — single input surface, single ownership
 
 `components/NoteModal.tsx` is the only modal in the editor. Hand-rolled
 (no portal, no library), state-gated conditional render with an inline
@@ -361,15 +373,50 @@ would have used `window.prompt` — both for comment composition (add / reply
 / edit) and for workflow transition notes (`REQUEST_CHANGES`,
 `RETURN_TO_DRAFT`).
 
+**Ownership: `index.tsx`.** There is exactly one `<NoteModal>` instance
+in the editor tree, driven by a `noteRequest: NoteRequestConfig | null`
+state in `index.tsx`. Surfaces that need to collect free-text input
+(ReviewPanel, ReadOnlyBanner) receive an `onRequestNote(config)` callback;
+calling it opens the shared modal with the supplied title/label/submit
+handler. This guarantees the audit path is identical regardless of which
+UI surface initiated the transition — `RETURN_TO_DRAFT` dispatched from
+ReadOnlyBanner is indistinguishable from the same transition dispatched
+from ReviewPanel, both routing through `NoteModal.onSubmit → dispatch`.
+
+The shared config shape lives at `components/noteRequest.ts`:
+
+```ts
+interface NoteRequestConfig {
+  title: string;
+  label: string;
+  placeholder?: string;
+  initialValue?: string;
+  required: boolean;
+  submitLabel: string;
+  onSubmit: (note: string) => void;
+}
+```
+
 Behaviour invariants:
 
-- `role="dialog"` + `aria-modal="true"` + `aria-labelledby` heading.
+- `role="dialog"` + `aria-modal="true"` + `aria-labelledby` heading +
+  `aria-describedby` label.
 - Backdrop click → `onCancel`. Inside-dialog clicks do not propagate.
-- Escape → `onCancel`. Ctrl/Meta+Enter → submit if not disabled.
-- Focus trap: Tab / Shift+Tab wrap inside the dialog using a per-event
-  `querySelectorAll` of focusable nodes (no mutation observer).
-- Focuses the textarea on open; restores focus to the previously active
-  element on unmount.
+- `Escape` → `onCancel`. `Ctrl/Meta+Enter` → submit if not disabled.
+- **Keyboard handling via document-level listener** (`document.addEventListener('keydown', ...)`)
+  inside a `useEffect` with explicit `removeEventListener` cleanup.
+  Covered by a test that spies on `document.removeEventListener` and
+  asserts a `"keydown"` removal fires on unmount.
+- **Focus trap**: Tab / Shift+Tab wrap inside the dialog using a
+  per-event `querySelectorAll` of focusable nodes (no mutation observer).
+- Focuses the textarea on open.
+- **DOM-safe focus restore** on close: the previously active element is
+  refocused only if it still lives in the document
+  (`document.contains(previous)`). Guards against the common case where
+  the opener unmounted during the modal session.
+- **Body scroll lock** while open: `document.body.style.overflow = 'hidden'`
+  on mount, original value restored on unmount. Covered by two tests
+  (unmount path and `isOpen → false` prop-change path).
 - Submit disabled when `required && trimmed.length === 0`, or when
   `value.length > maxLength`. Counter turns `TK.c.err` past the limit.
 - `id` for new comments is **never** generated client-side; the reducer
@@ -396,10 +443,28 @@ used as the Review tab pill for visual consistency.
 ### `<ReadOnlyBanner>`
 
 `components/ReadOnlyBanner.tsx` shows above the canvas when
-`isReadOnlyWorkflow(state.doc.review.workflow)` is true. Renders the
-human-readable workflow state and a "Return to draft" affordance when
-that transition is in `availableTransitions(...)`. Not dismissable —
-the banner reflects the truth of the read-only state.
+`isReadOnlyWorkflow(state.doc.review.workflow)` is true. Not
+dismissable — the banner reflects the truth of the read-only state.
+
+**Per-state CTA mapping**:
+
+| Workflow    | Primary CTA          | Secondary CTA        | Note prompt?                     |
+|-------------|----------------------|----------------------|----------------------------------|
+| `approved`  | Return to draft      | —                    | Yes — NoteModal (reason optional) |
+| `exported`  | Duplicate as draft   | Return to draft      | Primary: No (direct dispatch); secondary: Yes |
+| `published` | Duplicate as draft   | —                    | No (terminal state; duplication only) |
+
+Rationale: `approved` is pre-export editorial review where returning to
+draft with a reason is a normal revision flow. `exported` has produced
+an artifact but is not yet publicly visible — duplication preserves the
+exported snapshot while returning to draft remains legal. `published` is
+public-facing and terminal; editing would rewrite history, so only
+duplication is offered.
+
+**Audit parity**: `Return to draft` is **always** routed through the
+shared NoteModal via `onRequestNote`. Direct dispatches from the banner
+are reserved for `DUPLICATE_AS_DRAFT`, which produces a fresh document
+and carries no note.
 
 ### `<NotificationBanner>`
 

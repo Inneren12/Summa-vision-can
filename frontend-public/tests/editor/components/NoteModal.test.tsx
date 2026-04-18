@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NoteModal } from "../../../src/components/editor/components/NoteModal";
@@ -172,5 +172,130 @@ describe("NoteModal", () => {
     render(<NoteModal {...props} />);
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(props.onCancel).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("NoteModal — accessibility lifecycle (Issue 4)", () => {
+  test("restores focus to previously focused element on close (Escape path)", async () => {
+    const user = userEvent.setup();
+    function Host() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button data-testid="opener" onClick={() => setOpen(true)}>Open</button>
+          <NoteModal
+            isOpen={open}
+            title="T"
+            label="L"
+            onSubmit={() => setOpen(false)}
+            onCancel={() => setOpen(false)}
+          />
+        </>
+      );
+    }
+    render(<Host />);
+    const opener = screen.getByTestId("opener");
+    opener.focus();
+    await user.click(opener);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getByRole("textbox")).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
+    expect(opener).toHaveFocus();
+  });
+
+  test("does not throw when previously focused element is unmounted before close", async () => {
+    const user = userEvent.setup();
+    function Host() {
+      const [open, setOpen] = useState(false);
+      const [showOpener, setShowOpener] = useState(true);
+      return (
+        <>
+          {showOpener && (
+            <button
+              data-testid="opener"
+              onClick={() => { setOpen(true); setShowOpener(false); }}
+            >
+              Open
+            </button>
+          )}
+          <NoteModal
+            isOpen={open}
+            title="T"
+            label="L"
+            onSubmit={() => setOpen(false)}
+            onCancel={() => setOpen(false)}
+          />
+        </>
+      );
+    }
+    render(<Host />);
+    await user.click(screen.getByTestId("opener"));
+    // opener is now unmounted — guard must prevent throw on close.
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  test("locks body scroll while open, restores on unmount", () => {
+    document.body.style.overflow = "";
+    const originalOverflow = document.body.style.overflow;
+    const { unmount } = render(
+      <NoteModal
+        isOpen={true}
+        title="T"
+        label="L"
+        onSubmit={jest.fn()}
+        onCancel={jest.fn()}
+      />,
+    );
+    expect(document.body.style.overflow).toBe("hidden");
+
+    unmount();
+    expect(document.body.style.overflow).toBe(originalOverflow);
+  });
+
+  test("locks body scroll on open, restores on close via prop change", () => {
+    document.body.style.overflow = "";
+    function Host() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button data-testid="opener" onClick={() => setOpen(true)}>Open</button>
+          <button data-testid="closer" onClick={() => setOpen(false)}>Close</button>
+          <NoteModal
+            isOpen={open}
+            title="T"
+            label="L"
+            onSubmit={() => setOpen(false)}
+            onCancel={() => setOpen(false)}
+          />
+        </>
+      );
+    }
+    render(<Host />);
+    expect(document.body.style.overflow).toBe("");
+    fireEvent.click(screen.getByTestId("opener"));
+    expect(document.body.style.overflow).toBe("hidden");
+    fireEvent.click(screen.getByTestId("closer"));
+    expect(document.body.style.overflow).toBe("");
+  });
+
+  test("removes keydown listener on unmount", () => {
+    const spy = jest.spyOn(document, "removeEventListener");
+    const { unmount } = render(
+      <NoteModal
+        isOpen={true}
+        title="T"
+        label="L"
+        onSubmit={jest.fn()}
+        onCancel={jest.fn()}
+      />,
+    );
+    unmount();
+    const keydownRemovals = spy.mock.calls.filter((c) => c[0] === "keydown");
+    expect(keydownRemovals.length).toBeGreaterThan(0);
+    spy.mockRestore();
   });
 });

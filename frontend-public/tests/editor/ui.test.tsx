@@ -113,7 +113,8 @@ describe("Stage 3 PR 3 — full-tree integration", () => {
     expect(within(updated!).getByTestId("block-unresolved-pill")).toHaveTextContent("1");
   });
 
-  test("approved state: ReadOnlyBanner; Palette disabled; Return-to-draft clears banner", async () => {
+  test("approved state: ReadOnlyBanner; Palette disabled; Return-to-draft routes through NoteModal", async () => {
+    const user = userEvent.setup();
     render(<InfographicEditor />);
     fireEvent.click(screen.getByRole("tab", { name: /review/i }));
     fireEvent.click(screen.getByTestId("transition-SUBMIT_FOR_REVIEW"));
@@ -122,15 +123,45 @@ describe("Stage 3 PR 3 — full-tree integration", () => {
     });
     fireEvent.click(screen.getByTestId("transition-APPROVE"));
     const banner = await screen.findByTestId("read-only-banner");
-    expect(banner).toBeInTheDocument();
+    expect(banner).toHaveAttribute("data-workflow", "approved");
     // Theme tab — palette buttons disabled by effectivePerms.
     fireEvent.click(screen.getByRole("tab", { name: /theme tab/i }));
     const themeTabpanel = screen.getByRole("tabpanel", { name: /theme tab/i });
     const palBtns = within(themeTabpanel).getAllByRole("button", { name: /palette:/i });
     expect(palBtns.some((b) => (b as HTMLButtonElement).disabled)).toBe(true);
-    // Click "Return to draft" in the banner.
-    const returnBtn = within(banner).getByRole("button", { name: /return to draft/i });
-    fireEvent.click(returnBtn);
+    // Per Issue 1+2: banner "Return to draft" routes through the shared
+    // NoteModal — no direct dispatch. Fill the note, submit, banner clears.
+    await user.click(within(banner).getByTestId("banner-return-to-draft"));
+    const dialog = await screen.findByRole("dialog");
+    // Heading confirms we reached the shared NoteModal.
+    expect(within(dialog).getByRole("heading", { name: /return to draft/i })).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: /return to draft/i }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("read-only-banner")).not.toBeInTheDocument();
+    });
+  });
+
+  test("approved → exported: exported banner offers Duplicate (direct) and Return-to-draft (via NoteModal)", async () => {
+    const user = userEvent.setup();
+    render(<InfographicEditor />);
+    fireEvent.click(screen.getByRole("tab", { name: /review/i }));
+    // draft → in_review → approved → exported
+    fireEvent.click(screen.getByTestId("transition-SUBMIT_FOR_REVIEW"));
+    await waitFor(() => {
+      expect(screen.getByTestId("transition-APPROVE")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("transition-APPROVE"));
+    await waitFor(() => {
+      expect(screen.getByTestId("transition-MARK_EXPORTED")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("transition-MARK_EXPORTED"));
+    const banner = await screen.findByTestId("read-only-banner");
+    expect(banner).toHaveAttribute("data-workflow", "exported");
+    expect(within(banner).getByTestId("banner-duplicate")).toBeInTheDocument();
+    expect(within(banner).getByTestId("banner-return-to-draft")).toBeInTheDocument();
+    // Duplicate dispatches directly — document workflow flips to draft
+    // (duplicate produces a fresh draft document), banner disappears.
+    await user.click(within(banner).getByTestId("banner-duplicate"));
     await waitFor(() => {
       expect(screen.queryByTestId("read-only-banner")).not.toBeInTheDocument();
     });

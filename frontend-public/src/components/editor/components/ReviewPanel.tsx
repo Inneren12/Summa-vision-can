@@ -22,18 +22,10 @@ import {
 import { availableTransitions } from '../store/workflow';
 import { checkWorkflowPermission } from '../store/permissions';
 import { StatusBadge } from './StatusBadge';
-import { NoteModal } from './NoteModal';
+import type { NoteRequestConfig } from './noteRequest';
 
 const ACTOR_YOU = 'you';
 const HISTORY_COLLAPSED_LIMIT = 6;
-
-const TRANSITION_LABELS: Record<WorkflowState, string> = {
-  draft: 'Draft',
-  in_review: 'In review',
-  approved: 'Approved',
-  exported: 'Exported',
-  published: 'Published',
-};
 
 type TransitionDescriptor =
   | { kind: 'direct'; action: WorkflowAction; label: string }
@@ -92,23 +84,20 @@ function isCommentEvent(action: string): boolean {
   return action.startsWith('comment_');
 }
 
-interface ModalRequest {
-  title: string;
-  label: string;
-  required: boolean;
-  initialValue?: string;
-  placeholder?: string;
-  submitLabel?: string;
-  onSubmit: (text: string) => void;
-}
-
 export interface ReviewPanelProps {
   state: EditorState;
   dispatch: React.Dispatch<EditorAction>;
+  /**
+   * Request the editor's shared NoteModal. Owned by `index.tsx` so ReviewPanel
+   * and ReadOnlyBanner route through the same audit path: a note-bearing
+   * transition (or a comment mutation that wants free-text input) never
+   * dispatches directly from the UI — it always flows through NoteModal →
+   * onSubmit(note) → dispatch.
+   */
+  onRequestNote: (config: NoteRequestConfig) => void;
 }
 
-export function ReviewPanel({ state, dispatch }: ReviewPanelProps) {
-  const [modal, setModal] = useState<ModalRequest | null>(null);
+export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps) {
   const [showResolved, setShowResolved] = useState<boolean>(false);
   const [historyExpanded, setHistoryExpanded] = useState<boolean>(false);
 
@@ -130,7 +119,7 @@ export function ReviewPanel({ state, dispatch }: ReviewPanelProps) {
     if (!selId) return;
     const blockType = state.doc.blocks[selId]?.type;
     const blockLabel = blockDisplayLabel(blockType);
-    setModal({
+    onRequestNote({
       title: `Add comment on ${blockLabel}`,
       label: 'Comment',
       required: true,
@@ -138,13 +127,12 @@ export function ReviewPanel({ state, dispatch }: ReviewPanelProps) {
       placeholder: 'Type your comment...',
       onSubmit: (text) => {
         dispatch({ type: 'ADD_COMMENT', blockId: selId, text });
-        setModal(null);
       },
     });
   };
 
   const openReplyModal = (parentId: string) => {
-    setModal({
+    onRequestNote({
       title: 'Reply to comment',
       label: 'Reply',
       required: true,
@@ -152,13 +140,12 @@ export function ReviewPanel({ state, dispatch }: ReviewPanelProps) {
       placeholder: 'Type your reply...',
       onSubmit: (text) => {
         dispatch({ type: 'REPLY_TO_COMMENT', parentId, text });
-        setModal(null);
       },
     });
   };
 
   const openEditModal = (comment: Comment) => {
-    setModal({
+    onRequestNote({
       title: 'Edit comment',
       label: 'Comment',
       required: true,
@@ -166,7 +153,6 @@ export function ReviewPanel({ state, dispatch }: ReviewPanelProps) {
       submitLabel: 'Save',
       onSubmit: (text) => {
         dispatch({ type: 'EDIT_COMMENT', commentId: comment.id, text });
-        setModal(null);
       },
     });
   };
@@ -176,7 +162,7 @@ export function ReviewPanel({ state, dispatch }: ReviewPanelProps) {
       dispatch(descriptor.action);
       return;
     }
-    setModal({
+    onRequestNote({
       title: descriptor.modalTitle,
       label: 'Note (optional)',
       required: false,
@@ -189,7 +175,6 @@ export function ReviewPanel({ state, dispatch }: ReviewPanelProps) {
         } else {
           dispatch({ type: 'RETURN_TO_DRAFT', note });
         }
-        setModal(null);
       },
     });
   };
@@ -473,17 +458,6 @@ export function ReviewPanel({ state, dispatch }: ReviewPanelProps) {
         </ul>
       </div>
 
-      <NoteModal
-        isOpen={modal !== null}
-        title={modal?.title ?? ''}
-        label={modal?.label ?? ''}
-        placeholder={modal?.placeholder}
-        initialValue={modal?.initialValue}
-        submitLabel={modal?.submitLabel}
-        required={modal?.required ?? false}
-        onSubmit={(text) => modal?.onSubmit(text)}
-        onCancel={() => setModal(null)}
-      />
     </div>
   );
 }

@@ -1,7 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ReviewPanel } from "../../../src/components/editor/components/ReviewPanel";
+import { NoteModal } from "../../../src/components/editor/components/NoteModal";
+import type { NoteRequestConfig } from "../../../src/components/editor/components/noteRequest";
 import type { EditorState, WorkflowHistoryEntry } from "../../../src/components/editor/types";
 import {
   baseState,
@@ -11,11 +13,35 @@ import {
   withComments,
 } from "./_helpers";
 
+function Host({ state, dispatch }: { state: EditorState; dispatch: jest.Mock }) {
+  const [req, setReq] = useState<NoteRequestConfig | null>(null);
+  return (
+    <>
+      <ReviewPanel state={state} dispatch={dispatch} onRequestNote={setReq} />
+      <NoteModal
+        isOpen={req !== null}
+        title={req?.title ?? ""}
+        label={req?.label ?? ""}
+        placeholder={req?.placeholder}
+        initialValue={req?.initialValue}
+        submitLabel={req?.submitLabel}
+        required={req?.required ?? false}
+        onSubmit={(text) => {
+          const r = req;
+          setReq(null);
+          r?.onSubmit(text);
+        }}
+        onCancel={() => setReq(null)}
+      />
+    </>
+  );
+}
+
 function mount(state: EditorState) {
   const dispatch = jest.fn();
   return {
     dispatch,
-    ...render(<ReviewPanel state={state} dispatch={dispatch} />),
+    ...render(<Host state={state} dispatch={dispatch} />),
   };
 }
 

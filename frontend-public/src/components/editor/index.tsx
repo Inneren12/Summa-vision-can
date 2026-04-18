@@ -22,6 +22,8 @@ import { RightRail } from './components/RightRail';
 import { QAPanel } from './components/QAPanel';
 import { ReadOnlyBanner } from './components/ReadOnlyBanner';
 import { NotificationBanner } from './components/NotificationBanner';
+import { NoteModal } from './components/NoteModal';
+import type { NoteRequestConfig } from './components/noteRequest';
 
 export default function InfographicEditor() {
   const cvs = useRef<HTMLCanvasElement>(null);
@@ -32,6 +34,24 @@ export default function InfographicEditor() {
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Single NoteModal instance, owned here and shared by every surface that
+  // needs free-text user input (ReviewPanel comment composition, ReviewPanel
+  // transition notes, ReadOnlyBanner RETURN_TO_DRAFT). Centralising ownership
+  // keeps the audit path uniform — note-bearing transitions always flow
+  // through NoteModal.onSubmit → dispatch, regardless of initiating surface.
+  const [noteRequest, setNoteRequest] = useState<NoteRequestConfig | null>(null);
+  const requestNote = useCallback((config: NoteRequestConfig) => {
+    setNoteRequest(config);
+  }, []);
+  const handleNoteSubmit = useCallback((text: string) => {
+    const req = noteRequest;
+    setNoteRequest(null);
+    req?.onSubmit(text);
+  }, [noteRequest]);
+  const handleNoteCancel = useCallback(() => {
+    setNoteRequest(null);
+  }, []);
 
   const { doc, selectedBlockId: selId, undoStack, redoStack, dirty, mode } = state;
   // Mode lives in reducer state (single source of truth for permission gate).
@@ -254,7 +274,11 @@ export default function InfographicEditor() {
 
         {/* CENTER */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <ReadOnlyBanner workflow={doc.review.workflow} dispatch={dispatch} />
+          <ReadOnlyBanner
+            state={state}
+            dispatch={dispatch}
+            onRequestNote={requestNote}
+          />
           <Canvas canvasRef={cvs} />
           <QAPanel
             qaOpen={qaOpen}
@@ -275,8 +299,21 @@ export default function InfographicEditor() {
           selId={selId}
           mode={mode}
           canEdit={(reg, k) => canEdit(reg, k)}
+          onRequestNote={requestNote}
         />
       </div>
+
+      <NoteModal
+        isOpen={noteRequest !== null}
+        title={noteRequest?.title ?? ''}
+        label={noteRequest?.label ?? ''}
+        placeholder={noteRequest?.placeholder}
+        initialValue={noteRequest?.initialValue}
+        submitLabel={noteRequest?.submitLabel}
+        required={noteRequest?.required ?? false}
+        onSubmit={handleNoteSubmit}
+        onCancel={handleNoteCancel}
+      />
     </div>
   );
 }
