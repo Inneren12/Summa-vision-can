@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'react';
-import type { EditorMode, QAMode, LeftTab } from './types';
+import type { EditorMode, QAMode, LeftTab, BlockRegistryEntry } from './types';
 import { TK } from './config/tokens';
 import { PALETTES } from './config/palettes';
 import { BGS } from './config/backgrounds';
@@ -9,7 +9,8 @@ import { SIZES } from './config/sizes';
 import { BREG } from './registry/blocks';
 import { validateImportStrict, hydrateImportedDoc } from './registry/guards';
 import { reducer, initState } from './store/reducer';
-import { PERMS } from './store/permissions';
+import { PERMS, WORKFLOW_PERMISSIONS } from './store/permissions';
+import { isReadOnlyWorkflow } from './store/workflow';
 import { renderDoc } from './renderer/engine';
 import { validate } from './validation/validate';
 import { deferRevoke } from './utils/download';
@@ -17,8 +18,12 @@ import { shouldSkipGlobalShortcut } from './utils/shortcuts';
 import { TopBar } from './components/TopBar';
 import { LeftPanel } from './components/LeftPanel';
 import { Canvas } from './components/Canvas';
-import { Inspector } from './components/Inspector';
+import { RightRail } from './components/RightRail';
 import { QAPanel } from './components/QAPanel';
+import { ReadOnlyBanner } from './components/ReadOnlyBanner';
+import { NotificationBanner } from './components/NotificationBanner';
+import { NoteModal } from './components/NoteModal';
+import type { NoteRequestConfig } from './components/noteRequest';
 
 export default function InfographicEditor() {
   const cvs = useRef<HTMLCanvasElement>(null);
@@ -30,6 +35,24 @@ export default function InfographicEditor() {
   const [importError, setImportError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Single NoteModal instance, owned here and shared by every surface that
+  // needs free-text user input (ReviewPanel comment composition, ReviewPanel
+  // transition notes, ReadOnlyBanner RETURN_TO_DRAFT). Centralising ownership
+  // keeps the audit path uniform — note-bearing transitions always flow
+  // through NoteModal.onSubmit → dispatch, regardless of initiating surface.
+  const [noteRequest, setNoteRequest] = useState<NoteRequestConfig | null>(null);
+  const requestNote = useCallback((config: NoteRequestConfig) => {
+    setNoteRequest(config);
+  }, []);
+  const handleNoteSubmit = useCallback((text: string) => {
+    const req = noteRequest;
+    setNoteRequest(null);
+    req?.onSubmit(text);
+  }, [noteRequest]);
+  const handleNoteCancel = useCallback(() => {
+    setNoteRequest(null);
+  }, []);
+
   const { doc, selectedBlockId: selId, undoStack, redoStack, dirty, mode } = state;
   // Mode lives in reducer state (single source of truth for permission gate).
   // setMode is a thin wrapper that dispatches SET_MODE.
@@ -38,7 +61,27 @@ export default function InfographicEditor() {
   const sz = SIZES[doc.page.size] || SIZES.instagram_1080;
   const selB = selId ? doc.blocks[selId] : null;
   const selR = selB ? BREG[selB.type] : null;
-  const perms = PERMS[mode] || PERMS.design;
+  const basePerms = PERMS[mode] || PERMS.design;
+  const workflowPerms = WORKFLOW_PERMISSIONS[doc.review.workflow];
+  const isReadOnly = isReadOnlyWorkflow(doc.review.workflow);
+  // Effective permissions overlay: workflow gate disables capabilities even
+  // when mode would allow them. editBlock / toggleVisibility are functions —
+  // intercept those to also return false in read-only workflows so the
+  // Inspector reflects the workflow lockdown.
+  // `effectivePerms`: the mode × workflow permission overlay, the single
+  // source of truth for UI-side disable state. Distinct name from the raw
+  // module-level `PERMS[mode]` so future greps find the combined version.
+  const effectivePerms = useMemo(() => ({
+    ...basePerms,
+    switchTemplate: basePerms.switchTemplate && workflowPerms.style,
+    changePalette: basePerms.changePalette && workflowPerms.style,
+    changeBackground: basePerms.changeBackground && workflowPerms.style,
+    changeSize: basePerms.changeSize && workflowPerms.style,
+    editBlock: (reg: BlockRegistryEntry, k: string): boolean =>
+      !isReadOnly && basePerms.editBlock(reg, k),
+    toggleVisibility: (reg: BlockRegistryEntry): boolean =>
+      !isReadOnly && workflowPerms.structural && basePerms.toggleVisibility(reg),
+  }), [basePerms, workflowPerms, isReadOnly]);
 
   const vr = useMemo(() => validate(doc), [doc]);
   const dispErr = qaMode === "publish" ? vr.errors : [];
@@ -192,7 +235,7 @@ export default function InfographicEditor() {
     });
   }, [canExp, doc, pal, sz]);
 
-  const canEdit = (reg: typeof selR, k: string) => reg ? perms.editBlock(reg, k) : false;
+  const canEdit = (reg: typeof selR, k: string) => reg ? effectivePerms.editBlock(reg, k) : false;
 
   return (
     <div style={{ fontFamily: TK.font.body, background: TK.c.bgApp, color: TK.c.txtP, height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -214,45 +257,13 @@ export default function InfographicEditor() {
         markSaved={markSavedAndBackup}
         exportPNG={exportPNG}
       />
-      {(importError || importWarnings.length > 0) && (
-        <div
-          role={importError ? "alert" : "status"}
-          aria-live="polite"
-          style={{
-            borderBottom: `1px solid ${TK.c.brd}`,
-            background: importError ? `${TK.c.err}14` : `${TK.c.acc}14`,
-            color: importError ? TK.c.err : TK.c.txtP,
-            padding: "6px 12px",
-            display: "flex",
-            gap: "8px",
-            alignItems: "flex-start",
-          }}
-        >
-          <div style={{ fontSize: "8px", fontFamily: TK.font.data, textTransform: "uppercase", minWidth: "90px" }}>
-            {importError ? "Import error" : "Import warnings"}
-          </div>
-          <div style={{ fontSize: "9px", lineHeight: 1.4, flex: 1 }}>
-            {importError && <div>{importError}</div>}
-            {importWarnings.length > 0 && (
-              <ul style={{ margin: 0, paddingLeft: "16px" }}>
-                {importWarnings.map((w, i) => <li key={`${w}_${i}`}>{w}</li>)}
-              </ul>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setImportError(null);
-              setImportWarnings([]);
-            }}
-            style={{ background: "none", border: "none", color: TK.c.txtM, cursor: "pointer", fontSize: "10px", padding: 0 }}
-            aria-label="Dismiss import notices"
-            title="Dismiss import notices"
-          >
-            {"\u2715"}
-          </button>
-        </div>
-      )}
+      <NotificationBanner
+        state={state}
+        importError={importError}
+        importWarnings={importWarnings}
+        onClearImportError={() => setImportError(null)}
+        onClearImportWarnings={() => setImportWarnings([])}
+      />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <LeftPanel
@@ -261,11 +272,16 @@ export default function InfographicEditor() {
           selId={selId}
           ltab={ltab}
           setLtab={setLtab}
-          perms={perms}
+          effectivePerms={effectivePerms}
         />
 
         {/* CENTER */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <ReadOnlyBanner
+            state={state}
+            dispatch={dispatch}
+            onRequestNote={requestNote}
+          />
           <Canvas canvasRef={cvs} />
           <QAPanel
             qaOpen={qaOpen}
@@ -278,15 +294,29 @@ export default function InfographicEditor() {
           />
         </div>
 
-        <Inspector
+        <RightRail
+          state={state}
+          dispatch={dispatch}
           selB={selB}
           selR={selR ?? null}
           selId={selId}
           mode={mode}
           canEdit={(reg, k) => canEdit(reg, k)}
-          dispatch={dispatch}
+          onRequestNote={requestNote}
         />
       </div>
+
+      <NoteModal
+        isOpen={noteRequest !== null}
+        title={noteRequest?.title ?? ''}
+        label={noteRequest?.label ?? ''}
+        placeholder={noteRequest?.placeholder}
+        initialValue={noteRequest?.initialValue}
+        submitLabel={noteRequest?.submitLabel}
+        required={noteRequest?.required ?? false}
+        onSubmit={handleNoteSubmit}
+        onCancel={handleNoteCancel}
+      />
     </div>
   );
 }

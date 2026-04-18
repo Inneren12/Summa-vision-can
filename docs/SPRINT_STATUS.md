@@ -116,7 +116,7 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-3-1 | Stage 3 Domain Model Consolidation (`doc.review`, schema v2) | 🔄 | — |
 | E-3-2a | Stage 3 Reducer Actions — Workflow State Machine | 🔄 | E-3-1 |
 | E-3-2b | Stage 3 Reducer Actions — Comments Subsystem | 🔄 | E-3-2a |
-| E-3-3 | Stage 3 Review Panel UI | ⬜ | E-3-2b |
+| E-3-3 | Stage 3 Review Panel UI | 🔄 | E-3-2b |
 | E-3-4 | Stage 3 End-to-End Tests | ⬜ | E-3-3 |
 
 **E-3-1 status:** Data-layer only. `CanonicalDocument` now carries a `review`
@@ -154,6 +154,28 @@ and REOPEN are open to any commenter. `validateImportStrict` now
 deep-validates every `Comment` element and enforces referential integrity
 for `parentId`. Closes `DEBT-023`. UI surface (indicators, NoteModal,
 Review panel) deferred to E-3-3.
+
+**E-3-3 status (in flight):** Stage 3 UI integration. Six new editor
+components: `NoteModal` (the sole modal input surface; replaces any
+prospective `window.prompt` for comment text and transition notes;
+hand-rolled with focus trap + restore + Escape + Ctrl+Enter),
+`StatusBadge` (compact in TopBar, regular in ReviewPanel header),
+`RightRail` (tabbed parent for Inspector + Review), `ReviewPanel`
+(workflow header with `availableTransitions`, threads with reply /
+resolve / edit / delete affordances and tombstone rendering, history
+list with reverse-chrono ordering and collapse-after-6), `ReadOnlyBanner`
+(above-canvas notice when `isReadOnlyWorkflow(...)`, with one-click
+"Return to draft" when allowed), and `NotificationBanner` (priority-
+resolved in-app banner consuming `state._lastRejection` and the existing
+import error/warning state). TopBar and LeftPanel pick up small
+modifications: `<StatusBadge>` after the template chip; `unresolvedByBlock`
+memo + count pill in block rows. `index.tsx` now computes
+`effectivePerms` (mode × workflow overlay) so disabled buttons never
+silently dispatch into a reducer rejection. Canvas stays clean — no
+overlay layer (deferred). Editor test suite passes with ≥ 95% line
+coverage on every new Stage 3 component (NoteModal, StatusBadge,
+RightRail, ReviewPanel, ReadOnlyBanner, NotificationBanner) — see CI
+for exact counts.
 
 ## Theme #2: Marginal Tax Rate Meatgrinder
 
