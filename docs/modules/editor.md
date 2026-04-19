@@ -592,3 +592,77 @@ enhancement (see `DEBT.md`).
 | `components/TopBar.tsx`                           | Modified — inserts `<StatusBadge size="compact">` |
 | `index.tsx`                                       | Modified — `effectivePerms`, RightRail wiring    |
 
+## Production consumer (Stage 4 Task 0)
+
+Stage 4 Task 0 wires `InfographicEditor` into Next.js admin routes so
+it is reachable from a URL with working backend persistence.
+
+### Editor props
+
+```ts
+export interface InfographicEditorProps {
+  initialDoc?: CanonicalDocument;
+  publicationId?: string;
+}
+```
+
+- **`initialDoc`**. Optional seed document. Synchronously validated via
+  `validateImportStrict` at mount. Invalid → fallback to the default
+  `single_stat_hero` template and surface the error through the
+  existing `NotificationBanner` import-error state. `initState` accepts
+  a corresponding optional doc (pure constructor — does not validate).
+- **`publicationId`**. When present, Ctrl+S PATCHes the document to
+  the backend through the admin proxy. When absent, Ctrl+S is a
+  dev-warn no-op.
+
+### Save behaviour
+
+- Ctrl+S → `buildUpdatePayload(doc)` → `updateAdminPublication(id, payload)`.
+- Re-entrancy is blocked by `savingRef`: a second Ctrl+S while a PATCH
+  is in flight is discarded.
+- Success → dispatch `SAVED` (clears `state.dirty`; the TopBar dirty
+  dot disappears).
+- `AdminPublicationNotFoundError` → import-error banner:
+  `"Publication not found — reload the page"`.
+- Other errors → import-error banner: `"Save failed: {message}"`.
+- **Autosave is out of scope for Task 0** and will be added in
+  Stage 4 Task 2.
+
+### Persistence seam
+
+`src/components/editor/utils/persistence.ts` owns the mapping between
+the editor's `CanonicalDocument` and the backend's admin publication
+contract. Two pure functions:
+
+- `buildUpdatePayload(doc): UpdateAdminPublicationPayload` — extracts
+  headline / eyebrow / source_text / footnote / description from known
+  template blocks, derives `chart_type` and `visual_config.layout`
+  from `doc.templateId`, maps `doc.page.size` to the backend's coarser
+  `size` slug, and forwards `doc.review` verbatim. Fields without a
+  source block are OMITTED (not sent as `null`) so the backend's
+  `exclude_unset=True` PATCH semantics treat them as "unchanged".
+- `hydrateDoc(pub): CanonicalDocument` — starts from the default
+  template and overlays what the backend preserved (review,
+  visual_config.palette/background/size, editorial text blocks). NOT a
+  full inverse: block-level props beyond the well-known editorial
+  blocks are reset to template defaults. See DEBT-026 for the lossy
+  fields.
+
+### Routes
+
+- `/admin` — publication list (server component; fetches with
+  `fetchAdminPublicationListServer`).
+- `/admin/editor/[id]` — edit page. Server component fetches the
+  publication, hydrates the doc, and hands off to
+  `AdminEditorClient` (a thin `'use client'` wrapper around
+  `<InfographicEditor>`).
+- `/admin/editor/[id]/error.tsx` and `.../not-found.tsx` provide the
+  boundaries for unexpected errors and missing publications.
+
+### Legacy JSON download
+
+The previous Ctrl+S / TopBar SAVE behaviour wrote a local JSON file
+via `URL.createObjectURL`. Stage 4 Task 0 removes that path for the
+`publicationId` case. `exportJSON` (TopBar "Export JSON") is
+unchanged — it remains a manual checkpoint tool.
+
