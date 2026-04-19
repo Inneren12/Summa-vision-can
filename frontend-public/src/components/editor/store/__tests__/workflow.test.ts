@@ -619,9 +619,9 @@ describe("fix prompt / P1 — workflow transitions mark state as dirty", () => {
     expect(r.dirty).toBe(true);
   });
 
-  test("SAVED clears dirty", () => {
+  test("SAVED_IF_MATCHES clears dirty", () => {
     const s0: EditorState = { ...baseState(), dirty: true };
-    const r = reducer(s0, { type: "SAVED" });
+    const r = reducer(s0, { type: "SAVED_IF_MATCHES", snapshotDoc: s0.doc });
     expect(r.dirty).toBe(false);
   });
 });

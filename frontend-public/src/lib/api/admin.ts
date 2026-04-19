@@ -74,6 +74,13 @@ export interface UpdateAdminPublicationPayload {
   chart_type?: string;
   visual_config?: VisualConfig | null;
   review?: ReviewPayload | null;
+  /**
+   * Opaque JSON-serialised full CanonicalDocument — see DEBT-026
+   * resolution. The client always sends it alongside the derived
+   * editorial fields so search indexing and the public gallery keep
+   * working; the backend stores it verbatim.
+   */
+  document_state?: string | null;
 }
 
 export async function updateAdminPublication(

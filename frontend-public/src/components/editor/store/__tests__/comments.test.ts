@@ -826,12 +826,12 @@ describe("reducer / comment actions — dirty flag", () => {
     expect(s.dirty).toBe(true);
   });
 
-  test("42. SAVED clears dirty after a comment action", () => {
+  test("42. SAVED_IF_MATCHES clears dirty after a comment action", () => {
     let s: EditorState = { ...baseState(), dirty: false };
     const bid = findBlockIdByType(s, "headline_editorial");
     s = reducer(s, { type: "ADD_COMMENT", blockId: bid, text: "t" });
     expect(s.dirty).toBe(true);
-    s = reducer(s, { type: "SAVED" });
+    s = reducer(s, { type: "SAVED_IF_MATCHES", snapshotDoc: s.doc });
     expect(s.dirty).toBe(false);
   });
 });

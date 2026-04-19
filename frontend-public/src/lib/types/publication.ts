@@ -70,6 +70,14 @@ export interface AdminPublicationResponse {
   footnote?: string | null;
   visual_config?: VisualConfig | null;
   review?: ReviewPayload | null;
+  /**
+   * Opaque JSON-serialised full CanonicalDocument (DEBT-026 closure).
+   * Source of truth when non-null — the editor rehydrates from it via
+   * JSON.parse + validateImportStrict and falls back to the legacy
+   * field-level hydrate when the column is null (rows predating the
+   * column existed).
+   */
+  document_state?: string | null;
   virality_score?: number | null;
   status: string;
   cdn_url?: string | null;

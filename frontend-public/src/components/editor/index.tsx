@@ -173,6 +173,16 @@ export default function InfographicEditor({
   // to the backend via the admin proxy. Without a publicationId the save
   // command is a no-op — the legacy JSON download was removed in
   // Stage 4 Task 0 (see docs/modules/editor.md).
+  //
+  // Snapshot-based save (B2): we capture the doc reference at save start
+  // and dispatch SAVED_IF_MATCHES with it. The reducer only clears
+  // `dirty` if the current doc is still the same reference — i.e. the
+  // user did not edit during the in-flight PATCH. If they did, the new
+  // edits never reached the backend, so keeping `dirty: true` is correct.
+  //
+  // Error routing (B4): save failures land on `state.saveError` via
+  // SAVE_FAILED, distinct from the import-error channel. NotificationBanner
+  // priority: saveError > importError > _lastRejection > warnings.
   const markSavedAndBackup = useCallback(() => {
     if (!dirty) return;
     if (!publicationId) {
@@ -182,19 +192,24 @@ export default function InfographicEditor({
       return;
     }
     if (savingRef.current) return;
+
+    const snapshotDoc = doc;
     savingRef.current = true;
 
-    const payload = buildUpdatePayload(doc);
+    const payload = buildUpdatePayload(snapshotDoc);
     updateAdminPublication(publicationId, payload)
       .then(() => {
-        dispatch({ type: "SAVED" });
+        dispatch({ type: "SAVED_IF_MATCHES", snapshotDoc });
       })
       .catch((err: unknown) => {
         if (err instanceof AdminPublicationNotFoundError) {
-          setImportError('Publication not found — reload the page');
+          dispatch({
+            type: "SAVE_FAILED",
+            error: 'Publication not found — reload the page',
+          });
         } else {
           const msg = err instanceof Error ? err.message : String(err);
-          setImportError(`Save failed: ${msg}`);
+          dispatch({ type: "SAVE_FAILED", error: msg });
         }
       })
       .finally(() => {
@@ -336,6 +351,7 @@ export default function InfographicEditor({
         importWarnings={importWarnings}
         onClearImportError={() => setImportError(null)}
         onClearImportWarnings={() => setImportWarnings([])}
+        dispatch={dispatch}
       />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>

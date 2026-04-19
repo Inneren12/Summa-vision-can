@@ -620,33 +620,57 @@ export interface InfographicEditorProps {
 - Ctrl+S → `buildUpdatePayload(doc)` → `updateAdminPublication(id, payload)`.
 - Re-entrancy is blocked by `savingRef`: a second Ctrl+S while a PATCH
   is in flight is discarded.
-- Success → dispatch `SAVED` (clears `state.dirty`; the TopBar dirty
-  dot disappears).
-- `AdminPublicationNotFoundError` → import-error banner:
-  `"Publication not found — reload the page"`.
-- Other errors → import-error banner: `"Save failed: {message}"`.
+- **Snapshot-based clear** (B2 fix): on save start, `index.tsx`
+  captures `state.doc` by reference and dispatches
+  `SAVED_IF_MATCHES { snapshotDoc }` on resolve. The reducer clears
+  `dirty` only when `state.doc === snapshotDoc` — i.e. the user did
+  not edit during the in-flight PATCH. If they did, `dirty` stays set
+  and `saveError` is also cleared (the save itself succeeded; only the
+  clean-flag is withheld). Reference equality is sufficient because
+  the reducer treats `doc` as immutable — every mutation produces a
+  new object.
+- Errors dispatch `SAVE_FAILED { error }` (populates `state.saveError`,
+  leaves `dirty` untouched). `AdminPublicationNotFoundError` surfaces
+  as `"Publication not found — reload the page"`.
+- **Error channels** (B4 fix): save failures land on
+  `state.saveError` — distinct from the load-side `importError`.
+  NotificationBanner priority:
+  `saveError > importError > _lastRejection > warnings`.
+  Dismiss dispatches `DISMISS_SAVE_ERROR` (clears `saveError`, leaves
+  `dirty` untouched).
 - **Autosave is out of scope for Task 0** and will be added in
   Stage 4 Task 2.
 
-### Persistence seam
+### Persistence seam (DEBT-026 closed)
 
 `src/components/editor/utils/persistence.ts` owns the mapping between
 the editor's `CanonicalDocument` and the backend's admin publication
-contract. Two pure functions:
+contract. `document_state` is the source of truth: the editor sends
+the full doc as JSON text on every PATCH and rehydrates from it on
+load. Derived editorial columns (headline / chart_type / eyebrow /
+description / source_text / footnote / visual_config / review) are
+kept in sync for backend indexing and the public gallery.
 
-- `buildUpdatePayload(doc): UpdateAdminPublicationPayload` — extracts
-  headline / eyebrow / source_text / footnote / description from known
-  template blocks, derives `chart_type` and `visual_config.layout`
-  from `doc.templateId`, maps `doc.page.size` to the backend's coarser
-  `size` slug, and forwards `doc.review` verbatim. Fields without a
-  source block are OMITTED (not sent as `null`) so the backend's
-  `exclude_unset=True` PATCH semantics treat them as "unchanged".
-- `hydrateDoc(pub): CanonicalDocument` — starts from the default
-  template and overlays what the backend preserved (review,
-  visual_config.palette/background/size, editorial text blocks). NOT a
-  full inverse: block-level props beyond the well-known editorial
-  blocks are reset to template defaults. See DEBT-026 for the lossy
-  fields.
+Public functions:
+
+- **`buildUpdatePayload(doc): UpdateAdminPublicationPayload`** — emits
+  `document_state: JSON.stringify(doc)` plus all derived fields.
+  `chart_type` and `visual_config.layout` are derived from
+  `doc.templateId`; editorial text fields are extracted from the
+  matching template blocks. `review` is forwarded verbatim.
+- **`hydrateDoc(pub): CanonicalDocument`** — prefers
+  `pub.document_state` (lossless: `JSON.parse` + `validateImportStrict`);
+  when absent, falls back to the legacy field-level hydrate. Throws
+  `HydrationError` when `document_state` is present but malformed —
+  `src/app/admin/editor/[id]/page.tsx` logs server-side and re-throws
+  into Next.js `error.tsx`.
+- **`HydrationError`** (exported class). `publicationId` field lets
+  the server page log which row failed to rehydrate.
+- **Legacy path** rebuilds from scalar columns (template defaults for
+  block-level props), with a workflow fallback derived from
+  `publication.status` via `deriveWorkflowFromStatus` so legacy
+  PUBLISHED rows are not silently demoted to DRAFT on first save
+  (B3 fix). A dev-mode `console.warn` records each legacy hit.
 
 ### Routes
 

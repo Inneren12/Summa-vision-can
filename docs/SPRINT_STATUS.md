@@ -171,9 +171,11 @@ deep-validates every `Comment` element and enforces referential integrity
 for `parentId`. Closes `DEBT-023`. UI surface (indicators, NoteModal,
 Review panel) deferred to E-3-3.
 
-**E-4-0 status:** Editor wire-up lands on branch
-`claude/wire-infographic-editor-9w3wr`. New routes `/admin` (publication
-list) and `/admin/editor/[id]` (editor page) under
+**E-4-0 status (full close):** Wire-up landed on
+`claude/wire-infographic-editor-9w3wr` (PR #101, merged) and the four
+review blockers closed on follow-up branch
+`claude/close-infographic-blockers-wkjVX`. New routes `/admin`
+(publication list) and `/admin/editor/[id]` (editor page) under
 `frontend-public/src/app/admin/`. Browser code talks to the backend
 admin API via a same-origin Next.js proxy at
 `src/app/api/admin/publications/[...path]/route.ts`; the proxy injects
@@ -181,10 +183,20 @@ admin API via a same-origin Next.js proxy at
 never bundled to client). `InfographicEditor` gains `initialDoc?` and
 `publicationId?` props; `initState` accepts an optional seed doc.
 Ctrl+S PATCHes through `updateAdminPublication`; the legacy local-JSON
-download on save is removed. Persistence seam
-(`src/components/editor/utils/persistence.ts`) provides
-`buildUpdatePayload` + `hydrateDoc` — lossy round-trip for block props
-tracked as DEBT-026. Entry point established for E-4-1 (click-to-select).
+download on save is removed.
+
+Follow-up close resolves DEBT-026: opaque `document_state` column on
+`Publication` (migration `a3e81c0f5d21`) carries the full
+`CanonicalDocument` as JSON text; persistence seam
+(`src/components/editor/utils/persistence.ts`) prefers it on hydrate
+and falls back to the legacy field-level path for rows created before
+the column existed. B2 stale-save fixed by snapshot-based
+`SAVED_IF_MATCHES` — the reducer clears `dirty` only when
+`state.doc === snapshotDoc`. B3 workflow demotion on legacy
+PUBLISHED rows fixed by `deriveWorkflowFromStatus`. B4 separates
+`saveError` from `importError` in reducer state; NotificationBanner
+priority is `saveError > importError > _lastRejection > warnings`.
+Entry point established for E-4-1 (click-to-select).
 
 **E-3-3 status (in flight):** Stage 3 UI integration. Six new editor
 components: `NoteModal` (the sole modal input surface; replaces any

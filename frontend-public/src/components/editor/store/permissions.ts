@@ -287,7 +287,9 @@ export function checkWorkflowPermission(
     // Always-allowed channels: navigation, mode-toggle, save-flag.
     case "SELECT":
     case "SET_MODE":
-    case "SAVED":
+    case "SAVED_IF_MATCHES":
+    case "SAVE_FAILED":
+    case "DISMISS_SAVE_ERROR":
       return { allowed: true };
 
     // Workflow transitions are validated by `canTransition` in the reducer,

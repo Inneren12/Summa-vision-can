@@ -31,45 +31,6 @@ Rules:
 
 ## Active Debt
 
-### DEBT-026: Lossy round-trip between `CanonicalDocument` and `AdminPublicationResponse`
-
-- **Source:** Stage 4 Task 0 wire-up (branch `claude/wire-infographic-editor-9w3wr`)
-- **Added:** 2026-04-19
-- **Severity:** medium
-- **Category:** architecture
-- **Status:** accepted
-- **Description:** `hydrateDoc()` in
-  `frontend-public/src/components/editor/utils/persistence.ts` starts
-  from the default `single_stat_hero` template and overlays only the
-  well-known editorial text blocks (`headline_editorial`,
-  `eyebrow_tag`, `source_footer`, `body_annotation`,
-  `subtitle_descriptor`) plus `doc.review` and a subset of
-  `doc.page` (palette/background/size). All other block props — chart
-  data (`bar_horizontal.items`, `line_editorial.series`,
-  `comparison_kpi.items`, `table_enriched.rows`,
-  `small_multiple.items`), `hero_stat.value/label`, `delta_badge`,
-  `brand_stamp.position`, `source_footer.methodology` — are reset to
-  template defaults on hydrate. Symmetrically, `buildUpdatePayload()`
-  only extracts the matching editorial text fields into the PATCH.
-  The size mapping is also lossy: `instagram_1080` and
-  `instagram_port` both collapse to backend `size="instagram"` and
-  round-trip back to `instagram_1080`.
-- **Impact:** Block-level chart edits that do not have a mirror at
-  the top-level publication columns are not persisted across a
-  browser reload. Review/workflow state, the editorial headline/eyebrow/
-  source_text, and the loose visual config (palette/background/size)
-  DO round-trip. For Task 0 scope (read/edit workflow metadata + text
-  + theme) this is acceptable; chart-data editing is not yet wired.
-- **Resolution:** Choose one:
-  (a) Extend the backend schema with a dedicated `document_state`
-      JSON column that stores the full `CanonicalDocument` verbatim
-      (editor owns the shape; backend treats it opaquely).
-  (b) Broaden `VisualConfig` to cover every block-level prop the
-      editor can mutate (invasive, couples two schemas tightly).
-  Option (a) is preferred — aligns with how `review` is stored today.
-- **Target:** Stage 4 Task 2 (autosave) or a dedicated persistence PR
-  before any block-data editing flow ships to production.
-
 ### DEBT-021: Temp upload Parquet files not cleaned up
 
 - **Source:** JSON/CSV upload PR (`claude/add-data-upload-graphics-i8IWc`)
@@ -117,3 +78,22 @@ Rules:
 | DEBT-022 | `validateImport` dual-signature (string + throwing) | Stage 3 PR 2a (`claude/add-workflow-state-machine-mUM3P`) | 2026-04-17 |
 | DEBT-023 | `validateImportStrict` does not deep-validate `Comment` entries | Stage 3 PR 2b (`claude/recon-comments-subsystem-HwvB1`) | 2026-04-17 |
 | DEBT-024 | Rename `validateDocumentShape` → `assertCanonicalDocumentV2Shape` | Stage 3 PR 4 (`claude/reconnaissance-persistence-cleanup-EJ4uX`) | 2026-04-19 |
+| DEBT-026 | Lossy round-trip between `CanonicalDocument` and `AdminPublicationResponse` | Stage 4 Task 0 full close (`claude/close-infographic-blockers-wkjVX`) | 2026-04-19 |
+
+### DEBT-026 resolution note
+
+Closed by adding an opaque `document_state` JSON column on
+`Publication`. The frontend sends the full `CanonicalDocument` as a
+JSON string via `buildUpdatePayload`; the backend stores it verbatim
+(no parsing, no shape validation — the frontend's
+`validateImportStrict` is the sole seam). Derived editorial columns
+(`headline`, `chart_type`, `eyebrow`, `description`, `source_text`,
+`footnote`, `visual_config`, `review`) are kept in sync on every
+PATCH for search indexing and public gallery preview.
+
+Legacy rows (`document_state IS NULL`) fall back to the original
+field-level hydrate path with a workflow fallback derived from
+`publication.status` — see `deriveWorkflowFromStatus` in
+`frontend-public/src/components/editor/utils/persistence.ts`. First
+PATCH after opening a legacy row writes `document_state`; from that
+point on the row is lossless.

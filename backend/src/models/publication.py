@@ -125,6 +125,16 @@ class Publication(Base):
     review: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ------------------------------------------------------------------
+    # Opaque full canonical document — source of truth for the editor.
+    # Nullable for legacy rows that predate DEBT-026 resolution; when
+    # present, the frontend's lossless hydrate path uses it verbatim.
+    # Stored as Text (not JSONB) for SQLite compatibility; backend never
+    # inspects the payload — the frontend's ``validateImportStrict``
+    # owns the shape.
+    # ------------------------------------------------------------------
+    document_state: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # ------------------------------------------------------------------
     # Lifecycle metadata
     # ------------------------------------------------------------------
     updated_at: Mapped[datetime | None] = mapped_column(

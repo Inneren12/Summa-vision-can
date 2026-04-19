@@ -187,6 +187,12 @@ export interface EditorState {
   redoStack: CanonicalDocument[];
   selectedBlockId: string | null;
   dirty: boolean;
+  // Save-error channel (B4). Populated by SAVE_FAILED; cleared by
+  // DISMISS_SAVE_ERROR or by the next successful save snapshot match.
+  // Distinct from the import-error channel surfaced from index.tsx —
+  // see docs/modules/editor.md "Error channels" and the NotificationBanner
+  // priority order (saveError > importError > _lastRejection > warnings).
+  saveError: string | null;
   // Tracks recent editing bursts so reducer can batch keystroke history.
   _lastAction?: { type: string; blockId?: string; key?: string; at: number };
   // Last rejection emitted by the permission gate. Set whenever an action
@@ -214,7 +220,15 @@ export type EditorAction =
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'SELECT'; blockId: string | null }
-  | { type: 'SAVED' }
+  // Snapshot-based save completion (B2). Payload carries the doc
+  // reference captured at save start; the reducer clears `dirty` only if
+  // state.doc is referentially equal to `snapshotDoc` (no intervening
+  // edits). This replaces the older unconditional `SAVED` action.
+  | { type: 'SAVED_IF_MATCHES'; snapshotDoc: CanonicalDocument }
+  // Save failed — routed to `state.saveError` for the NotificationBanner.
+  | { type: 'SAVE_FAILED'; error: string }
+  // User dismissed the save-error banner. Leaves `dirty` untouched.
+  | { type: 'DISMISS_SAVE_ERROR' }
   | { type: 'SET_MODE'; mode: EditorMode }
   | WorkflowAction
   | CommentAction;
