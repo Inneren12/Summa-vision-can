@@ -155,6 +155,55 @@ as `DEBT-021` (24 h TTL via ``temp_upload_ttl_hours``).
   `Tab` from outside the tablist advances into the active tabpanel
   rather than cycling every tab.
 
+## Admin Surface (Stage 4 Task 0)
+
+- **Routes.** `/admin` (publication list) and `/admin/editor/[id]` (edit
+  existing publication). Both live under
+  `frontend-public/src/app/admin/` and share `app/admin/layout.tsx`. No
+  `/new` route and no creation affordance — Task 0 scope is read/edit
+  only. The admin layout sets `metadata.robots = { index: false, follow: false }`.
+- **Proxy.** Browser code talks to the same-origin Next.js route handler
+  at `src/app/api/admin/publications/[...path]/route.ts`. The handler
+  injects the server-only `X-API-KEY` header before forwarding to the
+  backend admin API. Supported verbs: `GET`, `POST`, `PATCH`, `DELETE`.
+  Any client-supplied `X-API-KEY` is ignored (server always wins). All
+  forwards set `cache: 'no-store'`. This is the ONLY path through which
+  client code reaches admin endpoints.
+- **Server-only helpers.** `src/lib/api/admin-server.ts` is imported by
+  server components (the admin page + editor page). It reads
+  `ADMIN_API_KEY` directly and throws if imported client-side
+  (`typeof window !== 'undefined'` guard at module top). `server-only`
+  package not used to avoid adding a dependency.
+- **Client helpers.** `src/lib/api/admin.ts` talks only to the
+  same-origin proxy (relative URLs). Never reads `ADMIN_API_KEY`.
+  Exports `fetchAdminPublication`, `fetchAdminPublicationList`,
+  `updateAdminPublication`, and `AdminPublicationNotFoundError`.
+- **Hydration flow.** Server page fetches with the key →
+  `hydrateDoc(publication)` in `components/editor/utils/persistence.ts`
+  maps the admin response onto a `CanonicalDocument` by overlaying the
+  default template → page passes the doc to `AdminEditorClient` → which
+  passes `initialDoc` and `publicationId` props into `InfographicEditor`.
+  `InfographicEditor` validates the doc through `validateImportStrict`
+  synchronously; invalid docs fall back to the template and surface the
+  error via `NotificationBanner`.
+- **Save flow.** Ctrl+S invokes `buildUpdatePayload(doc)` and issues a
+  PATCH through the proxy. On success the editor dispatches `SAVED`
+  (clears `state.dirty`). On 404 the user is told to reload; on other
+  errors the message surfaces via the import-error banner. Autosave is
+  deferred to Stage 4 Task 2.
+- **Environment variables.** `NEXT_PUBLIC_API_URL` is the only
+  client-exposed var (browser uses the proxy at same-origin;
+  server-only helpers read it directly). `ADMIN_API_KEY` is
+  server-only — it is NEVER placed into `next.config.ts#env`, which
+  would bundle it to the browser. `REVALIDATION_SECRET` is unchanged
+  from Stage 3. See `frontend-public/.env.example`.
+- **Type contract.** `src/lib/types/publication.ts` hosts both
+  `PublicationResponse` (public gallery, narrow) and
+  `AdminPublicationResponse` (admin, full contract including
+  `visual_config` and `review`). Old `PublicationResponse` was kept
+  unchanged to minimise churn across existing gallery consumers; admin
+  surface uses the new type.
+
 ## Technology Summary
 
 | Component | Technology |

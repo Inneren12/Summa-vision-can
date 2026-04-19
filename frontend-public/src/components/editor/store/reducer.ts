@@ -573,9 +573,10 @@ function applyDuplicateAsDraft(state: EditorState, action: WorkflowAction): Edit
   };
 }
 
-export function initState(): EditorState {
+export function initState(initialDoc?: CanonicalDocument): EditorState {
+  const seededDoc = initialDoc ?? mkDoc("single_stat_hero", TPLS.single_stat_hero);
   return {
-    doc: mkDoc("single_stat_hero", TPLS.single_stat_hero),
+    doc: seededDoc,
     undoStack: [],
     redoStack: [],
     selectedBlockId: null,

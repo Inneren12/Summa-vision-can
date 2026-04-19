@@ -119,6 +119,9 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-3-3 | Stage 3 Review Panel UI | 🔄 | E-3-2b |
 | E-3-4 | Stage 3 Backend Persistence + Cleanup | 🔄 | E-3-3 |
 | E-3-5 | Stage 3 End-to-End Tests | ⬜ | E-3-4 |
+| E-4-0 | Stage 4 Task 0 — Editor Wire-Up (Next.js admin routes) | ✅ | E-3-4 |
+| E-4-1 | Stage 4 Task 1 — Click-to-select + UX polish | ⬜ | E-4-0 |
+| E-4-2 | Stage 4 Task 2 — Autosave + recovery | ⬜ | E-4-0 |
 
 **E-3-4 status (in flight):** Backend-only persistence PR. Adds a
 nullable `Publication.review` Text column (Alembic migration
@@ -167,6 +170,21 @@ and REOPEN are open to any commenter. `validateImportStrict` now
 deep-validates every `Comment` element and enforces referential integrity
 for `parentId`. Closes `DEBT-023`. UI surface (indicators, NoteModal,
 Review panel) deferred to E-3-3.
+
+**E-4-0 status:** Editor wire-up lands on branch
+`claude/wire-infographic-editor-9w3wr`. New routes `/admin` (publication
+list) and `/admin/editor/[id]` (editor page) under
+`frontend-public/src/app/admin/`. Browser code talks to the backend
+admin API via a same-origin Next.js proxy at
+`src/app/api/admin/publications/[...path]/route.ts`; the proxy injects
+`X-API-KEY` server-side from `ADMIN_API_KEY` (server-only env var,
+never bundled to client). `InfographicEditor` gains `initialDoc?` and
+`publicationId?` props; `initState` accepts an optional seed doc.
+Ctrl+S PATCHes through `updateAdminPublication`; the legacy local-JSON
+download on save is removed. Persistence seam
+(`src/components/editor/utils/persistence.ts`) provides
+`buildUpdatePayload` + `hydrateDoc` — lossy round-trip for block props
+tracked as DEBT-026. Entry point established for E-4-1 (click-to-select).
 
 **E-3-3 status (in flight):** Stage 3 UI integration. Six new editor
 components: `NoteModal` (the sole modal input surface; replaces any

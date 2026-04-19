@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'react';
-import type { EditorMode, QAMode, LeftTab, BlockRegistryEntry } from './types';
+import type { EditorMode, QAMode, LeftTab, BlockRegistryEntry, CanonicalDocument } from './types';
 import { TK } from './config/tokens';
 import { PALETTES } from './config/palettes';
 import { BGS } from './config/backgrounds';
@@ -13,7 +13,12 @@ import { PERMS, WORKFLOW_PERMISSIONS, canEditKeyInWorkflow } from './store/permi
 import { renderDoc } from './renderer/engine';
 import { validate } from './validation/validate';
 import { deferRevoke } from './utils/download';
+import { buildUpdatePayload } from './utils/persistence';
 import { shouldSkipGlobalShortcut } from './utils/shortcuts';
+import {
+  updateAdminPublication,
+  AdminPublicationNotFoundError,
+} from '@/lib/api/admin';
 import { TopBar } from './components/TopBar';
 import { LeftPanel } from './components/LeftPanel';
 import { Canvas } from './components/Canvas';
@@ -24,14 +29,65 @@ import { NotificationBanner } from './components/NotificationBanner';
 import { NoteModal } from './components/NoteModal';
 import type { NoteRequestConfig } from './components/noteRequest';
 
-export default function InfographicEditor() {
+export interface InfographicEditorProps {
+  /**
+   * Optional document to seed the editor with. If omitted or invalid,
+   * the editor falls back to the default `single_stat_hero` template.
+   *
+   * Validation runs through `validateImportStrict` — invalid docs are
+   * logged (dev only), surfaced in the NotificationBanner via import
+   * error state, and the fallback is used.
+   */
+  initialDoc?: CanonicalDocument;
+
+  /**
+   * Optional publication id. When present, Ctrl+S PATCHes the document
+   * to the backend via the admin proxy. When absent, Ctrl+S is a
+   * no-op (the legacy JSON download was removed in Stage 4 Task 0).
+   */
+  publicationId?: string;
+}
+
+export default function InfographicEditor({
+  initialDoc,
+  publicationId,
+}: InfographicEditorProps = {}) {
   const cvs = useRef<HTMLCanvasElement>(null);
-  const [state, dispatch] = useReducer(reducer, null, initState);
+
+  // Synchronously validate initialDoc at mount time so the reducer never
+  // sees an invalid doc. Validation failure falls back to the default
+  // template and surfaces the error through importError banner state.
+  const [initialValidatedDoc, initialValidationError] = useMemo(() => {
+    if (!initialDoc) return [undefined, null] as const;
+    try {
+      const validated = validateImportStrict(initialDoc);
+      return [validated, null] as const;
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[InfographicEditor] initialDoc validation failed:', err);
+      }
+      return [
+        undefined,
+        err instanceof Error ? err.message : String(err),
+      ] as const;
+    }
+  }, [initialDoc]);
+
+  const [state, dispatch] = useReducer(
+    reducer,
+    undefined,
+    () => initState(initialValidatedDoc),
+  );
+  const savingRef = useRef<boolean>(false);
   const [ltab, setLtab] = useState<LeftTab>("templates");
   const [qaOpen, setQaOpen] = useState(true);
   const [qaMode, setQaMode] = useState<QAMode>("publish");
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
-  const [importError, setImportError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(
+    initialValidationError
+      ? `Failed to load publication — using template defaults. ${initialValidationError}`
+      : null,
+  );
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Single NoteModal instance, owned here and shared by every surface that
@@ -113,21 +169,38 @@ export default function InfographicEditor() {
     deferRevoke(url);
   }, [doc]);
 
-  // TODO: Replace local JSON backup with POST /api/v1/admin/publications
-  // once backend endpoint exists. Current impl serves as temp persistence.
+  // Ctrl+S persistence. When `publicationId` is set, PATCH the document
+  // to the backend via the admin proxy. Without a publicationId the save
+  // command is a no-op — the legacy JSON download was removed in
+  // Stage 4 Task 0 (see docs/modules/editor.md).
   const markSavedAndBackup = useCallback(() => {
     if (!dirty) return;
-    // Save local backup as JSON
-    const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `summa-${doc.templateId}-draft-v${doc.meta.version}.json`;
-    a.click();
-    deferRevoke(url);
-    // Mark clean
-    dispatch({ type: "SAVED" });
-  }, [dirty, doc]);
+    if (!publicationId) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[InfographicEditor] Ctrl+S pressed but no publicationId — save skipped.');
+      }
+      return;
+    }
+    if (savingRef.current) return;
+    savingRef.current = true;
+
+    const payload = buildUpdatePayload(doc);
+    updateAdminPublication(publicationId, payload)
+      .then(() => {
+        dispatch({ type: "SAVED" });
+      })
+      .catch((err: unknown) => {
+        if (err instanceof AdminPublicationNotFoundError) {
+          setImportError('Publication not found — reload the page');
+        } else {
+          const msg = err instanceof Error ? err.message : String(err);
+          setImportError(`Save failed: ${msg}`);
+        }
+      })
+      .finally(() => {
+        savingRef.current = false;
+      });
+  }, [dirty, doc, publicationId]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
