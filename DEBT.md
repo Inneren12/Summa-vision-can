@@ -80,20 +80,16 @@ Rules:
 | DEBT-024 | Rename `validateDocumentShape` → `assertCanonicalDocumentV2Shape` | Stage 3 PR 4 (`claude/reconnaissance-persistence-cleanup-EJ4uX`) | 2026-04-19 |
 | DEBT-026 | Lossy round-trip between `CanonicalDocument` and `AdminPublicationResponse` | Stage 4 Task 0 full close (`claude/close-infographic-blockers-wkjVX`) | 2026-04-19 |
 
-### DEBT-026 resolution note
+### DEBT-026: Lossy round-trip between CanonicalDocument and AdminPublicationResponse
 
-Closed by adding an opaque `document_state` JSON column on
-`Publication`. The frontend sends the full `CanonicalDocument` as a
-JSON string via `buildUpdatePayload`; the backend stores it verbatim
-(no parsing, no shape validation — the frontend's
-`validateImportStrict` is the sole seam). Derived editorial columns
-(`headline`, `chart_type`, `eyebrow`, `description`, `source_text`,
-`footnote`, `visual_config`, `review`) are kept in sync on every
-PATCH for search indexing and public gallery preview.
-
-Legacy rows (`document_state IS NULL`) fall back to the original
-field-level hydrate path with a workflow fallback derived from
-`publication.status` — see `deriveWorkflowFromStatus` in
-`frontend-public/src/components/editor/utils/persistence.ts`. First
-PATCH after opening a legacy row writes `document_state`; from that
-point on the row is lossless.
+- **Source:** PR review of `claude/wire-infographic-editor-9w3wr` (Stage 4 Task 0 initial commit `550c336`)
+- **Added:** 2026-04-19
+- **Severity:** high
+- **Category:** architecture
+- **Status:** resolved
+- **Description:** `buildUpdatePayload` emitted only editorial / text / review fields; `hydrateDoc` reconstructed from a template and overlaid the narrow subset. Block-level props, chart data, and layout fields did not survive a save → reload cycle. Size mapping (`instagram_1080` / `instagram_port` → backend `instagram`) was additionally lossy on the inverse.
+- **Impact:** Opening an existing publication, pressing Ctrl+S, and reloading silently reset block props and chart data to template defaults. Effective data loss on every save of any doc whose state exceeded the mapped subset.
+- **Resolution:** Added opaque `document_state` JSON column on `Publication` (nullable, Alembic `a3e81c0f5d21`). Frontend sends the full canonical document as a JSON string in every PATCH; backend stores verbatim with no parsing or shape validation. Derived editorial columns (`headline`, `chart_type`, `visual_config`, `review`, `eyebrow`, `description`, `source_text`, `footnote`) are kept in sync for search indexing and the public gallery. `hydrateDoc` prefers `document_state` when present (parse + `validateImportStrict`); falls back to the legacy field-level hydrate with `deriveWorkflowFromStatus` for rows predating this column (those rows become lossless on first subsequent PATCH). `HydrationError` surfaces malformed `document_state` through `error.tsx`.
+- **Target:** Stage 4 Task 0 full close (`claude/close-infographic-blockers-wkjVX`)
+- **Resolved:** 2026-04-19
+- **Resolution PR:** `claude/close-infographic-blockers-wkjVX` (fix commit `d46edf6`)
