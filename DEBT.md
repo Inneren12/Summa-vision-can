@@ -51,31 +51,6 @@ Rules:
   `settings.temp_upload_ttl_hours` (default 24 h).
 - **Target:** Follow-up PR (not blocking for the upload feature).
 
-### DEBT-024: Rename `validateDocumentShape` → `assertCanonicalDocumentV2Shape`
-
-- **Source:** Stage 3 PR 2a (`claude/add-workflow-state-machine-mUM3P`)
-- **Added:** 2026-04-17
-- **Severity:** low
-- **Category:** code-quality
-- **Status:** accepted
-- **Description:** The single shape validator in
-  `frontend-public/src/components/editor/registry/guards.ts` is named
-  `validateDocumentShape` but only accepts v2-shaped documents (every
-  v2 invariant is asserted: `meta.workflow` forbidden, `review.workflow`
-  required, `review.history` element shape, etc.). PR 2a's prompt
-  referenced it as `assertCanonicalDocumentV2Shape`, which is the more
-  honest name. Kept as-is in PR 2a to avoid scope churn (rename would
-  touch every test that asserts on its message strings indirectly).
-- **Impact:** Cosmetic. Function works correctly; only the name is
-  imprecise.
-- **Resolution:** Rename function + every reference (no behavior change).
-- **Target:** Future cleanup PR.
-> Updated 2026-04-17 (PR 2a follow-up): `validateDocumentShape` is now
-> module-internal again (the temporary `export` was removed to preserve
-> the single-entry-point contract). Only `validateImportStrict` is
-> exposed. Remaining scope for DEBT-024 is the cosmetic rename.
-
-
 ---
 
 ## Resolved
@@ -102,3 +77,4 @@ Rules:
 | DEBT-020 | CMHC and Tasks routers still mounted for deferred features | Dead Code Cleanup | 2026-04-12 |
 | DEBT-022 | `validateImport` dual-signature (string + throwing) | Stage 3 PR 2a (`claude/add-workflow-state-machine-mUM3P`) | 2026-04-17 |
 | DEBT-023 | `validateImportStrict` does not deep-validate `Comment` entries | Stage 3 PR 2b (`claude/recon-comments-subsystem-HwvB1`) | 2026-04-17 |
+| DEBT-024 | Rename `validateDocumentShape` → `assertCanonicalDocumentV2Shape` | Stage 3 PR 4 (`claude/reconnaissance-persistence-cleanup-EJ4uX`) | 2026-04-19 |

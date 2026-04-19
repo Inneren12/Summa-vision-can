@@ -19,10 +19,19 @@ extension. They cover:
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
-from typing import Optional
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# Workflow states mirror the frontend ``WorkflowState`` union in
+# ``frontend-public/src/components/editor/types.ts``. Kept in-sync by
+# review; frontend owns shape validation of nested history/comment
+# entries via ``assertCanonicalDocumentV2Shape``.
+WorkflowState = Literal[
+    "draft", "in_review", "approved", "exported", "published"
+]
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +89,38 @@ class VisualConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Review subtree
+# ---------------------------------------------------------------------------
+
+
+class ReviewPayload(BaseModel):
+    """Mirror of the frontend ``CanonicalDocument.review`` subtree.
+
+    Stored verbatim as JSON in ``Publication.review``. The top-level
+    shape (``workflow``, ``history``, ``comments``) is validated here;
+    nested history and comment elements are accepted as raw dicts
+    because the frontend's ``assertCanonicalDocumentV2Shape`` owns the
+    deep-shape contract and evolves faster than the backend needs to.
+
+    Adding ``extra='forbid'`` mirrors :class:`PublicationUpdate` — an
+    unknown top-level key (e.g. ``"workflows"``) is a likely typo and
+    must fail loudly rather than silently be persisted and lost.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    workflow: WorkflowState
+    history: list[dict[str, Any]] = Field(default_factory=list)
+    comments: list[dict[str, Any]] = Field(default_factory=list)
+
+    @field_validator("history", "comments", mode="before")
+    @classmethod
+    def _coerce_none_to_list(cls, v: Any) -> Any:
+        """Treat ``None`` as an empty list for parity with the frontend."""
+        return v if v is not None else []
+
+
+# ---------------------------------------------------------------------------
 # Create / Update request bodies
 # ---------------------------------------------------------------------------
 
@@ -98,6 +139,7 @@ class PublicationCreate(BaseModel):
     source_text: Optional[str] = Field(None, max_length=500)
     footnote: Optional[str] = None
     visual_config: Optional[VisualConfig] = None
+    review: Optional[ReviewPayload] = None
     virality_score: Optional[float] = None
     source_product_id: Optional[str] = Field(None, max_length=100)
 
@@ -130,6 +172,7 @@ class PublicationUpdate(BaseModel):
     source_text: Optional[str] = Field(None, max_length=500)
     footnote: Optional[str] = None
     visual_config: Optional[VisualConfig] = None
+    review: Optional[ReviewPayload] = None
     virality_score: Optional[float] = None
 
 
@@ -154,6 +197,8 @@ class PublicationResponse(BaseModel):
         source_text: Optional source attribution.
         footnote: Optional methodology note.
         visual_config: Parsed editor layer configuration (admin-only).
+        review: Parsed review subtree (workflow / history / comments,
+            admin-only). ``None`` when the row has no review payload.
         virality_score: AI-estimated virality score (0.0 – 1.0).
         status: Lifecycle status (``"DRAFT"`` or ``"PUBLISHED"``).
         cdn_url: Public CDN URL populated by the gallery endpoint.
@@ -172,6 +217,7 @@ class PublicationResponse(BaseModel):
     source_text: Optional[str] = None
     footnote: Optional[str] = None
     visual_config: Optional[VisualConfig] = None
+    review: Optional[ReviewPayload] = None
     virality_score: Optional[float] = None
     status: str
     cdn_url: Optional[str] = None
@@ -179,7 +225,27 @@ class PublicationResponse(BaseModel):
     updated_at: Optional[datetime] = None
     published_at: Optional[datetime] = None
 
+    @field_validator("review", mode="before")
+    @classmethod
+    def _parse_review_json(cls, v: Any) -> Any:
+        """Parse the stored JSON string into a dict before validation.
 
+        ``Publication.review`` is a Text column holding a JSON string;
+        Pydantic would otherwise reject it as "not a dict". Parse early
+        so :class:`ReviewPayload` validation runs on the structured form.
+        ``None`` and dicts are passed through unchanged.
+        """
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
+
+
+# ``review`` is deliberately absent from :class:`PublicationPublicResponse`
+# below. Workflow state, audit history and review comments are
+# admin-only editorial data and MUST NOT leak through the public
+# gallery endpoint. Adding a field here also requires extending the
+# public schema — do NOT do that for review; add a new admin-only
+# response shape instead.
 class PublicationPublicResponse(BaseModel):
     """Public gallery response — same shape as :class:`PublicationResponse`
     but with ``visual_config`` deliberately omitted.

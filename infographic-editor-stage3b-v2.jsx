@@ -983,29 +983,6 @@ function TopBar({ doc, workflow, mode, perms, totalUnresolved, onSetWorkflow, on
 
       <div style={{ flex: 1 }} />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 10.5, color: TK.textDim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          Demo
-        </span>
-        <select
-          value={workflow}
-          onChange={(e) => onSetWorkflow(e.target.value)}
-          className="mono"
-          style={{
-            padding: "5px 8px",
-            background: TK.surface,
-            border: `1px solid ${TK.border}`,
-            borderRadius: 5,
-            color: TK.text,
-            fontSize: 11,
-          }}
-        >
-          {Object.values(WF).map((w) => (
-            <option key={w} value={w}>{WF_META[w].label}</option>
-          ))}
-        </select>
-      </div>
-
       <div style={{ width: 1, height: 26, background: TK.border }} />
 
       <SegmentedControl

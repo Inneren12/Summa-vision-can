@@ -2,6 +2,46 @@
 
 > Infographic authoring tree under `frontend-public/src/components/editor/`.
 
+## Persistence (backend side)
+
+Stage 3 PR 4 wires the review subtree into the backend:
+
+- **`Publication.review`** — a nullable `Text` column on the `publications`
+  table (`backend/src/models/publication.py`). Stores the frontend
+  `CanonicalDocument.review` subtree verbatim as a JSON string
+  (SQLite-compat pattern, matches `visual_config`). The backend does
+  **not** deep-validate nested `history` / `comments` entries; the
+  frontend's `assertCanonicalDocumentV2Shape` owns shape validation.
+- **`PATCH /api/v1/admin/publications/{id}`** accepts a top-level
+  `review` field of type `ReviewPayload` (`backend/src/schemas/publication.py`).
+  Round-trip preserves the frontend structure — the backend does not
+  re-shape or migrate; an unknown top-level key causes `422`.
+- **Workflow → status sync rule.** `review.workflow` is the single
+  source of truth for editorial state; `Publication.status` remains
+  as a coarse gallery-visibility flag derived from it:
+  - `review.workflow == "published"` → `Publication.status = PUBLISHED`
+    (and `published_at` stamped if not already set).
+  - A transition out of `"published"` demotes `status` to `DRAFT`;
+    `published_at` is deliberately preserved for historical audit.
+- **`POST /publish`** and **`POST /unpublish`** still flip `status` but
+  now also mirror the change into `review.workflow` and append a
+  `"system"`-authored entry to `review.history` so the editor timeline
+  reflects admin-driven transitions. Rows without a `review` payload
+  are published by status alone (no synthesis by the backend).
+- **Audit events.** Workflow transitions emit
+  `PUBLICATION_WORKFLOW_{SUBMITTED, APPROVED, CHANGES_REQUESTED,
+  RETURNED_TO_DRAFT, EXPORTED}` (see `backend/src/schemas/events.py`).
+  A transition into `"published"` additionally emits
+  `PUBLICATION_PUBLISHED`; the two event types carry distinct
+  meaning — content-workflow vs. admin-visibility.
+- **Public leak prevention.** `PublicationPublicResponse` does **not**
+  expose `review`. Workflow state, history and comments are admin-only
+  editorial data and must never leave the admin namespace.
+- **Consumer status.** PR 4 establishes the persistence contract only.
+  The React `InfographicEditor` is not yet mounted by a Next.js route;
+  Flutter has its own narrow brief-edit widget. A follow-up PR wires a
+  consumer (admin route, WebView embed, or other).
+
 ## Document schema v2
 
 `CanonicalDocument` is the authoritative document shape for the infographic

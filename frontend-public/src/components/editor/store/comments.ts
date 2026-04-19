@@ -65,7 +65,7 @@ export function buildThreads(comments: readonly Comment[]): CommentThreadNode[] 
  * deep (root + replies). This matches the current data model, which is
  * enforced by:
  *   - `applyReplyToComment` (rejects reply-to-reply in the reducer)
- *   - `validateDocumentShape` (rejects reply-to-reply in imported docs)
+ *   - `assertCanonicalDocumentV2Shape` (rejects reply-to-reply in imported docs)
  *
  * If multi-level threading is ever permitted, this function must be made
  * recursive. Do not change it in isolation — the enforcement in the reducer
