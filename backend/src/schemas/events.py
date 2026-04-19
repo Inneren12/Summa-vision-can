@@ -40,6 +40,17 @@ class EventType(str, enum.Enum):
     PUBLICATION_GENERATED = "publication.generated"
     PUBLICATION_PUBLISHED = "publication.published"
 
+    # --- Publication workflow transitions (Stage 3 PR 4) ---
+    # Content-workflow events. Distinct from PUBLICATION_PUBLISHED,
+    # which tracks admin-visibility (gallery flag). See
+    # ``docs/modules/editor.md`` for the sync rule between
+    # ``review.workflow`` and ``Publication.status``.
+    PUBLICATION_WORKFLOW_SUBMITTED = "publication.workflow.submitted"
+    PUBLICATION_WORKFLOW_APPROVED = "publication.workflow.approved"
+    PUBLICATION_WORKFLOW_CHANGES_REQUESTED = "publication.workflow.changes_requested"
+    PUBLICATION_WORKFLOW_RETURNED_TO_DRAFT = "publication.workflow.returned_to_draft"
+    PUBLICATION_WORKFLOW_EXPORTED = "publication.workflow.exported"
+
     # --- ESP Sync (added in D-3) ---
     LEAD_ESP_SYNCED = "lead.esp_synced"
     LEAD_ESP_FAILED = "lead.esp_failed"

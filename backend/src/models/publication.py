@@ -54,6 +54,11 @@ class Publication(Base):
             (palette, background, layout, branding, custom primary
             colour). Stored as Text to keep SQLite compatibility for
             unit tests; the application layer parses/dumps the JSON.
+        review: JSON-serialised review subtree mirroring the frontend
+            ``CanonicalDocument.review`` ( ``workflow``, ``history``,
+            ``comments``). Stored as Text for SQLite compatibility.
+            The backend stores the payload verbatim — deep validation
+            (e.g. comment parent-id integrity) lives on the frontend.
         updated_at: UTC timestamp of the most recent change. Set
             automatically by SQLAlchemy on update.
         published_at: UTC timestamp recorded when the publication
@@ -108,6 +113,16 @@ class Publication(Base):
     # Stored as Text for SQLite compatibility.
     # ------------------------------------------------------------------
     visual_config: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # ------------------------------------------------------------------
+    # Review subtree — JSON-serialised editor workflow, history and
+    # comments (mirrors the frontend CanonicalDocument.review subtree).
+    # Stored as Text (not JSONB) for SQLite compatibility, matching the
+    # ``visual_config`` pattern. The backend stores the payload verbatim
+    # and does not deep-validate nested entries; the frontend's
+    # ``assertCanonicalDocumentV2Shape`` owns shape validation.
+    # ------------------------------------------------------------------
+    review: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ------------------------------------------------------------------
     # Lifecycle metadata

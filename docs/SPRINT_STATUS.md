@@ -117,7 +117,20 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-3-2a | Stage 3 Reducer Actions — Workflow State Machine | 🔄 | E-3-1 |
 | E-3-2b | Stage 3 Reducer Actions — Comments Subsystem | 🔄 | E-3-2a |
 | E-3-3 | Stage 3 Review Panel UI | 🔄 | E-3-2b |
-| E-3-4 | Stage 3 End-to-End Tests | ⬜ | E-3-3 |
+| E-3-4 | Stage 3 Backend Persistence + Cleanup | 🔄 | E-3-3 |
+| E-3-5 | Stage 3 End-to-End Tests | ⬜ | E-3-4 |
+
+**E-3-4 status (in flight):** Backend-only persistence PR. Adds a
+nullable `Publication.review` Text column (Alembic migration
+`f2a7d9c3b481`), a `ReviewPayload` schema, a workflow → status sync
+rule in the PATCH router, five new `PUBLICATION_WORKFLOW_*` audit
+event types, and augments `publish` / `unpublish` to mirror transitions
+into `review.workflow`. Closes DEBT-024 (cosmetic rename
+`validateDocumentShape` → `assertCanonicalDocumentV2Shape`) and removes
+the demo workflow switcher from `infographic-editor-stage3b-v2.jsx`.
+Stage 3 is functionally closed pending a consumer wire-up — no Next.js
+admin route or Flutter integration is in scope; PR 4 establishes the
+contract, a follow-up wires a consumer.
 
 **E-3-1 status:** Data-layer only. `CanonicalDocument` now carries a `review`
 section (workflow + workflow history + comments); root-level `workflow` is

@@ -100,6 +100,15 @@ as `DEBT-021` (24 h TTL via ``temp_upload_ttl_hours``).
   `frontend-public/src/components/editor/types.ts`. Schema version is tracked
   exclusively on `doc.schemaVersion` at the root; `meta.schemaVersion` is
   forbidden.
+- `Publication.review` (Stage 3 PR 4) stores the frontend review subtree
+  verbatim as a JSON string (Text column, SQLite-compat). Backend does
+  not deep-validate nested `history` / `comments` elements; frontend's
+  `assertCanonicalDocumentV2Shape` owns that. Workflow state is written
+  through both `review.workflow` and `Publication.status` — the latter
+  is a derived gallery-visibility flag synced from the former in the
+  PATCH / publish / unpublish handlers. `PublicationPublicResponse`
+  deliberately omits `review`: workflow, history and comments are
+  admin-only.
 - Review-related state (workflow, workflow history, comments) lives in
   `doc.review`. Edit history remains in `doc.meta.history` with its own
   `EditHistoryEntry` type — two histories, two purposes, never merged.

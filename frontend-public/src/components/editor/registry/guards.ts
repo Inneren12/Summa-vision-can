@@ -127,10 +127,11 @@ function normalizeWorkflow(raw: unknown): WorkflowState {
  * entry point for import validation. De-exported in the PR 2a follow-up
  * to prevent call sites from reaching around the migration step.
  *
- * Naming: a future cosmetic rename to `assertCanonicalDocumentV2Shape`
- * is tracked as DEBT-024.
+ * Accepts only v2-shaped documents (every v2 invariant is asserted:
+ * `meta.workflow` forbidden, `review.workflow` required, `review.history`
+ * element shape, etc.) — hence the assertive name.
  */
-function validateDocumentShape(doc: any): string | null {
+function assertCanonicalDocumentV2Shape(doc: any): string | null {
   if (!doc || typeof doc !== "object") return "Not an object";
   if (typeof doc.schemaVersion !== "number") return "Missing schemaVersion";
   if (!SUPPORTED_SCHEMA_VERSIONS.includes(doc.schemaVersion)) {
@@ -651,14 +652,14 @@ export function migrateDoc(raw: unknown): MigrationResult {
  *
  * Pipeline:
  *   1. `migrateDoc` — bumps to current schema (idempotent on v2 input)
- *   2. `validateDocumentShape` — top-level shape + `review.history` element shape
+ *   2. `assertCanonicalDocumentV2Shape` — top-level shape + `review.history` element shape
  *   3. `validateSectionReferences` — block id integrity, no orphans
  *   4. `validateRegistryConstraints` — types, slot rules, required blocks
  */
 export function validateImportStrict(raw: unknown): CanonicalDocument {
   const { doc } = migrateDoc(raw);
 
-  const shapeErr = validateDocumentShape(doc);
+  const shapeErr = assertCanonicalDocumentV2Shape(doc);
   if (shapeErr) throw new Error(shapeErr);
   const refErr = validateSectionReferences(doc);
   if (refErr) throw new Error(refErr);

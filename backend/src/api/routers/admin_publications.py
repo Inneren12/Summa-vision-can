@@ -19,6 +19,7 @@ Architecture:
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Literal
 
 import structlog
@@ -34,9 +35,46 @@ from src.schemas.publication import (
     PublicationCreate,
     PublicationResponse,
     PublicationUpdate,
+    ReviewPayload,
     VisualConfig,
 )
 from src.services.audit import AuditWriter
+
+
+def _classify_workflow_event(
+    previous: str | None, target: str
+) -> EventType | None:
+    """Return the audit event type for a workflow transition.
+
+    Returns ``None`` if the transition is not one we audit at the backend
+    level (``published`` is handled separately via
+    :attr:`EventType.PUBLICATION_PUBLISHED`).
+
+    Emitted event reflects business semantics, not just the target state:
+
+    * ``in_review → draft``        = ``CHANGES_REQUESTED``
+    * anything else → ``draft``    = ``RETURNED_TO_DRAFT``
+    * ``draft → in_review``        = ``SUBMITTED``
+    * ``in_review → approved``     = ``APPROVED``
+    * ``approved → exported``      = ``EXPORTED``
+
+    The ``draft → CHANGES_REQUESTED`` vs ``draft → RETURNED_TO_DRAFT``
+    distinction is the reason this is a function rather than a flat map:
+    two semantically different business events share the same target
+    state (``draft``) and must be disambiguated via ``previous``.
+    """
+    if target == "draft":
+        if previous == "in_review":
+            return EventType.PUBLICATION_WORKFLOW_CHANGES_REQUESTED
+        return EventType.PUBLICATION_WORKFLOW_RETURNED_TO_DRAFT
+    if target == "in_review":
+        return EventType.PUBLICATION_WORKFLOW_SUBMITTED
+    if target == "approved":
+        return EventType.PUBLICATION_WORKFLOW_APPROVED
+    if target == "exported":
+        return EventType.PUBLICATION_WORKFLOW_EXPORTED
+    # target == "published" → handled via PUBLICATION_PUBLISHED (existing)
+    return None
 
 logger: structlog.stdlib.BoundLogger = get_logger(module="admin_publications")
 
@@ -59,6 +97,71 @@ def _get_repo(session: AsyncSession = Depends(get_db)) -> PublicationRepository:
 def _get_audit(session: AsyncSession = Depends(get_db)) -> AuditWriter:
     """Provide an :class:`AuditWriter` via DI."""
     return AuditWriter(session)
+
+
+# ---------------------------------------------------------------------------
+# Review / workflow sync helper
+# ---------------------------------------------------------------------------
+
+
+_WORKFLOW_HISTORY_ACTIONS: dict[str, str] = {
+    "published": "published",
+    "draft": "returned_to_draft",
+}
+
+
+async def _sync_workflow_from_status(
+    repo: PublicationRepository,
+    publication: Publication,
+    *,
+    target_workflow: str,
+    summary: str,
+) -> Publication:
+    """Mirror ``Publication.status`` changes into ``review.workflow``.
+
+    Called by :func:`publish_publication` and :func:`unpublish_publication`
+    so the status-driven admin endpoints keep the ``review`` subtree in
+    sync with the gallery flag. Rows without an existing ``review``
+    payload are left untouched — a publication that never had a
+    frontend-authored review is published by status alone.
+
+    The appended history entry uses ``author = "system"``. ``fromWorkflow``
+    is read from the stored ``review.workflow`` before it is overwritten
+    so the audit trail preserves the actual prior state; the frontend
+    shape allows ``null`` for the edge case where the stored review has
+    no ``workflow`` key at all.
+    """
+    if publication.review is None:
+        return publication
+
+    try:
+        review = json.loads(publication.review)
+    except (json.JSONDecodeError, TypeError):
+        logger.warning(
+            "publication_review_parse_failed",
+            publication_id=publication.id,
+        )
+        return publication
+
+    # Capture the prior workflow BEFORE overwriting — history entry is
+    # only honest if it reports the actual transition. Missing key →
+    # ``None`` (shape-valid edge case, not silently fabricated).
+    previous_workflow = review.get("workflow")
+
+    review["workflow"] = target_workflow
+    history = review.setdefault("history", [])
+    history.append(
+        {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "action": _WORKFLOW_HISTORY_ACTIONS.get(target_workflow, target_workflow),
+            "summary": summary,
+            "author": "system",
+            "fromWorkflow": previous_workflow,
+            "toWorkflow": target_workflow,
+        }
+    )
+    updated = await repo.update_fields(publication.id, {"review": review})
+    return updated or publication
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +190,22 @@ def _serialize(publication: Publication) -> PublicationResponse:
             )
             visual_config = None
 
+    # ``review`` is stored as a JSON string and must be parsed back
+    # before :class:`PublicationResponse` accepts it. Parse failures
+    # surface as warnings (rather than 500s) to match the
+    # ``visual_config`` fallback behavior — the editor can always fetch
+    # a fresh copy and re-save.
+    review: ReviewPayload | None = None
+    if publication.review:
+        try:
+            review = ReviewPayload.model_validate_json(publication.review)
+        except Exception:
+            logger.warning(
+                "publication_review_parse_failed",
+                publication_id=publication.id,
+            )
+            review = None
+
     status_value = (
         publication.status.value
         if hasattr(publication.status, "value")
@@ -102,6 +221,7 @@ def _serialize(publication: Publication) -> PublicationResponse:
         source_text=publication.source_text,
         footnote=publication.footnote,
         visual_config=visual_config,
+        review=review,
         virality_score=publication.virality_score,
         status=status_value,
         cdn_url=None,
@@ -226,8 +346,45 @@ async def update_publication(
     publication_id: int,
     body: PublicationUpdate,
     repo: PublicationRepository = Depends(_get_repo),
+    audit: AuditWriter = Depends(_get_audit),
 ) -> PublicationResponse:
-    """Apply a partial update; ``None`` fields are ignored."""
+    """Apply a partial update; ``None`` fields are ignored.
+
+    Workflow sync (Stage 3 PR 4):
+        When the payload carries a ``review.workflow``, the backend
+        mirrors that value into ``Publication.status`` so the public
+        gallery can continue to filter on ``status``:
+
+        * ``review.workflow == "published"`` → ``status = PUBLISHED``
+          (and ``published_at`` stamped if not already set).
+        * any other workflow on a previously-PUBLISHED row → ``status = DRAFT``
+          (``published_at`` is deliberately preserved for historical audit).
+
+        The workflow transition also emits an audit event resolved by
+        :func:`_classify_workflow_event`, which distinguishes
+        ``in_review → draft`` (``CHANGES_REQUESTED``) from other
+        ``* → draft`` transitions (``RETURNED_TO_DRAFT``).
+        ``PUBLICATION_PUBLISHED`` is emitted *in addition* when the
+        target is ``"published"``.
+    """
+    # Snapshot the previous workflow state so we can detect transitions
+    # after ``update_fields`` mutates the row.
+    previous = await repo.get_by_id(publication_id)
+    if previous is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Publication not found",
+        )
+    previous_workflow: str | None = None
+    if previous.review:
+        try:
+            previous_workflow = json.loads(previous.review).get("workflow")
+        except json.JSONDecodeError:
+            logger.warning(
+                "publication_review_parse_failed",
+                publication_id=publication_id,
+            )
+
     payload = body.model_dump(exclude_unset=True)
     publication = await repo.update_fields(publication_id, payload)
     if publication is None:
@@ -235,10 +392,70 @@ async def update_publication(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Publication not found",
         )
+
+    new_workflow: str | None = None
+    if body.review is not None:
+        new_workflow = body.review.workflow
+
+        # Keep ``Publication.status`` in sync with ``review.workflow``.
+        if new_workflow == "published" and publication.status != PublicationStatus.PUBLISHED:
+            publication = await repo.publish(publication_id) or publication
+        elif new_workflow != "published" and publication.status == PublicationStatus.PUBLISHED:
+            await repo.update_status(publication_id, PublicationStatus.DRAFT)
+            publication = await repo.get_by_id(publication_id) or publication
+
+    # Emit workflow-transition audit events ONLY on a genuine transition
+    # between two known states. ``previous_workflow is None`` is the
+    # first-write case (row had no ``review`` yet): initial state
+    # assignment is not a transition and must not pollute transition
+    # metrics with a phantom ``RETURNED_TO_DRAFT`` (or any other) event.
+    # The creation signal is already captured by
+    # :attr:`EventType.PUBLICATION_GENERATED` at create time.
+    if (
+        previous_workflow is not None
+        and new_workflow is not None
+        and new_workflow != previous_workflow
+    ):
+        event_type = _classify_workflow_event(
+            previous=previous_workflow, target=new_workflow
+        )
+        if event_type is not None:
+            await audit.log_event(
+                event_type=event_type,
+                entity_type="publication",
+                entity_id=str(publication.id),
+                metadata={
+                    "from": previous_workflow,
+                    "to": new_workflow,
+                },
+                actor="admin_api",
+            )
+
+    # Admin-visibility audit channel. Distinct from the workflow-
+    # transition channel above: PUBLICATION_PUBLISHED tracks "row is
+    # publicly visible", which is meaningful even on a first-write
+    # PATCH that bypasses a prior draft state. Guarded only on the
+    # value-change predicate so a PATCH that keeps ``workflow="published"``
+    # does not re-emit.
+    if new_workflow == "published" and new_workflow != previous_workflow:
+        await audit.log_event(
+            event_type=EventType.PUBLICATION_PUBLISHED,
+            entity_type="publication",
+            entity_id=str(publication.id),
+            metadata={
+                "from": previous_workflow,
+                "to": new_workflow,
+                "source": "patch_review",
+            },
+            actor="admin_api",
+        )
+
     logger.info(
         "publication_updated",
         publication_id=publication.id,
         fields=list(payload.keys()),
+        previous_workflow=previous_workflow,
+        new_workflow=new_workflow,
     )
     return _serialize(publication)
 
@@ -262,13 +479,29 @@ async def publish_publication(
     repo: PublicationRepository = Depends(_get_repo),
     audit: AuditWriter = Depends(_get_audit),
 ) -> PublicationResponse:
-    """Set status to PUBLISHED, stamp ``published_at``, and audit."""
+    """Set status to PUBLISHED, stamp ``published_at``, and audit.
+
+    If the row already carries a ``review`` payload the endpoint also
+    mirrors ``review.workflow = "published"`` and appends a history
+    entry authored as ``"system"`` so the frontend can render the
+    transition in its timeline. Rows without a ``review`` payload are
+    published by status alone (no review sync is attempted).
+    """
     publication = await repo.publish(publication_id)
     if publication is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Publication not found",
         )
+
+    # Mirror into review.workflow when a review payload exists. We
+    # cannot know the ``fromWorkflow`` safely from the backend (no
+    # atomic snapshot), so leave it ``None`` — the frontend shape
+    # allows a null ``fromWorkflow`` for system-emitted entries.
+    publication = await _sync_workflow_from_status(
+        repo, publication, target_workflow="published",
+        summary="Published via admin endpoint",
+    )
 
     await audit.log_event(
         event_type=EventType.PUBLICATION_PUBLISHED,
@@ -314,6 +547,11 @@ async def unpublish_publication(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Publication not found",
         )
+
+    publication = await _sync_workflow_from_status(
+        repo, publication, target_workflow="draft",
+        summary="Unpublished via admin endpoint; returned to draft",
+    )
 
     await audit.log_event(
         event_type=EventType.PUBLICATION_PUBLISHED,

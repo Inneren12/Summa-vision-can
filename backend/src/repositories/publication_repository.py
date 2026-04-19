@@ -342,6 +342,48 @@ class PublicationRepository:
             f"Unsupported visual_config type: {type(value).__name__}"
         )
 
+    @staticmethod
+    def _serialize_review(value: Any) -> str | None:
+        """Coerce a review value to a JSON string for storage.
+
+        Mirrors :meth:`_serialize_visual_config`. Accepts ``None``, an
+        existing JSON string, a ``dict``, or a Pydantic model exposing
+        ``model_dump`` (e.g. :class:`ReviewPayload`). Returns the
+        JSON-serialised form, or ``None`` when the input is ``None``
+        (explicitly clears the column).
+        """
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict):
+            return json.dumps(value)
+        if hasattr(value, "model_dump"):
+            return json.dumps(value.model_dump())
+        raise TypeError(
+            f"Unsupported review type: {type(value).__name__}"
+        )
+
+    @staticmethod
+    def _deserialize_review(value: str | None) -> dict | None:
+        """Parse a stored review JSON string back into a ``dict``.
+
+        **Strict** internal helper: raises :class:`json.JSONDecodeError`
+        on malformed input. The API read path
+        (``PublicationResponse.review`` validator and
+        ``admin_publications._serialize``) is separately **tolerant** —
+        it returns ``None`` for malformed JSON so responses don't break
+        for one corrupt row. The two layers intentionally have
+        different contracts: repository = internal invariant, API =
+        user-facing tolerant. Callers that need tolerance should catch
+        ``json.JSONDecodeError`` at their own boundary.
+
+        Returns ``None`` when the column is ``NULL``.
+        """
+        if value is None:
+            return None
+        return json.loads(value)
+
     async def create_full(self, data: dict[str, Any]) -> Publication:
         """Create a publication with all editorial + visual fields.
 
@@ -359,6 +401,8 @@ class PublicationRepository:
             payload["visual_config"] = self._serialize_visual_config(
                 payload["visual_config"]
             )
+        if "review" in payload:
+            payload["review"] = self._serialize_review(payload["review"])
 
         payload.setdefault("status", PublicationStatus.DRAFT)
 
@@ -405,6 +449,8 @@ class PublicationRepository:
         for key, value in data.items():
             if key == "visual_config":
                 value = self._serialize_visual_config(value)
+            elif key == "review":
+                value = self._serialize_review(value)
             setattr(publication, key, value)
 
         await self._session.flush()
