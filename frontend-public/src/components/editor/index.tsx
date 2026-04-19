@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { EditorMode, QAMode, LeftTab, BlockRegistryEntry, CanonicalDocument } from './types';
 import { TK } from './config/tokens';
 import { PALETTES } from './config/palettes';
@@ -11,10 +12,12 @@ import { validateImportStrict, hydrateImportedDoc } from './registry/guards';
 import { reducer, initState } from './store/reducer';
 import { PERMS, WORKFLOW_PERMISSIONS, canEditKeyInWorkflow } from './store/permissions';
 import { renderDoc } from './renderer/engine';
+import { renderOverlay } from './renderer/overlay';
 import { validate } from './validation/validate';
 import { deferRevoke } from './utils/download';
 import { buildUpdatePayload } from './utils/persistence';
 import { shouldSkipGlobalShortcut } from './utils/shortcuts';
+import { clientToLogical, hitTest, type HitAreaEntry } from './utils/hit-test';
 import {
   updateAdminPublication,
   AdminPublicationNotFoundError,
@@ -53,6 +56,13 @@ export default function InfographicEditor({
   publicationId,
 }: InfographicEditorProps = {}) {
   const cvs = useRef<HTMLCanvasElement>(null);
+  const overlay = useRef<HTMLCanvasElement>(null);
+  // Per-frame derived data from the content render. Populated synchronously
+  // by the render effect below; read by the canvas click/hover handlers and
+  // by the overlay render effect. A ref (not state) because it is purely
+  // derived from `doc/sz/pal` — storing it in state would double-render.
+  const hitAreasRef = useRef<HitAreaEntry[]>([]);
+  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
 
   // Synchronously validate initialDoc at mount time so the reducer never
   // sees an invalid doc. Validation failure falls back to the default
@@ -152,12 +162,66 @@ export default function InfographicEditor({
     c.width = sz.w * dpr;
     c.height = sz.h * dpr;
     const ctx = c.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) {
+      // jsdom / headless: render can't run but the hit-area ref must still
+      // be consistent with the doc state the handlers will see.
+      hitAreasRef.current = [];
+      return;
+    }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     (BGS[doc.page.background] || BGS.solid_dark).r(ctx, sz.w, sz.h, pal);
-    renderDoc(ctx, doc, sz.w, sz.h, pal);
+    const results = renderDoc(ctx, doc, sz.w, sz.h, pal);
+    hitAreasRef.current = results.map(r => ({ blockId: r.blockId, hitArea: r.result.hitArea }));
   }, [doc, pal, sz]);
   useEffect(() => { render(); }, [render]);
+
+  // Overlay render — hover + selection outlines on a separate canvas.
+  // Ordered AFTER the content-render effect so `hitAreasRef.current` is
+  // up to date when this runs in the same commit cycle.
+  useEffect(() => {
+    const c = overlay.current;
+    if (!c) return;
+    const dpr = window.devicePixelRatio || 2;
+    const wantW = sz.w * dpr;
+    const wantH = sz.h * dpr;
+    // Skip the implicit clear that width/height assignment triggers when
+    // the backing store is already the right size.
+    if (c.width !== wantW) c.width = wantW;
+    if (c.height !== wantH) c.height = wantH;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    renderOverlay({
+      ctx,
+      logicalW: sz.w,
+      logicalH: sz.h,
+      hitAreas: hitAreasRef.current,
+      selectedBlockId: selId,
+      hoveredBlockId,
+      dpr,
+    });
+  }, [selId, hoveredBlockId, sz, doc, pal]);
+
+  const handleCanvasMouseDown = useCallback((e: ReactMouseEvent<HTMLCanvasElement>) => {
+    const canvas = cvs.current;
+    if (!canvas) return;
+    const { x, y } = clientToLogical(canvas, e.clientX, e.clientY, sz.w, sz.h);
+    const hit = hitTest(hitAreasRef.current, x, y);
+    // `null` hit ⇒ empty-space click deselects. Mirrors the implicit
+    // deselect that SWITCH_TPL / IMPORT already do in the reducer.
+    dispatch({ type: "SELECT", blockId: hit });
+  }, [sz.w, sz.h]);
+
+  const handleCanvasMouseMove = useCallback((e: ReactMouseEvent<HTMLCanvasElement>) => {
+    const canvas = cvs.current;
+    if (!canvas) return;
+    const { x, y } = clientToLogical(canvas, e.clientX, e.clientY, sz.w, sz.h);
+    const hit = hitTest(hitAreasRef.current, x, y);
+    setHoveredBlockId(prev => (prev === hit ? prev : hit));
+  }, [sz.w, sz.h]);
+
+  const handleCanvasMouseLeave = useCallback(() => {
+    setHoveredBlockId(null);
+  }, []);
 
   const exportJSON = useCallback(() => {
     const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
@@ -371,7 +435,13 @@ export default function InfographicEditor({
             dispatch={dispatch}
             onRequestNote={requestNote}
           />
-          <Canvas canvasRef={cvs} />
+          <Canvas
+            canvasRef={cvs}
+            overlayRef={overlay}
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseLeave={handleCanvasMouseLeave}
+          />
           <QAPanel
             qaOpen={qaOpen}
             setQaOpen={setQaOpen}
