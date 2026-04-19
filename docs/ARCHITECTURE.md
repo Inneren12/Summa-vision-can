@@ -204,6 +204,30 @@ as `DEBT-021` (24 h TTL via ``temp_upload_ttl_hours``).
   unchanged to minimise churn across existing gallery consumers; admin
   surface uses the new type.
 
+### Document persistence model (DEBT-026 closure)
+
+- **`document_state` is the source of truth.** Nullable `Text` column
+  on `Publication`. When present, it stores the full
+  `CanonicalDocument` as a JSON string — opaque to the backend (never
+  parsed, never shape-validated). The frontend rehydrates via
+  `JSON.parse` + `validateImportStrict`.
+- **Derived columns are denormalised.** `headline`, `chart_type`,
+  `eyebrow`, `description`, `source_text`, `footnote`, `visual_config`
+  and `review` are written alongside `document_state` on every PATCH
+  so search indexing, gallery preview, and the public (non-admin)
+  gallery endpoint keep working.
+- **Legacy rows (`document_state IS NULL`).** Expected for rows that
+  predate this column. The frontend falls back to the original
+  field-level hydrate path; its missing-review workflow fallback
+  (`deriveWorkflowFromStatus`) protects PUBLISHED legacy rows from
+  being silently demoted on first save. First PATCH after opening
+  a legacy row writes `document_state` — from that point on the row
+  is lossless.
+- **Shape validation ownership.** Lives entirely on the frontend
+  (`validateImportStrict` in `components/editor/registry/guards.ts`).
+  The backend does not couple to the editor schema — it can evolve
+  without backend migrations.
+
 ## Technology Summary
 
 | Component | Technology |

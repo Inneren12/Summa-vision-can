@@ -222,6 +222,8 @@ def _serialize(publication: Publication) -> PublicationResponse:
         footnote=publication.footnote,
         visual_config=visual_config,
         review=review,
+        # Opaque JSON string — never parsed here. Frontend owns rehydrate.
+        document_state=publication.document_state,
         virality_score=publication.virality_score,
         status=status_value,
         cdn_url=None,

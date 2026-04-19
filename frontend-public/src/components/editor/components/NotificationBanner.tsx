@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import type { EditorState } from '../types';
+import type { EditorState, EditorAction } from '../types';
 import { TK } from '../config/tokens';
 
 export interface NotificationBannerProps {
@@ -10,7 +10,13 @@ export interface NotificationBannerProps {
   importWarnings: string[];
   onClearImportError: () => void;
   onClearImportWarnings: () => void;
+  // Dispatch wired through so the save-error Dismiss button can clear
+  // `state.saveError` without a second piece of lifted state. Optional
+  // for legacy call sites that never surface save errors.
+  dispatch?: (action: EditorAction) => void;
 }
+
+const NOOP_DISPATCH: (action: EditorAction) => void = () => {};
 
 const ACTION_LABELS: Record<string, string> = {
   UPDATE_PROP: 'Edit',
@@ -46,6 +52,7 @@ export function NotificationBanner({
   importWarnings,
   onClearImportError,
   onClearImportWarnings,
+  dispatch = NOOP_DISPATCH,
 }: NotificationBannerProps) {
   const rejection = state._lastRejection;
   const [rejectionDismissed, setRejectionDismissed] = useState<boolean>(false);
@@ -55,7 +62,37 @@ export function NotificationBanner({
     setRejectionDismissed(false);
   }, [rejection?.at]);
 
-  // Resolution priority: importError > _lastRejection > importWarnings.
+  // Resolution priority (B4):
+  //   saveError > importError > _lastRejection > importWarnings.
+  // saveError wins because an unsuccessful persistence is the most
+  // actionable state — the user needs to see it before any secondary
+  // import/validation noise.
+  if (state.saveError) {
+    return (
+      <div
+        role="alert"
+        aria-live="polite"
+        data-testid="notification-banner"
+        data-kind="save-error"
+        style={bannerStyle({ background: `${TK.c.err}14`, color: TK.c.err })}
+      >
+        <div style={tagStyle()}>{'Save failed'}</div>
+        <div style={bodyStyle()}>
+          <div>{state.saveError}</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => dispatch({ type: 'DISMISS_SAVE_ERROR' })}
+          aria-label="Dismiss save error"
+          title="Dismiss save error"
+          style={dismissStyle()}
+        >
+          {'\u2715'}
+        </button>
+      </div>
+    );
+  }
+
   if (importError) {
     return (
       <div

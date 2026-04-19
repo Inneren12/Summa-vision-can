@@ -140,6 +140,11 @@ class PublicationCreate(BaseModel):
     footnote: Optional[str] = None
     visual_config: Optional[VisualConfig] = None
     review: Optional[ReviewPayload] = None
+    # Opaque full-canonical-document JSON string. See DEBT-026 resolution:
+    # backend stores verbatim, frontend owns shape validation. Typed as
+    # ``str`` (not ``dict`` or a nested model) so Pydantic does not parse
+    # or re-serialise it; the column is opaque at this layer.
+    document_state: Optional[str] = None
     virality_score: Optional[float] = None
     source_product_id: Optional[str] = Field(None, max_length=100)
 
@@ -173,6 +178,13 @@ class PublicationUpdate(BaseModel):
     footnote: Optional[str] = None
     visual_config: Optional[VisualConfig] = None
     review: Optional[ReviewPayload] = None
+    # Opaque full-canonical-document JSON string — see DEBT-026 resolution.
+    # Unlike ``review`` (parsed for workflow-sync logic), ``document_state``
+    # is never inspected by the backend: frontend serialises the whole
+    # ``CanonicalDocument`` as a JSON string on the wire, the backend
+    # persists it verbatim, and ``exclude_unset=True`` gives the usual
+    # PATCH semantics (omitted = unchanged, explicit null = cleared).
+    document_state: Optional[str] = None
     virality_score: Optional[float] = None
 
 
@@ -218,6 +230,11 @@ class PublicationResponse(BaseModel):
     footnote: Optional[str] = None
     visual_config: Optional[VisualConfig] = None
     review: Optional[ReviewPayload] = None
+    # Opaque full-canonical-document JSON string (DEBT-026 resolution).
+    # Passed straight through from the ``publications.document_state``
+    # Text column to the wire without parsing — the frontend rehydrates
+    # with ``JSON.parse`` + ``validateImportStrict``.
+    document_state: Optional[str] = None
     virality_score: Optional[float] = None
     status: str
     cdn_url: Optional[str] = None

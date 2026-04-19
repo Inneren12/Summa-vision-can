@@ -108,13 +108,15 @@ function checkModePermission(state: EditorState, action: EditorAction): { allowe
     case "UNDO":
     case "REDO":
     case "SELECT":
-    case "SAVED":
+    case "SAVED_IF_MATCHES":
+    case "SAVE_FAILED":
+    case "DISMISS_SAVE_ERROR":
     case "SET_MODE":
       // Always allowed:
       //   SELECT, SET_MODE — non-mutating UI state
       //   IMPORT — validated separately inside the reducer body (defense in depth)
       //   UNDO/REDO — operate on existing trusted history snapshots
-      //   SAVED — flag flip
+      //   SAVED_IF_MATCHES / SAVE_FAILED / DISMISS_SAVE_ERROR — save-channel bookkeeping
       return { allowed: true };
 
     case "ADD_COMMENT":
@@ -396,8 +398,27 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
     case "SELECT":
       nextState = { ...state, selectedBlockId: action.blockId, _lastRejection: undefined };
       break;
-    case "SAVED":
-      nextState = { ...state, dirty: false, _lastRejection: undefined };
+    case "SAVED_IF_MATCHES": {
+      // B2 fix: clear `dirty` only when the current doc is the exact
+      // reference we snapshotted at save start. Reference equality is
+      // sufficient because the reducer treats `doc` as immutable — every
+      // edit produces a new doc object. If the user typed during the
+      // in-flight PATCH, the snapshot's unsaved edits never reached the
+      // backend, so keeping `dirty: true` is correct.
+      if (state.doc === action.snapshotDoc) {
+        nextState = { ...state, dirty: false, saveError: null, _lastRejection: undefined };
+      } else {
+        // Save itself succeeded, so clear any prior save error; but
+        // `dirty` stays set because the server is now behind the UI.
+        nextState = { ...state, saveError: null, _lastRejection: undefined };
+      }
+      break;
+    }
+    case "SAVE_FAILED":
+      nextState = { ...state, saveError: action.error, _lastRejection: undefined };
+      break;
+    case "DISMISS_SAVE_ERROR":
+      nextState = { ...state, saveError: null, _lastRejection: undefined };
       break;
     case "SET_MODE":
       nextState = { ...state, mode: action.mode, _lastRejection: undefined };
@@ -581,6 +602,7 @@ export function initState(initialDoc?: CanonicalDocument): EditorState {
     redoStack: [],
     selectedBlockId: null,
     dirty: false,
+    saveError: null,
     _lastAction: undefined,
     _lastRejection: undefined,
     mode: "design",
