@@ -541,7 +541,10 @@ class TestPublishUnpublishReviewSync:
         assert "published" in actions
         last = data["review"]["history"][-1]
         assert last["author"] == "system"
-        assert last["fromWorkflow"] is None
+        # fromWorkflow is captured from the stored review prior to
+        # overwrite (Stage 3 PR 4 fix). _REVIEW_BASE ships workflow="draft",
+        # so the publish transition reads fromWorkflow="draft".
+        assert last["fromWorkflow"] == "draft"
         assert last["toWorkflow"] == "published"
 
     @pytest.mark.asyncio
@@ -678,6 +681,339 @@ class TestAuth:
                 json={"review": _REVIEW_BASE},
             )
         assert resp.status_code == 401
+
+
+# ===========================================================================
+# Post-review fixes (Stage 3 PR 4 fix) — fromWorkflow preservation,
+# semantic CHANGES_REQUESTED vs RETURNED_TO_DRAFT, unchanged-workflow PATCH,
+# malformed review during publish/unpublish.
+# ===========================================================================
+
+
+async def _fetch_audit_events_for(
+    session: AsyncSession, entity_id: str
+) -> list[AuditEvent]:
+    """Return every :class:`AuditEvent` for a publication entity id."""
+    stmt = select(AuditEvent).where(AuditEvent.entity_id == entity_id)
+    result = await session.execute(stmt)
+    return list(result.scalars())
+
+
+class TestPublishUnpublishSyncPreservesFromWorkflow:
+    @pytest.mark.asyncio
+    async def test_publish_sync_preserves_previous_workflow_in_history(
+        self, session_factory
+    ) -> None:
+        """Publishing a row with ``review.workflow=approved`` writes a
+        system history entry with ``fromWorkflow = "approved"`` (not
+        ``None``) — the prior state is captured before overwrite."""
+        app = _make_admin_app(session_factory)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            created = await client.post(
+                "/api/v1/admin/publications",
+                json={
+                    **_CREATE_BASE,
+                    "review": {
+                        "workflow": "approved",
+                        "history": [],
+                        "comments": [],
+                    },
+                },
+                headers=_auth_headers(),
+            )
+            assert created.status_code == 201
+            pub_id = created.json()["id"]
+
+            pub_resp = await client.post(
+                f"/api/v1/admin/publications/{pub_id}/publish",
+                headers=_auth_headers(),
+            )
+            assert pub_resp.status_code == 200
+
+            get_resp = await client.get(
+                f"/api/v1/admin/publications/{pub_id}",
+                headers=_auth_headers(),
+            )
+
+        review = get_resp.json()["review"]
+        assert review["workflow"] == "published"
+        system_entry = review["history"][-1]
+        assert system_entry["author"] == "system"
+        assert system_entry["fromWorkflow"] == "approved"
+        assert system_entry["toWorkflow"] == "published"
+
+    @pytest.mark.asyncio
+    async def test_unpublish_sync_preserves_previous_workflow_in_history(
+        self, session_factory
+    ) -> None:
+        """Unpublishing writes ``fromWorkflow = "published"`` in the
+        appended history entry (not ``None``)."""
+        app = _make_admin_app(session_factory)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            created = await client.post(
+                "/api/v1/admin/publications",
+                json={
+                    **_CREATE_BASE,
+                    "review": {
+                        "workflow": "published",
+                        "history": [],
+                        "comments": [],
+                    },
+                },
+                headers=_auth_headers(),
+            )
+            pub_id = created.json()["id"]
+
+            await client.post(
+                f"/api/v1/admin/publications/{pub_id}/publish",
+                headers=_auth_headers(),
+            )
+
+            unpub = await client.post(
+                f"/api/v1/admin/publications/{pub_id}/unpublish",
+                headers=_auth_headers(),
+            )
+            assert unpub.status_code == 200
+
+            get_resp = await client.get(
+                f"/api/v1/admin/publications/{pub_id}",
+                headers=_auth_headers(),
+            )
+
+        review = get_resp.json()["review"]
+        # Find the unpublish (toWorkflow != "published") system entry.
+        system_entries = [h for h in review["history"] if h["author"] == "system"]
+        last_unpublish = next(
+            (e for e in reversed(system_entries) if e["toWorkflow"] != "published"),
+            None,
+        )
+        assert last_unpublish is not None, "expected a system unpublish entry"
+        assert last_unpublish["fromWorkflow"] == "published"
+        assert last_unpublish["toWorkflow"] == "draft"
+
+
+class TestPatchWorkflowEventClassification:
+    @pytest.mark.asyncio
+    async def test_patch_in_review_to_draft_emits_changes_requested(
+        self, session_factory
+    ) -> None:
+        """``in_review → draft`` emits ``CHANGES_REQUESTED`` — distinct
+        from other ``* → draft`` transitions."""
+        app = _make_admin_app(session_factory)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            created = await client.post(
+                "/api/v1/admin/publications",
+                json={
+                    **_CREATE_BASE,
+                    "review": {
+                        "workflow": "in_review",
+                        "history": [],
+                        "comments": [],
+                    },
+                },
+                headers=_auth_headers(),
+            )
+            pub_id = created.json()["id"]
+
+            resp = await client.patch(
+                f"/api/v1/admin/publications/{pub_id}",
+                json={
+                    "review": {
+                        "workflow": "draft",
+                        "history": [],
+                        "comments": [],
+                    }
+                },
+                headers=_auth_headers(),
+            )
+            assert resp.status_code == 200
+
+        async with session_factory() as session:
+            events = await _fetch_audit_events_for(session, entity_id=str(pub_id))
+        workflow_events = [
+            e for e in events if e.event_type.startswith("publication.workflow.")
+        ]
+        assert len(workflow_events) == 1
+        assert workflow_events[0].event_type == (
+            "publication.workflow.changes_requested"
+        )
+
+    @pytest.mark.asyncio
+    async def test_patch_approved_to_draft_emits_returned_to_draft(
+        self, session_factory
+    ) -> None:
+        """``approved → draft`` emits ``RETURNED_TO_DRAFT`` — revocation
+        of approval, not a reviewer pushback."""
+        app = _make_admin_app(session_factory)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            created = await client.post(
+                "/api/v1/admin/publications",
+                json={
+                    **_CREATE_BASE,
+                    "review": {
+                        "workflow": "approved",
+                        "history": [],
+                        "comments": [],
+                    },
+                },
+                headers=_auth_headers(),
+            )
+            pub_id = created.json()["id"]
+
+            resp = await client.patch(
+                f"/api/v1/admin/publications/{pub_id}",
+                json={
+                    "review": {
+                        "workflow": "draft",
+                        "history": [],
+                        "comments": [],
+                    }
+                },
+                headers=_auth_headers(),
+            )
+            assert resp.status_code == 200
+
+        async with session_factory() as session:
+            events = await _fetch_audit_events_for(session, entity_id=str(pub_id))
+        workflow_events = [
+            e for e in events if e.event_type.startswith("publication.workflow.")
+        ]
+        assert len(workflow_events) == 1
+        assert workflow_events[0].event_type == (
+            "publication.workflow.returned_to_draft"
+        )
+
+
+class TestPatchSameWorkflowEmitsNoAudit:
+    @pytest.mark.asyncio
+    async def test_patch_same_workflow_emits_no_workflow_audit(
+        self, session_factory
+    ) -> None:
+        """A PATCH that carries ``review`` but does not change
+        ``review.workflow`` must NOT emit a workflow audit event.
+        Non-workflow field updates ride through unaffected."""
+        app = _make_admin_app(session_factory)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            created = await client.post(
+                "/api/v1/admin/publications",
+                json={
+                    **_CREATE_BASE,
+                    "headline": "original",
+                    "review": _REVIEW_BASE,
+                },
+                headers=_auth_headers(),
+            )
+            pub_id = created.json()["id"]
+
+            resp = await client.patch(
+                f"/api/v1/admin/publications/{pub_id}",
+                json={
+                    "headline": "updated",
+                    "review": _REVIEW_BASE,  # workflow == "draft" (unchanged)
+                },
+                headers=_auth_headers(),
+            )
+            assert resp.status_code == 200
+            assert resp.json()["headline"] == "updated"
+
+        async with session_factory() as session:
+            events = await _fetch_audit_events_for(session, entity_id=str(pub_id))
+        workflow_events = [
+            e for e in events if e.event_type.startswith("publication.workflow.")
+        ]
+        assert workflow_events == []
+
+
+class TestMalformedReviewDuringPublishUnpublish:
+    @pytest.mark.asyncio
+    async def test_publish_with_malformed_review_does_not_crash(
+        self, session_factory
+    ) -> None:
+        """If ``Publication.review`` contains malformed JSON, ``/publish``
+        still flips ``status = PUBLISHED``; the review sync is skipped
+        with a warning. Corrupt row stays corrupt (no silent rewrite)."""
+        app = _make_admin_app(session_factory)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            created = await client.post(
+                "/api/v1/admin/publications",
+                json={**_CREATE_BASE, "review": _REVIEW_BASE},
+                headers=_auth_headers(),
+            )
+            pub_id = int(created.json()["id"])
+
+        # Corrupt the column directly via the session factory.
+        async with session_factory() as session:
+            pub = await session.get(Publication, pub_id)
+            assert pub is not None
+            pub.review = "{not valid json"
+            await session.commit()
+
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            pub_resp = await client.post(
+                f"/api/v1/admin/publications/{pub_id}/publish",
+                headers=_auth_headers(),
+            )
+        assert pub_resp.status_code == 200
+        assert pub_resp.json()["status"] == "PUBLISHED"
+
+        async with session_factory() as session:
+            pub = await session.get(Publication, pub_id)
+            assert pub is not None
+            assert pub.status == PublicationStatus.PUBLISHED
+            # Corrupt content left as-is — sync skipped, not silently repaired.
+            assert pub.review == "{not valid json"
+
+    @pytest.mark.asyncio
+    async def test_unpublish_with_malformed_review_does_not_crash(
+        self, session_factory
+    ) -> None:
+        """Symmetric to publish: ``/unpublish`` with malformed review
+        still flips ``status = DRAFT``; sync is skipped."""
+        app = _make_admin_app(session_factory)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            created = await client.post(
+                "/api/v1/admin/publications",
+                json={
+                    **_CREATE_BASE,
+                    "review": {**_REVIEW_BASE, "workflow": "published"},
+                },
+                headers=_auth_headers(),
+            )
+            pub_id = int(created.json()["id"])
+
+            # Publish first so there's something to unpublish.
+            await client.post(
+                f"/api/v1/admin/publications/{pub_id}/publish",
+                headers=_auth_headers(),
+            )
+
+        # Corrupt the column directly.
+        async with session_factory() as session:
+            pub = await session.get(Publication, pub_id)
+            assert pub is not None
+            pub.review = "not json either"
+            await session.commit()
+
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            unpub_resp = await client.post(
+                f"/api/v1/admin/publications/{pub_id}/unpublish",
+                headers=_auth_headers(),
+            )
+        assert unpub_resp.status_code == 200
+        assert unpub_resp.json()["status"] == "DRAFT"
+
+        async with session_factory() as session:
+            pub = await session.get(Publication, pub_id)
+            assert pub is not None
+            assert pub.status == PublicationStatus.DRAFT
+            assert pub.review == "not json either"
 
 
 # ===========================================================================

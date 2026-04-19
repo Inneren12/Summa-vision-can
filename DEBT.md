@@ -31,6 +31,34 @@ Rules:
 
 ## Active Debt
 
+### DEBT-025: `test_kpi_period_filtering` uses hardcoded `_NOW` that drifts out of window
+
+- **Source:** Stage 3 PR 4 post-review CI
+  (`claude/reconnaissance-persistence-cleanup-EJ4uX`)
+- **Added:** 2026-04-19
+- **Severity:** low
+- **Category:** testing
+- **Status:** accepted
+- **Description:**
+  `backend/tests/services/kpi/test_kpi_service.py` defines
+  `_NOW = datetime(2026, 4, 12, 12, 0, 0, tzinfo=timezone.utc)` as a
+  module-level constant and seeds leads with `created_at = _NOW - 1d`.
+  `KPIService.get_kpi(days=7)` computes the window from the *live*
+  `datetime.now(tz.utc)`, not from `_NOW`. Once real time advances
+  past `_NOW + 7d`, the seeded "recent" lead falls outside the live
+  window and `test_kpi_period_filtering` fails with
+  `assert 0 == 1`. Reproducible on `origin/main` without any PR 4
+  changes applied (verified via `git stash` → `pytest` → stash pop).
+- **Impact:** Test is guaranteed to fail on any run after 2026-04-19.
+  CI is effectively red on this single test until the date rolls
+  back (never) or the test is fixed. No production-code impact; KPI
+  service logic is unchanged.
+- **Resolution:** Inject a clock into `KPIService` (or patch
+  `datetime.now` via `freezegun`/`time_machine` in the test). Replace
+  the module-level `_NOW` constant with a fixture that returns
+  `datetime.now(tz.utc)` so seed data always tracks the live clock.
+- **Target:** Follow-up PR (orthogonal to Stage 3).
+
 ### DEBT-021: Temp upload Parquet files not cleaned up
 
 - **Source:** JSON/CSV upload PR (`claude/add-data-upload-graphics-i8IWc`)

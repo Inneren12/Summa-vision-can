@@ -41,17 +41,40 @@ from src.schemas.publication import (
 from src.services.audit import AuditWriter
 
 
-# Mapping from a target ``review.workflow`` state to the audit
-# ``EventType`` that should be emitted when a PATCH transitions into it.
-# ``"published"`` is intentionally omitted — :attr:`EventType.PUBLICATION_PUBLISHED`
-# is emitted separately to preserve the existing publish/unpublish
-# semantics (admin-visibility). See ``docs/modules/editor.md``.
-_WORKFLOW_EVENT_MAP: dict[str, EventType] = {
-    "in_review": EventType.PUBLICATION_WORKFLOW_SUBMITTED,
-    "approved": EventType.PUBLICATION_WORKFLOW_APPROVED,
-    "draft": EventType.PUBLICATION_WORKFLOW_RETURNED_TO_DRAFT,
-    "exported": EventType.PUBLICATION_WORKFLOW_EXPORTED,
-}
+def _classify_workflow_event(
+    previous: str | None, target: str
+) -> EventType | None:
+    """Return the audit event type for a workflow transition.
+
+    Returns ``None`` if the transition is not one we audit at the backend
+    level (``published`` is handled separately via
+    :attr:`EventType.PUBLICATION_PUBLISHED`).
+
+    Emitted event reflects business semantics, not just the target state:
+
+    * ``in_review → draft``        = ``CHANGES_REQUESTED``
+    * anything else → ``draft``    = ``RETURNED_TO_DRAFT``
+    * ``draft → in_review``        = ``SUBMITTED``
+    * ``in_review → approved``     = ``APPROVED``
+    * ``approved → exported``      = ``EXPORTED``
+
+    The ``draft → CHANGES_REQUESTED`` vs ``draft → RETURNED_TO_DRAFT``
+    distinction is the reason this is a function rather than a flat map:
+    two semantically different business events share the same target
+    state (``draft``) and must be disambiguated via ``previous``.
+    """
+    if target == "draft":
+        if previous == "in_review":
+            return EventType.PUBLICATION_WORKFLOW_CHANGES_REQUESTED
+        return EventType.PUBLICATION_WORKFLOW_RETURNED_TO_DRAFT
+    if target == "in_review":
+        return EventType.PUBLICATION_WORKFLOW_SUBMITTED
+    if target == "approved":
+        return EventType.PUBLICATION_WORKFLOW_APPROVED
+    if target == "exported":
+        return EventType.PUBLICATION_WORKFLOW_EXPORTED
+    # target == "published" → handled via PUBLICATION_PUBLISHED (existing)
+    return None
 
 logger: structlog.stdlib.BoundLogger = get_logger(module="admin_publications")
 
@@ -102,22 +125,28 @@ async def _sync_workflow_from_status(
     payload are left untouched — a publication that never had a
     frontend-authored review is published by status alone.
 
-    The appended history entry uses ``author = "system"`` and
-    ``fromWorkflow = None`` because the backend has no atomic snapshot
-    of the prior workflow state; the frontend shape allows null
-    ``fromWorkflow`` for system-emitted entries.
+    The appended history entry uses ``author = "system"``. ``fromWorkflow``
+    is read from the stored ``review.workflow`` before it is overwritten
+    so the audit trail preserves the actual prior state; the frontend
+    shape allows ``null`` for the edge case where the stored review has
+    no ``workflow`` key at all.
     """
     if publication.review is None:
         return publication
 
     try:
         review = json.loads(publication.review)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, TypeError):
         logger.warning(
             "publication_review_parse_failed",
             publication_id=publication.id,
         )
         return publication
+
+    # Capture the prior workflow BEFORE overwriting — history entry is
+    # only honest if it reports the actual transition. Missing key →
+    # ``None`` (shape-valid edge case, not silently fabricated).
+    previous_workflow = review.get("workflow")
 
     review["workflow"] = target_workflow
     history = review.setdefault("history", [])
@@ -127,7 +156,7 @@ async def _sync_workflow_from_status(
             "action": _WORKFLOW_HISTORY_ACTIONS.get(target_workflow, target_workflow),
             "summary": summary,
             "author": "system",
-            "fromWorkflow": None,
+            "fromWorkflow": previous_workflow,
             "toWorkflow": target_workflow,
         }
     )
@@ -331,9 +360,12 @@ async def update_publication(
         * any other workflow on a previously-PUBLISHED row → ``status = DRAFT``
           (``published_at`` is deliberately preserved for historical audit).
 
-        The workflow transition also emits an audit event keyed on the
-        target state (``_WORKFLOW_EVENT_MAP``). ``PUBLICATION_PUBLISHED``
-        is emitted *in addition* when the target is ``"published"``.
+        The workflow transition also emits an audit event resolved by
+        :func:`_classify_workflow_event`, which distinguishes
+        ``in_review → draft`` (``CHANGES_REQUESTED``) from other
+        ``* → draft`` transitions (``RETURNED_TO_DRAFT``).
+        ``PUBLICATION_PUBLISHED`` is emitted *in addition* when the
+        target is ``"published"``.
     """
     # Snapshot the previous workflow state so we can detect transitions
     # after ``update_fields`` mutates the row.
@@ -374,7 +406,9 @@ async def update_publication(
 
     # Emit audit events on a genuine workflow transition.
     if new_workflow is not None and new_workflow != previous_workflow:
-        event_type = _WORKFLOW_EVENT_MAP.get(new_workflow)
+        event_type = _classify_workflow_event(
+            previous=previous_workflow, target=new_workflow
+        )
         if event_type is not None:
             await audit.log_event(
                 event_type=event_type,

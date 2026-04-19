@@ -28,9 +28,18 @@ Stage 3 PR 4 wires the review subtree into the backend:
   `"system"`-authored entry to `review.history` so the editor timeline
   reflects admin-driven transitions. Rows without a `review` payload
   are published by status alone (no synthesis by the backend).
-- **Audit events.** Workflow transitions emit
+- **Audit events.** Workflow transitions emit one of
   `PUBLICATION_WORKFLOW_{SUBMITTED, APPROVED, CHANGES_REQUESTED,
   RETURNED_TO_DRAFT, EXPORTED}` (see `backend/src/schemas/events.py`).
+  The event is classified by `_classify_workflow_event(previous, target)`
+  so business semantics are preserved:
+  - `draft → in_review`  → `SUBMITTED`
+  - `in_review → approved` → `APPROVED`
+  - `in_review → draft`  → `CHANGES_REQUESTED` (reviewer pushback,
+    distinct from an approval revocation)
+  - other `* → draft`    → `RETURNED_TO_DRAFT` (approval revocation)
+  - `approved → exported` → `EXPORTED`
+
   A transition into `"published"` additionally emits
   `PUBLICATION_PUBLISHED`; the two event types carry distinct
   meaning — content-workflow vs. admin-visibility.

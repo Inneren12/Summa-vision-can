@@ -368,10 +368,17 @@ class PublicationRepository:
     def _deserialize_review(value: str | None) -> dict | None:
         """Parse a stored review JSON string back into a ``dict``.
 
-        Returns ``None`` when the column is ``NULL``. Any JSON parse
-        error is propagated to the caller — malformed rows must not be
-        silently swallowed because the editor has no way to reconstruct
-        the review subtree from other columns.
+        **Strict** internal helper: raises :class:`json.JSONDecodeError`
+        on malformed input. The API read path
+        (``PublicationResponse.review`` validator and
+        ``admin_publications._serialize``) is separately **tolerant** —
+        it returns ``None`` for malformed JSON so responses don't break
+        for one corrupt row. The two layers intentionally have
+        different contracts: repository = internal invariant, API =
+        user-facing tolerant. Callers that need tolerance should catch
+        ``json.JSONDecodeError`` at their own boundary.
+
+        Returns ``None`` when the column is ``NULL``.
         """
         if value is None:
             return None
