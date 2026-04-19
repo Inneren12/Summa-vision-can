@@ -29,7 +29,16 @@ from src.services.kpi.kpi_service import KPIService
 # Fixtures
 # ---------------------------------------------------------------------------
 
-_NOW = datetime(2026, 4, 12, 12, 0, 0, tzinfo=timezone.utc)
+
+def _utc_now() -> datetime:
+    """Live UTC timestamp.
+
+    Seed rows are stamped relative to ``datetime.now(timezone.utc)`` so
+    the suite is date-agnostic. ``KPIService.get_kpi(days=N)`` computes
+    the period window from the same live clock, which means ``now - 1h``
+    is always inside any ``days >= 1`` window regardless of when CI runs.
+    """
+    return datetime.now(timezone.utc)
 
 
 @pytest.fixture()
@@ -63,7 +72,7 @@ async def _seed_lead(
         asset_id="asset-1",
         is_b2b=is_b2b,
         company_domain=company_domain,
-        created_at=created_at or _NOW,
+        created_at=created_at or _utc_now(),
     )
     session.add(lead)
     await session.flush()
@@ -189,11 +198,22 @@ class TestKPIServicePeriodFiltering:
         kpi_service: KPIService,
     ) -> None:
         """Leads outside the period window must be excluded."""
+        now = _utc_now()
         async with session_factory() as session:
-            # Inside 7-day window
-            await _seed_lead(session, email="recent@example.com", created_at=_NOW - timedelta(days=1))
-            # Outside 7-day window
-            await _seed_lead(session, email="old@example.com", created_at=_NOW - timedelta(days=10))
+            # Inside 7-day window — one hour ago is always inside any
+            # days>=1 window regardless of when the suite runs.
+            await _seed_lead(
+                session,
+                email="recent@example.com",
+                created_at=now - timedelta(hours=1),
+            )
+            # Outside 7-day window — eight days ago is always outside
+            # a 7-day window regardless of when the suite runs.
+            await _seed_lead(
+                session,
+                email="old@example.com",
+                created_at=now - timedelta(days=8),
+            )
             await session.commit()
 
         result = await kpi_service.get_kpi(days=7)
@@ -226,7 +246,7 @@ class TestKPIServiceEventAggregation:
                             event_type=event_type,
                             entity_type="test",
                             entity_id=str(i),
-                            created_at=_NOW - timedelta(hours=1),
+                            created_at=_utc_now() - timedelta(hours=1),
                         )
                     )
             await session.commit()
@@ -258,7 +278,7 @@ class TestKPIServiceJobFailures:
                             job_type=job_type,
                             status=JobStatus.FAILED,
                             payload_json="{}",
-                            created_at=_NOW - timedelta(hours=1),
+                            created_at=_utc_now() - timedelta(hours=1),
                         )
                     )
             # A successful job — should NOT appear in failed_by_type
@@ -267,7 +287,7 @@ class TestKPIServiceJobFailures:
                     job_type="graphics_generate",
                     status=JobStatus.SUCCESS,
                     payload_json="{}",
-                    created_at=_NOW - timedelta(hours=1),
+                    created_at=_utc_now() - timedelta(hours=1),
                 )
             )
             await session.commit()
