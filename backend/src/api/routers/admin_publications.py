@@ -404,8 +404,18 @@ async def update_publication(
             await repo.update_status(publication_id, PublicationStatus.DRAFT)
             publication = await repo.get_by_id(publication_id) or publication
 
-    # Emit audit events on a genuine workflow transition.
-    if new_workflow is not None and new_workflow != previous_workflow:
+    # Emit workflow-transition audit events ONLY on a genuine transition
+    # between two known states. ``previous_workflow is None`` is the
+    # first-write case (row had no ``review`` yet): initial state
+    # assignment is not a transition and must not pollute transition
+    # metrics with a phantom ``RETURNED_TO_DRAFT`` (or any other) event.
+    # The creation signal is already captured by
+    # :attr:`EventType.PUBLICATION_GENERATED` at create time.
+    if (
+        previous_workflow is not None
+        and new_workflow is not None
+        and new_workflow != previous_workflow
+    ):
         event_type = _classify_workflow_event(
             previous=previous_workflow, target=new_workflow
         )
@@ -420,18 +430,25 @@ async def update_publication(
                 },
                 actor="admin_api",
             )
-        if new_workflow == "published":
-            await audit.log_event(
-                event_type=EventType.PUBLICATION_PUBLISHED,
-                entity_type="publication",
-                entity_id=str(publication.id),
-                metadata={
-                    "from": previous_workflow,
-                    "to": new_workflow,
-                    "source": "patch_review",
-                },
-                actor="admin_api",
-            )
+
+    # Admin-visibility audit channel. Distinct from the workflow-
+    # transition channel above: PUBLICATION_PUBLISHED tracks "row is
+    # publicly visible", which is meaningful even on a first-write
+    # PATCH that bypasses a prior draft state. Guarded only on the
+    # value-change predicate so a PATCH that keeps ``workflow="published"``
+    # does not re-emit.
+    if new_workflow == "published" and new_workflow != previous_workflow:
+        await audit.log_event(
+            event_type=EventType.PUBLICATION_PUBLISHED,
+            entity_type="publication",
+            entity_id=str(publication.id),
+            metadata={
+                "from": previous_workflow,
+                "to": new_workflow,
+                "source": "patch_review",
+            },
+            actor="admin_api",
+        )
 
     logger.info(
         "publication_updated",

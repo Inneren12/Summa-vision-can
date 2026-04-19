@@ -887,6 +887,147 @@ class TestPatchWorkflowEventClassification:
             "publication.workflow.returned_to_draft"
         )
 
+    @pytest.mark.asyncio
+    async def test_patch_first_review_assignment_emits_no_workflow_audit(
+        self, session_factory
+    ) -> None:
+        """PATCH that sets ``review`` for the first time
+        (``previous_workflow is None``) must NOT emit a workflow-transition
+        audit event, regardless of the target state. Initial assignment
+        is not a transition — the creation signal is already on
+        ``PUBLICATION_GENERATED`` at POST time.
+        """
+        app = _make_admin_app(session_factory)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            # Create publication WITHOUT review
+            created = await client.post(
+                "/api/v1/admin/publications",
+                json={**_CREATE_BASE},  # no "review" key
+                headers=_auth_headers(),
+            )
+            assert created.status_code == 201
+            pub_id = int(created.json()["id"])
+
+        # Confirm review is NULL in DB
+        async with session_factory() as session:
+            pub = await session.get(Publication, pub_id)
+            assert pub is not None
+            assert pub.review is None
+
+        # First write: PATCH review.workflow="draft"
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            patch_resp = await client.patch(
+                f"/api/v1/admin/publications/{pub_id}",
+                json={
+                    "review": {
+                        "workflow": "draft",
+                        "history": [],
+                        "comments": [],
+                    }
+                },
+                headers=_auth_headers(),
+            )
+            assert patch_resp.status_code == 200
+
+        async with session_factory() as session:
+            events = await _fetch_audit_events_for(session, entity_id=str(pub_id))
+        workflow_events = [
+            e for e in events if e.event_type.startswith("publication.workflow.")
+        ]
+        assert workflow_events == [], (
+            "Expected no workflow transition events on first review write, "
+            f"got: {[e.event_type for e in workflow_events]}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_patch_first_review_to_in_review_emits_no_workflow_audit(
+        self, session_factory
+    ) -> None:
+        """Same first-write guard applies for a non-``draft`` target
+        (e.g. PATCH directly into ``in_review`` without a prior draft
+        row). Unusual, but must not produce a phantom ``SUBMITTED`` event.
+        """
+        app = _make_admin_app(session_factory)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            created = await client.post(
+                "/api/v1/admin/publications",
+                json={**_CREATE_BASE},
+                headers=_auth_headers(),
+            )
+            pub_id = int(created.json()["id"])
+
+            resp = await client.patch(
+                f"/api/v1/admin/publications/{pub_id}",
+                json={
+                    "review": {
+                        "workflow": "in_review",
+                        "history": [],
+                        "comments": [],
+                    }
+                },
+                headers=_auth_headers(),
+            )
+            assert resp.status_code == 200
+
+        async with session_factory() as session:
+            events = await _fetch_audit_events_for(session, entity_id=str(pub_id))
+        workflow_events = [
+            e for e in events if e.event_type.startswith("publication.workflow.")
+        ]
+        assert workflow_events == []
+
+    @pytest.mark.asyncio
+    async def test_patch_real_transition_still_emits_after_initial_write(
+        self, session_factory
+    ) -> None:
+        """Regression guard: the first-write gate must not silence
+        legitimate transitions. After a create-with-review (so
+        ``previous_workflow = "draft"`` on the next PATCH), a real
+        ``draft → in_review`` transition must emit
+        ``PUBLICATION_WORKFLOW_SUBMITTED``.
+        """
+        app = _make_admin_app(session_factory)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            # Step 1: create WITH review (no workflow transition audit)
+            created = await client.post(
+                "/api/v1/admin/publications",
+                json={
+                    **_CREATE_BASE,
+                    "review": {
+                        "workflow": "draft",
+                        "history": [],
+                        "comments": [],
+                    },
+                },
+                headers=_auth_headers(),
+            )
+            pub_id = int(created.json()["id"])
+
+            # Step 2: legitimate transition draft → in_review
+            resp = await client.patch(
+                f"/api/v1/admin/publications/{pub_id}",
+                json={
+                    "review": {
+                        "workflow": "in_review",
+                        "history": [],
+                        "comments": [],
+                    }
+                },
+                headers=_auth_headers(),
+            )
+            assert resp.status_code == 200
+
+        async with session_factory() as session:
+            events = await _fetch_audit_events_for(session, entity_id=str(pub_id))
+        workflow_events = [
+            e for e in events if e.event_type.startswith("publication.workflow.")
+        ]
+        assert len(workflow_events) == 1
+        assert workflow_events[0].event_type == "publication.workflow.submitted"
+
 
 class TestPatchSameWorkflowEmitsNoAudit:
     @pytest.mark.asyncio
