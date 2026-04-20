@@ -30,3 +30,15 @@ export type BlockRenderer = (
   palette: any,
   scale: number
 ) => RenderResult;
+
+/**
+ * One entry per rendered block, returned by `renderDoc` in draw order.
+ * `sectionRect` carries the layout rect of the owning section so that
+ * downstream consumers (hit-area clamping) can confine each block's
+ * geometry to the visible section bounds.
+ */
+export interface RenderedBlockEntry {
+  blockId: string;
+  sectionRect: { x: number; y: number; w: number; h: number };
+  result: RenderResult;
+}

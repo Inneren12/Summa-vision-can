@@ -17,7 +17,7 @@ import { validate } from './validation/validate';
 import { deferRevoke } from './utils/download';
 import { buildUpdatePayload } from './utils/persistence';
 import { shouldSkipGlobalShortcut } from './utils/shortcuts';
-import { clientToLogical, hitTest, type HitAreaEntry } from './utils/hit-test';
+import { clientToLogical, hitTest, clampRectToSection, type HitAreaEntry } from './utils/hit-test';
 import {
   updateAdminPublication,
   AdminPublicationNotFoundError,
@@ -171,13 +171,34 @@ export default function InfographicEditor({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     (BGS[doc.page.background] || BGS.solid_dark).r(ctx, sz.w, sz.h, pal);
     const results = renderDoc(ctx, doc, sz.w, sz.h, pal);
-    hitAreasRef.current = results.map(r => ({ blockId: r.blockId, hitArea: r.result.hitArea }));
+    // Clamp each hitArea to its owning section rect. Block renderers may
+    // return a hitArea whose height exceeds the visible section (copy-fit
+    // overflow); canvas rendering clips draws to section bounds but raw
+    // hit areas don't, so uncovered pixels in an adjacent section could
+    // otherwise steal selection from the overflowing block.
+    hitAreasRef.current = results.map(r => ({
+      blockId: r.blockId,
+      hitArea: clampRectToSection(r.result.hitArea, r.sectionRect),
+    }));
   }, [doc, pal, sz]);
   useEffect(() => { render(); }, [render]);
 
   // Overlay render — hover + selection outlines on a separate canvas.
   // Ordered AFTER the content-render effect so `hitAreasRef.current` is
   // up to date when this runs in the same commit cycle.
+  //
+  // `doc` and `pal` appear in the dependency array even though
+  // renderOverlay does not read them directly. They are proxies for
+  // "the content render just ran and hitAreasRef.current is now up to
+  // date". Without them, a content-only change (e.g. editing a block's
+  // text) would not trigger an overlay redraw even though the new hit
+  // areas are stored in the ref — the selection/hover outlines would
+  // continue drawing at the previous block positions until the next
+  // selection/hover change.
+  //
+  // Do not refactor to read hitAreasRef as a state value — that would
+  // churn undo history and double-render. The ref-as-derived-data
+  // pattern is the intentional tradeoff.
   useEffect(() => {
     const c = overlay.current;
     if (!c) return;

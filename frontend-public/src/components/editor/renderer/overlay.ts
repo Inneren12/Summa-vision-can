@@ -18,11 +18,21 @@ interface OutlineStyle {
 }
 
 /**
- * Outline styling draws from existing tokens only. `TK.c.acc` matches the
- * accent border LeftPanel uses for the selected block row; `TK.c.txtS` is
- * the subdued mid-grey used for secondary text, chosen here for a hover
- * indicator that reads clearly against dark backgrounds without competing
- * with the selection colour.
+ * Outline colour tokens:
+ *   - hover:    TK.c.txtS  (secondary text grey, #8B949E) — subtle,
+ *     non-competing with selection. Reads clearly against dark
+ *     backgrounds without pulling focus from the yellow selection ring.
+ *   - selected: TK.c.acc   (yellow accent, #FBBF24) — matches the
+ *     accent border LeftPanel uses for the selected block row so the
+ *     canvas-side and panel-side selection indicators are visually
+ *     linked.
+ *
+ * The initial Stage 4 Task 1 prompt referenced TK.c.fgSec / TK.c.bgAct,
+ * but neither is usable:
+ *   - fgSec does not exist in config/tokens.ts.
+ *   - bgAct is a dark background fill (#22252D) and would be invisible
+ *     as a stroke on the editor's dark canvas.
+ * txtS/acc are the confirmed equivalents in use.
  */
 const OVERLAY_STYLE: { hover: OutlineStyle; selected: OutlineStyle } = {
   hover: {
