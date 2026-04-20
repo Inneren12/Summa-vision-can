@@ -1199,6 +1199,17 @@ takes longer, the editor flips `fontsReady` anyway and accepts
 fallback rendering for that session. Typical preload on a warm
 cache is sub-100ms.
 
+The call to `document.fonts.load()` deliberately passes a multi-range
+sample text (`Aéřắαя`, one character per subset shard) as its second
+argument. Without this, the browser defaults the text argument to a
+single space (U+0020), and `FontFaceSet.load` then only resolves the
+single subset shard containing that character — basic Latin. All
+other shards (latin-ext, Vietnamese, Greek, Cyrillic) stay
+unresolved until a glyph from their range actually renders,
+re-opening the exact late-fetch gap this task is meant to close.
+The sample text guarantees every shard next/font emits for
+Latin-family Google fonts is resolved at preload time.
+
 Scope limit: this closes non-ASCII drift for glyphs within already-
 subsetted ranges (latin-ext, Greek, etc.). Glyphs outside all
 declared subsets (e.g. Devanagari) fallback to system fonts
