@@ -8,6 +8,7 @@ import type {
   EditorMode,
   EditorState,
 } from '../types';
+import type { ContrastIssue } from '../validation/contrast';
 import { TK } from '../config/tokens';
 import {
   buildThreads,
@@ -30,6 +31,7 @@ export interface RightRailProps {
   mode: EditorMode;
   canEdit: (reg: BlockRegistryEntry, k: string) => boolean;
   onRequestNote: (config: NoteRequestConfig) => void;
+  contrastIssues: ContrastIssue[];
 }
 
 export function RightRail({
@@ -41,6 +43,7 @@ export function RightRail({
   mode,
   canEdit,
   onRequestNote,
+  contrastIssues,
 }: RightRailProps) {
   const [tab, setTab] = useState<RightRailTab>('inspector');
   const inspectorTabId = useId();
@@ -159,6 +162,7 @@ export function RightRail({
             mode={mode}
             canEdit={canEdit}
             dispatch={dispatch}
+            contrastIssues={contrastIssues}
           />
         )}
       </div>

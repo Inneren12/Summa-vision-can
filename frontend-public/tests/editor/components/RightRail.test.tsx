@@ -34,6 +34,7 @@ function mountRail(stateOverride?: ReturnType<typeof baseState>) {
         mode="design"
         canEdit={canEdit}
         onRequestNote={onRequestNote}
+        contrastIssues={[]}
       />,
     ),
   };

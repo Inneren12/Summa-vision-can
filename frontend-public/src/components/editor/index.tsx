@@ -1013,6 +1013,7 @@ export default function InfographicEditor({
           mode={mode}
           canEdit={(reg, k) => canEdit(reg, k)}
           onRequestNote={requestNote}
+          contrastIssues={vr.contrastIssues}
         />
       </div>
 

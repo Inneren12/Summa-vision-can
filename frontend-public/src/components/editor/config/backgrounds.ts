@@ -79,3 +79,56 @@ export const BGS: Record<string, BackgroundEntry> = {
     },
   },
 };
+
+/**
+ * Data-only metadata for each background id. Parallel to BGS (render
+ * callbacks); the contrast validator reads this instead of executing
+ * a render and sampling pixels.
+ *
+ * Invariant: BG_META must have an entry for every key in BGS.
+ * Enforced by tests/editor/backgrounds-meta.test.ts.
+ */
+export interface BackgroundMeta {
+  /** Solid colour, or the base (darkest) colour of a gradient. */
+  base: string;
+  /** Only set when isGradient === true. Approximates the lightest visible region. */
+  lightestStop?: string;
+  isGradient: boolean;
+}
+
+export const BG_META: Record<string, BackgroundMeta> = {
+  solid_dark: {
+    base: '#0B0D11',
+    isGradient: false,
+  },
+  gradient_midnight: {
+    base: '#0B0D11',
+    lightestStop: '#1C1F26',
+    isGradient: true,
+  },
+  gradient_warm: {
+    // Render: base #0B0D11 blended with palette.p at ~8% alpha.
+    // For contrast purposes treat the darkest visible region as base;
+    // the lightest region trends toward a mid-tone that varies with
+    // palette, so lightestStop is a representative mid-grey.
+    base: '#0B0D11',
+    lightestStop: '#2A2E38',
+    isGradient: true,
+  },
+  gradient_radial: {
+    base: '#0B0D11',
+    lightestStop: '#1C1F26',
+    isGradient: true,
+  },
+  dot_grid: {
+    // Dots render at rgba(255,255,255,0.04) on #0B0D11; base colour
+    // dominates visually, treat as solid.
+    base: '#0B0D11',
+    isGradient: false,
+  },
+  topo: {
+    // Topo lines at ~8/255 alpha on #0B0D11; same rationale as dot_grid.
+    base: '#0B0D11',
+    isGradient: false,
+  },
+};
