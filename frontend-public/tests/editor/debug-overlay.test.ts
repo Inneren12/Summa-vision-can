@@ -102,6 +102,30 @@ describe('renderDebugOverlay', () => {
     expect(strokeRects.length).toBe(2);
   });
 
+  test('chart section renders with its palette entry', () => {
+    const { ctx, calls } = makeDebugCtx();
+    renderDebugOverlay({
+      ctx,
+      logicalW: 1080,
+      logicalH: 1080,
+      dpr: 1,
+      sections: [solidSection('chart', 64, 240, 952, 594)],
+      entries: [],
+    });
+
+    const fillRects = calls.filter((c) => c.method === 'fillRect');
+    const strokeRects = calls.filter((c) => c.method === 'strokeRect');
+    const textCalls = calls.filter((c) => c.method === 'fillText');
+
+    // 1 section fill + 1 label background rect
+    expect(fillRects.length).toBe(2);
+    // 1 section stroke outline
+    expect(strokeRects.length).toBe(1);
+    // 1 section-name label
+    expect(textCalls.length).toBe(1);
+    expect(textCalls[0].args[0]).toBe('chart');
+  });
+
   test('unknown section type is skipped silently', () => {
     const { ctx, calls } = makeDebugCtx();
     renderDebugOverlay({
