@@ -319,7 +319,6 @@ export default function InfographicEditor({
       blockId: r.blockId,
       hitArea: clampRectToSection(r.result.hitArea, r.sectionRect),
     }));
-  }, [doc, pal, sz, fontsReady]);
 
     // Debug-overlay data — populated only when the user has turned the
     // overlay on. Zero cost when off. Kept alongside hitAreasRef (not in
@@ -344,9 +343,25 @@ export default function InfographicEditor({
           raw.y < sec.y ||
           raw.x + raw.w > sec.x + sec.w ||
           raw.y + raw.h > sec.y + sec.h;
+
+        // In dev, surface invariant breaks loudly. By construction, every
+        // blockId emitted by renderDoc exists in doc.blocks — if it doesn't,
+        // either doc and results went out of sync (render pipeline bug) or
+        // a block was deleted mid-render (race). Both are bugs we want to
+        // hear about, not silently label "unknown". In production, keep the
+        // fallback: debug overlay is a dev tool and a misleading label is
+        // better than a prod crash.
+        const blockEntry = doc.blocks[r.blockId];
+        if (!blockEntry && process.env.NODE_ENV !== 'production') {
+          throw new Error(
+            `[debug-overlay] renderDoc emitted blockId "${r.blockId}" but doc.blocks has no such entry. ` +
+              'This is an invariant break between the render pipeline and the document.',
+          );
+        }
+
         return {
           blockId: r.blockId,
-          blockType: doc.blocks[r.blockId]?.type ?? 'unknown',
+          blockType: blockEntry?.type ?? 'unknown',
           rawHitArea: raw,
           clampedHitArea: clampRectToSection(raw, sec),
           sectionRect: sec,
@@ -357,7 +372,7 @@ export default function InfographicEditor({
       debugSectionsRef.current = [];
       debugEntriesRef.current = [];
     }
-  }, [doc, pal, sz, debugEnabled]);
+  }, [doc, pal, sz, fontsReady, debugEnabled]);
   useEffect(() => { render(); }, [render]);
 
   // Mount-time font-load gate (Stage 4 Task 3). Delegates to the shared
@@ -874,30 +889,20 @@ export default function InfographicEditor({
     r.readAsText(f);
   };
 
-  const exportPNG = useCallback(async () => {
+  const exportPNG = useCallback(() => {
     // QA gate: never produce broken output. PNG export is blocked when there
     // are validation errors; JSON export and SAVE are always allowed so users
     // can checkpoint work-in-progress.
     if (!canExp) return;
-    // Stage 4 Task 3: button is disabled while !fontsReady, so this
-    // early-return is belt-and-suspenders for the pathological case
-    // (devtools prop override, stale memoization).
+    // Stage 4 Task 3 B1 (post-review): fontsReady is the single contract.
+    // Once true (via mount-time waitForFontsReadyOrTimeout resolving
+    // 'ready', 'timeout', or 'unsupported'), render and export both
+    // proceed without re-invoking the helper. An earlier iteration of
+    // this code re-awaited the helper here as belt-and-suspenders, but
+    // that reintroduced the exact 5-second stall in pathological cases
+    // (document.fonts.ready never resolving) that the mount timeout was
+    // designed to prevent. Trust the flag.
     if (!fontsReady) return;
-
-    // B1 fix: apply the same timeout policy as the mount-time gate. Do
-    // NOT await `document.fonts.ready` directly — in the exact
-    // pathological case the mount-time timeout was designed for (ready
-    // promise never resolves), a direct await here would silently hang
-    // indefinitely, never calling `toBlob`, giving the user no download
-    // and no error. The `fontsReady` flag is the contract: once true,
-    // proceed regardless of font-load state.
-    //
-    // In typical operation this resolves instantly — `document.fonts.ready`
-    // caches its resolved state after first resolution, so on any render
-    // after fonts have loaded, the helper's inner promise resolves in
-    // the same microtask. The helper is here as belt-and-suspenders for
-    // pathological cases only.
-    await waitForFontsReadyOrTimeout();
 
     // Create a separate export canvas at canonical preset size.
     // Preview canvas stays DPR-scaled; export is exact 1:1 dimensions.

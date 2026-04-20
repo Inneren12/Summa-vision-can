@@ -125,6 +125,7 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-4-3 | Stage 4 Task 3 — Deterministic export (font-load gate) | ✅ | E-4-2 |
 
 - E-4-3 B1 fix (export hang + timer hygiene + docs truth-up): pending human commit
+- E-4-3 B1 nit close + merge resolution (double-wait removed, CI restored): pending human commit
 | E-4-4 | Stage 4 Task 4 — Debug overlay (dev tooling) | ✅ | E-4-1 |
 
 **E-3-4 status (in flight):** Backend-only persistence PR. Adds a

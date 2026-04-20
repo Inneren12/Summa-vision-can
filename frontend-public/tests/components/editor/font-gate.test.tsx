@@ -132,11 +132,16 @@ describe('Font gate (Stage 4 Task 3)', () => {
   // the button, but clicking EXPORT would hang forever inside the await,
   // never emitting another warn and never reaching any post-await code.
   //
-  // This test proves the shared helper's timeout now protects the export
-  // path too. Observable proof: the dev-only timeout warn fires a SECOND
-  // time when exportPNG's await completes via the helper's 5s timeout. If
-  // the export path hung on `document.fonts.ready`, the second warn would
-  // never fire — the helper would not even be entered.
+  // This test proves fontsReady is the single contract: once the mount
+  // timeout flips it true, exportPNG runs without re-invoking the helper.
+  // Pre-B1, exportPNG awaited document.fonts.ready directly and would
+  // hang forever. The B1 fix briefly re-invoked the helper as belt-and-
+  // suspenders, but that reintroduced a 5s stall per export in the same
+  // pathological case. Current contract: trust the flag.
+  //
+  // Observable proof of non-hang: clicking EXPORT after the mount timeout
+  // returns synchronously — no additional timeout warn fires (the helper
+  // is no longer reached) and the click does not throw or block.
   test('export does not hang when fonts.ready never resolves — timeout path', async () => {
     jest.useFakeTimers();
     const fonts = mockDocumentFontsReady({ initial: 'pending' });
@@ -156,35 +161,22 @@ describe('Font gate (Stage 4 Task 3)', () => {
       });
       expect(exportBtn).not.toBeDisabled();
 
-      // One warn so far — the mount-time timeout.
-      const warnsAfterMount = warnSpy.mock.calls.filter((c) =>
-        typeof c[0] === 'string' && c[0].includes('timed out after 5000ms'),
-      ).length;
-      expect(warnsAfterMount).toBe(1);
-
-      // Click EXPORT. Under the broken pre-B1 code, exportPNG would hit
-      // `await document.fonts.ready` and suspend forever — no further
-      // timeouts fire, no further warns are emitted.
+      // Click EXPORT. Pre-B1, this would have suspended on
+      // `await document.fonts.ready` indefinitely. Post-fix it runs to
+      // completion synchronously (no helper re-invocation).
       await act(async () => {
         fireEvent.click(exportBtn);
       });
 
-      // Advance past the export-path timeout. If the helper is being used,
-      // the inner setTimeout in waitForFontsReadyOrTimeout fires and emits
-      // its dev warn, and the async exportPNG continues past the await.
-      await act(async () => {
-        jest.advanceTimersByTime(FONTS_TIMEOUT_MS);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-
-      // Contract: export await completed via timeout → second warn fired.
-      // Non-hang is observable as a count increase. If the export path
-      // hangs (pre-B1), this stays at 1 and the assertion fails.
-      const warnsAfterExport = warnSpy.mock.calls.filter((c) =>
+      // Dev warning fired exactly once — at mount timeout. exportPNG no
+      // longer re-invokes waitForFontsReadyOrTimeout; it trusts fontsReady,
+      // so no second timeout warn ever appears.
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('timed out after 5000ms'),
+      );
+      expect(warnSpy.mock.calls.filter((c) =>
         typeof c[0] === 'string' && c[0].includes('timed out after 5000ms'),
-      ).length;
-      expect(warnsAfterExport).toBe(2);
+      ).length).toBe(1);
     } finally {
       warnSpy.mockRestore();
       fonts.restore();

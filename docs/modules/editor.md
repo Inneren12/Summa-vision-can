@@ -1017,19 +1017,16 @@ or `'unsupported'` (browser lacks the API — proceed with fallback).
 The helper clears its own timer on early resolution so there is no
 trailing no-op timer fire.
 
-Two gate points use this same helper:
-- **Render effect** — `render` useCallback early-returns when
-  `!fontsReady`; `fontsReady` is in the dep array, so when the mount
-  effect flips it true the callback re-memoizes, the render-trigger
-  effect re-runs, and the first real paint happens with correct
-  typography.
-- **`exportPNG`** — awaits the helper before constructing the export
-  canvas. This is essential (B1 fix): without the timeout, a direct
-  `await document.fonts.ready` in the export path would silently hang
-  in the exact pathological cases the mount-time timeout protects
-  against, producing no file and no error. Using the shared helper
-  makes both gates honour one contract — `fontsReady === true` means
-  "proceed, regardless of font-load state".
+The mount-time effect awaits this helper once, then flips `fontsReady`
+to true. From that moment, `fontsReady` is the single contract: the
+render callback proceeds, the EXPORT button enables, and `exportPNG`
+runs without a second wait.
+
+An earlier iteration re-invoked the helper inside `exportPNG` as
+belt-and-suspenders; this reintroduced the exact 5-second stall in
+pathological cases (a `document.fonts.ready` that never resolves)
+that the mount timeout was designed to prevent. The current design
+trusts the flag: once true, proceed.
 
 The helper logs a dev-only `console.warn` on `'timeout'` or
 `'unsupported'` outcomes so font-loading issues are discoverable during
