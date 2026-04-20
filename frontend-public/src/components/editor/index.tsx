@@ -264,9 +264,25 @@ export default function InfographicEditor({
           raw.y < sec.y ||
           raw.x + raw.w > sec.x + sec.w ||
           raw.y + raw.h > sec.y + sec.h;
+
+        // In dev, surface invariant breaks loudly. By construction, every
+        // blockId emitted by renderDoc exists in doc.blocks — if it doesn't,
+        // either doc and results went out of sync (render pipeline bug) or
+        // a block was deleted mid-render (race). Both are bugs we want to
+        // hear about, not silently label "unknown". In production, keep the
+        // fallback: debug overlay is a dev tool and a misleading label is
+        // better than a prod crash.
+        const blockEntry = doc.blocks[r.blockId];
+        if (!blockEntry && process.env.NODE_ENV !== 'production') {
+          throw new Error(
+            `[debug-overlay] renderDoc emitted blockId "${r.blockId}" but doc.blocks has no such entry. ` +
+              'This is an invariant break between the render pipeline and the document.',
+          );
+        }
+
         return {
           blockId: r.blockId,
-          blockType: doc.blocks[r.blockId]?.type ?? 'unknown',
+          blockType: blockEntry?.type ?? 'unknown',
           rawHitArea: raw,
           clampedHitArea: clampRectToSection(raw, sec),
           sectionRect: sec,

@@ -124,6 +124,8 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-4-2 | Stage 4 Task 2 — Autosave + recovery | ✅ | E-4-0 |
 | E-4-4 | Stage 4 Task 4 — Debug overlay (dev tooling) | ✅ | E-4-1 |
 
+- Nit fixes (chart test + dev-mode invariant): <pending>
+
 **E-3-4 status (in flight):** Backend-only persistence PR. Adds a
 nullable `Publication.review` Text column (Alembic migration
 `f2a7d9c3b481`), a `ReviewPayload` schema, a workflow → status sync
