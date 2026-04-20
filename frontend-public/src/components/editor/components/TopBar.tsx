@@ -25,9 +25,16 @@ interface TopBarProps {
   markSaved: () => void;
   exportPNG: () => void;
   saveStatus: SaveStatus;
+  // Stage 4 Task 4: debug overlay toggle. Availability is computed by the
+  // editor (dev auto / prod `?debug=1`); the button is only rendered when
+  // `debugAvailable === true`. The active-state styling is driven by
+  // `debugEnabled`.
+  debugAvailable?: boolean;
+  debugEnabled?: boolean;
+  onToggleDebug?: () => void;
 }
 
-export function TopBar({ doc, dispatch, undoStack, redoStack, dirty, mode, setMode, errs, warns, si, canExp, fileRef, importJSON, exportJSON, markSaved, exportPNG, saveStatus }: TopBarProps) {
+export function TopBar({ doc, dispatch, undoStack, redoStack, dirty, mode, setMode, errs, warns, si, canExp, fileRef, importJSON, exportJSON, markSaved, exportPNG, saveStatus, debugAvailable, debugEnabled, onToggleDebug }: TopBarProps) {
   return (
     <div style={{ padding: "6px 12px", borderBottom: `1px solid ${TK.c.brd}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -47,6 +54,25 @@ export function TopBar({ doc, dispatch, undoStack, redoStack, dirty, mode, setMo
       <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
         <span style={{ fontSize: "9px" }} title={`${errs}err ${warns}warn`}>{si}</span>
         <span style={{ fontSize: "7px", color: TK.c.txtM, fontFamily: TK.font.data }}>v{doc.meta.version}</span>
+        {debugAvailable && (
+          <button
+            type="button"
+            onClick={onToggleDebug}
+            aria-label={debugEnabled ? "Disable debug overlay" : "Enable debug overlay"}
+            title={debugEnabled ? "Debug overlay ON (Ctrl+Shift+D)" : "Debug overlay OFF (Ctrl+Shift+D)"}
+            style={{
+              padding: "3px 6px",
+              fontSize: "8px",
+              fontFamily: TK.font.data,
+              background: debugEnabled ? TK.c.acc : TK.c.bgSurf,
+              color: debugEnabled ? TK.c.bgApp : TK.c.txtS,
+              border: `1px solid ${debugEnabled ? TK.c.acc : TK.c.brd}`,
+              borderRadius: "2px",
+              cursor: "pointer",
+              fontWeight: debugEnabled ? 700 : 400,
+            }}
+          >DBG</button>
+        )}
         <input ref={fileRef} type="file" accept=".json" onChange={importJSON} style={{ display: "none" }} tabIndex={-1} aria-hidden="true" />
         <button type="button" onClick={() => fileRef.current?.click()} aria-label="Import document from JSON" title="Import document from JSON" style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.txtS, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", cursor: "pointer" }}>IMPORT</button>
         <button type="button" onClick={exportJSON} aria-label="Export document as JSON" title="Export document as JSON" style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.txtS, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", cursor: "pointer" }}>JSON</button>

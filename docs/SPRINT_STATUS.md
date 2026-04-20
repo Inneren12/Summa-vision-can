@@ -122,6 +122,7 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-4-0 | Stage 4 Task 0 — Editor Wire-Up (Next.js admin routes) | ✅ | E-3-4 |
 | E-4-1 | Stage 4 Task 1 — Click-to-select + UX polish | ✅ | E-4-0 |
 | E-4-2 | Stage 4 Task 2 — Autosave + recovery | ✅ | E-4-0 |
+| E-4-4 | Stage 4 Task 4 — Debug overlay (dev tooling) | ✅ | E-4-1 |
 
 **E-3-4 status (in flight):** Backend-only persistence PR. Adds a
 nullable `Publication.review` Text column (Alembic migration

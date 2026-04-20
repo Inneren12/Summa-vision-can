@@ -943,3 +943,97 @@ scheduled save.
 - Pointer/touch input for debounce reset (covered by the mouse-events
   scope note for Task 1 above).
 
+## Debug overlay (Stage 4 Task 4)
+
+Dev-only visualization layer that makes `SECTION_LAYOUT` rects and
+per-block hit areas visible. The whole point is to surface what
+`clampRectToSection` silently fixes — a block returning a raw
+`hitArea` that extends past its owning section is invisible during
+normal rendering and only shows up here.
+
+### What it shows
+
+- **Section boundaries** — translucent fill + stroke + label per
+  section type (cyan header, magenta hero, lime context, amber chart,
+  orange footer). All 5 `SECTION_LAYOUT` keys are covered; unknown
+  types are skipped silently.
+- **Block bounding boxes** — white outline for each block's clamped
+  `hitArea`, with a `<blockType>·<blockIdPrefix>` label rendered in
+  JetBrains Mono.
+- **Overflow markers** — when a block's raw `hitArea` extends beyond
+  its `sectionRect`, a dashed red outline is drawn around the raw
+  rect alongside the white clamped outline. This is the signal that
+  the Task 1 clamping fix is actively clipping.
+
+### When it's available
+
+- **Development** (`NODE_ENV !== 'production'`): always. Toggle via
+  the TopBar `DBG` button or `Ctrl+Shift+D`.
+- **Production**: only when `?debug=1` is present in the URL. The
+  toggle becomes visible; the user still has to click or shortcut to
+  enable. The query param controls *availability*, not *state*,
+  so accidentally sharing a link with `?debug=1` does not leak the
+  overlay to the next viewer.
+
+The `?debug=1` check runs once on mount via a `useEffect` that reads
+`window.location.search`. `useSearchParams` from `next/navigation` is
+deliberately avoided — the plain browser API requires no Suspense
+boundary and keeps the editor component framework-lean.
+
+### Architecture
+
+- **Third canvas sibling** in `components/Canvas.tsx`, conditionally
+  rendered on the truthiness of the `debugRef` prop. When
+  `debugEnabled === false`, `InfographicEditor` passes `undefined`
+  and React unmounts the canvas entirely — no backing store, no
+  draw cost. Render order: content canvas → hover/selection
+  overlay → debug overlay (LAST, so labels render on top).
+- **`debugEntriesRef` and `debugSectionsRef`** populated inside the
+  same content-render callback that writes `hitAreasRef`. Populated
+  only when `debugEnabled === true`; zero cost when off. Both refs
+  derive from the same `RenderedBlockEntry[]` array so they cannot
+  drift.
+- **`renderDebugOverlay`** in `renderer/debug-overlay.ts` mirrors
+  the API shape of `renderer/overlay.ts` (DPR handling, transform
+  preamble, small `draw*` helpers) but shares no code. Debug and
+  selection-overlay have independent lifecycles — one is dev-only,
+  the other is always on.
+- **`DEBUG_PALETTE`** is a module-local constant using `rgba()`
+  literals. Not part of `TK` tokens — debug colours are developer
+  tooling, not design-system output.
+
+### Shortcut behaviour
+
+`Ctrl+Shift+D` (or `Cmd+Shift+D` on macOS) toggles `debugEnabled`.
+The branch is evaluated *before* the `isEditable` gate in the
+keydown handler because the shortcut is never a meaningful text
+editing combo — it must work from inside Inspector inputs too. The
+branch bails when `debugAvailable === false`, so production users
+without `?debug=1` cannot flip it.
+
+### Independence from permissions
+
+The toggle has no interaction with `effectivePerms` / workflow
+state. A `published` document that is otherwise read-only still
+shows the DBG button to a developer in dev or a `?debug=1` session
+— debug is diagnostic, not authoring.
+
+### Coordination with font gating
+
+Debug-overlay labels use `TK.font.data` (JetBrains Mono). Once the
+forthcoming font gate (Stage 4 Task 3) lands, the debug render
+effect will need the same `fontsReady` gate as content rendering to
+avoid fallback-font labels during the first-load window. Until
+then, labels may render briefly with system monospace on a cold
+cache. Non-blocking for dev tooling.
+
+### Explicit non-goals
+
+- Safe-zone overlay for export presets. Deferred to a later Stage 4
+  task.
+- Performance metrics (render timings, draw-call counts). Out of
+  scope.
+- Interactive picks on the debug overlay. Read-only visualization
+  only; the hover/selection canvas continues to own pointer
+  affordances.
+
