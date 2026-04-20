@@ -53,6 +53,32 @@ Rules:
 
 ---
 
+### DEBT-027: Autosave retry-reset effect uses exhaustive-deps exception
+
+- **Source:** Stage 4 Task 2 implementation (`claude/stage4-task2-autosave`)
+- **Added:** 2026-04-20
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** accepted
+- **Description:** In `frontend-public/src/components/editor/index.tsx` a
+  `useEffect(() => { if (state.saveError) retryAttemptRef.current = 0; },
+  [doc])` uses `// eslint-disable-next-line react-hooks/exhaustive-deps`
+  to avoid including `state.saveError` in its dependency array.
+  Including it would cause the effect to re-run on every `SAVE_FAILED`
+  dispatch, resetting the attempt counter and defeating the exponential
+  backoff progression. The effect is intended to reset retries only
+  when the user edits the doc during error state.
+- **Impact:** One ESLint disable directive. No runtime consequence —
+  the behaviour is correct and fully covered by the autosave test
+  "user edit during error resets retry budget".
+- **Resolution:** Refactor autosave orchestration into a small reducer
+  (or a hand-rolled state machine) where attempt count lives alongside
+  saveError, replacing the pair of effect + ref with a single state
+  transition table. Out of scope for Task 2.
+- **Target:** Future autosave refactor (no concrete milestone).
+
+---
+
 ## Resolved
 
 | ID | Description | Resolved in | Date |

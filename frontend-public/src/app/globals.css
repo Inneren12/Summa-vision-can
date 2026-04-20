@@ -265,3 +265,12 @@ body {
     --duration-page:  0ms;
   }
 }
+
+/* ───────────────────────────────────────────────────────────
+   Editor — SaveStatusIndicator pulse (Stage 4 Task 2)
+   Amber dot pulses while a PATCH is in flight.
+   ─────────────────────────────────────────────────────────── */
+@keyframes summa-save-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}

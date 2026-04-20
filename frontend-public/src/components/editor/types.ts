@@ -9,6 +9,13 @@ export type BlockStatus = 'required_locked' | 'required_editable' | 'optional_de
 export type BlockCategory = 'text' | 'data' | 'chart' | 'struct';
 export type PageKey = 'size' | 'background' | 'palette';
 
+// Autosave UI status (Stage 4 Task 2). Ephemeral — lives in component state,
+// not reducer. `idle` means no scheduled or in-flight save; combined with
+// `dirty=false` it means fully saved. `pending` means a debounce timer is
+// armed. `saving` means a PATCH is in flight. `error` means the last attempt
+// failed and the retry orchestration is active (or has exhausted its budget).
+export type SaveStatus = 'idle' | 'pending' | 'saving' | 'error';
+
 export interface BlockProps {
   [key: string]: any;
 }

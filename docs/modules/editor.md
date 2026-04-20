@@ -850,3 +850,96 @@ If admin use on tablets becomes a requirement, migrate to the unified
 pointer model in a dedicated PR. Until then, mouse events are
 sufficient.
 
+## Autosave (Stage 4 Task 2)
+
+Task 2 adds automatic persistence on top of the manual Ctrl+S path from
+Task 0. There is no `localStorage` backup and no offline queue — the
+autosave operates directly against the admin proxy, same as Ctrl+S.
+
+### Trigger
+
+- Debounce: `AUTOSAVE_DEBOUNCE_MS = 2000` quiet milliseconds after the
+  last mutating reducer action.
+- Implementation: a `useEffect` with `[state.doc, state.dirty,
+  publicationId, performSave]` in its dependency array. Every mutating
+  reducer action returns a new `state.doc` reference; navigational
+  actions (`SELECT`, `SET_MODE`, `SAVED_IF_MATCHES`, `SAVE_FAILED`,
+  `DISMISS_SAVE_ERROR`) preserve reference. Watching `doc` alone is
+  therefore a clean "did content change" signal — no new reducer
+  actions or fields were added.
+- A new edit cancels and reschedules the pending timer via the effect's
+  cleanup function.
+- Ctrl+S cancels any pending timer and fires an immediate save. Same
+  code path as autosave (both call `performSave`); the Ctrl+S handler
+  additionally clears `autosaveTimerRef.current` before invoking
+  `performSave` so the scheduled PATCH does not fire redundantly.
+
+### Status indicator
+
+`SaveStatus = 'idle' | 'pending' | 'saving' | 'error'` is local
+component state, not reducer state. It exists only for the TopBar
+`SaveStatusIndicator`; storing it in the reducer would pollute undo
+history and serialisation.
+
+| saveStatus | dirty | TopBar glyph                            |
+|------------|-------|-----------------------------------------|
+| idle       | false | nothing (fully saved)                   |
+| idle       | true  | amber dot, "Unsaved changes"            |
+| pending    | true  | amber dot, "Unsaved changes"            |
+| saving     | true  | amber dot pulsing, "Saving…"            |
+| error      | any   | red dot, "Save failed"                  |
+
+The pulse uses `@keyframes summa-save-pulse` in `app/globals.css` (50%
+opacity dip). Token palette: amber = `TK.c.acc`, red = `TK.c.err`.
+
+### Failure handling — exponential backoff
+
+- `SAVE_FAILED` populates `state.saveError` (unchanged from Task 0 fix).
+- An orthogonal `useEffect` watches `state.saveError` AND a monotonic
+  `saveFailureGen` counter, scheduling auto-retries via setTimeout at
+  `RETRY_DELAYS_MS = [2000, 4000, 8000, 16000]`. The failure-generation
+  counter is required because React dep comparison uses `Object.is`;
+  without it, successive failures with the same error string would
+  leave the dep array unchanged and the effect would not re-run.
+- After four attempts the budget is exhausted; no further auto-retry
+  fires. The NotificationBanner continues to show with a "Retry now"
+  button.
+- A new mutating user edit resets `retryAttemptRef.current` to 0 so the
+  next failure re-enters the delay schedule from `delay[0]`.
+- The retry schedule is driven by an effect, not by `performSave`'s
+  `.catch`, so the save function stays pure and reusable from the
+  debounce path and the Ctrl+S / Retry-now paths.
+
+### NotificationBanner extension
+
+The save-error branch now renders:
+- "Retrying in Xs…" (live countdown, ticks every 250ms) when
+  `retryCountdownMs != null`.
+- "Retry now" button when `onManualRetry` is provided.
+- Existing Dismiss button (dispatches `DISMISS_SAVE_ERROR`).
+
+The other three tiers (import-error, rejection, warnings) are
+untouched.
+
+### `beforeunload` guard
+
+While `state.dirty === true`, a `beforeunload` listener is attached to
+`window`. It calls `preventDefault()` + assigns `returnValue = ''` to
+trigger the native "leave site?" prompt. Modern browsers ignore custom
+messages; the guard is only concerned with triggering the prompt at
+all. This covers the 2-second window between an edit and the next
+scheduled save.
+
+### What this task deliberately does NOT include
+
+- No `localStorage` backup. If the backend is unreachable and the tab
+  closes, the current 2s window of edits is lost. Acceptable for
+  Stage 4 scope.
+- No pause-on-tab-hidden behaviour. Timers continue to fire when the
+  tab is backgrounded.
+- No permission gate inside `performSave` — workflow gating is already
+  enforced at the reducer layer, so dirty/non-dirty is a sufficient
+  signal for whether a PATCH should fire.
+- Pointer/touch input for debounce reset (covered by the mouse-events
+  scope note for Task 1 above).
+
