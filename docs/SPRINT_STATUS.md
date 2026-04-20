@@ -127,6 +127,7 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-4-5 | Stage 4 Task 5 — WCAG AA contrast validator | ✅ | E-4-0 |
 | E-4-6 | Stage 4 Task 6 — Font lifecycle hardening (late-subset closure) | ✅ | E-4-3 |
 | E-4-9a | Stage 4 Task 9a — Perf: instrumentation + editor memoization | ✅ | E-4-6 |
+| E-4-10a | Stage 4 Task 10a — Production blockers (InquiryForm CAPTCHA + deploy docs) | ✅ | E-4-9a |
 
 - E-4-9b (public gallery perf: code splitting, DownloadModal lazy load): deferred to separate PR
 - E-4-6 follow-up (fonts.load text argument): pending human commit

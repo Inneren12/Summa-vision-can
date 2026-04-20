@@ -1,10 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { isBlockedEmailDomain } from '@/lib/constants/free_domains';
+import TurnstileWidget, {
+  type TurnstileWidgetHandle,
+} from '@/components/forms/TurnstileWidget';
 
 const inquirySchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
@@ -38,6 +41,8 @@ const BUDGET_OPTIONS = [
 export default function InquiryForm() {
   const [formState, setFormState] = useState<FormState>('idle');
   const [serverError, setServerError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileWidgetHandle | null>(null);
 
   const {
     register,
@@ -53,7 +58,26 @@ export default function InquiryForm() {
     },
   });
 
+  const handleTurnstileSuccess = useCallback((token: string) => {
+    setTurnstileToken(token);
+  }, []);
+
+  const handleTurnstileError = useCallback(() => {
+    setTurnstileToken(null);
+  }, []);
+
+  const resetTurnstile = useCallback(() => {
+    turnstileRef.current?.reset();
+    setTurnstileToken(null);
+  }, []);
+
   async function onSubmit(values: InquiryFormValues) {
+    if (!turnstileToken) {
+      setServerError('Please complete the verification challenge.');
+      setFormState('error');
+      return;
+    }
+
     setFormState('submitting');
     setServerError(null);
 
@@ -63,7 +87,10 @@ export default function InquiryForm() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(values),
+          body: JSON.stringify({
+            ...values,
+            turnstile_token: turnstileToken,
+          }),
         },
       );
 
@@ -72,10 +99,15 @@ export default function InquiryForm() {
         return;
       }
 
-      if (res.status === 422) {
+      if (res.status === 403) {
+        setServerError('Verification failed. Please try again.');
+        resetTurnstile();
+      } else if (res.status === 422) {
         const data = await res.json().catch(() => null);
         setServerError(
-          data?.detail ?? 'Invalid submission. Please check your input.',
+          typeof data?.detail === 'string'
+            ? data.detail
+            : 'Invalid submission. Please check your input.',
         );
       } else if (res.status === 429) {
         setServerError(
@@ -125,6 +157,7 @@ export default function InquiryForm() {
 
   return (
     <form
+      // eslint-disable-next-line react-hooks/refs
       onSubmit={handleSubmit(onSubmit)}
       noValidate
       className="space-y-6"
@@ -248,6 +281,13 @@ export default function InquiryForm() {
         )}
       </div>
 
+      {/* Turnstile CAPTCHA widget */}
+      <TurnstileWidget
+        ref={turnstileRef}
+        onSuccess={handleTurnstileSuccess}
+        onError={handleTurnstileError}
+      />
+
       {/* Server error */}
       {serverError && (
         <p
@@ -262,7 +302,7 @@ export default function InquiryForm() {
       {/* Submit */}
       <button
         type="submit"
-        disabled={formState === 'submitting'}
+        disabled={formState === 'submitting' || !turnstileToken}
         className="w-full rounded-button bg-btn-primary-bg px-6 py-3 font-semibold text-btn-primary-text transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {formState === 'submitting' ? (

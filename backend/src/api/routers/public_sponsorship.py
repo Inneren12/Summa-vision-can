@@ -23,6 +23,7 @@ from src.schemas.events import EventType
 from src.services.audit import AuditWriter
 from src.services.crm.scoring import LeadScoringService
 from src.services.notifications.slack import SlackNotifierService
+from src.services.security.turnstile import TurnstileValidator
 
 logger = structlog.get_logger(module="public_sponsorship")
 
@@ -41,6 +42,7 @@ class SponsorshipInquiryRequest(BaseModel):
     email: EmailStr
     budget: str = Field(min_length=1, max_length=100)
     message: str = Field(min_length=10, max_length=2000)
+    turnstile_token: str = Field(min_length=1)
 
 
 class SponsorshipInquiryResponse(BaseModel):
@@ -68,6 +70,21 @@ def _get_slack_notifier(
     )
 
 
+def _get_turnstile_validator(
+    request: Request,
+    settings: Settings = Depends(get_settings),
+) -> TurnstileValidator:
+    """Provide a TurnstileValidator via dependency injection.
+
+    Reuses the shared validator from ``services.security.turnstile``
+    and the app-scoped ``httpx.AsyncClient`` for connection reuse.
+    """
+    return TurnstileValidator(
+        secret_key=settings.turnstile_secret_key,
+        http_client=request.app.state.http_client,
+    )
+
+
 @router.post(
     "/inquire",
     response_model=SponsorshipInquiryResponse,
@@ -78,10 +95,12 @@ async def sponsorship_inquire(
     request: Request,
     db: AsyncSession = Depends(get_db),
     slack: SlackNotifierService = Depends(_get_slack_notifier),
+    turnstile: TurnstileValidator = Depends(_get_turnstile_validator),
 ) -> SponsorshipInquiryResponse:
     """Submit a sponsorship inquiry.
 
     Rate limited to 1 request per 5 minutes per IP.
+    Turnstile CAPTCHA is validated before any side effects.
     B2C emails are rejected with 422.
     """
     client_ip = _get_client_ip(request)
@@ -91,6 +110,15 @@ async def sponsorship_inquire(
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many requests. Please try again later.",
+        )
+
+    # Validate Turnstile CAPTCHA (fails closed on network/HTTP errors).
+    # Generic 403 — never leak Cloudflare error codes to the client.
+    turnstile_valid = await turnstile.validate(payload.turnstile_token, client_ip)
+    if not turnstile_valid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CAPTCHA verification failed",
         )
 
     # Score email
