@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import type { EditorMode, QAMode, LeftTab, BlockRegistryEntry, CanonicalDocument, SaveStatus } from './types';
+import type { EditorMode, QAMode, LeftTab, BlockRegistryEntry, CanonicalDocument, SaveStatus, EditorAction } from './types';
 import { TK } from './config/tokens';
 import { PALETTES } from './config/palettes';
 import { BGS } from './config/backgrounds';
@@ -77,6 +77,41 @@ export interface InfographicEditorProps {
   publicationId?: string;
 }
 
+/**
+ * Dev-only performance mark helper. Returns a function that, when
+ * called, emits a `performance.measure` between the start mark and
+ * the call site. Zero cost outside development (no-op function returned).
+ *
+ * Usage:
+ *   const end = perfMark('editor.render');
+ *   // ... work ...
+ *   end();
+ *
+ * Results visible in DevTools Performance tab under User Timing.
+ */
+function perfMark(label: string): () => void {
+  if (
+    process.env.NODE_ENV !== 'development' ||
+    typeof performance === 'undefined' ||
+    !performance.mark
+  ) {
+    return () => {};
+  }
+
+  const startMark = `${label}:start`;
+  const endMark = `${label}:end`;
+  performance.mark(startMark);
+
+  return () => {
+    performance.mark(endMark);
+    try {
+      performance.measure(label, startMark, endMark);
+    } catch {
+      // Ignore — marks may have been garbage-collected under memory pressure.
+    }
+  };
+}
+
 export default function InfographicEditor({
   initialDoc,
   publicationId,
@@ -130,11 +165,19 @@ export default function InfographicEditor({
     }
   }, [initialDoc]);
 
-  const [state, dispatch] = useReducer(
+  const [state, rawDispatch] = useReducer(
     reducer,
     undefined,
     () => initState(initialValidatedDoc),
   );
+  const dispatch = useMemo(() => {
+    if (process.env.NODE_ENV !== 'development') return rawDispatch;
+    return (action: EditorAction) => {
+      const end = perfMark(`reducer.${action.type}`);
+      rawDispatch(action);
+      end();
+    };
+  }, [rawDispatch]);
   const savingRef = useRef<boolean>(false);
   // Autosave UI status (Stage 4 Task 2). Local state — not reducer — because
   // it is ephemeral, per-session, and has no place in undo history or
@@ -201,7 +244,7 @@ export default function InfographicEditor({
   const { doc, selectedBlockId: selId, undoStack, redoStack, dirty, mode } = state;
   // Mode lives in reducer state (single source of truth for permission gate).
   // setMode is a thin wrapper that dispatches SET_MODE.
-  const setMode = useCallback((m: EditorMode) => dispatch({ type: "SET_MODE", mode: m }), []);
+  const setMode = useCallback((m: EditorMode) => dispatch({ type: "SET_MODE", mode: m }), [dispatch]);
   const pal = PALETTES[doc.page.palette] || PALETTES.housing;
   const sz = SIZES[doc.page.size] || SIZES.instagram_1080;
   const selB = selId ? doc.blocks[selId] : null;
@@ -229,22 +272,34 @@ export default function InfographicEditor({
       workflowPerms.structural && basePerms.toggleVisibility(reg),
   }), [basePerms, workflow, workflowPerms]);
 
-  const vr = useMemo(() => validate(doc), [doc]);
+  const vr = useMemo(() => {
+    const end = perfMark('editor.validate');
+    const result = validate(doc);
+    end();
+    return result;
+  }, [doc]);
   const dispErr = qaMode === "publish" ? vr.errors : [];
   const errs = vr.errors.length, warns = vr.warnings.length;
   const canExp = errs === 0;
   const si = errs > 0 ? "\uD83D\uDD34" : warns > 0 ? "\uD83D\uDFE1" : "\uD83D\uDFE2";
 
   const render = useCallback(() => {
+    const end = perfMark('editor.render');
     const c = cvs.current;
-    if (!c) return;
+    if (!c) {
+      end();
+      return;
+    }
     // Stage 4 Task 3: skip rendering until fonts are loaded. When
     // fontsReady flips true this callback re-memoizes (new dep value),
     // the render-trigger effect re-runs, and the first real paint
     // happens with correct typography instead of system fallbacks.
     // Leave hitAreasRef untouched on this path — it is initially `[]`
     // and handlers remain consistent until the first real render.
-    if (!fontsReady) return;
+    if (!fontsReady) {
+      end();
+      return;
+    }
     const dpr = window.devicePixelRatio || 2;
     c.width = sz.w * dpr;
     c.height = sz.h * dpr;
@@ -253,6 +308,7 @@ export default function InfographicEditor({
       // jsdom / headless: render can't run but the hit-area ref must still
       // be consistent with the doc state the handlers will see.
       hitAreasRef.current = [];
+      end();
       return;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -320,6 +376,7 @@ export default function InfographicEditor({
       debugSectionsRef.current = [];
       debugEntriesRef.current = [];
     }
+    end();
   }, [doc, pal, sz, fontsReady, debugEnabled]);
   useEffect(() => { render(); }, [render]);
 
@@ -446,7 +503,7 @@ export default function InfographicEditor({
     // `null` hit ⇒ empty-space click deselects. Mirrors the implicit
     // deselect that SWITCH_TPL / IMPORT already do in the reducer.
     dispatch({ type: "SELECT", blockId: hit });
-  }, [sz.w, sz.h]);
+  }, [dispatch, sz.w, sz.h]);
 
   const handleCanvasMouseMove = useCallback((e: ReactMouseEvent<HTMLCanvasElement>) => {
     const canvas = cvs.current;
@@ -537,7 +594,7 @@ export default function InfographicEditor({
       .finally(() => {
         savingRef.current = false;
       });
-  }, [dirty, doc, publicationId]);
+  }, [dirty, doc, dispatch, publicationId]);
 
   // Debounced autosave (Stage 4 Task 2). Every mutating reducer action
   // produces a new `state.doc` reference; navigational actions (SELECT,
@@ -800,7 +857,7 @@ export default function InfographicEditor({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [performSave, debugAvailable]);
+  }, [dispatch, performSave, debugAvailable]);
 
   const importJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -885,7 +942,10 @@ export default function InfographicEditor({
     });
   }, [canExp, fontsReady, doc, pal, sz]);
 
-  const canEdit = (reg: typeof selR, k: string) => reg ? effectivePerms.editBlock(reg, k) : false;
+  const canEdit = useCallback(
+    (reg: typeof selR, k: string) => (reg ? effectivePerms.editBlock(reg, k) : false),
+    [effectivePerms],
+  );
 
   return (
     <div style={{ fontFamily: TK.font.body, background: TK.c.bgApp, color: TK.c.txtP, height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -966,7 +1026,7 @@ export default function InfographicEditor({
           selR={selR ?? null}
           selId={selId}
           mode={mode}
-          canEdit={(reg, k) => canEdit(reg, k)}
+          canEdit={canEdit}
           onRequestNote={requestNote}
           contrastIssues={vr.contrastIssues}
         />

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo } from 'react';
 import type { Block, BlockRegistryEntry, EditorAction, EditorMode, BarItem, KPIItem, SeriesItem } from '../types';
 import type { ContrastIssue } from '../validation/contrast';
 import { TK } from '../config/tokens';
@@ -35,7 +35,7 @@ function getBoolProp(block: Block, key: string): boolean {
   return typeof v === "boolean" ? v : false;
 }
 
-export function Inspector({ selB, selR, selId, mode, canEdit, dispatch, contrastIssues }: InspectorProps) {
+function InspectorImpl({ selB, selR, selId, mode, canEdit, dispatch, contrastIssues }: InspectorProps) {
   const statusBadge = selR ? badge(selR.status) : null;
   const blockIssues = selId ? contrastIssues.filter(i => i.blockId === selId) : [];
 
@@ -152,3 +152,5 @@ export function Inspector({ selB, selR, selId, mode, canEdit, dispatch, contrast
     </div>
   );
 }
+
+export const Inspector = memo(InspectorImpl);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useId, useMemo, useRef, useState } from 'react';
+import React, { memo, useId, useMemo, useRef, useState } from 'react';
 import type {
   Block,
   BlockRegistryEntry,
@@ -34,7 +34,7 @@ export interface RightRailProps {
   contrastIssues: ContrastIssue[];
 }
 
-export function RightRail({
+function RightRailImpl({
   state,
   dispatch,
   selB,
@@ -184,6 +184,8 @@ export function RightRail({
     </aside>
   );
 }
+
+export const RightRail = memo(RightRailImpl);
 
 function tabButtonStyle(active: boolean): React.CSSProperties {
   return {
