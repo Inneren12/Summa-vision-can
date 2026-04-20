@@ -1,7 +1,7 @@
 import type { CanonicalDocument, Palette } from '../types';
 import { TK } from '../config/tokens';
 import { BR } from './blocks';
-import type { RenderResult } from './types';
+import type { RenderedBlockEntry } from './types';
 
 export const SECTION_LAYOUT: Record<string, (w: number, h: number, s: number, p: number) => { x: number; y: number; w: number; h: number }> = {
   header: (w, h, s, p) => ({ x: p, y: p, w: w - p * 2, h: 130 * s }),
@@ -17,10 +17,10 @@ export function renderDoc(
   w: number,
   h: number,
   pal: Palette,
-): Array<{ blockId: string; result: RenderResult }> {
+): RenderedBlockEntry[] {
   const s = w / 1080;
   const pad = 64 * s;
-  const results: Array<{ blockId: string; result: RenderResult }> = [];
+  const results: RenderedBlockEntry[] = [];
 
   ctx.fillStyle = TK.c.acc;
   ctx.fillRect(0, 0, w, 4 * s);
@@ -43,7 +43,11 @@ export function renderDoc(
       const fn = BR[block.type];
       if (!fn) return;
       const result = fn(ctx, block.props, la.x, la.y + cy, la.w, la.h - cy, pal, s);
-      results.push({ blockId: bid, result });
+      results.push({
+        blockId: bid,
+        sectionRect: { x: la.x, y: la.y, w: la.w, h: la.h },
+        result,
+      });
       cy += result.height;
     });
 

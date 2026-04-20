@@ -1,4 +1,9 @@
-import { hitTest, clientToLogical, type HitAreaEntry } from '../../src/components/editor/utils/hit-test';
+import {
+  hitTest,
+  clientToLogical,
+  clampRectToSection,
+  type HitAreaEntry,
+} from '../../src/components/editor/utils/hit-test';
 
 function rect(blockId: string, x: number, y: number, w: number, h: number): HitAreaEntry {
   return { blockId, hitArea: { x, y, w, h } };
@@ -99,5 +104,74 @@ describe('clientToLogical', () => {
   test('click at rect origin maps to logical (0, 0)', () => {
     const canvas = stubCanvas({ width: 720, height: 720, left: 10, top: 20 });
     expect(clientToLogical(canvas, 10, 20, 1080, 1080)).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe('clampRectToSection', () => {
+  const section = { x: 10, y: 20, w: 100, h: 50 };
+
+  test('rect fully inside section → unchanged', () => {
+    const rect = { x: 20, y: 30, w: 40, h: 20 };
+    expect(clampRectToSection(rect, section)).toEqual(rect);
+  });
+
+  test('rect overflows bottom → clamped to section bottom', () => {
+    const rect = { x: 20, y: 30, w: 40, h: 200 };
+    expect(clampRectToSection(rect, section)).toEqual({ x: 20, y: 30, w: 40, h: 40 });
+  });
+
+  test('rect overflows right → clamped to section right', () => {
+    const rect = { x: 20, y: 30, w: 200, h: 10 };
+    expect(clampRectToSection(rect, section)).toEqual({ x: 20, y: 30, w: 90, h: 10 });
+  });
+
+  test('rect starts above section → top clamped, height reduced', () => {
+    const rect = { x: 20, y: 0, w: 40, h: 40 };
+    expect(clampRectToSection(rect, section)).toEqual({ x: 20, y: 20, w: 40, h: 20 });
+  });
+
+  test('rect fully outside section (below) → zero-area at origin', () => {
+    const rect = { x: 20, y: 200, w: 40, h: 10 };
+    const result = clampRectToSection(rect, section);
+    expect(result.w).toBe(0);
+    expect(result.h).toBe(0);
+  });
+
+  test('rect fully outside section (right) → zero-area at origin', () => {
+    const rect = { x: 500, y: 30, w: 40, h: 10 };
+    const result = clampRectToSection(rect, section);
+    expect(result.w).toBe(0);
+    expect(result.h).toBe(0);
+  });
+
+  test('hitTest with zero-area rect → never matches', () => {
+    const entries = [{ blockId: 'a', hitArea: { x: 10, y: 20, w: 0, h: 0 } }];
+    expect(hitTest(entries, 10, 20)).toBeNull();
+    expect(hitTest(entries, 5, 5)).toBeNull();
+  });
+
+  test('two-block overlap scenario — clamping prevents adjacent-section steal', () => {
+    // Simulate an overflowing hero block and an adjacent context block.
+    // Without clamping, hero's hit area reaches into context's section.
+    // With clamping, hero is confined to its section and context wins.
+    const heroSection = { x: 0, y: 0, w: 1080, h: 400 };
+    // contextSection (x:0, y:400, w:1080, h:400) is implicit — the context
+    // block's raw hit rect is already within bounds so clamping is a no-op.
+
+    const rawHero = { x: 100, y: 100, w: 800, h: 500 }; // overflows!
+    const contextBlock = { x: 100, y: 450, w: 800, h: 100 };
+
+    const clampedHero = clampRectToSection(rawHero, heroSection);
+    expect(clampedHero.h).toBe(300); // clamped to section bottom
+
+    // Build entries in draw order (hero first, context later = topmost).
+    const entries = [
+      { blockId: 'hero', hitArea: clampedHero },
+      { blockId: 'context', hitArea: contextBlock },
+    ];
+
+    // Point at y=500 is in context's section, not hero's.
+    // Without clamping, raw hero (y+h=600) would match and steal selection.
+    expect(hitTest(entries, 500, 500)).toBe('context');
   });
 });

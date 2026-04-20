@@ -784,3 +784,69 @@ workflow state. This is intentional: review and approval flows need
 selection to drive the Inspector and Review panel even when edits are
 disabled.
 
+### Outline colour tokens
+
+The overlay canvas uses two distinct tokens for its two outline states:
+
+| State    | Token        | Value (at time of writing) | Rationale |
+|----------|--------------|----------------------------|-----------|
+| Hover    | `TK.c.txtS`  | `#8B949E` (secondary grey) | Subtle, doesn't compete visually with selection |
+| Selected | `TK.c.acc`   | `#FBBF24` (yellow accent)  | Matches LeftPanel selection highlight semantics |
+
+Historical note: an earlier iteration of the Task 1 spec referenced
+`TK.c.fgSec` and `TK.c.bgAct`. Neither is usable:
+
+- `fgSec` does not exist in `config/tokens.ts`.
+- `bgAct` is a background fill (`#22252D`, dark grey), not viable as a
+  stroke on a dark canvas.
+
+`txtS` and `acc` are the confirmed equivalents in use. Both
+definitions live in `renderer/overlay.ts#OVERLAY_STYLE` as the single
+source of truth; changing outline colours means editing that one
+const.
+
+### Hit area clamping to section bounds
+
+Each block's `hitArea` (from `RenderResult.hitArea`) is clamped to its
+owning section's rect before being stored in `hitAreasRef`. This closes
+a theoretical cross-section hit-steal scenario where an overflowing
+block renderer returns a `hitArea.h` that extends past the visible
+section — the content canvas clips draws to the section rect, but raw
+hit areas don't, so uncovered pixels in an adjacent section could
+match the overflowing block and steal selection from its actual
+occupant.
+
+Mechanics:
+
+- `renderer/engine.ts#renderDoc` now returns
+  `Array<RenderedBlockEntry>` where each entry carries the block's
+  `sectionRect` alongside its `RenderResult`.
+- `index.tsx` calls
+  `clampRectToSection(entry.result.hitArea, entry.sectionRect)` before
+  writing into `hitAreasRef`.
+- `utils/hit-test.ts#clampRectToSection` is a pure function that
+  returns the rectangle intersection; an empty intersection collapses
+  to a zero-area rect that `hitTest` can never match.
+
+Clamping is per-section (not canvas-wide) because two overflowing
+blocks in different sections could otherwise still fight for the same
+pixels through the canvas-wide clamp.
+
+### Input scope: mouse events only
+
+Task 1 wires `onMouseDown`, `onMouseMove`, and `onMouseLeave` on the
+content canvas. Touch and stylus events are **not** handled.
+
+This is a conscious scope choice for Stage 4:
+
+- The admin surface is desktop-only.
+- Touch/stylus would require `onPointerDown` / `onPointerMove` with
+  pointer-capture semantics, plus consideration for long-press vs tap
+  vs drag.
+- Adding pointer events in a follow-up is a small change (swap the
+  four event names, adjust the type) with no architectural impact.
+
+If admin use on tablets becomes a requirement, migrate to the unified
+pointer model in a dedicated PR. Until then, mouse events are
+sufficient.
+
