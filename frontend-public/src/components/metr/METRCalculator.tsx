@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchMETRCalculation, fetchMETRCurve } from '@/lib/api/metr';
+import { logError } from '@/lib/log-error';
 import type {
   FamilyType,
   METRCalculateResponse,
@@ -78,7 +79,7 @@ export default function METRCalculator() {
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      console.error('METR calculation failed:', err);
+      logError(err, { source: 'metr.METRCalculator' });
       setError(err instanceof Error ? err.message : 'Failed to load METR data.');
     } finally {
       if (!controller.signal.aborted) setLoading(false);

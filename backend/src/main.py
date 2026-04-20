@@ -126,11 +126,18 @@ async def lifespan(app: FastAPI):
     structlog.get_logger().info("app_stopped")
 
 
+# Production hides the OpenAPI schema + interactive docs. Development
+# keeps them exposed for convenience. Gated on settings.environment.
+_is_prod: bool = settings_on_startup.environment == "production"
+
 app = FastAPI(
     title=settings_on_startup.app_name,
     version="0.1.0",
     description="Canadian housing data ETL and visualization API.",
     lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 # ---------------------------------------------------------------------------
@@ -174,7 +181,6 @@ app.add_middleware(
     allow_origins=[
         "https://summa.vision",
         "https://www.summa.vision",
-        "http://localhost:3000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
