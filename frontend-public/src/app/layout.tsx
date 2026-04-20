@@ -34,7 +34,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${bricolageGrotesque.variable} ${dmSans.variable} ${jetBrainsMono.variable}`}>
-      <body><WebVitalsReporter />{children}</body>
+      <body>
+        <WebVitalsReporter />
+        {children}
+      </body>
     </html>
   );
 }
