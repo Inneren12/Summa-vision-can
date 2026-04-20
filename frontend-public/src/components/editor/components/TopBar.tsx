@@ -25,8 +25,7 @@ interface TopBarProps {
   markSaved: () => void;
   exportPNG: () => void;
   saveStatus: SaveStatus;
- fontsReady: boolean;
-
+  fontsReady: boolean;
   // Stage 4 Task 4: debug overlay toggle. Availability is computed by the
   // editor (dev auto / prod `?debug=1`); the button is only rendered when
   // `debugAvailable === true`. The active-state styling is driven by
