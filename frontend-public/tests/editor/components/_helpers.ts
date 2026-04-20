@@ -45,3 +45,57 @@ export function makeComment(over: Partial<Comment> & Pick<Comment, "id" | "block
     ...over,
   };
 }
+
+/**
+ * Mock `document.fonts` with a ready promise whose resolution the test
+ * controls. Stage 4 Task 3 introduced a `document.fonts.ready` gate on
+ * canvas render + PNG export; jsdom exposes the API shape but its
+ * default resolution timing is not deterministic for our needs.
+ *
+ * Usage (pending by default):
+ *
+ *   const fonts = mockDocumentFontsReady();
+ *   // render editor, assert EXPORT disabled ...
+ *   fonts.resolve();
+ *   await flushPromises();
+ *   // assert EXPORT enabled ...
+ *   fonts.restore();
+ *
+ * For tests that don't care about the pending state, pass { initial: 'resolved' }.
+ */
+export interface FontsReadyHandle {
+  resolve: () => void;
+  restore: () => void;
+}
+
+export function mockDocumentFontsReady(
+  opts: { initial?: "pending" | "resolved" } = {},
+): FontsReadyHandle {
+  const initial = opts.initial ?? "pending";
+
+  let resolveFn: () => void = () => {};
+  const ready =
+    initial === "resolved"
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => {
+          resolveFn = resolve;
+        });
+
+  const originalFonts = Object.getOwnPropertyDescriptor(document, "fonts");
+
+  Object.defineProperty(document, "fonts", {
+    configurable: true,
+    value: { ready },
+  });
+
+  return {
+    resolve: () => resolveFn(),
+    restore: () => {
+      if (originalFonts) {
+        Object.defineProperty(document, "fonts", originalFonts);
+      } else {
+        delete (document as unknown as { fonts?: unknown }).fonts;
+      }
+    },
+  };
+}

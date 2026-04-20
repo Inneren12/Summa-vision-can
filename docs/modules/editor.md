@@ -973,3 +973,75 @@ scheduled save.
 - Pointer/touch input for debounce reset (covered by the mouse-events
   scope note for Task 1 above).
 
+## Font loading and deterministic export (Stage 4 Task 3)
+
+### Problem
+
+`next/font/google` loads Bricolage Grotesque, DM Sans, and JetBrains Mono
+asynchronously. Canvas `ctx.font = '700 48px <family>'` falls back to the
+token string's second component (`system-ui` / `monospace`) until the web
+font file finishes loading. Without a gate:
+
+- Initial canvas mount renders with fallback fonts, then flickers to the
+  real faces when load completes.
+- `exportPNG` can fire before fonts finish loading → the exported PNG uses
+  fallback fonts while the preview (if the user waited) shows the real
+  ones. Silent visual drift between preview and output.
+
+Task 3 is named "deterministic export" because closing this gap is the
+point.
+
+### Solution
+
+`fontsReady: boolean` — local `useState` in `InfographicEditor`. Stays
+out of the reducer because it is ephemeral, per-session UI state with
+no place in undo history or persistence (same rationale as Task 1's
+`hoveredBlockId` and Task 2's `saveStatus`).
+
+On mount, a one-shot effect races `document.fonts.ready` against a 5s
+timeout. Whichever wins flips `fontsReady` to true. On timeout, a
+dev-only `console.warn` documents the fallback so development catches
+the drift early.
+
+Two gate points:
+- **Render effect** — `render` useCallback early-returns when
+  `!fontsReady`; `fontsReady` is in the dep array, so when it flips
+  true the callback re-memoizes, the render-trigger effect re-runs,
+  and the first real paint happens with correct typography.
+- **`exportPNG`** — awaits `document.fonts.ready` before constructing
+  the export canvas. Belt-and-suspenders: the button is also disabled
+  while `!fontsReady`, so this await normally resolves instantly. It
+  protects against the pathological case where the button was pressed
+  in a moment when the flag was briefly stale.
+
+### Not gated
+
+- **Overlay canvas** (hover/selection outlines from Task 1) renders
+  only `strokeRect` — no font dependency. It remains fully responsive
+  while fonts load, so the user can hover/click blocks before first
+  real paint.
+- **Autosave** (Task 2) is data-only. Its debounce timer and retry
+  orchestration have no font dependency.
+- **`exportJSON`** serializes the document to JSON. No canvas, no
+  fonts, no gate.
+
+### UX
+
+The EXPORT button disables until `canExp && fontsReady`. Tooltip
+priority: validation errors first (user must fix them before export
+works anyway), then the fonts-loading message. Typical fonts-loading
+window is <100ms on warm cache; users rarely see the disabled state
+outside first page load. No spinner or keyframe — the existing muted
+disabled style (opacity 0.5, `TK.c.txtM` background, not-allowed
+cursor) is sufficient.
+
+### Timeout rationale
+
+5 seconds. `document.fonts.ready` resolves even on font URL failure
+(the FontFaceSet transitions through `loaded` regardless of individual
+face outcomes), so the timeout should rarely fire in practice. It
+exists as insurance against pathological browser states where the
+promise hangs forever. The `console.warn` on timeout is dev-only and
+helps catch environment issues during development. No retry — once
+`fontsReady` flips true it stays true for the session.
+

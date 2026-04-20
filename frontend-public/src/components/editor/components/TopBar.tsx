@@ -25,9 +25,20 @@ interface TopBarProps {
   markSaved: () => void;
   exportPNG: () => void;
   saveStatus: SaveStatus;
+  fontsReady: boolean;
 }
 
-export function TopBar({ doc, dispatch, undoStack, redoStack, dirty, mode, setMode, errs, warns, si, canExp, fileRef, importJSON, exportJSON, markSaved, exportPNG, saveStatus }: TopBarProps) {
+export function TopBar({ doc, dispatch, undoStack, redoStack, dirty, mode, setMode, errs, warns, si, canExp, fileRef, importJSON, exportJSON, markSaved, exportPNG, saveStatus, fontsReady }: TopBarProps) {
+  // Stage 4 Task 3: EXPORT button composes two gates. Validation errors
+  // take priority in the tooltip — the user has to fix those anyway
+  // before export works, and the fonts-loading window is typically
+  // sub-100ms on warm cache.
+  const exportDisabled = !canExp || !fontsReady;
+  const exportMessage = !canExp
+    ? `Export disabled: ${errs} validation error${errs === 1 ? '' : 's'}`
+    : !fontsReady
+      ? 'Export disabled: loading fonts\u2026'
+      : 'Export as PNG';
   return (
     <div style={{ padding: "6px 12px", borderBottom: `1px solid ${TK.c.brd}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -54,10 +65,10 @@ export function TopBar({ doc, dispatch, undoStack, redoStack, dirty, mode, setMo
         <button
           type="button"
           onClick={exportPNG}
-          disabled={!canExp}
-          aria-label={canExp ? "Export as PNG" : `Cannot export: ${errs} validation error${errs === 1 ? "" : "s"}`}
-          title={canExp ? "Export as PNG" : `Export disabled: ${errs} validation error${errs === 1 ? "" : "s"}`}
-          style={{ padding: "3px 7px", fontSize: "8px", fontFamily: TK.font.data, background: canExp ? TK.c.acc : TK.c.txtM, color: TK.c.bgApp, border: "none", borderRadius: "2px", cursor: canExp ? "pointer" : "not-allowed", fontWeight: 700, opacity: canExp ? 1 : .5 }}
+          disabled={exportDisabled}
+          aria-label={exportDisabled ? exportMessage : 'Export as PNG'}
+          title={exportMessage}
+          style={{ padding: "3px 7px", fontSize: "8px", fontFamily: TK.font.data, background: exportDisabled ? TK.c.txtM : TK.c.acc, color: TK.c.bgApp, border: "none", borderRadius: "2px", cursor: exportDisabled ? "not-allowed" : "pointer", fontWeight: 700, opacity: exportDisabled ? 0.5 : 1 }}
         >EXPORT</button>
       </div>
     </div>

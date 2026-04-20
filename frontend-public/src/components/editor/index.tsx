@@ -40,6 +40,13 @@ import type { NoteRequestConfig } from './components/noteRequest';
 const AUTOSAVE_DEBOUNCE_MS = 2000;
 const RETRY_DELAYS_MS = [2000, 4000, 8000, 16000] as const;
 
+// Maximum wait for `document.fonts.ready` before flipping `fontsReady`
+// true anyway (Stage 4 Task 3). Guards against pathological browser
+// states where the promise hangs; normal warm-cache loads resolve in
+// sub-100ms and never hit this ceiling. A dev-only console.warn on
+// timeout documents the fallback for development.
+const FONTS_TIMEOUT_MS = 5000;
+
 export interface InfographicEditorProps {
   /**
    * Optional document to seed the editor with. If omitted or invalid,
@@ -71,6 +78,13 @@ export default function InfographicEditor({
   // derived from `doc/sz/pal` — storing it in state would double-render.
   const hitAreasRef = useRef<HitAreaEntry[]>([]);
   const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
+  // Font-load gate (Stage 4 Task 3). `next/font` loads fonts async; until
+  // they're ready, canvas `ctx.font` falls back to `system-ui`/`monospace`
+  // and preview/export silently diverge from the real typography. The
+  // mount effect below races `document.fonts.ready` against a 5s timeout
+  // and flips this true in either case. Render effect and exportPNG both
+  // gate on it; Export button disables until true.
+  const [fontsReady, setFontsReady] = useState<boolean>(false);
 
   // Synchronously validate initialDoc at mount time so the reducer never
   // sees an invalid doc. Validation failure falls back to the default
@@ -199,6 +213,13 @@ export default function InfographicEditor({
   const render = useCallback(() => {
     const c = cvs.current;
     if (!c) return;
+    // Stage 4 Task 3: skip rendering until fonts are loaded. When
+    // fontsReady flips true this callback re-memoizes (new dep value),
+    // the render-trigger effect re-runs, and the first real paint
+    // happens with correct typography instead of system fallbacks.
+    // Leave hitAreasRef untouched on this path — it is initially `[]`
+    // and handlers remain consistent until the first real render.
+    if (!fontsReady) return;
     const dpr = window.devicePixelRatio || 2;
     c.width = sz.w * dpr;
     c.height = sz.h * dpr;
@@ -221,8 +242,47 @@ export default function InfographicEditor({
       blockId: r.blockId,
       hitArea: clampRectToSection(r.result.hitArea, r.sectionRect),
     }));
-  }, [doc, pal, sz]);
+  }, [doc, pal, sz, fontsReady]);
   useEffect(() => { render(); }, [render]);
+
+  // Mount-time font-load gate (Stage 4 Task 3). Races `document.fonts.ready`
+  // against a 5s timeout; flips `fontsReady` true on either outcome. The
+  // promise is idempotent and cached by the browser, so re-running this
+  // on hot reloads or remounts is safe but unnecessary — hence the
+  // empty dependency array. The `cancelled` flag prevents a late-resolving
+  // race from calling setState on an unmounted component.
+  useEffect(() => {
+    let cancelled = false;
+
+    if (typeof document === 'undefined' || !document.fonts || !document.fonts.ready) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          '[InfographicEditor] document.fonts API unavailable — rendering with fallback fonts',
+        );
+      }
+      setFontsReady(true);
+      return;
+    }
+
+    const readyPromise = document.fonts.ready.then(() => 'ready' as const);
+    const timeoutPromise = new Promise<'timeout'>((resolve) => {
+      window.setTimeout(() => resolve('timeout'), FONTS_TIMEOUT_MS);
+    });
+
+    void Promise.race([readyPromise, timeoutPromise]).then((outcome) => {
+      if (cancelled) return;
+      if (outcome === 'timeout' && process.env.NODE_ENV !== 'production') {
+        console.warn(
+          `[InfographicEditor] document.fonts.ready timed out after ${FONTS_TIMEOUT_MS}ms — rendering with fallback fonts`,
+        );
+      }
+      setFontsReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Overlay render — hover + selection outlines on a separate canvas.
   // Ordered AFTER the content-render effect so `hitAreasRef.current` is
@@ -641,11 +701,23 @@ export default function InfographicEditor({
     r.readAsText(f);
   };
 
-  const exportPNG = useCallback(() => {
+  const exportPNG = useCallback(async () => {
     // QA gate: never produce broken output. PNG export is blocked when there
     // are validation errors; JSON export and SAVE are always allowed so users
     // can checkpoint work-in-progress.
     if (!canExp) return;
+    // Stage 4 Task 3: button is disabled while !fontsReady, so this
+    // early-return is belt-and-suspenders for the pathological case
+    // (devtools prop override, stale memoization).
+    if (!fontsReady) return;
+
+    // Defensive await: idempotent after first resolution. Protects against
+    // a race where fontsReady flipped true on the timeout path but the
+    // real fonts finished loading just after — awaiting here guarantees
+    // the export canvas sees the same font state as the preview.
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+      await document.fonts.ready;
+    }
 
     // Create a separate export canvas at canonical preset size.
     // Preview canvas stays DPR-scaled; export is exact 1:1 dimensions.
@@ -671,7 +743,7 @@ export default function InfographicEditor({
         deferRevoke(url);
       }, "image/png");
     });
-  }, [canExp, doc, pal, sz]);
+  }, [canExp, fontsReady, doc, pal, sz]);
 
   const canEdit = (reg: typeof selR, k: string) => reg ? effectivePerms.editBlock(reg, k) : false;
 
@@ -695,6 +767,7 @@ export default function InfographicEditor({
         markSaved={performSave}
         exportPNG={exportPNG}
         saveStatus={saveStatus}
+        fontsReady={fontsReady}
       />
       <NotificationBanner
         state={state}
