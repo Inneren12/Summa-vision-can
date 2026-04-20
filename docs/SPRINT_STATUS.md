@@ -209,10 +209,19 @@ single scheduled save at `delay[0]=2000ms` instead of two racing
 timers; **B4** the debounce callback re-arms itself when `savingRef`
 is held by an in-flight PATCH (previously a slow-network PATCH could
 leave subsequent edits unsaved until a mutating action or Ctrl+S).
-Test files: `autosave.test.tsx` (20 tests; +6 from close),
+Test files: `autosave.test.tsx` (21 tests; +6 from close, +1 from B5),
 `save-status-indicator.test.tsx` (6 tests), `_admin-api-mock.ts`
 helper; extended `error-channels.test.tsx` with 5 retry-UX tests.
-604 tests passing.
+605 tests passing.
+
+- B5 follow-up (dismiss bypass): debounce effect guard on
+  `canAutoRetryRef.current`. Dismissing a 404 banner clears
+  `state.saveError` but leaves `dirty = true`; before B5 the debounce
+  effect re-ran on the `saveError → null` transition and scheduled a
+  fresh 2s PATCH that immediately 404'd. The new guard (after the
+  `state.saveError` check, before the `!dirty` check) short-circuits
+  when the terminal flag is still set. Zero reducer / schema / API /
+  banner changes. +1 test in the terminal-errors describe block.
 
 Follow-up close resolves DEBT-026: opaque `document_state` column on
 `Publication` (migration `a3e81c0f5d21`) carries the full

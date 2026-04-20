@@ -386,6 +386,22 @@ export default function InfographicEditor({
       return;
     }
 
+    // B5: Dismiss-bypass guard.
+    // When a terminal error (404) fires, canAutoRetryRef flips to false.
+    // If the user dismisses the banner, state.saveError clears but the
+    // server-side terminal condition has not changed — another PATCH
+    // would fail identically. Honour the terminal-error contract by
+    // refusing to auto-schedule until either (a) a new user edit resets
+    // canAutoRetryRef.current to true via the edit-reset effect, or
+    // (b) the user explicitly clicks "Retry now" (handleManualRetry
+    // resets the flag directly). canAutoRetryRef is read, not depended
+    // on: the existing deps already re-run this effect on the
+    // state.saveError → null transition, which is when the current ref
+    // value matters.
+    if (!canAutoRetryRef.current) {
+      return;
+    }
+
     if (!dirty || !publicationId) {
       // Either nothing to save or no backend target. Drop a stale
       // `pending`/`saving` status back to `idle`. Functional update

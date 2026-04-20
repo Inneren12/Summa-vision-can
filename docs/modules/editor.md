@@ -924,6 +924,17 @@ effect instead of two racing. The edit-reset effect is declared
 before the retry effect so `retryAttemptRef` is zeroed before the
 retry effect body reads it.
 
+**Terminal-error dismiss.** Dismissing a 404 banner clears `saveError`
+but does NOT re-enable auto-retry. The debounce effect checks
+`canAutoRetryRef.current` in addition to `state.saveError` and
+short-circuits while the terminal flag is `false`. Auto-scheduling
+resumes only when the user makes a new edit (which resets the flag via
+the edit-reset effect) or clicks "Retry now" (which resets it
+explicitly). `canAutoRetryRef` is read from the effect body, not
+added to the dependency array — the existing `state.saveError`
+transition to `null` on dismiss already re-runs the effect and lets
+it observe the current ref value.
+
 **Slow-PATCH re-arm.** The debounce callback checks `savingRef.current`
 before invoking `performSave`. If a previous PATCH is still in flight
 the callback would otherwise no-op (performSave's own guard) and

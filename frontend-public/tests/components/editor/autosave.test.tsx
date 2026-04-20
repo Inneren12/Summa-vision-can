@@ -376,6 +376,37 @@ describe('Autosave — terminal errors (404, Stage 4 Task 2 fix B1)', () => {
     expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(2);
   });
 
+  test('dismissing a 404 banner does not re-enable autosave (Stage 4 Task 2 B5)', async () => {
+    // Every PATCH returns 404. If the dismiss-bypass guard is missing,
+    // a second PATCH would fire 2s after the user clicks Dismiss.
+    mockUpdateAdminPublication.mockRejectedValue(
+      new MockAdminPublicationNotFoundError('pub1'),
+    );
+
+    render(<InfographicEditor publicationId="pub1" />);
+    clickPalette(/palette: government/i);
+
+    // First PATCH fires and 404s.
+    act(() => { jest.advanceTimersByTime(2000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
+
+    // User clicks Dismiss (✕) on the save-error banner.
+    const dismissBtn = screen.getByLabelText(/dismiss save error/i);
+    await act(async () => {
+      fireEvent.click(dismissBtn);
+      await Promise.resolve();
+    });
+    await flushMicrotasks();
+
+    // Reducer cleared saveError but left dirty = true. Without the B5
+    // guard the debounce effect would schedule a new PATCH here.
+    // With the guard canAutoRetryRef.current is still false → no schedule.
+    act(() => { jest.advanceTimersByTime(60_000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
+  });
+
   test('user edit after 404 re-enables auto-retry for the next failure', async () => {
     mockUpdateAdminPublication.mockRejectedValueOnce(
       new MockAdminPublicationNotFoundError('pub1'),
