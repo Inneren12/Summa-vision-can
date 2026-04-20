@@ -3,10 +3,9 @@
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
 
-// The modal body (react-hook-form, zod resolver, TurnstileWidget, overlay
-// JSX) lives in a separate chunk that loads on first click. Homepage with
-// 24 InfographicCards pays zero RHF/zod/Turnstile hydration cost until a
-// user actually opens a modal.
+// Pages with many InfographicCards pay zero RHF/zod/Turnstile hydration
+// cost until first open — each card's trigger button is a tiny client
+// island; the heavy form bundle only loads when the user clicks Download.
 const DownloadModalContent = dynamic(
   () =>
     import('./DownloadModalContent').then((m) => m.DownloadModalContent),
