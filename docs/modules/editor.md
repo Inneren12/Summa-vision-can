@@ -998,21 +998,31 @@ out of the reducer because it is ephemeral, per-session UI state with
 no place in undo history or persistence (same rationale as Task 1's
 `hoveredBlockId` and Task 2's `saveStatus`).
 
-On mount, a one-shot effect races `document.fonts.ready` against a 5s
-timeout. Whichever wins flips `fontsReady` to true. On timeout, a
-dev-only `console.warn` documents the fallback so development catches
-the drift early.
+A shared helper `waitForFontsReadyOrTimeout()` races
+`document.fonts.ready` against a 5-second timeout. It never rejects,
+never hangs, and always resolves to one of three outcomes: `'ready'`
+(fonts loaded), `'timeout'` (5s elapsed — proceed with fallback fonts),
+or `'unsupported'` (browser lacks the API — proceed with fallback).
+The helper clears its own timer on early resolution so there is no
+trailing no-op timer fire.
 
-Two gate points:
+Two gate points use this same helper:
 - **Render effect** — `render` useCallback early-returns when
-  `!fontsReady`; `fontsReady` is in the dep array, so when it flips
-  true the callback re-memoizes, the render-trigger effect re-runs,
-  and the first real paint happens with correct typography.
-- **`exportPNG`** — awaits `document.fonts.ready` before constructing
-  the export canvas. Belt-and-suspenders: the button is also disabled
-  while `!fontsReady`, so this await normally resolves instantly. It
-  protects against the pathological case where the button was pressed
-  in a moment when the flag was briefly stale.
+  `!fontsReady`; `fontsReady` is in the dep array, so when the mount
+  effect flips it true the callback re-memoizes, the render-trigger
+  effect re-runs, and the first real paint happens with correct
+  typography.
+- **`exportPNG`** — awaits the helper before constructing the export
+  canvas. This is essential (B1 fix): without the timeout, a direct
+  `await document.fonts.ready` in the export path would silently hang
+  in the exact pathological cases the mount-time timeout protects
+  against, producing no file and no error. Using the shared helper
+  makes both gates honour one contract — `fontsReady === true` means
+  "proceed, regardless of font-load state".
+
+The helper logs a dev-only `console.warn` on `'timeout'` or
+`'unsupported'` outcomes so font-loading issues are discoverable during
+development. Production stays silent.
 
 ### Not gated
 
@@ -1041,7 +1051,8 @@ cursor) is sufficient.
 (the FontFaceSet transitions through `loaded` regardless of individual
 face outcomes), so the timeout should rarely fire in practice. It
 exists as insurance against pathological browser states where the
-promise hangs forever. The `console.warn` on timeout is dev-only and
-helps catch environment issues during development. No retry — once
-`fontsReady` flips true it stays true for the session.
+promise hangs forever. Both the mount gate and the export gate honour
+it — the `fontsReady` flag is the single contract: once true, proceed,
+regardless of font-load state. No retry — once `fontsReady` flips true
+it stays true for the session.
 

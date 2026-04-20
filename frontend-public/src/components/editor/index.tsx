@@ -45,7 +45,65 @@ const RETRY_DELAYS_MS = [2000, 4000, 8000, 16000] as const;
 // states where the promise hangs; normal warm-cache loads resolve in
 // sub-100ms and never hit this ceiling. A dev-only console.warn on
 // timeout documents the fallback for development.
-const FONTS_TIMEOUT_MS = 5000;
+//
+// Exported for the B1 fix test (font-gate.test.tsx) so the timeout
+// assertion reads from the single source of truth instead of
+// hardcoding 5000 in the test body.
+export const FONTS_TIMEOUT_MS = 5000;
+
+type FontsWaitOutcome = 'ready' | 'timeout' | 'unsupported';
+
+/**
+ * Race `document.fonts.ready` against `FONTS_TIMEOUT_MS`.
+ *
+ * Resolves to:
+ *   - `'ready'`       : fonts loaded within timeout (expected path)
+ *   - `'timeout'`     : fonts did NOT resolve within `FONTS_TIMEOUT_MS`
+ *                       (pathological browser state — proceed with fallback)
+ *   - `'unsupported'` : `document.fonts` API unavailable (old browser,
+ *                       exotic environment — proceed with fallback)
+ *
+ * Never rejects. Never hangs. This is the contract the `fontsReady` flag
+ * encodes: after this resolves, the caller MUST proceed regardless of
+ * outcome. Both the mount-time gate and `exportPNG` must use this —
+ * direct `await document.fonts.ready` in `exportPNG` would re-introduce
+ * the hang that `FONTS_TIMEOUT_MS` is meant to prevent (B1 fix).
+ *
+ * Dev-only: `'timeout'` and `'unsupported'` outcomes log a console.warn
+ * so font-loading issues are discoverable during development. Production
+ * stays silent.
+ */
+async function waitForFontsReadyOrTimeout(): Promise<FontsWaitOutcome> {
+  if (typeof document === 'undefined' || !document.fonts?.ready) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(
+        '[InfographicEditor] document.fonts API unavailable — rendering with fallback fonts',
+      );
+    }
+    return 'unsupported';
+  }
+
+  return new Promise<FontsWaitOutcome>((resolve) => {
+    let settled = false;
+    const timeoutId = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          `[InfographicEditor] document.fonts.ready timed out after ${FONTS_TIMEOUT_MS}ms — rendering with fallback fonts`,
+        );
+      }
+      resolve('timeout');
+    }, FONTS_TIMEOUT_MS);
+
+    void document.fonts.ready.then(() => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      resolve('ready');
+    });
+  });
+}
 
 export interface InfographicEditorProps {
   /**
@@ -245,37 +303,22 @@ export default function InfographicEditor({
   }, [doc, pal, sz, fontsReady]);
   useEffect(() => { render(); }, [render]);
 
-  // Mount-time font-load gate (Stage 4 Task 3). Races `document.fonts.ready`
-  // against a 5s timeout; flips `fontsReady` true on either outcome. The
-  // promise is idempotent and cached by the browser, so re-running this
-  // on hot reloads or remounts is safe but unnecessary — hence the
-  // empty dependency array. The `cancelled` flag prevents a late-resolving
-  // race from calling setState on an unmounted component.
+  // Mount-time font-load gate (Stage 4 Task 3). Delegates to the shared
+  // `waitForFontsReadyOrTimeout` helper so the mount gate and
+  // `exportPNG` share one policy — critical for B1: without a timeout,
+  // `exportPNG` would hang in the same cases the mount gate protects
+  // against. The helper logs its own dev warnings; this effect only
+  // needs to flip the flag once the helper resolves.
+  //
+  // Empty dep array: the helper's inner promise is idempotent and
+  // cached after first resolution, so re-running on hot reloads or
+  // remounts is safe but unnecessary. `cancelled` prevents a late
+  // resolution from calling setState on an unmounted component.
   useEffect(() => {
     let cancelled = false;
 
-    if (typeof document === 'undefined' || !document.fonts || !document.fonts.ready) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn(
-          '[InfographicEditor] document.fonts API unavailable — rendering with fallback fonts',
-        );
-      }
-      setFontsReady(true);
-      return;
-    }
-
-    const readyPromise = document.fonts.ready.then(() => 'ready' as const);
-    const timeoutPromise = new Promise<'timeout'>((resolve) => {
-      window.setTimeout(() => resolve('timeout'), FONTS_TIMEOUT_MS);
-    });
-
-    void Promise.race([readyPromise, timeoutPromise]).then((outcome) => {
+    void waitForFontsReadyOrTimeout().then(() => {
       if (cancelled) return;
-      if (outcome === 'timeout' && process.env.NODE_ENV !== 'production') {
-        console.warn(
-          `[InfographicEditor] document.fonts.ready timed out after ${FONTS_TIMEOUT_MS}ms — rendering with fallback fonts`,
-        );
-      }
       setFontsReady(true);
     });
 
@@ -711,13 +754,20 @@ export default function InfographicEditor({
     // (devtools prop override, stale memoization).
     if (!fontsReady) return;
 
-    // Defensive await: idempotent after first resolution. Protects against
-    // a race where fontsReady flipped true on the timeout path but the
-    // real fonts finished loading just after — awaiting here guarantees
-    // the export canvas sees the same font state as the preview.
-    if (typeof document !== 'undefined' && document.fonts?.ready) {
-      await document.fonts.ready;
-    }
+    // B1 fix: apply the same timeout policy as the mount-time gate. Do
+    // NOT await `document.fonts.ready` directly — in the exact
+    // pathological case the mount-time timeout was designed for (ready
+    // promise never resolves), a direct await here would silently hang
+    // indefinitely, never calling `toBlob`, giving the user no download
+    // and no error. The `fontsReady` flag is the contract: once true,
+    // proceed regardless of font-load state.
+    //
+    // In typical operation this resolves instantly — `document.fonts.ready`
+    // caches its resolved state after first resolution, so on any render
+    // after fonts have loaded, the helper's inner promise resolves in
+    // the same microtask. The helper is here as belt-and-suspenders for
+    // pathological cases only.
+    await waitForFontsReadyOrTimeout();
 
     // Create a separate export canvas at canonical preset size.
     // Preview canvas stays DPR-scaled; export is exact 1:1 dimensions.

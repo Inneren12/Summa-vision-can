@@ -124,6 +124,8 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-4-2 | Stage 4 Task 2 — Autosave + recovery | ✅ | E-4-0 |
 | E-4-3 | Stage 4 Task 3 — Deterministic export (font-load gate) | ✅ | E-4-2 |
 
+- E-4-3 B1 fix (export hang + timer hygiene + docs truth-up): pending human commit
+
 **E-3-4 status (in flight):** Backend-only persistence PR. Adds a
 nullable `Publication.review` Text column (Alembic migration
 `f2a7d9c3b481`), a `ReviewPayload` schema, a workflow → status sync
