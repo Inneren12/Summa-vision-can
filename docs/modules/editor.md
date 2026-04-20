@@ -901,11 +901,52 @@ opacity dip). Token palette: amber = `TK.c.acc`, red = `TK.c.err`.
   counter is required because React dep comparison uses `Object.is`;
   without it, successive failures with the same error string would
   leave the dep array unchanged and the effect would not re-run.
-- After four attempts the budget is exhausted; no further auto-retry
-  fires. The NotificationBanner continues to show with a "Retry now"
-  button.
-- A new mutating user edit resets `retryAttemptRef.current` to 0 so the
-  next failure re-enters the delay schedule from `delay[0]`.
+
+**Auto-retry applies only to retryable failures.** Terminal errors
+(404 — `AdminPublicationNotFoundError`) bypass the retry schedule
+entirely; the banner shows with a manual "Retry now" button that the
+user can invoke explicitly. Retryability is tracked via a local
+`canAutoRetryRef` (not a reducer field): `performSave.catch` flips it
+to `false` on 404 and `true` on any other failure, and the retry
+effect short-circuits when the flag is `false`. Any new user edit
+resets the flag back to `true`, so subsequent failures are eligible
+for the full backoff cycle again. Manual "Retry now" also resets it.
+
+After four failed auto-retries on a retryable error, the banner
+persists with "Retry now" until the user acts or edits.
+
+**Single-scheduler invariant.** While `saveError` is set, the debounce
+effect no-ops. The retry effect is the sole save orchestrator during
+error-state. A new user edit resets retry state, and the retry effect
+schedules the next attempt at `RETRY_DELAYS_MS[0] = 2000ms` —
+functionally identical to the debounce window, but emitted by one
+effect instead of two racing. The edit-reset effect is declared
+before the retry effect so `retryAttemptRef` is zeroed before the
+retry effect body reads it.
+
+**Terminal-error dismiss.** Dismissing a 404 banner clears `saveError`
+but does NOT re-enable auto-retry. The debounce effect checks
+`canAutoRetryRef.current` in addition to `state.saveError` and
+short-circuits while the terminal flag is `false`. Auto-scheduling
+resumes only when the user makes a new edit (which resets the flag via
+the edit-reset effect) or clicks "Retry now" (which resets it
+explicitly). `canAutoRetryRef` is read from the effect body, not
+added to the dependency array — the existing `state.saveError`
+transition to `null` on dismiss already re-runs the effect and lets
+it observe the current ref value.
+
+**Slow-PATCH re-arm.** The debounce callback checks `savingRef.current`
+before invoking `performSave`. If a previous PATCH is still in flight
+the callback would otherwise no-op (performSave's own guard) and
+silently drop any pending edits until the next mutating action or
+Ctrl+S. Instead, the callback recursively re-arms itself one
+`AUTOSAVE_DEBOUNCE_MS` cycle later. The re-arm is bounded: each
+iteration waits the full debounce window, and re-arm only triggers
+while `savingRef` is set, so a healthy save loop does not spin.
+
+- A new mutating user edit resets `retryAttemptRef.current` to 0 and
+  `canAutoRetryRef.current` to `true` so the next failure re-enters
+  the delay schedule from `delay[0]` and auto-retry is eligible.
 - The retry schedule is driven by an effect, not by `performSave`'s
   `.catch`, so the save function stays pure and reusable from the
   debounce path and the Ctrl+S / Retry-now paths.
@@ -1039,4 +1080,176 @@ rollout to pass AA-normal on the canonical `#0B0D11` background.
 the original `#E11D48`. See DEBT.md "Historical Notes → 2026-04-20
 Editor token tuning for WCAG AA" for rationale and before/after
 ratios.
+## Font loading and deterministic export (Stage 4 Task 3)
+
+### Problem
+
+`next/font/google` loads Bricolage Grotesque, DM Sans, and JetBrains Mono
+asynchronously. Canvas `ctx.font = '700 48px <family>'` falls back to the
+token string's second component (`system-ui` / `monospace`) until the web
+font file finishes loading. Without a gate:
+
+- Initial canvas mount renders with fallback fonts, then flickers to the
+  real faces when load completes.
+- `exportPNG` can fire before fonts finish loading → the exported PNG uses
+  fallback fonts while the preview (if the user waited) shows the real
+  ones. Silent visual drift between preview and output.
+
+Task 3 is named "deterministic export" because closing this gap is the
+point.
+
+### Solution
+
+`fontsReady: boolean` — local `useState` in `InfographicEditor`. Stays
+out of the reducer because it is ephemeral, per-session UI state with
+no place in undo history or persistence (same rationale as Task 1's
+`hoveredBlockId` and Task 2's `saveStatus`).
+
+A shared helper `waitForFontsReadyOrTimeout()` races
+`document.fonts.ready` against a 5-second timeout. It never rejects,
+never hangs, and always resolves to one of three outcomes: `'ready'`
+(fonts loaded), `'timeout'` (5s elapsed — proceed with fallback fonts),
+or `'unsupported'` (browser lacks the API — proceed with fallback).
+The helper clears its own timer on early resolution so there is no
+trailing no-op timer fire.
+
+The mount-time effect awaits this helper once, then flips `fontsReady`
+to true. From that moment, `fontsReady` is the single contract: the
+render callback proceeds, the EXPORT button enables, and `exportPNG`
+runs without a second wait.
+
+An earlier iteration re-invoked the helper inside `exportPNG` as
+belt-and-suspenders; this reintroduced the exact 5-second stall in
+pathological cases (a `document.fonts.ready` that never resolves)
+that the mount timeout was designed to prevent. The current design
+trusts the flag: once true, proceed.
+
+The helper logs a dev-only `console.warn` on `'timeout'` or
+`'unsupported'` outcomes so font-loading issues are discoverable during
+development. Production stays silent.
+
+### Not gated
+
+- **Overlay canvas** (hover/selection outlines from Task 1) renders
+  only `strokeRect` — no font dependency. It remains fully responsive
+  while fonts load, so the user can hover/click blocks before first
+  real paint.
+- **Autosave** (Task 2) is data-only. Its debounce timer and retry
+  orchestration have no font dependency.
+- **`exportJSON`** serializes the document to JSON. No canvas, no
+  fonts, no gate.
+
+### UX
+
+The EXPORT button disables until `canExp && fontsReady`. Tooltip
+priority: validation errors first (user must fix them before export
+works anyway), then the fonts-loading message. Typical fonts-loading
+window is <100ms on warm cache; users rarely see the disabled state
+outside first page load. No spinner or keyframe — the existing muted
+disabled style (opacity 0.5, `TK.c.txtM` background, not-allowed
+cursor) is sufficient.
+
+### Timeout rationale
+
+5 seconds. `document.fonts.ready` resolves even on font URL failure
+(the FontFaceSet transitions through `loaded` regardless of individual
+face outcomes), so the timeout should rarely fire in practice. It
+exists as insurance against pathological browser states where the
+promise hangs forever. Both the mount gate and the export gate honour
+it — the `fontsReady` flag is the single contract: once true, proceed,
+regardless of font-load state. No retry — once `fontsReady` flips true
+it stays true for the session.
+## Debug overlay (Stage 4 Task 4)
+
+Dev-only visualization layer that makes `SECTION_LAYOUT` rects and
+per-block hit areas visible. The whole point is to surface what
+`clampRectToSection` silently fixes — a block returning a raw
+`hitArea` that extends past its owning section is invisible during
+normal rendering and only shows up here.
+
+### What it shows
+
+- **Section boundaries** — translucent fill + stroke + label per
+  section type (cyan header, magenta hero, lime context, amber chart,
+  orange footer). All 5 `SECTION_LAYOUT` keys are covered; unknown
+  types are skipped silently.
+- **Block bounding boxes** — white outline for each block's clamped
+  `hitArea`, with a `<blockType>·<blockIdPrefix>` label rendered in
+  JetBrains Mono.
+- **Overflow markers** — when a block's raw `hitArea` extends beyond
+  its `sectionRect`, a dashed red outline is drawn around the raw
+  rect alongside the white clamped outline. This is the signal that
+  the Task 1 clamping fix is actively clipping.
+
+### When it's available
+
+- **Development** (`NODE_ENV !== 'production'`): always. Toggle via
+  the TopBar `DBG` button or `Ctrl+Shift+D`.
+- **Production**: only when `?debug=1` is present in the URL. The
+  toggle becomes visible; the user still has to click or shortcut to
+  enable. The query param controls *availability*, not *state*,
+  so accidentally sharing a link with `?debug=1` does not leak the
+  overlay to the next viewer.
+
+The `?debug=1` check runs once on mount via a `useEffect` that reads
+`window.location.search`. `useSearchParams` from `next/navigation` is
+deliberately avoided — the plain browser API requires no Suspense
+boundary and keeps the editor component framework-lean.
+
+### Architecture
+
+- **Third canvas sibling** in `components/Canvas.tsx`, conditionally
+  rendered on the truthiness of the `debugRef` prop. When
+  `debugEnabled === false`, `InfographicEditor` passes `undefined`
+  and React unmounts the canvas entirely — no backing store, no
+  draw cost. Render order: content canvas → hover/selection
+  overlay → debug overlay (LAST, so labels render on top).
+- **`debugEntriesRef` and `debugSectionsRef`** populated inside the
+  same content-render callback that writes `hitAreasRef`. Populated
+  only when `debugEnabled === true`; zero cost when off. Both refs
+  derive from the same `RenderedBlockEntry[]` array so they cannot
+  drift.
+- **`renderDebugOverlay`** in `renderer/debug-overlay.ts` mirrors
+  the API shape of `renderer/overlay.ts` (DPR handling, transform
+  preamble, small `draw*` helpers) but shares no code. Debug and
+  selection-overlay have independent lifecycles — one is dev-only,
+  the other is always on.
+- **`DEBUG_PALETTE`** is a module-local constant using `rgba()`
+  literals. Not part of `TK` tokens — debug colours are developer
+  tooling, not design-system output.
+
+### Shortcut behaviour
+
+`Ctrl+Shift+D` (or `Cmd+Shift+D` on macOS) toggles `debugEnabled`.
+The branch is evaluated *before* the `isEditable` gate in the
+keydown handler because the shortcut is never a meaningful text
+editing combo — it must work from inside Inspector inputs too. The
+branch bails when `debugAvailable === false`, so production users
+without `?debug=1` cannot flip it.
+
+### Independence from permissions
+
+The toggle has no interaction with `effectivePerms` / workflow
+state. A `published` document that is otherwise read-only still
+shows the DBG button to a developer in dev or a `?debug=1` session
+— debug is diagnostic, not authoring.
+
+### Coordination with font gating
+
+Debug-overlay labels use `TK.font.data` (JetBrains Mono). Once the
+forthcoming font gate (Stage 4 Task 3) lands, the debug render
+effect will need the same `fontsReady` gate as content rendering to
+avoid fallback-font labels during the first-load window. Until
+then, labels may render briefly with system monospace on a cold
+cache. Non-blocking for dev tooling.
+
+### Explicit non-goals
+
+- Safe-zone overlay for export presets. Deferred to a later Stage 4
+  task.
+- Performance metrics (render timings, draw-call counts). Out of
+  scope.
+- Interactive picks on the debug overlay. Read-only visualization
+  only; the hover/selection canvas continues to own pointer
+  affordances.
 

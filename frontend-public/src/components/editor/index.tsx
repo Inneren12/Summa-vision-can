@@ -11,8 +11,13 @@ import { BREG } from './registry/blocks';
 import { validateImportStrict, hydrateImportedDoc } from './registry/guards';
 import { reducer, initState } from './store/reducer';
 import { PERMS, WORKFLOW_PERMISSIONS, canEditKeyInWorkflow } from './store/permissions';
-import { renderDoc } from './renderer/engine';
+import { renderDoc, SECTION_LAYOUT } from './renderer/engine';
 import { renderOverlay } from './renderer/overlay';
+import {
+  renderDebugOverlay,
+  type DebugBlockEntry,
+  type DebugSectionEntry,
+} from './renderer/debug-overlay';
 import { validate } from './validation/validate';
 import { deferRevoke } from './utils/download';
 import { buildUpdatePayload } from './utils/persistence';
@@ -40,6 +45,71 @@ import type { NoteRequestConfig } from './components/noteRequest';
 const AUTOSAVE_DEBOUNCE_MS = 2000;
 const RETRY_DELAYS_MS = [2000, 4000, 8000, 16000] as const;
 
+// Maximum wait for `document.fonts.ready` before flipping `fontsReady`
+// true anyway (Stage 4 Task 3). Guards against pathological browser
+// states where the promise hangs; normal warm-cache loads resolve in
+// sub-100ms and never hit this ceiling. A dev-only console.warn on
+// timeout documents the fallback for development.
+//
+// Exported for the B1 fix test (font-gate.test.tsx) so the timeout
+// assertion reads from the single source of truth instead of
+// hardcoding 5000 in the test body.
+export const FONTS_TIMEOUT_MS = 5000;
+
+type FontsWaitOutcome = 'ready' | 'timeout' | 'unsupported';
+
+/**
+ * Race `document.fonts.ready` against `FONTS_TIMEOUT_MS`.
+ *
+ * Resolves to:
+ *   - `'ready'`       : fonts loaded within timeout (expected path)
+ *   - `'timeout'`     : fonts did NOT resolve within `FONTS_TIMEOUT_MS`
+ *                       (pathological browser state — proceed with fallback)
+ *   - `'unsupported'` : `document.fonts` API unavailable (old browser,
+ *                       exotic environment — proceed with fallback)
+ *
+ * Never rejects. Never hangs. This is the contract the `fontsReady` flag
+ * encodes: after this resolves, the caller MUST proceed regardless of
+ * outcome. Both the mount-time gate and `exportPNG` must use this —
+ * direct `await document.fonts.ready` in `exportPNG` would re-introduce
+ * the hang that `FONTS_TIMEOUT_MS` is meant to prevent (B1 fix).
+ *
+ * Dev-only: `'timeout'` and `'unsupported'` outcomes log a console.warn
+ * so font-loading issues are discoverable during development. Production
+ * stays silent.
+ */
+async function waitForFontsReadyOrTimeout(): Promise<FontsWaitOutcome> {
+  if (typeof document === 'undefined' || !document.fonts?.ready) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(
+        '[InfographicEditor] document.fonts API unavailable — rendering with fallback fonts',
+      );
+    }
+    return 'unsupported';
+  }
+
+  return new Promise<FontsWaitOutcome>((resolve) => {
+    let settled = false;
+    const timeoutId = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          `[InfographicEditor] document.fonts.ready timed out after ${FONTS_TIMEOUT_MS}ms — rendering with fallback fonts`,
+        );
+      }
+      resolve('timeout');
+    }, FONTS_TIMEOUT_MS);
+
+    void document.fonts.ready.then(() => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      resolve('ready');
+    });
+  });
+}
+
 export interface InfographicEditorProps {
   /**
    * Optional document to seed the editor with. If omitted or invalid,
@@ -65,12 +135,33 @@ export default function InfographicEditor({
 }: InfographicEditorProps = {}) {
   const cvs = useRef<HTMLCanvasElement>(null);
   const overlay = useRef<HTMLCanvasElement>(null);
+  const debugCvs = useRef<HTMLCanvasElement | null>(null);
   // Per-frame derived data from the content render. Populated synchronously
   // by the render effect below; read by the canvas click/hover handlers and
   // by the overlay render effect. A ref (not state) because it is purely
   // derived from `doc/sz/pal` — storing it in state would double-render.
   const hitAreasRef = useRef<HitAreaEntry[]>([]);
+  // Debug-overlay input refs — populated only when `debugEnabled === true`.
+  // See the render callback below for the gating branch.
+  const debugEntriesRef = useRef<DebugBlockEntry[]>([]);
+  const debugSectionsRef = useRef<DebugSectionEntry[]>([]);
   const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
+  // Font-load gate (Stage 4 Task 3). `next/font` loads fonts async; until
+  // they're ready, canvas `ctx.font` falls back to `system-ui`/`monospace`
+  // and preview/export silently diverge from the real typography. The
+  // mount effect below races `document.fonts.ready` against a 5s timeout
+  // and flips this true in either case. Render effect and exportPNG both
+  // gate on it; Export button disables until true.
+  const [fontsReady, setFontsReady] = useState<boolean>(false);
+  // Stage 4 Task 4: debug overlay state. `debugAvailable` gates the toggle's
+  // visibility; `debugEnabled` is the actual user-controlled on/off. Dev
+  // auto-availability + prod `?debug=1` availability is resolved in a
+  // mount-time effect (see below). `debugEnabled` always starts false so
+  // opening the editor never shows the overlay without explicit opt-in.
+  const [debugAvailable, setDebugAvailable] = useState<boolean>(
+    process.env.NODE_ENV !== 'production',
+  );
+  const [debugEnabled, setDebugEnabled] = useState<boolean>(false);
 
   // Synchronously validate initialDoc at mount time so the reducer never
   // sees an invalid doc. Validation failure falls back to the default
@@ -120,6 +211,16 @@ export default function InfographicEditor({
   const retryCountdownIntervalRef = useRef<number | null>(null);
   const [retryCountdownMs, setRetryCountdownMs] = useState<number | null>(null);
   const [saveFailureGen, setSaveFailureGen] = useState<number>(0);
+  // Auto-retry eligibility for the current saveError.
+  // - true  (default): error is transient (network, 5xx) → retry effect schedules backoff.
+  // - false: error is terminal (404 or other non-recoverable) → retry effect
+  //   skips scheduling; banner still shows with manual "Retry now" button.
+  //
+  // Reset to true on:
+  //   - any new user edit (edit-reset effect)
+  //   - manual "Retry now" click
+  //   - successful save (implicit — saveError clears, effect resets)
+  const canAutoRetryRef = useRef<boolean>(true);
   const [ltab, setLtab] = useState<LeftTab>("templates");
   const [qaOpen, setQaOpen] = useState(true);
   const [qaMode, setQaMode] = useState<QAMode>("publish");
@@ -189,6 +290,13 @@ export default function InfographicEditor({
   const render = useCallback(() => {
     const c = cvs.current;
     if (!c) return;
+    // Stage 4 Task 3: skip rendering until fonts are loaded. When
+    // fontsReady flips true this callback re-memoizes (new dep value),
+    // the render-trigger effect re-runs, and the first real paint
+    // happens with correct typography instead of system fallbacks.
+    // Leave hitAreasRef untouched on this path — it is initially `[]`
+    // and handlers remain consistent until the first real render.
+    if (!fontsReady) return;
     const dpr = window.devicePixelRatio || 2;
     c.width = sz.w * dpr;
     c.height = sz.h * dpr;
@@ -211,8 +319,85 @@ export default function InfographicEditor({
       blockId: r.blockId,
       hitArea: clampRectToSection(r.result.hitArea, r.sectionRect),
     }));
-  }, [doc, pal, sz]);
+
+    // Debug-overlay data — populated only when the user has turned the
+    // overlay on. Zero cost when off. Kept alongside hitAreasRef (not in
+    // a separate effect) so both derive from the same `results` array and
+    // cannot drift.
+    if (debugEnabled) {
+      const sSec = sz.w / 1080;
+      const padSec = 64 * sSec;
+      const sections: DebugSectionEntry[] = [];
+      for (const docSection of doc.sections) {
+        const calc = SECTION_LAYOUT[docSection.type];
+        if (!calc) continue;
+        sections.push({ type: docSection.type, rect: calc(sz.w, sz.h, sSec, padSec) });
+      }
+      debugSectionsRef.current = sections;
+
+      debugEntriesRef.current = results.map((r) => {
+        const raw = r.result.hitArea;
+        const sec = r.sectionRect;
+        const overflows =
+          raw.x < sec.x ||
+          raw.y < sec.y ||
+          raw.x + raw.w > sec.x + sec.w ||
+          raw.y + raw.h > sec.y + sec.h;
+
+        // In dev, surface invariant breaks loudly. By construction, every
+        // blockId emitted by renderDoc exists in doc.blocks — if it doesn't,
+        // either doc and results went out of sync (render pipeline bug) or
+        // a block was deleted mid-render (race). Both are bugs we want to
+        // hear about, not silently label "unknown". In production, keep the
+        // fallback: debug overlay is a dev tool and a misleading label is
+        // better than a prod crash.
+        const blockEntry = doc.blocks[r.blockId];
+        if (!blockEntry && process.env.NODE_ENV !== 'production') {
+          throw new Error(
+            `[debug-overlay] renderDoc emitted blockId "${r.blockId}" but doc.blocks has no such entry. ` +
+              'This is an invariant break between the render pipeline and the document.',
+          );
+        }
+
+        return {
+          blockId: r.blockId,
+          blockType: blockEntry?.type ?? 'unknown',
+          rawHitArea: raw,
+          clampedHitArea: clampRectToSection(raw, sec),
+          sectionRect: sec,
+          overflow: overflows,
+        };
+      });
+    } else {
+      debugSectionsRef.current = [];
+      debugEntriesRef.current = [];
+    }
+  }, [doc, pal, sz, fontsReady, debugEnabled]);
   useEffect(() => { render(); }, [render]);
+
+  // Mount-time font-load gate (Stage 4 Task 3). Delegates to the shared
+  // `waitForFontsReadyOrTimeout` helper so the mount gate and
+  // `exportPNG` share one policy — critical for B1: without a timeout,
+  // `exportPNG` would hang in the same cases the mount gate protects
+  // against. The helper logs its own dev warnings; this effect only
+  // needs to flip the flag once the helper resolves.
+  //
+  // Empty dep array: the helper's inner promise is idempotent and
+  // cached after first resolution, so re-running on hot reloads or
+  // remounts is safe but unnecessary. `cancelled` prevents a late
+  // resolution from calling setState on an unmounted component.
+  useEffect(() => {
+    let cancelled = false;
+
+    void waitForFontsReadyOrTimeout().then(() => {
+      if (cancelled) return;
+      setFontsReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Overlay render — hover + selection outlines on a separate canvas.
   // Ordered AFTER the content-render effect so `hitAreasRef.current` is
@@ -252,6 +437,51 @@ export default function InfographicEditor({
       dpr,
     });
   }, [selId, hoveredBlockId, sz, doc, pal]);
+
+  // Stage 4 Task 4: prod-only `?debug=1` availability check. Runs once on
+  // mount. Never auto-enables the overlay — it only makes the toggle
+  // visible. Reading `window.location.search` inside an effect (rather
+  // than `useSearchParams`) avoids a Suspense wrapper and an unnecessary
+  // `next/navigation` dependency here.
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') {
+      try {
+        const q = new URLSearchParams(window.location.search);
+        if (q.get('debug') === '1') {
+          setDebugAvailable(true);
+        }
+      } catch {
+        // URLSearchParams failure is unreachable in browsers; swallow.
+      }
+    }
+  }, []);
+
+  // Stage 4 Task 4: debug render effect. Mirrors the overlay effect shape.
+  // Depends on `[debugEnabled, sz, doc, pal]` — not hover/selection, since
+  // the debug layer is static relative to content. When debug is off the
+  // canvas is not mounted (see Canvas.tsx conditional JSX); when it toggles
+  // on, React mounts the canvas, this effect re-runs, the fresh backing
+  // store is sized, and `renderDebugOverlay` paints.
+  useEffect(() => {
+    if (!debugEnabled) return;
+    const c = debugCvs.current;
+    if (!c) return;
+    const dpr = window.devicePixelRatio || 2;
+    const wantW = sz.w * dpr;
+    const wantH = sz.h * dpr;
+    if (c.width !== wantW) c.width = wantW;
+    if (c.height !== wantH) c.height = wantH;
+    const ctx = c.getContext('2d');
+    if (!ctx) return;
+    renderDebugOverlay({
+      ctx,
+      logicalW: sz.w,
+      logicalH: sz.h,
+      dpr,
+      sections: debugSectionsRef.current,
+      entries: debugEntriesRef.current,
+    });
+  }, [debugEnabled, sz, doc, pal]);
 
   const handleCanvasMouseDown = useCallback((e: ReactMouseEvent<HTMLCanvasElement>) => {
     const canvas = cvs.current;
@@ -323,14 +553,27 @@ export default function InfographicEditor({
       })
       .catch((err: unknown) => {
         if (err instanceof AdminPublicationNotFoundError) {
+          // Terminal condition. Do NOT auto-retry — the resource does not
+          // exist on the server, and repeat PATCHes will 404 identically.
+          // Manual "Retry now" is still available (the user may have created
+          // the publication in another tab); it resets canAutoRetryRef.
+          canAutoRetryRef.current = false;
           dispatch({
             type: "SAVE_FAILED",
             error: 'Publication not found — reload the page',
           });
-        } else {
-          const msg = err instanceof Error ? err.message : String(err);
-          dispatch({ type: "SAVE_FAILED", error: msg });
+          // IMPORTANT: do NOT increment saveFailureGen here. The retry effect
+          // watches [state.saveError, saveFailureGen]; leaving gen unchanged
+          // still fires the effect (because saveError transitions null→string),
+          // but the canAutoRetryRef guard below makes it a no-op schedule.
+          setSaveStatus('error');
+          return;
         }
+
+        // Transient / unknown failure — retry with backoff.
+        canAutoRetryRef.current = true;
+        const msg = err instanceof Error ? err.message : String(err);
+        dispatch({ type: "SAVE_FAILED", error: msg });
         // Bump the failure generation so the retry effect re-runs even
         // when the error string is identical to a previous attempt.
         setSaveFailureGen((n) => n + 1);
@@ -352,6 +595,33 @@ export default function InfographicEditor({
       autosaveTimerRef.current = null;
     }
 
+    // During active saveError, the retry effect is the sole save
+    // orchestrator. A user edit resets retry state (via the edit-reset
+    // effect), and the retry effect then schedules the next attempt using
+    // RETRY_DELAYS_MS[0] = 2000ms — functionally identical to a debounce
+    // window. Having both effects schedule would create two timers racing
+    // to call performSave, the second no-op'ing against savingRef but
+    // adding noise to countdown semantics.
+    if (state.saveError) {
+      return;
+    }
+
+    // B5: Dismiss-bypass guard.
+    // When a terminal error (404) fires, canAutoRetryRef flips to false.
+    // If the user dismisses the banner, state.saveError clears but the
+    // server-side terminal condition has not changed — another PATCH
+    // would fail identically. Honour the terminal-error contract by
+    // refusing to auto-schedule until either (a) a new user edit resets
+    // canAutoRetryRef.current to true via the edit-reset effect, or
+    // (b) the user explicitly clicks "Retry now" (handleManualRetry
+    // resets the flag directly). canAutoRetryRef is read, not depended
+    // on: the existing deps already re-run this effect on the
+    // state.saveError → null transition, which is when the current ref
+    // value matters.
+    if (!canAutoRetryRef.current) {
+      return;
+    }
+
     if (!dirty || !publicationId) {
       // Either nothing to save or no backend target. Drop a stale
       // `pending`/`saving` status back to `idle`. Functional update
@@ -365,10 +635,23 @@ export default function InfographicEditor({
     // is in flight) or `error` (retry orchestration is active).
     setSaveStatus((prev) => (prev === 'idle' ? 'pending' : prev));
 
-    autosaveTimerRef.current = window.setTimeout(() => {
-      autosaveTimerRef.current = null;
-      performSave();
-    }, AUTOSAVE_DEBOUNCE_MS);
+    // Re-arm pattern (B4): when the timer fires while a previous PATCH
+    // is still in flight, performSave would no-op against savingRef and
+    // edits would remain unsaved until the next mutating action or Ctrl+S.
+    // Instead, detect savingRef and schedule one more debounce cycle so
+    // the latest doc gets saved once savingRef clears. Bounded delay
+    // (AUTOSAVE_DEBOUNCE_MS per iteration), not a tight loop.
+    const scheduleAutosave = () => {
+      autosaveTimerRef.current = window.setTimeout(() => {
+        autosaveTimerRef.current = null;
+        if (savingRef.current) {
+          scheduleAutosave();
+          return;
+        }
+        performSave();
+      }, AUTOSAVE_DEBOUNCE_MS);
+    };
+    scheduleAutosave();
 
     return () => {
       if (autosaveTimerRef.current !== null) {
@@ -376,7 +659,29 @@ export default function InfographicEditor({
         autosaveTimerRef.current = null;
       }
     };
-  }, [doc, dirty, publicationId, performSave]);
+  }, [doc, dirty, publicationId, performSave, state.saveError]);
+
+  // A new user edit while in error state deserves a fresh attempt cycle.
+  // Reset the attempt counter so the retry orchestration effect re-enters
+  // at delay index 0. We intentionally do NOT depend on `state.saveError`
+  // here — including it would reset attempts on every SAVE_FAILED
+  // dispatch, defeating the exponential-backoff progression.
+  //
+  // Declared BEFORE the retry effect so the reset lands before the retry
+  // effect body reads `retryAttemptRef`. React runs useEffect bodies in
+  // declaration order on each commit; swapping these two effects would
+  // leave the retry effect reading a stale (pre-edit) attempt count and
+  // scheduling at the old delay index.
+  useEffect(() => {
+    if (state.saveError) {
+      retryAttemptRef.current = 0;
+      canAutoRetryRef.current = true;
+    }
+    // Intentional: react only to doc changes, not to saveError flipping.
+    // Including state.saveError would reset attempts on every SAVE_FAILED
+    // dispatch, defeating exponential-backoff progression.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc]);
 
   // Retry orchestration (Stage 4 Task 2). Watches `state.saveError`;
   // schedules an exponential-backoff auto-retry (2s → 4s → 8s → 16s)
@@ -398,6 +703,14 @@ export default function InfographicEditor({
       // Saved successfully (SAVED_IF_MATCHES cleared saveError) or user
       // dismissed. Reset the retry budget.
       retryAttemptRef.current = 0;
+      setRetryCountdownMs(null);
+      return;
+    }
+
+    // Terminal error — no auto-retry. Banner shows with manual Retry button.
+    // Do not touch retryAttemptRef here; a user edit or manual Retry
+    // will reset it independently.
+    if (!canAutoRetryRef.current) {
       setRetryCountdownMs(null);
       return;
     }
@@ -444,26 +757,15 @@ export default function InfographicEditor({
     };
   }, [state.saveError, saveFailureGen, performSave]);
 
-  // A new user edit while in error state deserves a fresh attempt cycle.
-  // Reset the attempt counter so the retry orchestration effect re-enters
-  // at delay index 0. We intentionally do NOT depend on `state.saveError`
-  // here — including it would reset attempts on every SAVE_FAILED
-  // dispatch, defeating the exponential-backoff progression.
-  useEffect(() => {
-    if (state.saveError) {
-      retryAttemptRef.current = 0;
-    }
-    // Intentional: react only to doc changes, not to saveError flipping.
-    // Including state.saveError would reset attempts on every SAVE_FAILED
-    // dispatch, defeating exponential-backoff progression.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc]);
-
   // Manual "Retry now" from the NotificationBanner. Cancels any scheduled
   // retry + countdown, resets the attempt budget, and fires the save
   // immediately. On failure, the retry effect will re-enter at delay 0.
   const handleManualRetry = useCallback(() => {
+    // User override: explicit "Retry now" resets both the attempt counter
+    // and the terminal-error flag. If the next attempt fails terminally
+    // again, canAutoRetryRef flips back to false inside performSave.catch.
     retryAttemptRef.current = 0;
+    canAutoRetryRef.current = true;
     if (retryTimerRef.current !== null) {
       window.clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
@@ -496,6 +798,18 @@ export default function InfographicEditor({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
+
+      // Stage 4 Task 4: debug toggle — evaluated BEFORE the isEditable
+      // early-return because Ctrl+Shift+D is never a text-editing
+      // shortcut. Gated on `debugAvailable` so prod users without
+      // `?debug=1` cannot flip it.
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && key === 'd') {
+        if (!debugAvailable) return;
+        e.preventDefault();
+        setDebugEnabled((v) => !v);
+        return;
+      }
+
       const isEditable = shouldSkipGlobalShortcut(e);
 
       // Inside editable fields: only Ctrl+S fires (save is always useful).
@@ -531,7 +845,7 @@ export default function InfographicEditor({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [performSave]);
+  }, [performSave, debugAvailable]);
 
   const importJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -580,6 +894,15 @@ export default function InfographicEditor({
     // are validation errors; JSON export and SAVE are always allowed so users
     // can checkpoint work-in-progress.
     if (!canExp) return;
+    // Stage 4 Task 3 B1 (post-review): fontsReady is the single contract.
+    // Once true (via mount-time waitForFontsReadyOrTimeout resolving
+    // 'ready', 'timeout', or 'unsupported'), render and export both
+    // proceed without re-invoking the helper. An earlier iteration of
+    // this code re-awaited the helper here as belt-and-suspenders, but
+    // that reintroduced the exact 5-second stall in pathological cases
+    // (document.fonts.ready never resolving) that the mount timeout was
+    // designed to prevent. Trust the flag.
+    if (!fontsReady) return;
 
     // Create a separate export canvas at canonical preset size.
     // Preview canvas stays DPR-scaled; export is exact 1:1 dimensions.
@@ -605,7 +928,7 @@ export default function InfographicEditor({
         deferRevoke(url);
       }, "image/png");
     });
-  }, [canExp, doc, pal, sz]);
+  }, [canExp, fontsReady, doc, pal, sz]);
 
   const canEdit = (reg: typeof selR, k: string) => reg ? effectivePerms.editBlock(reg, k) : false;
 
@@ -629,6 +952,10 @@ export default function InfographicEditor({
         markSaved={performSave}
         exportPNG={exportPNG}
         saveStatus={saveStatus}
+        fontsReady={fontsReady}
+        debugAvailable={debugAvailable}
+        debugEnabled={debugEnabled}
+        onToggleDebug={() => setDebugEnabled((v) => !v)}
       />
       <NotificationBanner
         state={state}
@@ -661,6 +988,7 @@ export default function InfographicEditor({
           <Canvas
             canvasRef={cvs}
             overlayRef={overlay}
+            debugRef={debugEnabled ? debugCvs : undefined}
             onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleCanvasMouseMove}
             onMouseLeave={handleCanvasMouseLeave}

@@ -123,6 +123,13 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-4-1 | Stage 4 Task 1 — Click-to-select + UX polish | ✅ | E-4-0 |
 | E-4-2 | Stage 4 Task 2 — Autosave + recovery | ✅ | E-4-0 |
 | E-4-5 | Stage 4 Task 5 — WCAG AA contrast validator | ✅ | E-4-0 |
+| E-4-3 | Stage 4 Task 3 — Deterministic export (font-load gate) | ✅ | E-4-2 |
+
+- E-4-3 B1 fix (export hang + timer hygiene + docs truth-up): pending human commit
+- E-4-3 B1 nit close + merge resolution (double-wait removed, CI restored): pending human commit
+| E-4-4 | Stage 4 Task 4 — Debug overlay (dev tooling) | ✅ | E-4-1 |
+
+- Nit fixes (chart test + dev-mode invariant): <pending>
 
 **E-3-4 status (in flight):** Backend-only persistence PR. Adds a
 nullable `Publication.review` Text column (Alembic migration
@@ -186,22 +193,43 @@ never bundled to client). `InfographicEditor` gains `initialDoc?` and
 Ctrl+S PATCHes through `updateAdminPublication`; the legacy local-JSON
 download on save is removed.
 
-**E-4-2 status:** Autosave landed on `claude/stage4-task2-autosave`.
-Debounced 2000ms `useEffect` on `state.doc` reference; navigational
-actions preserve identity so they don't reset the timer. Reuses the
-Task 0 `SAVED_IF_MATCHES` / `SAVE_FAILED` channel verbatim — no reducer
-changes. New local `SaveStatus` enum (`idle | pending | saving | error`)
-drives a four-state `SaveStatusIndicator` in TopBar (amber/red dot with
-CSS keyframe pulse for `saving`). Exponential-backoff retry
-(2s/4s/8s/16s, 4 attempts) scheduled via an orthogonal effect watching
+**E-4-2 status (full close):** Autosave landed on
+`claude/stage4-task2-autosave`; review-fix close on
+`claude/stage4-task2-fix-close-sxKZr`. Debounced 2000ms `useEffect` on
+`state.doc` reference; navigational actions preserve identity so they
+don't reset the timer. Reuses the Task 0 `SAVED_IF_MATCHES` /
+`SAVE_FAILED` channel verbatim — no reducer changes. New local
+`SaveStatus` enum (`idle | pending | saving | error`) drives a
+four-state `SaveStatusIndicator` in TopBar (amber/red dot with CSS
+keyframe pulse for `saving`). Exponential-backoff retry (2s/4s/8s/16s,
+4 attempts) scheduled via an orthogonal effect watching
 `state.saveError` + a `saveFailureGen` counter (required because
 identical error strings would otherwise leave the dep array stable).
 NotificationBanner save-error branch extended inline with live
 countdown + "Retry now" button. `beforeunload` guard covers the 2s
-window between an edit and the next scheduled save. New test files:
-`autosave.test.tsx` (14 tests), `save-status-indicator.test.tsx`
-(6 tests), `_admin-api-mock.ts` helper; extended
-`error-channels.test.tsx` with 5 retry-UX tests. 598 tests passing.
+window between an edit and the next scheduled save. Review-fix close
+resolves three blockers: **B1** 404s no longer schedule auto-retries
+(local `canAutoRetryRef` flag drives the retry-effect guard; zero
+reducer changes); **B2** the debounce effect short-circuits while
+`state.saveError` is set, so the retry effect is the sole save
+orchestrator during error-state and edit-during-error produces a
+single scheduled save at `delay[0]=2000ms` instead of two racing
+timers; **B4** the debounce callback re-arms itself when `savingRef`
+is held by an in-flight PATCH (previously a slow-network PATCH could
+leave subsequent edits unsaved until a mutating action or Ctrl+S).
+Test files: `autosave.test.tsx` (21 tests; +6 from close, +1 from B5),
+`save-status-indicator.test.tsx` (6 tests), `_admin-api-mock.ts`
+helper; extended `error-channels.test.tsx` with 5 retry-UX tests.
+605 tests passing.
+
+- B5 follow-up (dismiss bypass): debounce effect guard on
+  `canAutoRetryRef.current`. Dismissing a 404 banner clears
+  `state.saveError` but leaves `dirty = true`; before B5 the debounce
+  effect re-ran on the `saveError → null` transition and scheduled a
+  fresh 2s PATCH that immediately 404'd. The new guard (after the
+  `state.saveError` check, before the `!dirty` check) short-circuits
+  when the terminal flag is still set. Zero reducer / schema / API /
+  banner changes. +1 test in the terminal-errors describe block.
 
 **E-4-5 status:** WCAG AA contrast validator landed on
 `claude/contrast-matrix-validator-thFnP`. New pure-function validator

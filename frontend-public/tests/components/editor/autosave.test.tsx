@@ -294,14 +294,22 @@ describe('Autosave — user edit during error resets retry budget', () => {
     await flushMicrotasks();
     expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(3);
 
-    // User edits again. Attempt counter resets; debounce re-arms.
+    // User edits again. Attempt counter resets; retry effect re-enters at
+    // delay[0] = 2000ms (the debounce effect is the sole save orchestrator
+    // during saveError, and delay[0] is functionally identical to the
+    // debounce window — see Stage 4 Task 2 fix, B2).
     clickPalette(/palette: energy/i);
     act(() => { jest.advanceTimersByTime(2000); });
     await flushMicrotasks();
     expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(4);
 
-    // Next auto-retry is at delay[0] = 2000ms (not delay[3] = 16000ms).
-    act(() => { jest.advanceTimersByTime(2000); });
+    // Call 4 advanced the attempt counter, so the next retry is at
+    // delay[1] = 4000ms. This matches the exponential-backoff schedule
+    // starting fresh from the edit. Pre-B2 fix the 5th call happened at
+    // +2000 because the old code had a debounce timer racing the retry
+    // effect — the second timer no-op'd against savingRef but injected a
+    // short-latency follow-up that looked indistinguishable from a retry.
+    act(() => { jest.advanceTimersByTime(4000); });
     await flushMicrotasks();
     expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(5);
   });
@@ -320,6 +328,206 @@ describe('Autosave — 404 produces the dedicated error message', () => {
 
     const banner = screen.getByTestId('notification-banner');
     expect(banner.textContent).toMatch(/reload the page/i);
+  });
+});
+
+describe('Autosave — terminal errors (404, Stage 4 Task 2 fix B1)', () => {
+  test('AdminPublicationNotFoundError does not trigger auto-retry', async () => {
+    mockUpdateAdminPublication.mockRejectedValue(
+      new MockAdminPublicationNotFoundError('pub1'),
+    );
+
+    render(<InfographicEditor publicationId="pub1" />);
+    clickPalette(/palette: government/i);
+
+    // Debounce → PATCH1, which 404s.
+    act(() => { jest.advanceTimersByTime(2000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
+
+    // Advance past all four retry windows (2+4+8+16 = 30s) plus slack.
+    act(() => { jest.advanceTimersByTime(60_000); });
+    await flushMicrotasks();
+
+    // Still exactly one call — terminal error blocked auto-retry.
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
+  });
+
+  test('manual "Retry now" after 404 overrides the terminal flag', async () => {
+    mockUpdateAdminPublication.mockRejectedValueOnce(
+      new MockAdminPublicationNotFoundError('pub1'),
+    );
+
+    render(<InfographicEditor publicationId="pub1" />);
+    clickPalette(/palette: government/i);
+    act(() => { jest.advanceTimersByTime(2000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
+
+    // Simulate publication being (re)created in another tab — next PATCH succeeds.
+    mockUpdateAdminPublication.mockResolvedValueOnce({} as AdminPublicationResponse);
+
+    const retryBtn = screen.getByTestId('retry-now-button');
+    await act(async () => {
+      fireEvent.click(retryBtn);
+      await Promise.resolve();
+    });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(2);
+  });
+
+  test('dismissing a 404 banner does not re-enable autosave (Stage 4 Task 2 B5)', async () => {
+    // Every PATCH returns 404. If the dismiss-bypass guard is missing,
+    // a second PATCH would fire 2s after the user clicks Dismiss.
+    mockUpdateAdminPublication.mockRejectedValue(
+      new MockAdminPublicationNotFoundError('pub1'),
+    );
+
+    render(<InfographicEditor publicationId="pub1" />);
+    clickPalette(/palette: government/i);
+
+    // First PATCH fires and 404s.
+    act(() => { jest.advanceTimersByTime(2000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
+
+    // User clicks Dismiss (✕) on the save-error banner.
+    const dismissBtn = screen.getByLabelText(/dismiss save error/i);
+    await act(async () => {
+      fireEvent.click(dismissBtn);
+      await Promise.resolve();
+    });
+    await flushMicrotasks();
+
+    // Reducer cleared saveError but left dirty = true. Without the B5
+    // guard the debounce effect would schedule a new PATCH here.
+    // With the guard canAutoRetryRef.current is still false → no schedule.
+    act(() => { jest.advanceTimersByTime(60_000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
+  });
+
+  test('user edit after 404 re-enables auto-retry for the next failure', async () => {
+    mockUpdateAdminPublication.mockRejectedValueOnce(
+      new MockAdminPublicationNotFoundError('pub1'),
+    );
+
+    render(<InfographicEditor publicationId="pub1" />);
+    clickPalette(/palette: government/i);
+    act(() => { jest.advanceTimersByTime(2000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
+
+    // Next attempt: transient failure. canAutoRetryRef flips back to true
+    // on the incoming edit (edit-reset effect) and the retry effect will
+    // schedule a backoff cycle from delay[0].
+    mockUpdateAdminPublication.mockRejectedValue(new Error('network timeout'));
+
+    clickPalette(/palette: energy/i);
+    // Retry effect schedules at delay[0]=2000ms (attempt counter just reset).
+    act(() => { jest.advanceTimersByTime(2000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(2);
+
+    // Transient failure → auto-retry at delay[1]=4000ms (attempt counter
+    // advanced when call 2 fired). Advancing here proves the backoff
+    // cycle is active, which is only possible because canAutoRetryRef
+    // flipped back to true on the user edit.
+    act(() => { jest.advanceTimersByTime(4000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('Autosave — single-scheduler guarantee (Stage 4 Task 2 fix B2)', () => {
+  test('edit during active saveError schedules exactly one next save', async () => {
+    // First attempt fails (transient). Second PATCH — triggered by the
+    // retry effect after the user edit — resolves.
+    mockUpdateAdminPublication.mockRejectedValueOnce(new Error('network'));
+    mockUpdateAdminPublication.mockResolvedValueOnce({} as AdminPublicationResponse);
+
+    render(<InfographicEditor publicationId="pub1" />);
+    clickPalette(/palette: government/i);
+    act(() => { jest.advanceTimersByTime(2000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
+
+    // saveError now set; retry scheduled at delay[0]=2000. User edits
+    // during this window. The debounce effect must NOT also schedule.
+    clickPalette(/palette: energy/i);
+
+    // Advance to the retry delay boundary. Exactly one PATCH fires —
+    // from the retry effect, not a racing debounce timer.
+    act(() => { jest.advanceTimersByTime(2000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(2);
+
+    // Advance further to prove no queued-up extra save fires.
+    act(() => { jest.advanceTimersByTime(10_000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Autosave — slow-PATCH re-arm (Stage 4 Task 2 fix B4)', () => {
+  test('debounce fires during in-flight PATCH → reschedules and saves latest doc', async () => {
+    // First PATCH hangs (controlled promise). Second PATCH resolves.
+    let resolveFirstSave: (v: AdminPublicationResponse) => void = () => {};
+    const firstSavePromise = new Promise<AdminPublicationResponse>((resolve) => {
+      resolveFirstSave = resolve;
+    });
+    mockUpdateAdminPublication.mockReturnValueOnce(firstSavePromise);
+    mockUpdateAdminPublication.mockResolvedValueOnce({} as AdminPublicationResponse);
+
+    render(<InfographicEditor publicationId="pub1" />);
+
+    // Edit 1 → first PATCH fires and hangs; savingRef becomes true.
+    clickPalette(/palette: government/i);
+    act(() => { jest.advanceTimersByTime(2000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
+
+    // Edit 2 arrives while first PATCH is still in flight.
+    clickPalette(/palette: energy/i);
+
+    // Debounce timer fires at +2000ms from edit 2. savingRef is still
+    // true → callback re-arms one more debounce cycle instead of
+    // dropping. Pre-B4 fix this would be a silent no-op and the
+    // second edit would never reach the backend until another
+    // mutating action or Ctrl+S.
+    act(() => { jest.advanceTimersByTime(2000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
+
+    // Resolve the first PATCH. savingRef clears.
+    await act(async () => {
+      resolveFirstSave({} as AdminPublicationResponse);
+      await Promise.resolve();
+    });
+
+    // Re-armed timer is still scheduled. Advance the next 2000ms cycle.
+    act(() => { jest.advanceTimersByTime(2000); });
+    await flushMicrotasks();
+
+    // Second PATCH now fires with the post-edit-2 doc.
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(2);
+  });
+
+  test('no infinite re-arm loop when performSave proceeds normally', async () => {
+    mockUpdateAdminPublication.mockResolvedValue({} as AdminPublicationResponse);
+
+    render(<InfographicEditor publicationId="pub1" />);
+    clickPalette(/palette: government/i);
+    act(() => { jest.advanceTimersByTime(2000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
+
+    // Advance far. Re-arm only fires when savingRef is true at the
+    // moment the debounce callback runs; otherwise performSave fires
+    // and the timer is not re-scheduled.
+    act(() => { jest.advanceTimersByTime(60_000); });
+    await flushMicrotasks();
+    expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
   });
 });
 
