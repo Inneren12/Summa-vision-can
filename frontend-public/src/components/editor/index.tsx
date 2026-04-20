@@ -18,6 +18,7 @@ import {
   type DebugBlockEntry,
   type DebugSectionEntry,
 } from './renderer/debug-overlay';
+import { preloadCanvasFonts } from './renderer/font-preload';
 import { validate } from './validation/validate';
 import { deferRevoke } from './utils/download';
 import { buildUpdatePayload } from './utils/persistence';
@@ -45,70 +46,17 @@ import type { NoteRequestConfig } from './components/noteRequest';
 const AUTOSAVE_DEBOUNCE_MS = 2000;
 const RETRY_DELAYS_MS = [2000, 4000, 8000, 16000] as const;
 
-// Maximum wait for `document.fonts.ready` before flipping `fontsReady`
-// true anyway (Stage 4 Task 3). Guards against pathological browser
-// states where the promise hangs; normal warm-cache loads resolve in
-// sub-100ms and never hit this ceiling. A dev-only console.warn on
-// timeout documents the fallback for development.
+// Maximum wait for the mount-time canvas font preload race before
+// flipping `fontsReady` true anyway (Stage 4 Tasks 3 + 6). Guards
+// against pathological browser states where font loading stalls;
+// normal warm-cache loads resolve in sub-100ms and never hit this
+// ceiling. A dev-only console.warn on timeout documents the fallback
+// for development.
 //
 // Exported for the B1 fix test (font-gate.test.tsx) so the timeout
 // assertion reads from the single source of truth instead of
 // hardcoding 5000 in the test body.
 export const FONTS_TIMEOUT_MS = 5000;
-
-type FontsWaitOutcome = 'ready' | 'timeout' | 'unsupported';
-
-/**
- * Race `document.fonts.ready` against `FONTS_TIMEOUT_MS`.
- *
- * Resolves to:
- *   - `'ready'`       : fonts loaded within timeout (expected path)
- *   - `'timeout'`     : fonts did NOT resolve within `FONTS_TIMEOUT_MS`
- *                       (pathological browser state — proceed with fallback)
- *   - `'unsupported'` : `document.fonts` API unavailable (old browser,
- *                       exotic environment — proceed with fallback)
- *
- * Never rejects. Never hangs. This is the contract the `fontsReady` flag
- * encodes: after this resolves, the caller MUST proceed regardless of
- * outcome. Both the mount-time gate and `exportPNG` must use this —
- * direct `await document.fonts.ready` in `exportPNG` would re-introduce
- * the hang that `FONTS_TIMEOUT_MS` is meant to prevent (B1 fix).
- *
- * Dev-only: `'timeout'` and `'unsupported'` outcomes log a console.warn
- * so font-loading issues are discoverable during development. Production
- * stays silent.
- */
-async function waitForFontsReadyOrTimeout(): Promise<FontsWaitOutcome> {
-  if (typeof document === 'undefined' || !document.fonts?.ready) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn(
-        '[InfographicEditor] document.fonts API unavailable — rendering with fallback fonts',
-      );
-    }
-    return 'unsupported';
-  }
-
-  return new Promise<FontsWaitOutcome>((resolve) => {
-    let settled = false;
-    const timeoutId = window.setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn(
-          `[InfographicEditor] document.fonts.ready timed out after ${FONTS_TIMEOUT_MS}ms — rendering with fallback fonts`,
-        );
-      }
-      resolve('timeout');
-    }, FONTS_TIMEOUT_MS);
-
-    void document.fonts.ready.then(() => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timeoutId);
-      resolve('ready');
-    });
-  });
-}
 
 export interface InfographicEditorProps {
   /**
@@ -375,27 +323,34 @@ export default function InfographicEditor({
   }, [doc, pal, sz, fontsReady, debugEnabled]);
   useEffect(() => { render(); }, [render]);
 
-  // Mount-time font-load gate (Stage 4 Task 3). Delegates to the shared
-  // `waitForFontsReadyOrTimeout` helper so the mount gate and
-  // `exportPNG` share one policy — critical for B1: without a timeout,
-  // `exportPNG` would hang in the same cases the mount gate protects
-  // against. The helper logs its own dev warnings; this effect only
-  // needs to flip the flag once the helper resolves.
-  //
-  // Empty dep array: the helper's inner promise is idempotent and
-  // cached after first resolution, so re-running on hot reloads or
-  // remounts is safe but unnecessary. `cancelled` prevents a late
-  // resolution from calling setState on an unmounted component.
+  // Mount-time font-load gate (Stage 4 Tasks 3 + 6). Task 3 established
+  // `fontsReady` as the single contract for preview/export; Task 6 closes
+  // the late-subset gap by preloading every canvas (family, weight) pair
+  // before flipping the flag. The race stays inside the same 5s ceiling:
+  // if preload stalls, warn in dev and proceed with fallback fonts.
   useEffect(() => {
     let cancelled = false;
-
-    void waitForFontsReadyOrTimeout().then(() => {
+    const timeoutId = window.setTimeout(() => {
       if (cancelled) return;
+      cancelled = true;
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          `[InfographicEditor] Canvas font preload timed out after ${FONTS_TIMEOUT_MS}ms — rendering with fallback fonts`,
+        );
+      }
+      setFontsReady(true);
+    }, FONTS_TIMEOUT_MS);
+
+    void preloadCanvasFonts().then(() => {
+      if (cancelled) return;
+      cancelled = true;
+      window.clearTimeout(timeoutId);
       setFontsReady(true);
     });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
     };
   }, []);
 
@@ -895,8 +850,8 @@ export default function InfographicEditor({
     // can checkpoint work-in-progress.
     if (!canExp) return;
     // Stage 4 Task 3 B1 (post-review): fontsReady is the single contract.
-    // Once true (via mount-time waitForFontsReadyOrTimeout resolving
-    // 'ready', 'timeout', or 'unsupported'), render and export both
+    // Once true (via mount-time preload completion or timeout), render
+    // and export both
     // proceed without re-invoking the helper. An earlier iteration of
     // this code re-awaited the helper here as belt-and-suspenders, but
     // that reintroduced the exact 5-second stall in pathological cases
