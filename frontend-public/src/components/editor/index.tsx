@@ -120,6 +120,16 @@ export default function InfographicEditor({
   const retryCountdownIntervalRef = useRef<number | null>(null);
   const [retryCountdownMs, setRetryCountdownMs] = useState<number | null>(null);
   const [saveFailureGen, setSaveFailureGen] = useState<number>(0);
+  // Auto-retry eligibility for the current saveError.
+  // - true  (default): error is transient (network, 5xx) → retry effect schedules backoff.
+  // - false: error is terminal (404 or other non-recoverable) → retry effect
+  //   skips scheduling; banner still shows with manual "Retry now" button.
+  //
+  // Reset to true on:
+  //   - any new user edit (edit-reset effect)
+  //   - manual "Retry now" click
+  //   - successful save (implicit — saveError clears, effect resets)
+  const canAutoRetryRef = useRef<boolean>(true);
   const [ltab, setLtab] = useState<LeftTab>("templates");
   const [qaOpen, setQaOpen] = useState(true);
   const [qaMode, setQaMode] = useState<QAMode>("publish");
@@ -323,14 +333,27 @@ export default function InfographicEditor({
       })
       .catch((err: unknown) => {
         if (err instanceof AdminPublicationNotFoundError) {
+          // Terminal condition. Do NOT auto-retry — the resource does not
+          // exist on the server, and repeat PATCHes will 404 identically.
+          // Manual "Retry now" is still available (the user may have created
+          // the publication in another tab); it resets canAutoRetryRef.
+          canAutoRetryRef.current = false;
           dispatch({
             type: "SAVE_FAILED",
             error: 'Publication not found — reload the page',
           });
-        } else {
-          const msg = err instanceof Error ? err.message : String(err);
-          dispatch({ type: "SAVE_FAILED", error: msg });
+          // IMPORTANT: do NOT increment saveFailureGen here. The retry effect
+          // watches [state.saveError, saveFailureGen]; leaving gen unchanged
+          // still fires the effect (because saveError transitions null→string),
+          // but the canAutoRetryRef guard below makes it a no-op schedule.
+          setSaveStatus('error');
+          return;
         }
+
+        // Transient / unknown failure — retry with backoff.
+        canAutoRetryRef.current = true;
+        const msg = err instanceof Error ? err.message : String(err);
+        dispatch({ type: "SAVE_FAILED", error: msg });
         // Bump the failure generation so the retry effect re-runs even
         // when the error string is identical to a previous attempt.
         setSaveFailureGen((n) => n + 1);
@@ -352,6 +375,17 @@ export default function InfographicEditor({
       autosaveTimerRef.current = null;
     }
 
+    // During active saveError, the retry effect is the sole save
+    // orchestrator. A user edit resets retry state (via the edit-reset
+    // effect), and the retry effect then schedules the next attempt using
+    // RETRY_DELAYS_MS[0] = 2000ms — functionally identical to a debounce
+    // window. Having both effects schedule would create two timers racing
+    // to call performSave, the second no-op'ing against savingRef but
+    // adding noise to countdown semantics.
+    if (state.saveError) {
+      return;
+    }
+
     if (!dirty || !publicationId) {
       // Either nothing to save or no backend target. Drop a stale
       // `pending`/`saving` status back to `idle`. Functional update
@@ -365,10 +399,23 @@ export default function InfographicEditor({
     // is in flight) or `error` (retry orchestration is active).
     setSaveStatus((prev) => (prev === 'idle' ? 'pending' : prev));
 
-    autosaveTimerRef.current = window.setTimeout(() => {
-      autosaveTimerRef.current = null;
-      performSave();
-    }, AUTOSAVE_DEBOUNCE_MS);
+    // Re-arm pattern (B4): when the timer fires while a previous PATCH
+    // is still in flight, performSave would no-op against savingRef and
+    // edits would remain unsaved until the next mutating action or Ctrl+S.
+    // Instead, detect savingRef and schedule one more debounce cycle so
+    // the latest doc gets saved once savingRef clears. Bounded delay
+    // (AUTOSAVE_DEBOUNCE_MS per iteration), not a tight loop.
+    const scheduleAutosave = () => {
+      autosaveTimerRef.current = window.setTimeout(() => {
+        autosaveTimerRef.current = null;
+        if (savingRef.current) {
+          scheduleAutosave();
+          return;
+        }
+        performSave();
+      }, AUTOSAVE_DEBOUNCE_MS);
+    };
+    scheduleAutosave();
 
     return () => {
       if (autosaveTimerRef.current !== null) {
@@ -376,7 +423,29 @@ export default function InfographicEditor({
         autosaveTimerRef.current = null;
       }
     };
-  }, [doc, dirty, publicationId, performSave]);
+  }, [doc, dirty, publicationId, performSave, state.saveError]);
+
+  // A new user edit while in error state deserves a fresh attempt cycle.
+  // Reset the attempt counter so the retry orchestration effect re-enters
+  // at delay index 0. We intentionally do NOT depend on `state.saveError`
+  // here — including it would reset attempts on every SAVE_FAILED
+  // dispatch, defeating the exponential-backoff progression.
+  //
+  // Declared BEFORE the retry effect so the reset lands before the retry
+  // effect body reads `retryAttemptRef`. React runs useEffect bodies in
+  // declaration order on each commit; swapping these two effects would
+  // leave the retry effect reading a stale (pre-edit) attempt count and
+  // scheduling at the old delay index.
+  useEffect(() => {
+    if (state.saveError) {
+      retryAttemptRef.current = 0;
+      canAutoRetryRef.current = true;
+    }
+    // Intentional: react only to doc changes, not to saveError flipping.
+    // Including state.saveError would reset attempts on every SAVE_FAILED
+    // dispatch, defeating exponential-backoff progression.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc]);
 
   // Retry orchestration (Stage 4 Task 2). Watches `state.saveError`;
   // schedules an exponential-backoff auto-retry (2s → 4s → 8s → 16s)
@@ -398,6 +467,14 @@ export default function InfographicEditor({
       // Saved successfully (SAVED_IF_MATCHES cleared saveError) or user
       // dismissed. Reset the retry budget.
       retryAttemptRef.current = 0;
+      setRetryCountdownMs(null);
+      return;
+    }
+
+    // Terminal error — no auto-retry. Banner shows with manual Retry button.
+    // Do not touch retryAttemptRef here; a user edit or manual Retry
+    // will reset it independently.
+    if (!canAutoRetryRef.current) {
       setRetryCountdownMs(null);
       return;
     }
@@ -444,26 +521,15 @@ export default function InfographicEditor({
     };
   }, [state.saveError, saveFailureGen, performSave]);
 
-  // A new user edit while in error state deserves a fresh attempt cycle.
-  // Reset the attempt counter so the retry orchestration effect re-enters
-  // at delay index 0. We intentionally do NOT depend on `state.saveError`
-  // here — including it would reset attempts on every SAVE_FAILED
-  // dispatch, defeating the exponential-backoff progression.
-  useEffect(() => {
-    if (state.saveError) {
-      retryAttemptRef.current = 0;
-    }
-    // Intentional: react only to doc changes, not to saveError flipping.
-    // Including state.saveError would reset attempts on every SAVE_FAILED
-    // dispatch, defeating exponential-backoff progression.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc]);
-
   // Manual "Retry now" from the NotificationBanner. Cancels any scheduled
   // retry + countdown, resets the attempt budget, and fires the save
   // immediately. On failure, the retry effect will re-enter at delay 0.
   const handleManualRetry = useCallback(() => {
+    // User override: explicit "Retry now" resets both the attempt counter
+    // and the terminal-error flag. If the next attempt fails terminally
+    // again, canAutoRetryRef flips back to false inside performSave.catch.
     retryAttemptRef.current = 0;
+    canAutoRetryRef.current = true;
     if (retryTimerRef.current !== null) {
       window.clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;

@@ -901,11 +901,41 @@ opacity dip). Token palette: amber = `TK.c.acc`, red = `TK.c.err`.
   counter is required because React dep comparison uses `Object.is`;
   without it, successive failures with the same error string would
   leave the dep array unchanged and the effect would not re-run.
-- After four attempts the budget is exhausted; no further auto-retry
-  fires. The NotificationBanner continues to show with a "Retry now"
-  button.
-- A new mutating user edit resets `retryAttemptRef.current` to 0 so the
-  next failure re-enters the delay schedule from `delay[0]`.
+
+**Auto-retry applies only to retryable failures.** Terminal errors
+(404 — `AdminPublicationNotFoundError`) bypass the retry schedule
+entirely; the banner shows with a manual "Retry now" button that the
+user can invoke explicitly. Retryability is tracked via a local
+`canAutoRetryRef` (not a reducer field): `performSave.catch` flips it
+to `false` on 404 and `true` on any other failure, and the retry
+effect short-circuits when the flag is `false`. Any new user edit
+resets the flag back to `true`, so subsequent failures are eligible
+for the full backoff cycle again. Manual "Retry now" also resets it.
+
+After four failed auto-retries on a retryable error, the banner
+persists with "Retry now" until the user acts or edits.
+
+**Single-scheduler invariant.** While `saveError` is set, the debounce
+effect no-ops. The retry effect is the sole save orchestrator during
+error-state. A new user edit resets retry state, and the retry effect
+schedules the next attempt at `RETRY_DELAYS_MS[0] = 2000ms` —
+functionally identical to the debounce window, but emitted by one
+effect instead of two racing. The edit-reset effect is declared
+before the retry effect so `retryAttemptRef` is zeroed before the
+retry effect body reads it.
+
+**Slow-PATCH re-arm.** The debounce callback checks `savingRef.current`
+before invoking `performSave`. If a previous PATCH is still in flight
+the callback would otherwise no-op (performSave's own guard) and
+silently drop any pending edits until the next mutating action or
+Ctrl+S. Instead, the callback recursively re-arms itself one
+`AUTOSAVE_DEBOUNCE_MS` cycle later. The re-arm is bounded: each
+iteration waits the full debounce window, and re-arm only triggers
+while `savingRef` is set, so a healthy save loop does not spin.
+
+- A new mutating user edit resets `retryAttemptRef.current` to 0 and
+  `canAutoRetryRef.current` to `true` so the next failure re-enters
+  the delay schedule from `delay[0]` and auto-retry is eligible.
 - The retry schedule is driven by an effect, not by `performSave`'s
   `.catch`, so the save function stays pure and reusable from the
   debounce path and the Ctrl+S / Retry-now paths.
