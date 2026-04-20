@@ -185,22 +185,34 @@ never bundled to client). `InfographicEditor` gains `initialDoc?` and
 Ctrl+S PATCHes through `updateAdminPublication`; the legacy local-JSON
 download on save is removed.
 
-**E-4-2 status:** Autosave landed on `claude/stage4-task2-autosave`.
-Debounced 2000ms `useEffect` on `state.doc` reference; navigational
-actions preserve identity so they don't reset the timer. Reuses the
-Task 0 `SAVED_IF_MATCHES` / `SAVE_FAILED` channel verbatim — no reducer
-changes. New local `SaveStatus` enum (`idle | pending | saving | error`)
-drives a four-state `SaveStatusIndicator` in TopBar (amber/red dot with
-CSS keyframe pulse for `saving`). Exponential-backoff retry
-(2s/4s/8s/16s, 4 attempts) scheduled via an orthogonal effect watching
+**E-4-2 status (full close):** Autosave landed on
+`claude/stage4-task2-autosave`; review-fix close on
+`claude/stage4-task2-fix-close-sxKZr`. Debounced 2000ms `useEffect` on
+`state.doc` reference; navigational actions preserve identity so they
+don't reset the timer. Reuses the Task 0 `SAVED_IF_MATCHES` /
+`SAVE_FAILED` channel verbatim — no reducer changes. New local
+`SaveStatus` enum (`idle | pending | saving | error`) drives a
+four-state `SaveStatusIndicator` in TopBar (amber/red dot with CSS
+keyframe pulse for `saving`). Exponential-backoff retry (2s/4s/8s/16s,
+4 attempts) scheduled via an orthogonal effect watching
 `state.saveError` + a `saveFailureGen` counter (required because
 identical error strings would otherwise leave the dep array stable).
 NotificationBanner save-error branch extended inline with live
 countdown + "Retry now" button. `beforeunload` guard covers the 2s
-window between an edit and the next scheduled save. New test files:
-`autosave.test.tsx` (14 tests), `save-status-indicator.test.tsx`
-(6 tests), `_admin-api-mock.ts` helper; extended
-`error-channels.test.tsx` with 5 retry-UX tests. 598 tests passing.
+window between an edit and the next scheduled save. Review-fix close
+resolves three blockers: **B1** 404s no longer schedule auto-retries
+(local `canAutoRetryRef` flag drives the retry-effect guard; zero
+reducer changes); **B2** the debounce effect short-circuits while
+`state.saveError` is set, so the retry effect is the sole save
+orchestrator during error-state and edit-during-error produces a
+single scheduled save at `delay[0]=2000ms` instead of two racing
+timers; **B4** the debounce callback re-arms itself when `savingRef`
+is held by an in-flight PATCH (previously a slow-network PATCH could
+leave subsequent edits unsaved until a mutating action or Ctrl+S).
+Test files: `autosave.test.tsx` (20 tests; +6 from close),
+`save-status-indicator.test.tsx` (6 tests), `_admin-api-mock.ts`
+helper; extended `error-channels.test.tsx` with 5 retry-UX tests.
+604 tests passing.
 
 Follow-up close resolves DEBT-026: opaque `document_state` column on
 `Publication` (migration `a3e81c0f5d21`) carries the full
