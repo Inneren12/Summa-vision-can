@@ -127,9 +127,26 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-4-5 | Stage 4 Task 5 — WCAG AA contrast validator | ✅ | E-4-0 |
 | E-4-6 | Stage 4 Task 6 — Font lifecycle hardening (late-subset closure) | ✅ | E-4-3 |
 | E-4-9a | Stage 4 Task 9a — Perf: instrumentation + editor memoization | ✅ | E-4-6 |
+| E-4-9b | Stage 4 Task 9b — Public gallery perf (dynamic modal + form + bundle analyzer) | ✅ | E-4-9a |
 
-- E-4-9b (public gallery perf: code splitting, DownloadModal lazy load): deferred to separate PR
 - E-4-6 follow-up (fonts.load text argument): pending human commit
+
+**E-4-9b status:** Public-route bundle splitting. `DownloadModal` is split
+into a thin trigger (button + `isOpen` state; ships on every card) and a
+dynamically-imported `DownloadModalContent` chunk (form, `react-hook-form`,
+`zod` resolver, `TurnstileWidget`) that downloads on first click. Homepage
+with 24 cards now pays zero RHF/zod/Turnstile hydration cost until a user
+clicks Download. Chunk reuse across subsequent cards. `InquiryForm` on
+`/partner-with-us` moved to `next/dynamic` with `ssr: true` so the form
+still server-renders for SEO / no-JS, but hydration and the RHF bundle
+defer. `@next/bundle-analyzer` wired as devDep behind `ANALYZE=true
+npm run analyze` (uses `--webpack` flag; Turbopack analyzer not yet
+compatible with the `@next/bundle-analyzer` wrapper in Next 16). Build
+artifacts confirm the split: `app/page.js` and `app/graphics/[id]/page.js`
+(trigger host chunks) contain the `Download High-Res` button text but no
+`useForm`; `useForm` lives in the deferred chunk. Zero changes to form
+logic, submit behaviour, or Turnstile integration. 672 tests passing;
+lint unchanged (169 errors / 13 warnings baseline preserved).
 
 **E-3-4 status (in flight):** Backend-only persistence PR. Adds a
 nullable `Publication.review` Text column (Alembic migration
