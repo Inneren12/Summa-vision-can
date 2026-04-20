@@ -120,7 +120,7 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-3-4 | Stage 3 Backend Persistence + Cleanup | 🔄 | E-3-3 |
 | E-3-5 | Stage 3 End-to-End Tests | ⬜ | E-3-4 |
 | E-4-0 | Stage 4 Task 0 — Editor Wire-Up (Next.js admin routes) | ✅ | E-3-4 |
-| E-4-1 | Stage 4 Task 1 — Click-to-select + UX polish | ⬜ | E-4-0 |
+| E-4-1 | Stage 4 Task 1 — Click-to-select + UX polish | ✅ | E-4-0 |
 | E-4-2 | Stage 4 Task 2 — Autosave + recovery | ⬜ | E-4-0 |
 
 **E-3-4 status (in flight):** Backend-only persistence PR. Adds a

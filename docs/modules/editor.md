@@ -567,15 +567,17 @@ LeftPanel and Inspector receive `effectivePerms`; in `approved` /
 `canEdit` is derived from `effectivePerms.editBlock` so Inspector
 property fields disable too.
 
-### Canvas stays clean — no overlay
+### Canvas stays clean — no overlay (Stage 3 PR 3)
 
-PR 3 does **not** introduce a canvas overlay layer. Comment indicators
-appear only in (a) the LeftPanel block-row pills and (b) the Review
-panel. `Canvas.tsx` is unchanged; the canvas remains a single
-`<canvas>` DOM element. Rationale: keeping the rendering surface clean
-preserves export/PNG fidelity and avoids reflowing the PR 3 scope into
-the renderer engine. Adding a canvas overlay is tracked as a deferred
-enhancement (see `DEBT.md`).
+PR 3 did not introduce a canvas overlay layer. Comment indicators
+appeared only in (a) the LeftPanel block-row pills and (b) the Review
+panel. The rationale was to preserve export/PNG fidelity and avoid
+reflowing the PR 3 scope into the renderer engine.
+
+**Revised in Stage 4 Task 1** — see the "Canvas interaction" section
+below. The canvas now has a separate overlay canvas used strictly for
+hover/selection outlines. PNG export still reads from the content
+canvas only, so the PR 3 export-fidelity constraint is preserved.
 
 ### Component file map
 
@@ -689,4 +691,96 @@ The previous Ctrl+S / TopBar SAVE behaviour wrote a local JSON file
 via `URL.createObjectURL`. Stage 4 Task 0 removes that path for the
 `publicationId` case. `exportJSON` (TopBar "Export JSON") is
 unchanged — it remains a manual checkpoint tool.
+
+## Canvas interaction (Stage 4 Task 1)
+
+Stage 4 Task 1 adds click-to-select and hover outlines on the canvas,
+replacing the PR-3 deferred note in "Canvas stays clean — no overlay".
+The PR-3 decision is explicitly revised: the canvas now has an overlay
+layer, but it is **separate** from the content canvas and never
+participates in PNG export.
+
+### Two-canvas layered architecture
+
+`components/Canvas.tsx` renders two sibling `<canvas>` elements inside
+a shared `position: relative` wrapper:
+
+- **Content canvas** — the existing rendering surface. Background + all
+  block renderers draw here. PNG export still reads from this canvas.
+- **Overlay canvas** — absolutely positioned on top, same CSS size,
+  `pointer-events: none`. Hover + selection outlines draw here. The
+  overlay never touches the content canvas's backing store, so export
+  fidelity is preserved.
+
+Pointer events land on the content canvas (overlay is
+`pointer-events: none` so events pass through). `onMouseDown`,
+`onMouseMove`, and `onMouseLeave` are wired from `index.tsx`.
+
+### Hit areas
+
+`renderDoc` has always returned
+`Array<{ blockId, result: RenderResult }>` where
+`result.hitArea = { x, y, w, h }` is populated by each block renderer
+(`renderer/blocks.ts` → `rr()` helper). The Task 0 content-render
+effect discarded this value; Task 1 captures it into
+`hitAreasRef: useRef<HitAreaEntry[]>` immediately after each render.
+
+Storing hit areas in a ref (not reducer state) avoids polluting undo
+history with derived render data. The ref is refreshed on every
+`doc/pal/sz` change, so hover/click handlers always read the latest
+geometry.
+
+### Coordinate transform
+
+`utils/hit-test.ts` exposes two pure helpers:
+
+- `hitTest(entries, x, y)` — iterates `entries` in **reverse** so the
+  last-drawn block wins on overlap (matches the engine's draw order).
+- `clientToLogical(canvas, clientX, clientY, logicalW, logicalH)` —
+  maps pointer-event client coordinates to canvas logical units using
+  `getBoundingClientRect` + `logicalW / rect.width` scale. DPR is not
+  part of the transform because `ctx.setTransform(dpr, 0, 0, dpr, 0, 0)`
+  already maps logical → backing-store, and hit areas live in logical
+  space.
+
+### Selection + hover semantics
+
+- **Click a block** → `dispatch({ type: "SELECT", blockId })`. Mirrors
+  the existing LeftPanel pathway exactly.
+- **Click empty canvas** → `dispatch({ type: "SELECT", blockId: null })`.
+  This is new behaviour (LeftPanel never deselects) but matches the
+  implicit deselect path that `SWITCH_TPL` / `IMPORT` already take and
+  is the standard canvas-editor interaction.
+- **Hover** → `setHoveredBlockId(hit)` with an identity-check bail-out
+  so mousemove inside the same block does not trigger overlay redraws.
+- **Hover state is component-local `useState`**, not in the reducer.
+  It is ephemeral UI: never persisted, never audited, never permission-
+  gated.
+- **`SELECT` is always allowed** by both the mode-axis and workflow
+  gates (`permissions.ts`, `workflow.test.ts` case 23) — canvas
+  click-to-select works even in `published`, `approved`, `exported`,
+  and `in_review`. Selection is navigation, not mutation.
+
+### Overlay rendering
+
+`renderer/overlay.ts` (pure function) draws outlines:
+
+- **Selection**: `TK.c.acc`, 2px solid. Matches the accent colour
+  LeftPanel uses for its selected row border.
+- **Hover**: `TK.c.txtS`, 1px dashed. Subtle mid-grey, distinct from
+  selection.
+
+When the hover target equals the selected block, the hover outline is
+suppressed so outlines do not stack. When they differ, hover is drawn
+first and selection on top. The overlay effect reads from
+`hitAreasRef.current` and depends on `[selId, hoveredBlockId, sz, doc,
+pal]`; `doc`/`pal` appear in the dep array so the overlay reconciles
+after a content change that shifts block rects.
+
+### Read-only / published behaviour
+
+Click-to-select and hover remain functional in every read-only
+workflow state. This is intentional: review and approval flows need
+selection to drive the Inspector and Review panel even when edits are
+disabled.
 
