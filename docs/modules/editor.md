@@ -1071,15 +1071,25 @@ For gradients, the validator checks both points:
    (dot grid, topo lines) at very low alpha are treated as solid
    for contrast purposes — the base colour dominates visually.
 
-### Known token tuning
+### Token tuning history
 
-`TK.c.txtM` (`#5C6370` → `#7A818C`) and `pal.neg` across all six
-palettes (`#E11D48` → `#F43F5E`) were tuned inline during the Task 5
-rollout to pass AA-normal on the canonical `#0B0D11` background.
-`TK.c.err` (editor-chrome error state, not canvas-rendered) retains
-the original `#E11D48`. See DEBT.md "Historical Notes → 2026-04-20
-Editor token tuning for WCAG AA" for rationale and before/after
-ratios.
+Task 5 discovered two tokens failed WCAG AA normal (4.5:1) on the
+standard dark background `#0B0D11` and tuned them inline to compliant
+values:
+
+- `TK.c.txtM` (eyebrow_tag, source_footer text): `#5C6370` → `#7A818C`.
+  3.22:1 → 4.96:1. Still muted relative to `txtS` (`#8B949E`) and
+  `txtP` (`#F3F4F6`); the `txtM < txtS < txtP` hierarchy is preserved.
+
+- `pal.neg` (delta_badge negative direction, across all 6 palettes):
+  `#E11D48` → `#F43F5E`. 4.14:1 → 5.60:1. Red semantic preserved,
+  slightly brighter hue.
+
+Future design refreshes should be aware the tokens were tuned to
+pass the validator rather than chosen freely from brand palette.
+Do not revert to old values without also relaxing the validator
+contract.
+
 ## Font loading and deterministic export (Stage 4 Task 3)
 
 ### Problem
