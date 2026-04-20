@@ -85,7 +85,10 @@ export function mockDocumentFontsReady(
 
   Object.defineProperty(document, "fonts", {
     configurable: true,
-    value: { ready },
+    value: {
+      ready,
+      load: () => ready.then(() => []),
+    },
   });
 
   return {

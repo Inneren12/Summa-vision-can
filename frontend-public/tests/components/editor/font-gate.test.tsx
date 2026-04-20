@@ -183,4 +183,34 @@ describe('Font gate (Stage 4 Task 3)', () => {
       jest.useRealTimers();
     }
   });
+
+  test('mount effect preloads canvas fonts before flipping fontsReady', async () => {
+    const loadMock = jest.fn(() => Promise.resolve([]));
+    const origFonts = Object.getOwnPropertyDescriptor(document, 'fonts');
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: {
+        load: loadMock,
+        ready: Promise.resolve(),
+      },
+    });
+
+    try {
+      await act(async () => {
+        render(<InfographicEditor initialDoc={makeTestDoc()} />);
+      });
+      await flushPromises();
+
+      expect(loadMock.mock.calls.length).toBeGreaterThan(0);
+
+      const btn = getExportButton();
+      expect(btn).not.toBeDisabled();
+    } finally {
+      if (origFonts) {
+        Object.defineProperty(document, 'fonts', origFonts);
+      } else {
+        delete (document as unknown as { fonts?: unknown }).fonts;
+      }
+    }
+  });
 });

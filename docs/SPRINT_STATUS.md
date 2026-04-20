@@ -125,6 +125,7 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-4-5 | Stage 4 Task 5 — WCAG AA contrast validator | ✅ | E-4-0 |
 | E-4-3 | Stage 4 Task 3 — Deterministic export (font-load gate) | ✅ | E-4-2 |
 | E-4-4 | Stage 4 Task 4 — Debug overlay (dev tooling) | ✅ | E-4-1 |
+| E-4-6 | Stage 4 Task 6 — Font lifecycle hardening (late-subset closure) | ✅ | E-4-3 |
 
 - Nit fixes (chart test + dev-mode invariant): <pending>
 

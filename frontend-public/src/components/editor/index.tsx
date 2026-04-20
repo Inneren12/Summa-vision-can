@@ -18,6 +18,7 @@ import {
   type DebugBlockEntry,
   type DebugSectionEntry,
 } from './renderer/debug-overlay';
+import { preloadCanvasFonts } from './renderer/font-preload';
 import { validate } from './validation/validate';
 import { deferRevoke } from './utils/download';
 import { buildUpdatePayload } from './utils/persistence';
@@ -78,6 +79,7 @@ type FontsWaitOutcome = 'ready' | 'timeout' | 'unsupported';
  * so font-loading issues are discoverable during development. Production
  * stays silent.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function waitForFontsReadyOrTimeout(): Promise<FontsWaitOutcome> {
   if (typeof document === 'undefined' || !document.fonts?.ready) {
     if (process.env.NODE_ENV !== 'production') {
@@ -375,27 +377,34 @@ export default function InfographicEditor({
   }, [doc, pal, sz, fontsReady, debugEnabled]);
   useEffect(() => { render(); }, [render]);
 
-  // Mount-time font-load gate (Stage 4 Task 3). Delegates to the shared
-  // `waitForFontsReadyOrTimeout` helper so the mount gate and
-  // `exportPNG` share one policy — critical for B1: without a timeout,
-  // `exportPNG` would hang in the same cases the mount gate protects
-  // against. The helper logs its own dev warnings; this effect only
-  // needs to flip the flag once the helper resolves.
-  //
-  // Empty dep array: the helper's inner promise is idempotent and
-  // cached after first resolution, so re-running on hot reloads or
-  // remounts is safe but unnecessary. `cancelled` prevents a late
-  // resolution from calling setState on an unmounted component.
+  // Mount-time font-load gate (Stage 4 Tasks 3 + 6). Task 3 established
+  // `fontsReady` as the single contract for preview/export; Task 6 closes
+  // the late-subset gap by preloading every canvas (family, weight) pair
+  // before flipping the flag. The race stays inside the same 5s ceiling:
+  // if preload stalls, warn in dev and proceed with fallback fonts.
   useEffect(() => {
     let cancelled = false;
-
-    void waitForFontsReadyOrTimeout().then(() => {
+    const timeoutId = window.setTimeout(() => {
       if (cancelled) return;
+      cancelled = true;
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          `[InfographicEditor] Canvas font preload timed out after ${FONTS_TIMEOUT_MS}ms — rendering with fallback fonts`,
+        );
+      }
+      setFontsReady(true);
+    }, FONTS_TIMEOUT_MS);
+
+    void preloadCanvasFonts().then(() => {
+      if (cancelled) return;
+      cancelled = true;
+      window.clearTimeout(timeoutId);
       setFontsReady(true);
     });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
     };
   }, []);
 

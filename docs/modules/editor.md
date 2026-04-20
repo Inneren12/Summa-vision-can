@@ -1123,10 +1123,14 @@ or `'unsupported'` (browser lacks the API — proceed with fallback).
 The helper clears its own timer on early resolution so there is no
 trailing no-op timer fire.
 
-The mount-time effect awaits this helper once, then flips `fontsReady`
-to true. From that moment, `fontsReady` is the single contract: the
-render callback proceeds, the EXPORT button enables, and `exportPNG`
-runs without a second wait.
+After Task 6, the mount-time effect preloads every canvas `(family,
+weight)` pair first, racing that preload work against the same
+5-second ceiling. The helper remains as the canonical description of
+the timeout contract, but mount-time readiness now comes from the
+preload race rather than directly awaiting `document.fonts.ready`.
+From that moment, `fontsReady` is the single contract: the render
+callback proceeds, the EXPORT button enables, and `exportPNG` runs
+without a second wait.
 
 An earlier iteration re-invoked the helper inside `exportPNG` as
 belt-and-suspenders; this reintroduced the exact 5-second stall in
@@ -1169,6 +1173,67 @@ promise hangs forever. Both the mount gate and the export gate honour
 it — the `fontsReady` flag is the single contract: once true, proceed,
 regardless of font-load state. No retry — once `fontsReady` flips true
 it stays true for the session.
+### Late-subset closure (Stage 4 Task 6)
+
+`document.fonts.ready` resolves when currently-requested faces load.
+With unicode-range subsets (next/font splits Google families into
+latin, latin-ext, Vietnamese, Greek, Cyrillic shards by default), a
+subset face is only requested when a glyph from its range actually
+renders. A user typing `é` post-mount triggers a late fetch that the
+original gate resolved past, and the next canvas render uses
+fallback glyphs until the late fetch completes.
+
+Task 6 closes this by explicitly preloading every `(family, weight)`
+the canvas renderer uses, via `document.fonts.load()`, before
+flipping `fontsReady`. This forces all unicode-range shards per
+(family, weight) to fetch up front.
+
+The canvas face registry lives at `renderer/font-preload.ts` as
+`CANVAS_FONT_FACES`. It mirrors the renderer's `ctx.font` weights
+exactly - 11 entries across display/body/data. If the renderer
+starts using a new weight, the registry updates in lockstep. A unit
+test pins the set.
+
+The mount-time race still honours the 5-second ceiling. If preload
+takes longer, the editor flips `fontsReady` anyway and accepts
+fallback rendering for that session. Typical preload on a warm
+cache is sub-100ms.
+
+Scope limit: this closes non-ASCII drift for glyphs within already-
+subsetted ranges (latin-ext, Greek, etc.). Glyphs outside all
+declared subsets (e.g. Devanagari) fallback to system fonts
+regardless. That's acceptable for the Canadian macro-data product
+scope; a future refresh adding broader multilingual coverage would
+extend the subset declaration in `layout.tsx`.
+
+### Public-route preload (verification)
+
+next/font automatically emits preload metadata through route-level
+`next-font-manifest.json` files. Verified in current artifacts for:
+
+- `frontend-public/.next/dev/server/app/page/next-font-manifest.json`
+- `frontend-public/.next/dev/server/app/admin/page/next-font-manifest.json`
+- `frontend-public/.next/dev/server/app/insights/metr/calculator/page/next-font-manifest.json`
+
+Each manifest lists the same three woff2 assets:
+
+- `static/media/017d9bea37084d9b-s.p.179.vsfvxa6t5.woff2`
+- `static/media/5c285b27cdda1fe8-s.p.0yo6-5yoeeudq.woff2`
+- `static/media/70bc3e132a0a741e-s.p.1409xf.ylxg8g.woff2`
+
+Live HTML inspection was not available in current artifacts, so this
+is manifest-level verification only. No manual preload tags are
+needed or recommended. Manual preload per spec ignores unicode-range,
+which would force the entire font family to download regardless of
+which glyphs the page actually renders. For English-dominant public
+routes this would be a net negative on LCP. next/font's automatic
+preload remains the correct approach.
+
+Informational note: source declarations still read
+`subsets: ['latin']` in `src/app/layout.tsx`, but the compiled
+next/font CSS currently contains broader unicode ranges (latin-ext
+and others). This task does not change that behaviour.
+
 ## Debug overlay (Stage 4 Task 4)
 
 Dev-only visualization layer that makes `SECTION_LAYOUT` rects and
