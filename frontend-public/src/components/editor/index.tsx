@@ -11,8 +11,13 @@ import { BREG } from './registry/blocks';
 import { validateImportStrict, hydrateImportedDoc } from './registry/guards';
 import { reducer, initState } from './store/reducer';
 import { PERMS, WORKFLOW_PERMISSIONS, canEditKeyInWorkflow } from './store/permissions';
-import { renderDoc } from './renderer/engine';
+import { renderDoc, SECTION_LAYOUT } from './renderer/engine';
 import { renderOverlay } from './renderer/overlay';
+import {
+  renderDebugOverlay,
+  type DebugBlockEntry,
+  type DebugSectionEntry,
+} from './renderer/debug-overlay';
 import { validate } from './validation/validate';
 import { deferRevoke } from './utils/download';
 import { buildUpdatePayload } from './utils/persistence';
@@ -65,12 +70,26 @@ export default function InfographicEditor({
 }: InfographicEditorProps = {}) {
   const cvs = useRef<HTMLCanvasElement>(null);
   const overlay = useRef<HTMLCanvasElement>(null);
+  const debugCvs = useRef<HTMLCanvasElement | null>(null);
   // Per-frame derived data from the content render. Populated synchronously
   // by the render effect below; read by the canvas click/hover handlers and
   // by the overlay render effect. A ref (not state) because it is purely
   // derived from `doc/sz/pal` — storing it in state would double-render.
   const hitAreasRef = useRef<HitAreaEntry[]>([]);
+  // Debug-overlay input refs — populated only when `debugEnabled === true`.
+  // See the render callback below for the gating branch.
+  const debugEntriesRef = useRef<DebugBlockEntry[]>([]);
+  const debugSectionsRef = useRef<DebugSectionEntry[]>([]);
   const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
+  // Stage 4 Task 4: debug overlay state. `debugAvailable` gates the toggle's
+  // visibility; `debugEnabled` is the actual user-controlled on/off. Dev
+  // auto-availability + prod `?debug=1` availability is resolved in a
+  // mount-time effect (see below). `debugEnabled` always starts false so
+  // opening the editor never shows the overlay without explicit opt-in.
+  const [debugAvailable, setDebugAvailable] = useState<boolean>(
+    process.env.NODE_ENV !== 'production',
+  );
+  const [debugEnabled, setDebugEnabled] = useState<boolean>(false);
 
   // Synchronously validate initialDoc at mount time so the reducer never
   // sees an invalid doc. Validation failure falls back to the default
@@ -221,7 +240,44 @@ export default function InfographicEditor({
       blockId: r.blockId,
       hitArea: clampRectToSection(r.result.hitArea, r.sectionRect),
     }));
-  }, [doc, pal, sz]);
+
+    // Debug-overlay data — populated only when the user has turned the
+    // overlay on. Zero cost when off. Kept alongside hitAreasRef (not in
+    // a separate effect) so both derive from the same `results` array and
+    // cannot drift.
+    if (debugEnabled) {
+      const sSec = sz.w / 1080;
+      const padSec = 64 * sSec;
+      const sections: DebugSectionEntry[] = [];
+      for (const docSection of doc.sections) {
+        const calc = SECTION_LAYOUT[docSection.type];
+        if (!calc) continue;
+        sections.push({ type: docSection.type, rect: calc(sz.w, sz.h, sSec, padSec) });
+      }
+      debugSectionsRef.current = sections;
+
+      debugEntriesRef.current = results.map((r) => {
+        const raw = r.result.hitArea;
+        const sec = r.sectionRect;
+        const overflows =
+          raw.x < sec.x ||
+          raw.y < sec.y ||
+          raw.x + raw.w > sec.x + sec.w ||
+          raw.y + raw.h > sec.y + sec.h;
+        return {
+          blockId: r.blockId,
+          blockType: doc.blocks[r.blockId]?.type ?? 'unknown',
+          rawHitArea: raw,
+          clampedHitArea: clampRectToSection(raw, sec),
+          sectionRect: sec,
+          overflow: overflows,
+        };
+      });
+    } else {
+      debugSectionsRef.current = [];
+      debugEntriesRef.current = [];
+    }
+  }, [doc, pal, sz, debugEnabled]);
   useEffect(() => { render(); }, [render]);
 
   // Overlay render — hover + selection outlines on a separate canvas.
@@ -262,6 +318,51 @@ export default function InfographicEditor({
       dpr,
     });
   }, [selId, hoveredBlockId, sz, doc, pal]);
+
+  // Stage 4 Task 4: prod-only `?debug=1` availability check. Runs once on
+  // mount. Never auto-enables the overlay — it only makes the toggle
+  // visible. Reading `window.location.search` inside an effect (rather
+  // than `useSearchParams`) avoids a Suspense wrapper and an unnecessary
+  // `next/navigation` dependency here.
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') {
+      try {
+        const q = new URLSearchParams(window.location.search);
+        if (q.get('debug') === '1') {
+          setDebugAvailable(true);
+        }
+      } catch {
+        // URLSearchParams failure is unreachable in browsers; swallow.
+      }
+    }
+  }, []);
+
+  // Stage 4 Task 4: debug render effect. Mirrors the overlay effect shape.
+  // Depends on `[debugEnabled, sz, doc, pal]` — not hover/selection, since
+  // the debug layer is static relative to content. When debug is off the
+  // canvas is not mounted (see Canvas.tsx conditional JSX); when it toggles
+  // on, React mounts the canvas, this effect re-runs, the fresh backing
+  // store is sized, and `renderDebugOverlay` paints.
+  useEffect(() => {
+    if (!debugEnabled) return;
+    const c = debugCvs.current;
+    if (!c) return;
+    const dpr = window.devicePixelRatio || 2;
+    const wantW = sz.w * dpr;
+    const wantH = sz.h * dpr;
+    if (c.width !== wantW) c.width = wantW;
+    if (c.height !== wantH) c.height = wantH;
+    const ctx = c.getContext('2d');
+    if (!ctx) return;
+    renderDebugOverlay({
+      ctx,
+      logicalW: sz.w,
+      logicalH: sz.h,
+      dpr,
+      sections: debugSectionsRef.current,
+      entries: debugEntriesRef.current,
+    });
+  }, [debugEnabled, sz, doc, pal]);
 
   const handleCanvasMouseDown = useCallback((e: ReactMouseEvent<HTMLCanvasElement>) => {
     const canvas = cvs.current;
@@ -578,6 +679,18 @@ export default function InfographicEditor({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
+
+      // Stage 4 Task 4: debug toggle — evaluated BEFORE the isEditable
+      // early-return because Ctrl+Shift+D is never a text-editing
+      // shortcut. Gated on `debugAvailable` so prod users without
+      // `?debug=1` cannot flip it.
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && key === 'd') {
+        if (!debugAvailable) return;
+        e.preventDefault();
+        setDebugEnabled((v) => !v);
+        return;
+      }
+
       const isEditable = shouldSkipGlobalShortcut(e);
 
       // Inside editable fields: only Ctrl+S fires (save is always useful).
@@ -613,7 +726,7 @@ export default function InfographicEditor({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [performSave]);
+  }, [performSave, debugAvailable]);
 
   const importJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -711,6 +824,9 @@ export default function InfographicEditor({
         markSaved={performSave}
         exportPNG={exportPNG}
         saveStatus={saveStatus}
+        debugAvailable={debugAvailable}
+        debugEnabled={debugEnabled}
+        onToggleDebug={() => setDebugEnabled((v) => !v)}
       />
       <NotificationBanner
         state={state}
@@ -743,6 +859,7 @@ export default function InfographicEditor({
           <Canvas
             canvasRef={cvs}
             overlayRef={overlay}
+            debugRef={debugEnabled ? debugCvs : undefined}
             onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleCanvasMouseMove}
             onMouseLeave={handleCanvasMouseLeave}
