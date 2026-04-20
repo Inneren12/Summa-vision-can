@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, DM_Sans, JetBrains_Mono } from "next/font/google";
+import { WebVitalsReporter } from "@/lib/web-vitals";
 import "./globals.css";
 
 const bricolageGrotesque = Bricolage_Grotesque({
@@ -33,7 +34,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${bricolageGrotesque.variable} ${dmSans.variable} ${jetBrainsMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <WebVitalsReporter />
+        {children}
+      </body>
     </html>
   );
 }

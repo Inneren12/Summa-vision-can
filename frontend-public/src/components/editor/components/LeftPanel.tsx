@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { memo, useMemo } from 'react';
 import type { CanonicalDocument, EditorAction, PermissionSet, BlockRegistryEntry, LeftTab, TemplateEntry } from '../types';
 import { TK } from '../config/tokens';
 import { PALETTES } from '../config/palettes';
@@ -46,7 +46,7 @@ function badge(st: string) {
 
 const tb = (a: boolean): React.CSSProperties => ({ padding: "5px 7px", fontSize: "8px", fontFamily: TK.font.data, textTransform: "uppercase", letterSpacing: "0.4px", cursor: "pointer", background: a ? TK.c.bgAct : "transparent", color: a ? TK.c.acc : TK.c.txtM, border: "none", borderBottom: a ? `2px solid ${TK.c.acc}` : "2px solid transparent", whiteSpace: "nowrap" });
 
-export function LeftPanel({ doc, dispatch, selId, ltab, setLtab, effectivePerms }: LeftPanelProps) {
+function LeftPanelImpl({ doc, dispatch, selId, ltab, setLtab, effectivePerms }: LeftPanelProps) {
   const canToggle = (reg: BlockRegistryEntry) => effectivePerms.toggleVisibility(reg);
 
   const unresolvedByBlock = useMemo(() => {
@@ -143,3 +143,5 @@ export function LeftPanel({ doc, dispatch, selId, ltab, setLtab, effectivePerms 
     </div>
   );
 }
+
+export const LeftPanel = memo(LeftPanelImpl);

@@ -1328,3 +1328,57 @@ cache. Non-blocking for dev tooling.
   only; the hover/selection canvas continues to own pointer
   affordances.
 
+## Performance instrumentation (Stage 4 Task 9a)
+
+### Web Vitals
+
+Public pages report Core Web Vitals via `WebVitalsReporter` component
+mounted in `src/app/layout.tsx`. In development, metrics log to the
+console with the `[web-vitals]` prefix (LCP / INP / CLS / FCP / TTFB).
+In production, reporting is a no-op pending CI or analytics hookup in
+a future task. The `web-vitals` package is pinned to `^4` — majors
+have shipped breaking changes before.
+
+### Editor hot-path marks
+
+Dev-mode `performance.mark/measure` calls wrap three hot paths in
+the admin editor:
+
+- `editor.render` — one entry per content canvas repaint
+- `editor.validate` — one entry per validation pass
+- `reducer.<ACTION_TYPE>` — one entry per reducer dispatch
+
+All three are gated by `NODE_ENV === 'development'`. Production and
+test builds see no-op functions. Visible in DevTools Performance tab
+under User Timing.
+
+The helper `perfMark(label)` in `components/editor/index.tsx` returns
+an end() function; call site pattern:
+
+    const end = perfMark('editor.render');
+    // ... work ...
+    end();
+
+This is lower-friction than pairing raw `performance.mark` calls
+manually. No dependency; no test impact.
+
+### Component memoization
+
+Inspector, RightRail, and LeftPanel are wrapped in `React.memo`.
+The inline `canEdit` wrapper at the Inspector/RightRail call sites
+was replaced with a `useCallback` to avoid defeating memoization
+via unstable function identity. Observed via React DevTools
+Profiler: Inspector no longer rerenders for edits to unrelated
+blocks; RightRail rerender rate drops significantly but not to
+zero (it still receives the full reducer `state`, and that is
+correct — any state change is a reason for it to refresh).
+
+Deferred (Task 9a explicitly out of scope):
+
+- Canvas dirty-region rendering (major refactor; defer indefinitely
+  unless measurements show it's needed)
+- Keystroke debounce before dispatch (UX trade-off; not worth it
+  pre-launch without RUM data)
+- Per-block memoization of Inspector form children (re-examine if
+  Inspector profiler still hot after this task)
+
