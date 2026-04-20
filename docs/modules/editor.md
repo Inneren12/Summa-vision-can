@@ -984,6 +984,85 @@ scheduled save.
 - Pointer/touch input for debounce reset (covered by the mouse-events
   scope note for Task 1 above).
 
+## Font loading and deterministic export (Stage 4 Task 3)
+
+### Problem
+
+`next/font/google` loads Bricolage Grotesque, DM Sans, and JetBrains Mono
+asynchronously. Canvas `ctx.font = '700 48px <family>'` falls back to the
+token string's second component (`system-ui` / `monospace`) until the web
+font file finishes loading. Without a gate:
+
+- Initial canvas mount renders with fallback fonts, then flickers to the
+  real faces when load completes.
+- `exportPNG` can fire before fonts finish loading → the exported PNG uses
+  fallback fonts while the preview (if the user waited) shows the real
+  ones. Silent visual drift between preview and output.
+
+Task 3 is named "deterministic export" because closing this gap is the
+point.
+
+### Solution
+
+`fontsReady: boolean` — local `useState` in `InfographicEditor`. Stays
+out of the reducer because it is ephemeral, per-session UI state with
+no place in undo history or persistence (same rationale as Task 1's
+`hoveredBlockId` and Task 2's `saveStatus`).
+
+A shared helper `waitForFontsReadyOrTimeout()` races
+`document.fonts.ready` against a 5-second timeout. It never rejects,
+never hangs, and always resolves to one of three outcomes: `'ready'`
+(fonts loaded), `'timeout'` (5s elapsed — proceed with fallback fonts),
+or `'unsupported'` (browser lacks the API — proceed with fallback).
+The helper clears its own timer on early resolution so there is no
+trailing no-op timer fire.
+
+The mount-time effect awaits this helper once, then flips `fontsReady`
+to true. From that moment, `fontsReady` is the single contract: the
+render callback proceeds, the EXPORT button enables, and `exportPNG`
+runs without a second wait.
+
+An earlier iteration re-invoked the helper inside `exportPNG` as
+belt-and-suspenders; this reintroduced the exact 5-second stall in
+pathological cases (a `document.fonts.ready` that never resolves)
+that the mount timeout was designed to prevent. The current design
+trusts the flag: once true, proceed.
+
+The helper logs a dev-only `console.warn` on `'timeout'` or
+`'unsupported'` outcomes so font-loading issues are discoverable during
+development. Production stays silent.
+
+### Not gated
+
+- **Overlay canvas** (hover/selection outlines from Task 1) renders
+  only `strokeRect` — no font dependency. It remains fully responsive
+  while fonts load, so the user can hover/click blocks before first
+  real paint.
+- **Autosave** (Task 2) is data-only. Its debounce timer and retry
+  orchestration have no font dependency.
+- **`exportJSON`** serializes the document to JSON. No canvas, no
+  fonts, no gate.
+
+### UX
+
+The EXPORT button disables until `canExp && fontsReady`. Tooltip
+priority: validation errors first (user must fix them before export
+works anyway), then the fonts-loading message. Typical fonts-loading
+window is <100ms on warm cache; users rarely see the disabled state
+outside first page load. No spinner or keyframe — the existing muted
+disabled style (opacity 0.5, `TK.c.txtM` background, not-allowed
+cursor) is sufficient.
+
+### Timeout rationale
+
+5 seconds. `document.fonts.ready` resolves even on font URL failure
+(the FontFaceSet transitions through `loaded` regardless of individual
+face outcomes), so the timeout should rarely fire in practice. It
+exists as insurance against pathological browser states where the
+promise hangs forever. Both the mount gate and the export gate honour
+it — the `fontsReady` flag is the single contract: once true, proceed,
+regardless of font-load state. No retry — once `fontsReady` flips true
+it stays true for the session.
 ## Debug overlay (Stage 4 Task 4)
 
 Dev-only visualization layer that makes `SECTION_LAYOUT` rects and
