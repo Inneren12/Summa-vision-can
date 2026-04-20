@@ -122,6 +122,7 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-4-0 | Stage 4 Task 0 — Editor Wire-Up (Next.js admin routes) | ✅ | E-3-4 |
 | E-4-1 | Stage 4 Task 1 — Click-to-select + UX polish | ✅ | E-4-0 |
 | E-4-2 | Stage 4 Task 2 — Autosave + recovery | ✅ | E-4-0 |
+| E-4-5 | Stage 4 Task 5 — WCAG AA contrast validator | ✅ | E-4-0 |
 
 **E-3-4 status (in flight):** Backend-only persistence PR. Adds a
 nullable `Publication.review` Text column (Alembic migration
@@ -201,6 +202,31 @@ window between an edit and the next scheduled save. New test files:
 `autosave.test.tsx` (14 tests), `save-status-indicator.test.tsx`
 (6 tests), `_admin-api-mock.ts` helper; extended
 `error-channels.test.tsx` with 5 retry-UX tests. 598 tests passing.
+
+**E-4-5 status:** WCAG AA contrast validator landed on
+`claude/contrast-matrix-validator-thFnP`. New pure-function validator
+`validateContrast(doc)` in `src/components/editor/validation/contrast.ts`
+implements WCAG 2.1 relative-luminance math from scratch (no library),
+maps each text-bearing block type to its renderer's text-colour choice
+via `getBlockTextColor`, and iterates visible blocks × document
+palette × background base (and gradient lightest-stop where applicable).
+`ValidationResult` widened with `contrastIssues: ContrastIssue[]`; the
+structured issues feed a new per-block contrast surface in Inspector
+while string summaries continue flowing into existing `errors`/`warnings`
+buckets → TopBar counts → `canExp` export gate. New `BG_META` registry
+parallel to `BGS` exposes data-only `{ base, lightestStop?, isGradient }`
+per background id; parity with `BGS` enforced by test. Crude YIQ
+heuristic at `validate.ts:115-122` deleted — smoking-gun test ensures
+`"Primary color may be too dark on dark bg"` warning can never re-appear.
+Large-text WCAG threshold (3:1) applied to `hero_stat` and
+`headline_editorial`; everything else uses 4.5:1. Gradient handling
+emits error on base-stop failure and warning on lightest-stop failure.
+Two design tokens tuned to pass validation: `TK.c.txtM` (#5C6370 →
+#7A818C; 3.22:1 → 4.96:1) and `pal.neg` across all six palettes
+(#E11D48 → #F43F5E; 4.14:1 → 5.60:1). Historical note filed in DEBT.md.
+36 new tests across `contrast.test.ts`, `backgrounds-meta.test.ts`,
+`inspector-contrast.test.tsx`, plus 4 contrast-integration cases
+appended to `validate.test.ts`. 638 tests passing.
 
 Follow-up close resolves DEBT-026: opaque `document_state` column on
 `Publication` (migration `a3e81c0f5d21`) carries the full

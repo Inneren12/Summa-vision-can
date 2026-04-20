@@ -943,3 +943,100 @@ scheduled save.
 - Pointer/touch input for debounce reset (covered by the mouse-events
   scope note for Task 1 above).
 
+## Accessibility: WCAG AA contrast validation
+
+Stage 4 Task 5 added a pure-function WCAG 2.1 contrast validator that
+runs on every document mutation via the unified `validate(doc)`
+pipeline. It checks each text-bearing block's text colour against the
+page background, emits structured issues consumed by the Inspector,
+and mirrors human-readable summaries into the existing `errors` /
+`warnings` buckets so TopBar counts and the `canExp = errs === 0`
+export gate pick them up automatically.
+
+### Thresholds
+
+- Normal text: 4.5:1 (WCAG AA).
+- Large text (`hero_stat`, `headline_editorial`): 3:1 (WCAG AA for
+  ≥18pt / ≥14pt bold). Enumerated via `LARGE_TEXT_BLOCKS` in
+  `validation/contrast.ts`; renderer sizes confirm both block types
+  qualify.
+- Below threshold → `error` (blocks export via the existing
+  `canExp` chain). Below threshold at a gradient's lightest stop while
+  base still passes → `warning` (text readable on most of the
+  gradient but not all).
+
+### How colours are resolved
+
+`getBlockTextColor(blockType, pal, slot?)` in
+`validation/contrast.ts` duplicates the renderer's per-block token
+choices (`renderer/blocks.ts`). This is a deliberate duplication — the
+validator has to mirror the renderer or it lies about what's on
+screen. Changes to text colour in a block renderer **must** be
+reflected in `getBlockTextColor`; otherwise the validator and canvas
+disagree and the export gate either fires spuriously or misses real
+failures. Unit tests in `tests/editor/contrast.test.ts` cover the
+mapping.
+
+### Backgrounds
+
+`BG_META` in `config/backgrounds.ts` is a data-only registry parallel
+to `BGS` (which holds render callbacks). Each entry declares
+`{ base, lightestStop?, isGradient }`. The validator reads `BG_META`
+directly — it never executes a render callback or samples pixels.
+Parity with `BGS` is enforced by
+`tests/editor/backgrounds-meta.test.ts`.
+
+For gradients, the validator checks both points:
+
+- `base` fails → `error` (and do not double-emit for the same block).
+- `base` passes, `lightestStop` fails → `warning`.
+- Both pass → no issue.
+
+### Where issues surface
+
+- **QAPanel (bottom strip).** Reads string summaries from
+  `ValidationResult.errors` / `.warnings`. Same surface as every other
+  validator; no new UI code.
+- **TopBar status glyph.** `errs` / `warns` counts flow into the
+  existing `🔴 / 🟡 / 🟢` indicator and the `errs`/`warns` tooltip.
+- **EXPORT button.** `canExp = errs === 0` already gates PNG export;
+  any contrast error blocks it automatically — no new condition needed.
+- **Inspector per-block surface.** `ValidationResult.contrastIssues`
+  is threaded via `RightRail` into `Inspector`. When the selected
+  block has structured issues, a compact panel renders between the
+  status badge and the ctrl controls, showing ratio, threshold, and
+  gradient suffix where applicable. Error issues use `TK.c.err`;
+  warning issues use `TK.c.acc`. No new tokens.
+
+### Adding a new text-bearing block
+
+1. Add the block type to `TEXT_BEARING_BLOCKS` in
+   `validation/contrast.ts`.
+2. Add a `case` for it in `getBlockTextColor`, returning the same
+   token the renderer draws with (including any per-slot branching).
+3. If the block renders text ≥18pt / ≥14pt bold, add it to
+   `LARGE_TEXT_BLOCKS`.
+4. Re-run `tests/editor/contrast.test.ts` —
+   `every TEXT_BEARING_BLOCKS entry returns a non-null colour` will
+   fail until the mapping is added.
+
+### Adding a new background
+
+1. Add the background id to `BGS` (render callback, as before).
+2. Add the same id to `BG_META` with `{ base, lightestStop?,
+   isGradient }`. The parity test fails otherwise.
+3. For a gradient, choose a `lightestStop` that represents the
+   maximum-luminance visible region. Procedural/overlay patterns
+   (dot grid, topo lines) at very low alpha are treated as solid
+   for contrast purposes — the base colour dominates visually.
+
+### Known token tuning
+
+`TK.c.txtM` (`#5C6370` → `#7A818C`) and `pal.neg` across all six
+palettes (`#E11D48` → `#F43F5E`) were tuned inline during the Task 5
+rollout to pass AA-normal on the canonical `#0B0D11` background.
+`TK.c.err` (editor-chrome error state, not canvas-rendered) retains
+the original `#E11D48`. See DEBT.md "Historical Notes → 2026-04-20
+Editor token tuning for WCAG AA" for rationale and before/after
+ratios.
+

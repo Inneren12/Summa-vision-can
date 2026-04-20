@@ -2,6 +2,7 @@
 
 import React from 'react';
 import type { Block, BlockRegistryEntry, EditorAction, EditorMode, BarItem, KPIItem, SeriesItem } from '../types';
+import type { ContrastIssue } from '../validation/contrast';
 import { TK } from '../config/tokens';
 import { canEditStructure as permCanEditStructure } from '../store/permissions';
 import { BarItemsEditor } from './data-editors/BarItemsEditor';
@@ -15,6 +16,7 @@ interface InspectorProps {
   mode: EditorMode;
   canEdit: (reg: BlockRegistryEntry, k: string) => boolean;
   dispatch: React.Dispatch<EditorAction>;
+  contrastIssues: ContrastIssue[];
 }
 
 function badge(st: string) {
@@ -33,8 +35,9 @@ function getBoolProp(block: Block, key: string): boolean {
   return typeof v === "boolean" ? v : false;
 }
 
-export function Inspector({ selB, selR, selId, mode, canEdit, dispatch }: InspectorProps) {
+export function Inspector({ selB, selR, selId, mode, canEdit, dispatch, contrastIssues }: InspectorProps) {
   const statusBadge = selR ? badge(selR.status) : null;
+  const blockIssues = selId ? contrastIssues.filter(i => i.blockId === selId) : [];
 
   // Structured-data editor decisions (hoisted out of inline IIFE for clarity).
   // canValues: individual cell/field edits within the block's existing structure
@@ -95,6 +98,21 @@ export function Inspector({ selB, selR, selId, mode, canEdit, dispatch }: Inspec
               <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                 <span style={{ fontSize: "8px", fontFamily: TK.font.data, color: statusBadge.color, padding: "2px 6px", background: TK.c.bgAct, borderRadius: "2px" }}>{statusBadge.label}</span>
                 {!selB.visible && <span style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM }}>HIDDEN</span>}
+              </div>
+            )}
+
+            {blockIssues.length > 0 && (
+              <div data-testid="inspector-contrast" style={{ padding: "6px 8px", borderRadius: "3px", background: TK.c.bgSurf, border: `1px solid ${TK.c.brd}` }}>
+                <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", letterSpacing: "0.3px", marginBottom: "4px" }}>Contrast</div>
+                {blockIssues.map((issue, idx) => (
+                  <div key={idx} style={{ fontSize: "10px", fontFamily: TK.font.body, color: issue.severity === "error" ? TK.c.err : TK.c.acc, display: "flex", alignItems: "center", gap: "4px", marginTop: idx === 0 ? 0 : "2px" }}>
+                    <span aria-hidden="true">{issue.severity === "error" ? "\u2717" : "!"}</span>
+                    <span>
+                      {issue.ratio.toFixed(2)}:1 vs {issue.threshold.toFixed(1)}:1
+                      {issue.bgPoint === "lightestStop" ? " (gradient)" : ""}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
 

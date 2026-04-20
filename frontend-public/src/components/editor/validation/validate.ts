@@ -4,10 +4,11 @@ import { SIZES } from '../config/sizes';
 import { PALETTES } from '../config/palettes';
 import { BGS } from '../config/backgrounds';
 import { validateBlockData } from './block-data';
+import { validateContrast } from './contrast';
 import { measureLayout } from '../renderer/measure';
 
 export function validate(doc: CanonicalDocument): ValidationResult {
-  const R: ValidationResult = { errors: [], warnings: [], info: [], passed: [] };
+  const R: ValidationResult = { errors: [], warnings: [], info: [], passed: [], contrastIssues: [] };
   const blocks = Object.values(doc.blocks).filter(b => b.visible);
   const types = blocks.map(b => b.type);
   const sz = SIZES[doc.page.size] || SIZES.instagram_1080;
@@ -112,14 +113,6 @@ export function validate(doc: CanonicalDocument): ValidationResult {
   // Source placeholder
   const sf = blocks.find(b => b.type === "source_footer");
   if (sf && sf.props.text === BREG.source_footer.dp.text) R.warnings.push("Source is still default");
-  // Contrast
-  const pal = PALETTES[doc.page.palette];
-  if (pal) {
-    const hex = pal.p.replace("#", "");
-    const r = parseInt(hex.substr(0, 2), 16), g = parseInt(hex.substr(2, 2), 16), b2 = parseInt(hex.substr(4, 2), 16);
-    const lum = (0.299 * r + 0.587 * g + 0.114 * b2) / 255;
-    if (lum < 0.15) R.warnings.push("Primary color may be too dark on dark bg");
-  }
   // Size-specific warnings
   if (sz.h < 700 && types.includes("body_annotation")) R.info.push("Annotation may not fit on landscape sizes");
   if (sz.w < 1100 && types.includes("table_enriched")) R.warnings.push("Visual Table may be cramped on narrow canvas");
@@ -138,6 +131,19 @@ export function validate(doc: CanonicalDocument): ValidationResult {
         );
       }
     });
+  }
+
+  // WCAG AA contrast — structured issues preserved on R.contrastIssues
+  // for Inspector; human-readable summaries also mirrored into the
+  // existing errors / warnings buckets so QAPanel + TopBar pick them up.
+  const contrastIssues = validateContrast(doc);
+  R.contrastIssues = contrastIssues;
+  for (const issue of contrastIssues) {
+    if (issue.severity === 'error') {
+      R.errors.push(issue.message);
+    } else {
+      R.warnings.push(issue.message);
+    }
   }
 
   return R;

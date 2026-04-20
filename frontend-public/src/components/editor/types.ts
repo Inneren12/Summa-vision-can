@@ -1,3 +1,5 @@
+import type { ContrastIssue } from './validation/contrast';
+
 export type EditorMode = 'template' | 'design';
 export type QAMode = 'draft' | 'publish';
 export type LeftTab = 'templates' | 'blocks' | 'theme';
@@ -149,6 +151,12 @@ export interface ValidationResult {
   warnings: string[];
   info: string[];
   passed: string[];
+  /**
+   * Structured per-block contrast issues. String summaries are also
+   * pushed to `errors` / `warnings` for QAPanel; this field preserves
+   * blockId / ratio / threshold for Inspector per-block surfacing.
+   */
+  contrastIssues: ContrastIssue[];
 }
 
 export interface Palette {
