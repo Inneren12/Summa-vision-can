@@ -14,6 +14,14 @@ export interface NotificationBannerProps {
   // `state.saveError` without a second piece of lifted state. Optional
   // for legacy call sites that never surface save errors.
   dispatch?: (action: EditorAction) => void;
+  // Stage 4 Task 2 autosave retry UX. Non-null = auto-retry scheduled;
+  // banner renders "Retrying in Xs…" with a live countdown. Null while
+  // no retry is pending or after the budget is exhausted.
+  retryCountdownMs?: number | null;
+  // When provided, the save-error banner renders a "Retry now" button.
+  // Optional so legacy callers and the three non-save tiers stay
+  // untouched.
+  onManualRetry?: () => void;
 }
 
 const NOOP_DISPATCH: (action: EditorAction) => void = () => {};
@@ -53,6 +61,8 @@ export function NotificationBanner({
   onClearImportError,
   onClearImportWarnings,
   dispatch = NOOP_DISPATCH,
+  retryCountdownMs = null,
+  onManualRetry,
 }: NotificationBannerProps) {
   const rejection = state._lastRejection;
   const [rejectionDismissed, setRejectionDismissed] = useState<boolean>(false);
@@ -68,6 +78,10 @@ export function NotificationBanner({
   // actionable state — the user needs to see it before any secondary
   // import/validation noise.
   if (state.saveError) {
+    const inAutoRetry = retryCountdownMs != null;
+    const countdownSec = inAutoRetry
+      ? Math.max(0, Math.ceil((retryCountdownMs as number) / 1000))
+      : null;
     return (
       <div
         role="alert"
@@ -79,7 +93,28 @@ export function NotificationBanner({
         <div style={tagStyle()}>{'Save failed'}</div>
         <div style={bodyStyle()}>
           <div>{state.saveError}</div>
+          {inAutoRetry && (
+            <div
+              aria-live="polite"
+              data-testid="retry-countdown"
+              style={{ marginTop: '2px', color: TK.c.txtS }}
+            >
+              {`Retrying in ${countdownSec}s\u2026`}
+            </div>
+          )}
         </div>
+        {onManualRetry && (
+          <button
+            type="button"
+            onClick={onManualRetry}
+            aria-label="Retry save now"
+            title="Retry save now"
+            data-testid="retry-now-button"
+            style={retryButtonStyle()}
+          >
+            {'Retry now'}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => dispatch({ type: 'DISMISS_SAVE_ERROR' })}
@@ -224,5 +259,20 @@ function dismissStyle(): React.CSSProperties {
     cursor: 'pointer',
     fontSize: '10px',
     padding: 0,
+  };
+}
+
+function retryButtonStyle(): React.CSSProperties {
+  return {
+    background: TK.c.bgSurf,
+    color: TK.c.txtS,
+    border: `1px solid ${TK.c.brd}`,
+    borderRadius: '2px',
+    padding: '3px 6px',
+    fontSize: '8px',
+    fontFamily: TK.font.data,
+    textTransform: 'uppercase',
+    cursor: 'pointer',
+    marginRight: '6px',
   };
 }

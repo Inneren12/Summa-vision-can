@@ -1,10 +1,11 @@
 'use client';
 
 import React from 'react';
-import type { CanonicalDocument, EditorAction, EditorMode } from '../types';
+import type { CanonicalDocument, EditorAction, EditorMode, SaveStatus } from '../types';
 import { TK } from '../config/tokens';
 import { TPLS } from '../registry/templates';
 import { StatusBadge } from './StatusBadge';
+import { SaveStatusIndicator } from './SaveStatusIndicator';
 
 interface TopBarProps {
   doc: CanonicalDocument;
@@ -23,9 +24,10 @@ interface TopBarProps {
   exportJSON: () => void;
   markSaved: () => void;
   exportPNG: () => void;
+  saveStatus: SaveStatus;
 }
 
-export function TopBar({ doc, dispatch, undoStack, redoStack, dirty, mode, setMode, errs, warns, si, canExp, fileRef, importJSON, exportJSON, markSaved, exportPNG }: TopBarProps) {
+export function TopBar({ doc, dispatch, undoStack, redoStack, dirty, mode, setMode, errs, warns, si, canExp, fileRef, importJSON, exportJSON, markSaved, exportPNG, saveStatus }: TopBarProps) {
   return (
     <div style={{ padding: "6px 12px", borderBottom: `1px solid ${TK.c.brd}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -40,7 +42,7 @@ export function TopBar({ doc, dispatch, undoStack, redoStack, dirty, mode, setMo
           <button type="button" onClick={() => dispatch({ type: "UNDO" })} disabled={!undoStack.length} aria-label="Undo" style={{ padding: "2px 6px", fontSize: "10px", background: "transparent", border: "none", color: undoStack.length ? TK.c.txtS : TK.c.txtM, cursor: undoStack.length ? "pointer" : "default", opacity: undoStack.length ? 1 : .3 }} title="Undo (Ctrl+Z)">{"\u21A9"}</button>
           <button type="button" onClick={() => dispatch({ type: "REDO" })} disabled={!redoStack.length} aria-label="Redo" style={{ padding: "2px 6px", fontSize: "10px", background: "transparent", border: "none", color: redoStack.length ? TK.c.txtS : TK.c.txtM, cursor: redoStack.length ? "pointer" : "default", opacity: redoStack.length ? 1 : .3 }} title="Redo (Ctrl+Y)">{"\u21AA"}</button>
         </div>
-        {dirty && <span style={{ fontSize: "7px", color: TK.c.acc, fontFamily: TK.font.data }}>{"\u25CF"}</span>}
+        <SaveStatusIndicator dirty={dirty} saveStatus={saveStatus} />
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
         <span style={{ fontSize: "9px" }} title={`${errs}err ${warns}warn`}>{si}</span>

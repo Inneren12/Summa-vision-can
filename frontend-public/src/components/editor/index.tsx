@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import type { EditorMode, QAMode, LeftTab, BlockRegistryEntry, CanonicalDocument } from './types';
+import type { EditorMode, QAMode, LeftTab, BlockRegistryEntry, CanonicalDocument, SaveStatus } from './types';
 import { TK } from './config/tokens';
 import { PALETTES } from './config/palettes';
 import { BGS } from './config/backgrounds';
@@ -31,6 +31,14 @@ import { ReadOnlyBanner } from './components/ReadOnlyBanner';
 import { NotificationBanner } from './components/NotificationBanner';
 import { NoteModal } from './components/NoteModal';
 import type { NoteRequestConfig } from './components/noteRequest';
+
+// Autosave cadence (Stage 4 Task 2). `AUTOSAVE_DEBOUNCE_MS` is the quiet
+// window after the last mutating reducer action before a PATCH fires.
+// `RETRY_DELAYS_MS` is the exponential backoff schedule used when a save
+// fails; after all four attempts are exhausted, auto-retry stops and the
+// user can trigger a manual retry from the NotificationBanner.
+const AUTOSAVE_DEBOUNCE_MS = 2000;
+const RETRY_DELAYS_MS = [2000, 4000, 8000, 16000] as const;
 
 export interface InfographicEditorProps {
   /**
@@ -89,6 +97,29 @@ export default function InfographicEditor({
     () => initState(initialValidatedDoc),
   );
   const savingRef = useRef<boolean>(false);
+  // Autosave UI status (Stage 4 Task 2). Local state — not reducer — because
+  // it is ephemeral, per-session, and has no place in undo history or
+  // persistence. `saveStatus` plus `dirty` fully describes the TopBar
+  // indicator.
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  // Debounce timer for autosave. Reset on every mutating doc change; cleared
+  // on Ctrl+S, unmount, and when the effect finds nothing to save.
+  const autosaveTimerRef = useRef<number | null>(null);
+  // Retry orchestration (Stage 4 Task 2). `retryAttemptRef` is 0-indexed
+  // into RETRY_DELAYS_MS; at length == RETRY_DELAYS_MS.length the budget
+  // is exhausted. `retryCountdownMs` drives the banner countdown text
+  // and is the only piece of retry state that needs to render.
+  //
+  // `saveFailureGen` is a monotonic counter incremented on every
+  // SAVE_FAILED dispatch. The retry effect depends on it so successive
+  // failures with an identical error message still re-trigger the
+  // effect (React dep comparison uses Object.is; the counter guarantees
+  // a changed dep on every failure).
+  const retryAttemptRef = useRef<number>(0);
+  const retryTimerRef = useRef<number | null>(null);
+  const retryCountdownIntervalRef = useRef<number | null>(null);
+  const [retryCountdownMs, setRetryCountdownMs] = useState<number | null>(null);
+  const [saveFailureGen, setSaveFailureGen] = useState<number>(0);
   const [ltab, setLtab] = useState<LeftTab>("templates");
   const [qaOpen, setQaOpen] = useState(true);
   const [qaMode, setQaMode] = useState<QAMode>("publish");
@@ -254,30 +285,30 @@ export default function InfographicEditor({
     deferRevoke(url);
   }, [doc]);
 
-  // Ctrl+S persistence. When `publicationId` is set, PATCH the document
-  // to the backend via the admin proxy. Without a publicationId the save
-  // command is a no-op — the legacy JSON download was removed in
-  // Stage 4 Task 0 (see docs/modules/editor.md).
+  // Persistence via the admin proxy. When `publicationId` is set, PATCH
+  // the document. Without a publicationId the save is a no-op — the
+  // legacy JSON download was removed in Stage 4 Task 0 (see
+  // docs/modules/editor.md).
   //
-  // Snapshot-based save (B2): we capture the doc reference at save start
-  // and dispatch SAVED_IF_MATCHES with it. The reducer only clears
-  // `dirty` if the current doc is still the same reference — i.e. the
-  // user did not edit during the in-flight PATCH. If they did, the new
-  // edits never reached the backend, so keeping `dirty: true` is correct.
+  // Snapshot-based save (B2): capture the doc reference at save start and
+  // dispatch SAVED_IF_MATCHES with it. The reducer only clears `dirty`
+  // if the current doc is still the same reference — i.e. the user did
+  // not edit during the in-flight PATCH. If they did, the new edits
+  // never reached the backend, so keeping `dirty: true` is correct.
   //
   // Error routing (B4): save failures land on `state.saveError` via
   // SAVE_FAILED, distinct from the import-error channel. NotificationBanner
   // priority: saveError > importError > _lastRejection > warnings.
-  const markSavedAndBackup = useCallback(() => {
-    if (!dirty) return;
-    if (!publicationId) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('[InfographicEditor] Ctrl+S pressed but no publicationId — save skipped.');
-      }
-      return;
-    }
-    if (savingRef.current) return;
+  //
+  // Status transitions (Stage 4 Task 2) happen here at the call site, not
+  // inside the reducer: `saving` before PATCH, `idle` on success, `error`
+  // on failure. The `'pending'` → `'saving'` transition is owned by the
+  // debounce effect, not this function, because `'pending'` represents a
+  // scheduled timer that this function never sees.
+  const performSave = useCallback(() => {
+    if (!dirty || !publicationId || savingRef.current) return;
 
+    setSaveStatus('saving');
     const snapshotDoc = doc;
     savingRef.current = true;
 
@@ -285,6 +316,10 @@ export default function InfographicEditor({
     updateAdminPublication(publicationId, payload)
       .then(() => {
         dispatch({ type: "SAVED_IF_MATCHES", snapshotDoc });
+        // If the reducer kept dirty=true (user edited mid-flight), the
+        // debounce effect will re-arm `'pending'` on its next run — so
+        // dropping to `'idle'` here is safe.
+        setSaveStatus('idle');
       })
       .catch((err: unknown) => {
         if (err instanceof AdminPublicationNotFoundError) {
@@ -296,11 +331,167 @@ export default function InfographicEditor({
           const msg = err instanceof Error ? err.message : String(err);
           dispatch({ type: "SAVE_FAILED", error: msg });
         }
+        // Bump the failure generation so the retry effect re-runs even
+        // when the error string is identical to a previous attempt.
+        setSaveFailureGen((n) => n + 1);
+        setSaveStatus('error');
       })
       .finally(() => {
         savingRef.current = false;
       });
   }, [dirty, doc, publicationId]);
+
+  // Debounced autosave (Stage 4 Task 2). Every mutating reducer action
+  // produces a new `state.doc` reference; navigational actions (SELECT,
+  // SET_MODE, save-channel bookkeeping) preserve identity. Watching `doc`
+  // here is therefore a clean "did content change" signal, no new reducer
+  // fields required.
+  useEffect(() => {
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+
+    if (!dirty || !publicationId) {
+      // Either nothing to save or no backend target. Drop a stale
+      // `pending`/`saving` status back to `idle`. Functional update
+      // avoids adding `saveStatus` to deps (which would cause a
+      // re-schedule storm on every status transition).
+      setSaveStatus((prev) => (prev === 'pending' || prev === 'saving' ? 'idle' : prev));
+      return;
+    }
+
+    // Only promote `idle` → `pending`. Don't clobber `saving` (a PATCH
+    // is in flight) or `error` (retry orchestration is active).
+    setSaveStatus((prev) => (prev === 'idle' ? 'pending' : prev));
+
+    autosaveTimerRef.current = window.setTimeout(() => {
+      autosaveTimerRef.current = null;
+      performSave();
+    }, AUTOSAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [doc, dirty, publicationId, performSave]);
+
+  // Retry orchestration (Stage 4 Task 2). Watches `state.saveError`;
+  // schedules an exponential-backoff auto-retry (2s → 4s → 8s → 16s)
+  // whenever an error is active and the attempt budget is not exhausted.
+  // Driven by an effect, not by performSave's .catch, so the save
+  // function stays pure and reusable from both debounce and manual paths.
+  useEffect(() => {
+    // Rebuild every run: always clear in-flight timers up front.
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+    if (retryCountdownIntervalRef.current !== null) {
+      window.clearInterval(retryCountdownIntervalRef.current);
+      retryCountdownIntervalRef.current = null;
+    }
+
+    if (!state.saveError) {
+      // Saved successfully (SAVED_IF_MATCHES cleared saveError) or user
+      // dismissed. Reset the retry budget.
+      retryAttemptRef.current = 0;
+      setRetryCountdownMs(null);
+      return;
+    }
+
+    const attempt = retryAttemptRef.current;
+    if (attempt >= RETRY_DELAYS_MS.length) {
+      // Budget exhausted. Banner persists with manual Retry button.
+      setRetryCountdownMs(null);
+      return;
+    }
+
+    const delay = RETRY_DELAYS_MS[attempt];
+    setRetryCountdownMs(delay);
+
+    const tickMs = 250;
+    retryCountdownIntervalRef.current = window.setInterval(() => {
+      setRetryCountdownMs((prev) => {
+        if (prev === null) return null;
+        const next = prev - tickMs;
+        return next > 0 ? next : 0;
+      });
+    }, tickMs);
+
+    retryTimerRef.current = window.setTimeout(() => {
+      retryTimerRef.current = null;
+      if (retryCountdownIntervalRef.current !== null) {
+        window.clearInterval(retryCountdownIntervalRef.current);
+        retryCountdownIntervalRef.current = null;
+      }
+      retryAttemptRef.current = attempt + 1;
+      setRetryCountdownMs(null);
+      performSave();
+    }, delay);
+
+    return () => {
+      if (retryTimerRef.current !== null) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+      if (retryCountdownIntervalRef.current !== null) {
+        window.clearInterval(retryCountdownIntervalRef.current);
+        retryCountdownIntervalRef.current = null;
+      }
+    };
+  }, [state.saveError, saveFailureGen, performSave]);
+
+  // A new user edit while in error state deserves a fresh attempt cycle.
+  // Reset the attempt counter so the retry orchestration effect re-enters
+  // at delay index 0. We intentionally do NOT depend on `state.saveError`
+  // here — including it would reset attempts on every SAVE_FAILED
+  // dispatch, defeating the exponential-backoff progression.
+  useEffect(() => {
+    if (state.saveError) {
+      retryAttemptRef.current = 0;
+    }
+    // Intentional: react only to doc changes, not to saveError flipping.
+    // Including state.saveError would reset attempts on every SAVE_FAILED
+    // dispatch, defeating exponential-backoff progression.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc]);
+
+  // Manual "Retry now" from the NotificationBanner. Cancels any scheduled
+  // retry + countdown, resets the attempt budget, and fires the save
+  // immediately. On failure, the retry effect will re-enter at delay 0.
+  const handleManualRetry = useCallback(() => {
+    retryAttemptRef.current = 0;
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+    if (retryCountdownIntervalRef.current !== null) {
+      window.clearInterval(retryCountdownIntervalRef.current);
+      retryCountdownIntervalRef.current = null;
+    }
+    setRetryCountdownMs(null);
+    performSave();
+  }, [performSave]);
+
+  // beforeunload guard (Stage 4 Task 2). Covers the 2s debounce window
+  // between an edit and the next scheduled save. Modern browsers ignore
+  // custom messages; assigning returnValue is still required to trigger
+  // the native prompt. Re-runs only on `dirty` flips — `savingRef` is a
+  // ref and does not drive re-renders, but `dirty` is always true when
+  // a save is in flight (SAVED_IF_MATCHES clears it only on success),
+  // so gating on `dirty` alone is sufficient.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -311,7 +502,11 @@ export default function InfographicEditor({
       if (isEditable) {
         if ((e.ctrlKey || e.metaKey) && key === "s") {
           e.preventDefault();
-          markSavedAndBackup();
+          if (autosaveTimerRef.current !== null) {
+            window.clearTimeout(autosaveTimerRef.current);
+            autosaveTimerRef.current = null;
+          }
+          performSave();
         }
         return;
       }
@@ -327,12 +522,16 @@ export default function InfographicEditor({
       }
       if ((e.ctrlKey || e.metaKey) && key === "s") {
         e.preventDefault();
-        markSavedAndBackup();
+        if (autosaveTimerRef.current !== null) {
+          window.clearTimeout(autosaveTimerRef.current);
+          autosaveTimerRef.current = null;
+        }
+        performSave();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [markSavedAndBackup]);
+  }, [performSave]);
 
   const importJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -427,8 +626,9 @@ export default function InfographicEditor({
         fileRef={fileRef}
         importJSON={importJSON}
         exportJSON={exportJSON}
-        markSaved={markSavedAndBackup}
+        markSaved={performSave}
         exportPNG={exportPNG}
+        saveStatus={saveStatus}
       />
       <NotificationBanner
         state={state}
@@ -437,6 +637,8 @@ export default function InfographicEditor({
         onClearImportError={() => setImportError(null)}
         onClearImportWarnings={() => setImportWarnings([])}
         dispatch={dispatch}
+        retryCountdownMs={retryCountdownMs}
+        onManualRetry={handleManualRetry}
       />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>

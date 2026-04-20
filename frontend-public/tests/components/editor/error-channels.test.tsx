@@ -91,3 +91,90 @@ describe('NotificationBanner — error channel priority (B4)', () => {
     expect(dispatched).toEqual([{ type: 'DISMISS_SAVE_ERROR' }]);
   });
 });
+
+describe('NotificationBanner — Stage 4 Task 2 retry UX', () => {
+  test('renders "Retrying in Xs…" when retryCountdownMs is set', () => {
+    const state = base({ saveError: 'Network down' });
+    render(
+      <NotificationBanner
+        state={state}
+        importError={null}
+        importWarnings={[]}
+        onClearImportError={() => {}}
+        onClearImportWarnings={() => {}}
+        dispatch={() => {}}
+        retryCountdownMs={4000}
+      />,
+    );
+    const countdown = screen.getByTestId('retry-countdown');
+    expect(countdown.textContent).toMatch(/Retrying in 4s/);
+  });
+
+  test('countdown rounds up (3500ms → "4s")', () => {
+    const state = base({ saveError: 'oops' });
+    render(
+      <NotificationBanner
+        state={state}
+        importError={null}
+        importWarnings={[]}
+        onClearImportError={() => {}}
+        onClearImportWarnings={() => {}}
+        dispatch={() => {}}
+        retryCountdownMs={3500}
+      />,
+    );
+    expect(screen.getByTestId('retry-countdown').textContent).toMatch(/4s/);
+  });
+
+  test('hides countdown when retryCountdownMs is null (budget exhausted)', () => {
+    const state = base({ saveError: 'exhausted' });
+    render(
+      <NotificationBanner
+        state={state}
+        importError={null}
+        importWarnings={[]}
+        onClearImportError={() => {}}
+        onClearImportWarnings={() => {}}
+        dispatch={() => {}}
+        retryCountdownMs={null}
+        onManualRetry={() => {}}
+      />,
+    );
+    expect(screen.queryByTestId('retry-countdown')).toBeNull();
+  });
+
+  test('"Retry now" button renders when onManualRetry is provided and click invokes it', () => {
+    const state = base({ saveError: 'oops' });
+    const onRetry = jest.fn();
+    render(
+      <NotificationBanner
+        state={state}
+        importError={null}
+        importWarnings={[]}
+        onClearImportError={() => {}}
+        onClearImportWarnings={() => {}}
+        dispatch={() => {}}
+        retryCountdownMs={null}
+        onManualRetry={onRetry}
+      />,
+    );
+    const button = screen.getByTestId('retry-now-button');
+    fireEvent.click(button);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  test('"Retry now" is absent when onManualRetry is omitted', () => {
+    const state = base({ saveError: 'oops' });
+    render(
+      <NotificationBanner
+        state={state}
+        importError={null}
+        importWarnings={[]}
+        onClearImportError={() => {}}
+        onClearImportWarnings={() => {}}
+        dispatch={() => {}}
+      />,
+    );
+    expect(screen.queryByTestId('retry-now-button')).toBeNull();
+  });
+});

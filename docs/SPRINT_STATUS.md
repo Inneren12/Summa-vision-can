@@ -121,7 +121,7 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-3-5 | Stage 3 End-to-End Tests | ⬜ | E-3-4 |
 | E-4-0 | Stage 4 Task 0 — Editor Wire-Up (Next.js admin routes) | ✅ | E-3-4 |
 | E-4-1 | Stage 4 Task 1 — Click-to-select + UX polish | ✅ | E-4-0 |
-| E-4-2 | Stage 4 Task 2 — Autosave + recovery | ⬜ | E-4-0 |
+| E-4-2 | Stage 4 Task 2 — Autosave + recovery | ✅ | E-4-0 |
 
 **E-3-4 status (in flight):** Backend-only persistence PR. Adds a
 nullable `Publication.review` Text column (Alembic migration
@@ -184,6 +184,23 @@ never bundled to client). `InfographicEditor` gains `initialDoc?` and
 `publicationId?` props; `initState` accepts an optional seed doc.
 Ctrl+S PATCHes through `updateAdminPublication`; the legacy local-JSON
 download on save is removed.
+
+**E-4-2 status:** Autosave landed on `claude/stage4-task2-autosave`.
+Debounced 2000ms `useEffect` on `state.doc` reference; navigational
+actions preserve identity so they don't reset the timer. Reuses the
+Task 0 `SAVED_IF_MATCHES` / `SAVE_FAILED` channel verbatim — no reducer
+changes. New local `SaveStatus` enum (`idle | pending | saving | error`)
+drives a four-state `SaveStatusIndicator` in TopBar (amber/red dot with
+CSS keyframe pulse for `saving`). Exponential-backoff retry
+(2s/4s/8s/16s, 4 attempts) scheduled via an orthogonal effect watching
+`state.saveError` + a `saveFailureGen` counter (required because
+identical error strings would otherwise leave the dep array stable).
+NotificationBanner save-error branch extended inline with live
+countdown + "Retry now" button. `beforeunload` guard covers the 2s
+window between an edit and the next scheduled save. New test files:
+`autosave.test.tsx` (14 tests), `save-status-indicator.test.tsx`
+(6 tests), `_admin-api-mock.ts` helper; extended
+`error-channels.test.tsx` with 5 retry-UX tests. 598 tests passing.
 
 Follow-up close resolves DEBT-026: opaque `document_state` column on
 `Publication` (migration `a3e81c0f5d21`) carries the full
