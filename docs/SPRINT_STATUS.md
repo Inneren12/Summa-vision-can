@@ -129,6 +129,7 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-4-9a | Stage 4 Task 9a — Perf: instrumentation + editor memoization | ✅ | E-4-6 |
 
 - E-4-9b (public gallery perf: code splitting, DownloadModal lazy load): deferred to separate PR
+- E-4-6 follow-up (fonts.load text argument): pending human commit
 
 **E-3-4 status (in flight):** Backend-only persistence PR. Adds a
 nullable `Publication.review` Text column (Alembic migration

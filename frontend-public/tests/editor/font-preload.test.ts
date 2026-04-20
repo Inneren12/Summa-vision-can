@@ -111,7 +111,7 @@ describe('preloadCanvasFonts', () => {
     }
   });
 
-  test('shorthand format is "weight 1em family"', async () => {
+  test('shorthand format for first arg is "weight 1em family"', async () => {
     const loadMock = jest.fn(() => Promise.resolve([]));
     const origFonts = Object.getOwnPropertyDescriptor(document, 'fonts');
     Object.defineProperty(document, 'fonts', {
@@ -123,6 +123,42 @@ describe('preloadCanvasFonts', () => {
       const [firstArgs] = loadMock.mock.calls as unknown[][];
       const firstCall = String(firstArgs?.[0] ?? '');
       expect(firstCall).toMatch(/^\d{3}\s+1em\s+/);
+    } finally {
+      if (origFonts) {
+        Object.defineProperty(document, 'fonts', origFonts);
+      } else {
+        delete (document as unknown as { fonts?: unknown }).fonts;
+      }
+    }
+  });
+
+  test('passes a multi-subset sample text to every fonts.load call', async () => {
+    const loadMock = jest.fn(() => Promise.resolve([]));
+    const origFonts = Object.getOwnPropertyDescriptor(document, 'fonts');
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: { load: loadMock, ready: Promise.resolve() },
+    });
+    try {
+      await preloadCanvasFonts();
+
+      // Regression guard for the Task 6 follow-up. document.fonts.load
+      // defaults its text arg to a single space (U+0020); without an
+      // explicit arg, only the basic-Latin subset shard is resolved,
+      // leaving late-subset shards (latin-ext, Greek, Cyrillic, etc.)
+      // to fetch late and re-open the gap this module is meant to close.
+      expect(loadMock.mock.calls.length).toBeGreaterThan(0);
+      for (const call of loadMock.mock.calls) {
+        expect(call.length).toBe(2);
+        const text = call[1] as string;
+        expect(typeof text).toBe('string');
+        // Must include at least one non-ASCII character — a space-only
+        // or basic-Latin-only string would silently regress the fix.
+        const hasNonAscii = [...text].some(
+          (ch) => ch.charCodeAt(0) > 0x007f,
+        );
+        expect(hasNonAscii).toBe(true);
+      }
     } finally {
       if (origFonts) {
         Object.defineProperty(document, 'fonts', origFonts);
