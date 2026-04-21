@@ -157,6 +157,14 @@ export default function InquiryForm() {
 
   return (
     <form
+      // react-hook-form's handleSubmit wraps our onSubmit callback,
+      // which reads turnstileRef.current?.reset() on a 403 response.
+      // The react-hooks/refs rule (eslint-plugin-react-hooks v7, React
+      // Compiler) flags the ref-reading function being passed through
+      // during render. The reference-component DownloadModal.tsx has
+      // the same baseline error for the identical RHF + Turnstile ref
+      // pattern. A proper fix (refactoring the RHF integration) is out
+      // of scope for Task 10a; tracked for future cleanup.
       // eslint-disable-next-line react-hooks/refs
       onSubmit={handleSubmit(onSubmit)}
       noValidate

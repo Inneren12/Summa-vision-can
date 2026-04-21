@@ -105,20 +105,26 @@ async def sponsorship_inquire(
     """
     client_ip = _get_client_ip(request)
 
-    # Rate limit
-    if not _sponsorship_rate_limiter.is_allowed(client_ip):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many requests. Please try again later.",
-        )
-
-    # Validate Turnstile CAPTCHA (fails closed on network/HTTP errors).
-    # Generic 403 — never leak Cloudflare error codes to the client.
+    # Validate Turnstile CAPTCHA BEFORE the rate limit so a transient
+    # CF/network hiccup or expired token doesn't burn the 1/5min slot
+    # for a legitimate user. Trade-off: invalid tokens still trigger a
+    # CF siteverify call, but CF rate-limits that endpoint server-side
+    # and no DB/Slack side effects run — legitimate-user correctness
+    # wins over the small cost of siteverify calls for invalid tokens.
+    # Fails closed on network/HTTP errors. Generic 403 — never leak
+    # Cloudflare error codes to the client.
     turnstile_valid = await turnstile.validate(payload.turnstile_token, client_ip)
     if not turnstile_valid:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="CAPTCHA verification failed",
+        )
+
+    # Rate limit — only verified humans consume the quota.
+    if not _sponsorship_rate_limiter.is_allowed(client_ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please try again later.",
         )
 
     # Score email
