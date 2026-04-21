@@ -208,6 +208,15 @@ export interface EditorState {
   // see docs/modules/editor.md "Error channels" and the NotificationBanner
   // priority order (saveError > importError > _lastRejection > warnings).
   saveError: string | null;
+  // Retry-orchestration state (DEBT-027 closure). `retryAttempt` is
+  // 0-indexed into RETRY_DELAYS_MS at the call site; at length ==
+  // RETRY_DELAYS_MS.length the budget is exhausted. `canAutoRetry` is
+  // false for terminal failures (e.g. 404) — the retry effect skips
+  // scheduling and only manual retry can re-arm. Both transition through
+  // the reducer so doc-mutation actions can reset them atomically with
+  // the document change (see cross-cutting reset at end of `reducer`).
+  retryAttempt: number;
+  canAutoRetry: boolean;
   // Tracks recent editing bursts so reducer can batch keystroke history.
   _lastAction?: { type: string; blockId?: string; key?: string; at: number };
   // Last rejection emitted by the permission gate. Set whenever an action
@@ -241,9 +250,22 @@ export type EditorAction =
   // edits). This replaces the older unconditional `SAVED` action.
   | { type: 'SAVED_IF_MATCHES'; snapshotDoc: CanonicalDocument }
   // Save failed — routed to `state.saveError` for the NotificationBanner.
-  | { type: 'SAVE_FAILED'; error: string }
+  // `canAutoRetry` distinguishes transient failures (true → retry effect
+  // schedules a backoff cycle) from terminal failures like 404 (false →
+  // banner stays with manual "Retry now" only).
+  | { type: 'SAVE_FAILED'; error: string; canAutoRetry: boolean }
   // User dismissed the save-error banner. Leaves `dirty` untouched.
   | { type: 'DISMISS_SAVE_ERROR' }
+  // Manual "Retry now" pressed: reset retry budget so a fresh backoff
+  // cycle starts on the next failure, and re-arm `canAutoRetry` (so the
+  // user can recover from a prior terminal classification).
+  | { type: 'RETRY_RESET' }
+  // Retry timer fired — advance the delay index so the NEXT auto-retry
+  // (if this one also fails) waits the next slot in RETRY_DELAYS_MS.
+  // Dispatched by the retry-orchestration effect's timer callback right
+  // before it calls performSave(). Mirrors the historical `attempt + 1`
+  // write performed inside the timer pre-DEBT-027.
+  | { type: 'RETRY_ATTEMPT_ADVANCE' }
   | { type: 'SET_MODE'; mode: EditorMode }
   | WorkflowAction
   | CommentAction;
