@@ -128,10 +128,25 @@ Temp Parquet cleanup tracked as DEBT-021.
 | E-4-6 | Stage 4 Task 6 — Font lifecycle hardening (late-subset closure) | ✅ | E-4-3 |
 | E-4-9a | Stage 4 Task 9a — Perf: instrumentation + editor memoization | ✅ | E-4-6 |
 | E-4-10b | Stage 4 Task 10b — Production polish (error boundaries, console, FastAPI docs) | ✅ | E-4-9a |
+| E-4-9b | Stage 4 Task 9b — Public gallery perf: DownloadModal dynamic import + InquiryForm deferred hydration | ✅ | E-4-9a |
 
-- E-4-9b (public gallery perf: code splitting, DownloadModal lazy load): deferred to separate PR
 - E-4-6 follow-up (fonts.load text argument): pending human commit
 - E-4-10a (production blockers: admin auth + InquiryForm CAPTCHA): separate PR, may land before or after 10b
+
+**E-4-9b status:** `DownloadModal` split into a trigger
+(button + `useState` + `next/dynamic` import) and a deferred
+`DownloadModalContent` chunk that owns the form, `react-hook-form`,
+the `zod` resolver, and `TurnstileWidget`. Homepage hydration cost
+of the heavy form code collapses from per-card to zero until first
+open; subsequent opens across any card reuse the chunk. `InquiryForm`
+on `/partner-with-us` wrapped in `dynamic(..., { ssr: true })` so the
+form still server-renders for SEO / no-JS while client hydration and
+the RHF bundle defer off the critical path. `@next/bundle-analyzer`
+wired as a devDep; `npm run analyze` runs a webpack build gated on
+`ANALYZE=true` (cross-env for Windows portability) and writes reports
+to `.next/analyze/`. The `--webpack` flag is required because
+`@next/bundle-analyzer` is not yet compatible with Turbopack. No
+changes to form logic, submit behaviour, or Turnstile integration.
 
 **E-3-4 status (in flight):** Backend-only persistence PR. Adds a
 nullable `Publication.review` Text column (Alembic migration
