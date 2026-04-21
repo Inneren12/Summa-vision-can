@@ -21,6 +21,8 @@ Additional jobs can be registered via :func:`get_scheduler`.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import structlog
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -159,6 +161,37 @@ async def scheduled_audit_cleanup() -> None:
         )
 
 
+async def scheduled_temp_uploads_cleanup() -> None:
+    """Wrapper executed by APScheduler to clean expired temp uploads."""
+    try:
+        from src.services.storage.temp_cleanup import TempUploadCleaner  # noqa: PLC0415
+
+        if _app_ref is None or not hasattr(_app_ref, "state"):
+            raise RuntimeError(
+                "Scheduler requires app reference for storage/settings DI"
+            )
+
+        storage = getattr(_app_ref.state, "storage", None)
+        settings = getattr(_app_ref.state, "settings", None)
+        if storage is None:
+            raise RuntimeError("app.state.storage not set")
+        if settings is None:
+            raise RuntimeError("app.state.settings not set")
+
+        cleaner = TempUploadCleaner(
+            storage=storage,
+            settings=settings,
+            clock=lambda: datetime.now(timezone.utc),
+        )
+        await cleaner.run_once()
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Scheduled job failed: temp_uploads_cleanup",
+            error=str(exc),
+            exc_info=True,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Lifecycle management
 # ---------------------------------------------------------------------------
@@ -213,6 +246,19 @@ def start_scheduler(settings: Settings | None = None, app: object | None = None)
         id="audit_cleanup",
         name="Delete expired audit events",
         replace_existing=True,
+    )
+
+    interval_minutes = settings.temp_upload_cleanup_interval_minutes
+    _scheduler.add_job(
+        scheduled_temp_uploads_cleanup,
+        trigger="interval",
+        minutes=interval_minutes,
+        id="temp_uploads_cleanup",
+        name="Delete expired temp upload objects",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=interval_minutes * 60,
     )
 
     _scheduler.start()

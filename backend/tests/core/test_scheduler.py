@@ -21,6 +21,7 @@ from src.core.scheduler import (
     get_scheduler,
     scheduled_audit_cleanup,
     scheduled_fetch_todays_releases,
+    scheduled_temp_uploads_cleanup,
     shutdown_scheduler,
     start_scheduler,
 )
@@ -85,7 +86,7 @@ class TestStartShutdown:
 
     @pytest.mark.asyncio
     async def test_start_registers_cron_job(self) -> None:
-        """Starting the scheduler should register the cron jobs."""
+        """Starting the scheduler should register all configured jobs."""
         settings = _make_settings()
         start_scheduler(settings)
 
@@ -94,11 +95,12 @@ class TestStartShutdown:
         assert scheduler.running
 
         jobs = scheduler.get_jobs()
-        assert len(jobs) == 2
+        assert len(jobs) == 3
 
         job_ids = {j.id for j in jobs}
         assert "fetch_todays_releases" in job_ids
         assert "audit_cleanup" in job_ids
+        assert "temp_uploads_cleanup" in job_ids
 
         fetch_job = scheduler.get_job("fetch_todays_releases")
         assert fetch_job is not None
@@ -107,6 +109,13 @@ class TestStartShutdown:
         audit_job = scheduler.get_job("audit_cleanup")
         assert audit_job is not None
         assert audit_job.name == "Delete expired audit events"
+
+        temp_cleanup_job = scheduler.get_job("temp_uploads_cleanup")
+        assert temp_cleanup_job is not None
+        assert temp_cleanup_job.name == "Delete expired temp upload objects"
+        assert temp_cleanup_job.coalesce is True
+        assert temp_cleanup_job.max_instances == 1
+        assert temp_cleanup_job.misfire_grace_time == 3600
 
     @pytest.mark.asyncio
     async def test_cron_job_timezone_is_eastern(self) -> None:
@@ -179,7 +188,40 @@ class TestStartShutdown:
         scheduler = get_scheduler()
         assert scheduler is not None
         jobs = scheduler.get_jobs()
-        assert len(jobs) == 2  # fetch_todays_releases + audit_cleanup
+        assert len(jobs) == 3
+
+
+class TestScheduledTempUploadsCleanup:
+    """Tests for the temp upload cleanup scheduler wrapper."""
+
+    @pytest.mark.asyncio
+    async def test_success_path(self) -> None:
+        """Wrapper should instantiate the cleaner from app-scoped DI."""
+        mock_storage = MagicMock()
+        mock_settings = _make_settings()
+        mock_app = MagicMock()
+        mock_app.state.storage = mock_storage
+        mock_app.state.settings = mock_settings
+        mock_cleaner = MagicMock()
+        mock_cleaner.run_once = AsyncMock()
+
+        with (
+            patch("src.core.scheduler._app_ref", mock_app),
+            patch(
+                "src.services.storage.temp_cleanup.TempUploadCleaner",
+                return_value=mock_cleaner,
+            ) as cleaner_cls,
+        ):
+            await scheduled_temp_uploads_cleanup()
+
+        cleaner_cls.assert_called_once()
+        mock_cleaner.run_once.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_missing_app_state_is_caught(self) -> None:
+        """Missing app DI should be logged and not escape the wrapper."""
+        with patch("src.core.scheduler._app_ref", None):
+            await scheduled_temp_uploads_cleanup()
 
 
 # ---------------------------------------------------------------------------

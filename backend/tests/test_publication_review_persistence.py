@@ -46,7 +46,7 @@ from src.api.routers.public_graphics import (
 from src.core.database import Base
 from src.core.security.auth import AuthMiddleware
 from src.core.security.ip_rate_limiter import InMemoryRateLimiter
-from src.core.storage import StorageInterface
+from src.core.storage import StorageInterface, StorageObjectMetadata
 from src.models.audit_event import AuditEvent
 from src.models.publication import Publication, PublicationStatus
 from src.repositories.publication_repository import PublicationRepository
@@ -102,6 +102,11 @@ class _NullStorage(StorageInterface):  # pragma: no cover - stub
         return None
 
     async def list_objects(self, prefix: str) -> list[str]:
+        return []
+
+    async def list_objects_with_metadata(
+        self, prefix: str
+    ) -> list[StorageObjectMetadata]:
         return []
 
     async def generate_presigned_url(self, path: str, ttl: int = 3600) -> str:
