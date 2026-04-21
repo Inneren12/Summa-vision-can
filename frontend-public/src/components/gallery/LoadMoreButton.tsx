@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { fetchMoreGraphics } from '@/lib/api/client';
 import type { PublicationResponse } from '@/lib/api/client';
+import { logError } from '@/lib/log-error';
 import { InfographicCard } from './InfographicCard';
 
 interface LoadMoreButtonProps {
@@ -28,7 +29,7 @@ export function LoadMoreButton({ initialOffset, limit, total }: LoadMoreButtonPr
         setHasMore(false);
       }
     } catch (err) {
-      console.error('Failed to load more graphics', err);
+      logError(err, { source: 'gallery.LoadMoreButton' });
     } finally {
       setIsLoading(false);
     }

@@ -126,11 +126,18 @@ async def lifespan(app: FastAPI):
     structlog.get_logger().info("app_stopped")
 
 
+# Production hides the OpenAPI schema + interactive docs. Development
+# keeps them exposed for convenience. Gated on settings.environment.
+_is_prod: bool = settings_on_startup.environment == "production"
+
 app = FastAPI(
     title=settings_on_startup.app_name,
     version="0.1.0",
     description="Canadian housing data ETL and visualization API.",
     lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 # ---------------------------------------------------------------------------
@@ -169,13 +176,20 @@ app.add_middleware(
     admin_api_key=settings_on_startup.admin_api_key,
 )
 
+# CORS: production is the two public hostnames only. Development
+# additionally permits localhost:3000 for the Next.js dev server.
+# Pattern mirrors the docs_url env-gate above: one source of truth
+# on settings.environment.
+_cors_origins: list[str] = [
+    "https://summa.vision",
+    "https://www.summa.vision",
+]
+if settings_on_startup.environment != "production":
+    _cors_origins.append("http://localhost:3000")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://summa.vision",
-        "https://www.summa.vision",
-        "http://localhost:3000",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
