@@ -29,10 +29,9 @@ export interface BlockTextSlot {
   slot: string;
   /** Hex colour the renderer paints for that slot (after theme resolution). */
   color: string;
+  /** WCAG large-text threshold applies only when the rendered slot qualifies. */
+  isLarge: boolean;
 }
-
-/** WCAG-style large-text block types (threshold 3:1 instead of 4.5:1). */
-const LARGE_TEXT_BLOCKS = new Set<string>(['hero_stat', 'headline_editorial']);
 
 /** Block types that render text at all. Everything else is skipped. */
 export const TEXT_BEARING_BLOCKS = new Set<string>([
@@ -64,48 +63,50 @@ export function getBlockTextSlots(
 ): BlockTextSlot[] {
   switch (blockType) {
     case 'eyebrow_tag':
-      return [{ slot: "primary", color: TK.c.txtM }];
+      return [{ slot: "primary", color: TK.c.txtM, isLarge: false }];
     case 'headline_editorial':
-      return [{ slot: "primary", color: TK.c.txtP }];
+      return [{ slot: "primary", color: TK.c.txtP, isLarge: true }];
     case 'subtitle_descriptor':
-      return [{ slot: "primary", color: TK.c.txtS }];
+      return [{ slot: "primary", color: TK.c.txtS, isLarge: false }];
     case 'hero_stat':
       return [
-        { slot: 'value', color: pal.p },
-        { slot: 'label', color: TK.c.txtS },
+        { slot: 'value', color: pal.p, isLarge: true },
+        { slot: 'label', color: TK.c.txtS, isLarge: false },
       ];
     case 'delta_badge':
       // Direction-dependent at render time; worst case for contrast
       // is pal.neg (red) on dark bg. Use it as the representative.
-      return [{ slot: "primary", color: pal.neg }];
+      return [{ slot: "primary", color: pal.neg, isLarge: false }];
     case 'body_annotation':
-      return [{ slot: "primary", color: TK.c.txtS }];
+      return [{ slot: "primary", color: TK.c.txtS, isLarge: false }];
     case 'source_footer':
-      return [{ slot: "primary", color: TK.c.txtM }];
+      return [{ slot: "primary", color: TK.c.txtM, isLarge: false }];
     case 'brand_stamp':
-      return [{ slot: "primary", color: TK.c.acc }];
+      return [{ slot: "primary", color: TK.c.acc, isLarge: false }];
     case 'bar_horizontal':
       return [
-        { slot: 'label', color: TK.c.txtS },
-        { slot: 'value', color: TK.c.txtP },
+        { slot: 'label', color: TK.c.txtS, isLarge: false },
+        { slot: 'value', color: TK.c.txtP, isLarge: false },
       ];
     case 'line_editorial':
-      return [{ slot: "primary", color: pal.p }];
+      return [{ slot: "primary", color: pal.p, isLarge: false }];
     case 'comparison_kpi':
       return [
-        { slot: 'value', color: TK.c.txtP },
-        { slot: 'delta_pos', color: pal.pos },
-        { slot: 'delta_neg', color: pal.neg },
-        { slot: 'label', color: TK.c.txtS },
+        { slot: 'value', color: TK.c.txtP, isLarge: true },
+        { slot: 'delta_pos', color: pal.pos, isLarge: false },
+        { slot: 'delta_neg', color: pal.neg, isLarge: false },
+        { slot: 'label', color: TK.c.txtS, isLarge: false },
       ];
     case 'table_enriched':
       return [
-        { slot: 'header', color: TK.c.txtS },
-        { slot: 'cell', color: TK.c.txtP },
-        { slot: 'score', color: pal.p },
+        { slot: 'header', color: TK.c.txtS, isLarge: false },
+        { slot: 'rank', color: pal.p, isLarge: false },
+        { slot: 'cell', color: TK.c.txtP, isLarge: false },
+        { slot: 'metric', color: TK.c.txtS, isLarge: false },
+        { slot: 'score', color: TK.c.txtP, isLarge: false },
       ];
     case 'small_multiple':
-      return [{ slot: "primary", color: TK.c.txtP }];
+      return [{ slot: "primary", color: TK.c.txtP, isLarge: false }];
     default:
       return [];
   }
@@ -175,11 +176,10 @@ export function validateContrast(doc: CanonicalDocument): ContrastIssue[] {
       if (!block || !block.visible) continue;
       if (!TEXT_BEARING_BLOCKS.has(block.type)) continue;
 
-      const isLarge = LARGE_TEXT_BLOCKS.has(block.type);
-      const threshold = isLarge ? 3.0 : 4.5;
       const textSlots = getBlockTextSlots(block.type, pal);
 
-      for (const { slot, color } of textSlots) {
+      for (const { slot, color, isLarge } of textSlots) {
+        const threshold = isLarge ? 3.0 : 4.5;
         const baseRatio = contrastRatio(color, bgMeta.base);
         if (baseRatio < threshold) {
           const ratio = round2(baseRatio);

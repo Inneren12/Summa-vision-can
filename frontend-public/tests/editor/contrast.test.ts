@@ -145,14 +145,14 @@ describe("getBlockTextSlots", () => {
 
   test("headline_editorial → TK.c.txtP", () => {
     expect(getBlockTextSlots("headline_editorial", housing)).toEqual([
-      { slot: "primary", color: TK.c.txtP },
+      { slot: "primary", color: TK.c.txtP, isLarge: true },
     ]);
   });
 
   test("hero_stat default slot → pal.p", () => {
     expect(getBlockTextSlots("hero_stat", housing)).toEqual([
-      { slot: "value", color: housing.p },
-      { slot: "label", color: TK.c.txtS },
+      { slot: "value", color: housing.p, isLarge: true },
+      { slot: "label", color: TK.c.txtS, isLarge: false },
     ]);
   });
 
@@ -160,19 +160,21 @@ describe("getBlockTextSlots", () => {
     expect(getBlockTextSlots("hero_stat", housing)[1]).toEqual({
       slot: "label",
       color: TK.c.txtS,
+      isLarge: false,
     });
   });
 
   test("bar_horizontal value slot → txtP, default slot → txtS", () => {
     expect(getBlockTextSlots("bar_horizontal", housing)).toEqual([
-      { slot: "label", color: TK.c.txtS },
-      { slot: "value", color: TK.c.txtP },
+      { slot: "label", color: TK.c.txtS, isLarge: false },
+      { slot: "value", color: TK.c.txtP, isLarge: false },
     ]);
   });
 
   test("comparison_kpi label slot → txtS, default → pal.p", () => {
     const slots = getBlockTextSlots("comparison_kpi", housing);
     const bySlot = Object.fromEntries(slots.map(({ slot, color }) => [slot, color]));
+    const byLarge = Object.fromEntries(slots.map(({ slot, isLarge }) => [slot, isLarge]));
 
     expect(slots).toHaveLength(4);
     expect(bySlot).toEqual({
@@ -181,31 +183,39 @@ describe("getBlockTextSlots", () => {
       delta_neg: housing.neg,
       label: TK.c.txtS,
     });
+    expect(byLarge).toEqual({
+      value: true,
+      delta_pos: false,
+      delta_neg: false,
+      label: false,
+    });
   });
 
   test("table_enriched score slot → txtP, default → txtS", () => {
     expect(getBlockTextSlots("table_enriched", housing)).toEqual([
-      { slot: "header", color: TK.c.txtS },
-      { slot: "cell", color: TK.c.txtP },
-      { slot: "score", color: housing.p },
+      { slot: "header", color: TK.c.txtS, isLarge: false },
+      { slot: "rank", color: housing.p, isLarge: false },
+      { slot: "cell", color: TK.c.txtP, isLarge: false },
+      { slot: "metric", color: TK.c.txtS, isLarge: false },
+      { slot: "score", color: TK.c.txtP, isLarge: false },
     ]);
   });
 
   test("brand_stamp → TK.c.acc", () => {
     expect(getBlockTextSlots("brand_stamp", housing)).toEqual([
-      { slot: "primary", color: TK.c.acc },
+      { slot: "primary", color: TK.c.acc, isLarge: false },
     ]);
   });
 
   test("delta_badge → pal.neg (worst-case direction)", () => {
     expect(getBlockTextSlots("delta_badge", housing)).toEqual([
-      { slot: "primary", color: housing.neg },
+      { slot: "primary", color: housing.neg, isLarge: false },
     ]);
   });
 
   test("line_editorial → pal.p", () => {
     expect(getBlockTextSlots("line_editorial", housing)).toEqual([
-      { slot: "primary", color: housing.p },
+      { slot: "primary", color: housing.p, isLarge: false },
     ]);
   });
 
@@ -333,7 +343,7 @@ describe("validateContrast — integration", () => {
     expect(issues[0].message.startsWith("hero_stat.value:")).toBe(true);
   });
 
-  test("table_enriched emits only the failing score slot when pal.p loses contrast", () => {
+  test("table_enriched emits only the failing rank slot when pal.p loses contrast", () => {
     registerPalette("test_table_score_palette", {
       n: "Test Table Score",
       p: "#111318",
@@ -355,11 +365,11 @@ describe("validateContrast — integration", () => {
     );
 
     expect(issues).toHaveLength(1);
-    expect(issues[0].slot).toBe("score");
-    expect(issues[0].message.startsWith("table_enriched.score:")).toBe(true);
+    expect(issues[0].slot).toBe("rank");
+    expect(issues[0].message.startsWith("table_enriched.rank:")).toBe(true);
   });
 
-  test("table_enriched checks header independently from score", () => {
+  test("table_enriched checks header separately from score and rank", () => {
     registerPalette("test_table_header_palette", {
       n: "Test Table Header",
       p: "#FFFFFF",
@@ -380,9 +390,10 @@ describe("validateContrast — integration", () => {
       }),
     );
 
-    expect(issues).toHaveLength(1);
-    expect(issues[0].slot).toBe("header");
-    expect(issues[0].message.startsWith("table_enriched.header:")).toBe(true);
+    expect(issues).toHaveLength(2);
+    expect(issues.map((issue) => issue.slot).sort()).toEqual(["header", "metric"]);
+    expect(issues.some((issue) => issue.message.startsWith("table_enriched.header:"))).toBe(true);
+    expect(issues.every((issue) => issue.slot !== "score" && issue.slot !== "rank")).toBe(true);
   });
 
   test("multi-slot blocks never emit the legacy primary slot label", () => {
