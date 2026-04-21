@@ -1,6 +1,13 @@
 import type { Metadata } from 'next';
+import dynamic from 'next/dynamic';
 import { AUDIENCE_METRICS, SPONSORSHIP_TIERS } from '@/lib/constants/pricing';
-import InquiryForm from '@/components/forms/InquiryForm';
+
+// InquiryForm ships a large react-hook-form + zod import chain. The form
+// is visible on initial paint (not click-gated), so keep ssr:true to
+// preserve the SSR HTML for SEO / no-JS users; only hydration defers.
+const InquiryForm = dynamic(() => import('@/components/forms/InquiryForm'), {
+  ssr: true,
+});
 
 export const metadata: Metadata = {
   title: 'Partner with Summa Vision | Canadian Data Visualization Sponsorship',
