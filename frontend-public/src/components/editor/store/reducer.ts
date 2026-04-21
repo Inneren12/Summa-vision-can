@@ -111,12 +111,15 @@ function checkModePermission(state: EditorState, action: EditorAction): { allowe
     case "SAVED_IF_MATCHES":
     case "SAVE_FAILED":
     case "DISMISS_SAVE_ERROR":
+    case "RETRY_RESET":
+    case "RETRY_ATTEMPT_ADVANCE":
     case "SET_MODE":
       // Always allowed:
       //   SELECT, SET_MODE — non-mutating UI state
       //   IMPORT — validated separately inside the reducer body (defense in depth)
       //   UNDO/REDO — operate on existing trusted history snapshots
-      //   SAVED_IF_MATCHES / SAVE_FAILED / DISMISS_SAVE_ERROR — save-channel bookkeeping
+      //   SAVED_IF_MATCHES / SAVE_FAILED / DISMISS_SAVE_ERROR /
+      //     RETRY_RESET / RETRY_ATTEMPT_ADVANCE — save-channel bookkeeping
       return { allowed: true };
 
     case "ADD_COMMENT":
@@ -405,20 +408,56 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       // edit produces a new doc object. If the user typed during the
       // in-flight PATCH, the snapshot's unsaved edits never reached the
       // backend, so keeping `dirty: true` is correct.
+      //
+      // DEBT-027: a successful save also resets the retry budget so the
+      // next failure starts from delay[0]. This previously lived in the
+      // retry-orchestration effect, which observed `saveError` flipping
+      // to null.
+      const cleared = { saveError: null, retryAttempt: 0, _lastRejection: undefined };
       if (state.doc === action.snapshotDoc) {
-        nextState = { ...state, dirty: false, saveError: null, _lastRejection: undefined };
+        nextState = { ...state, dirty: false, ...cleared };
       } else {
         // Save itself succeeded, so clear any prior save error; but
         // `dirty` stays set because the server is now behind the UI.
-        nextState = { ...state, saveError: null, _lastRejection: undefined };
+        nextState = { ...state, ...cleared };
       }
       break;
     }
     case "SAVE_FAILED":
-      nextState = { ...state, saveError: action.error, _lastRejection: undefined };
+      // DEBT-027: capture `canAutoRetry` here so the retry orchestration
+      // effect can read it from state instead of from a ref.
+      // `canAutoRetry: false` is the terminal (404) classification;
+      // transient failures pass `true`. `retryAttempt` is intentionally
+      // NOT incremented here — it advances when the retry timer fires
+      // (RETRY_ATTEMPT_ADVANCE), matching the historical `attempt + 1`
+      // write performed inside the timer callback pre-DEBT-027.
+      // Incrementing on SAVE_FAILED would shift the backoff schedule
+      // so the first auto-retry waited RETRY_DELAYS_MS[1] instead of [0].
+      nextState = {
+        ...state,
+        saveError: action.error,
+        canAutoRetry: action.canAutoRetry,
+        _lastRejection: undefined,
+      };
       break;
     case "DISMISS_SAVE_ERROR":
-      nextState = { ...state, saveError: null, _lastRejection: undefined };
+      // DEBT-027: dismiss also resets the retry budget. The original
+      // retry effect treated saveError → null as the reset trigger
+      // regardless of whether the clear came from SAVED_IF_MATCHES or
+      // DISMISS_SAVE_ERROR; preserve that. `canAutoRetry` is intentionally
+      // left as-is — the dismiss-bypass guard (B5) relies on a 404's
+      // `canAutoRetry: false` surviving until a new edit or manual retry.
+      nextState = { ...state, saveError: null, retryAttempt: 0, _lastRejection: undefined };
+      break;
+    case "RETRY_RESET":
+      // DEBT-027: manual "Retry now" path. Resets the budget AND re-arms
+      // canAutoRetry so a previously-terminal error can be retried.
+      nextState = { ...state, retryAttempt: 0, canAutoRetry: true, _lastRejection: undefined };
+      break;
+    case "RETRY_ATTEMPT_ADVANCE":
+      // DEBT-027: replaces the historical `attempt + 1` write performed
+      // inside the retry-orchestration timer callback pre-DEBT-027.
+      nextState = { ...state, retryAttempt: state.retryAttempt + 1, _lastRejection: undefined };
       break;
     case "SET_MODE":
       nextState = { ...state, mode: action.mode, _lastRejection: undefined };
@@ -459,6 +498,20 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       break;
     default:
       nextState = state;
+  }
+
+  // DEBT-027 cross-cutting reset: a doc-mutating action while a save error
+  // is active means the user edited during error state. Reset the retry
+  // budget so the next attempt re-enters the backoff cycle at delay[0],
+  // and re-arm `canAutoRetry` so a previously-terminal error can be
+  // retried against the now-different document. The check uses the BEFORE
+  // state's `saveError` because no doc-mutating reducer case touches it
+  // (saveError is only set by SAVE_FAILED and cleared by SAVED_IF_MATCHES
+  // / DISMISS_SAVE_ERROR / RETRY_RESET, none of which mutate `doc`).
+  // Replaces the deleted `useEffect(..., [doc])` in index.tsx that used
+  // an exhaustive-deps disable to skip `state.saveError` in its deps.
+  if (state.saveError != null && nextState.doc !== state.doc) {
+    nextState = { ...nextState, retryAttempt: 0, canAutoRetry: true };
   }
 
   if (process.env.NODE_ENV === "development" && nextState !== state) {
@@ -603,6 +656,8 @@ export function initState(initialDoc?: CanonicalDocument): EditorState {
     selectedBlockId: null,
     dirty: false,
     saveError: null,
+    retryAttempt: 0,
+    canAutoRetry: true,
     _lastAction: undefined,
     _lastRejection: undefined,
     mode: "design",

@@ -82,6 +82,7 @@ describe('SAVE_FAILED', () => {
     const s1 = reducer(s0, {
       type: 'SAVE_FAILED',
       error: 'Network down',
+      canAutoRetry: true,
     });
     expect(s1.saveError).toBe('Network down');
     expect(s1.dirty).toBe(true);
@@ -105,5 +106,88 @@ describe('initState includes saveError: null', () => {
   test('initState with seeded doc still has null saveError', () => {
     const doc = mkDoc('single_stat_hero', TPLS.single_stat_hero);
     expect(initState(doc).saveError).toBeNull();
+  });
+});
+
+// DEBT-027: retry-orchestration state lives in the reducer instead of
+// `useRef` + `useEffect([doc])` with an exhaustive-deps disable.
+// The "user edited during error → reset retry budget" semantic is
+// implemented as a cross-cutting reducer transition: any action that
+// produces a new `doc` reference while `state.saveError != null` resets
+// `retryAttempt` to 0 and re-arms `canAutoRetry`. UPDATE_PROP is the
+// canonical doc-mutating action used to drive these tests.
+describe('DEBT-027 — retry-state reducer transitions', () => {
+  test('user edit during error state resets retryAttempt to 0 (cross-cutting)', () => {
+    const s0Initial = seededState();
+    const blockId = firstEditableBlockId(s0Initial);
+    const s0: EditorState = {
+      ...s0Initial,
+      saveError: 'transient network failure',
+      retryAttempt: 3,
+      canAutoRetry: true,
+    };
+    const s1 = reducer(s0, {
+      type: 'UPDATE_PROP',
+      blockId,
+      key: 'text',
+      value: 'edited during error',
+    });
+    expect(s1.retryAttempt).toBe(0);
+    // Other retry-orchestration fields preserved or re-armed.
+    expect(s1.canAutoRetry).toBe(true);
+    // `saveError` is intentionally NOT cleared — the banner stays up so
+    // the user knows the prior failure happened. The reducer only
+    // re-enters the retry cycle; the next save attempt or dismissal
+    // clears `saveError`.
+    expect(s1.saveError).toBe('transient network failure');
+  });
+
+  test('doc edit when no save error is active does NOT change retryAttempt', () => {
+    const s0Initial = seededState();
+    const blockId = firstEditableBlockId(s0Initial);
+    const s0: EditorState = {
+      ...s0Initial,
+      saveError: null,
+      retryAttempt: 3,
+      canAutoRetry: true,
+    };
+    const s1 = reducer(s0, {
+      type: 'UPDATE_PROP',
+      blockId,
+      key: 'text',
+      value: 'normal edit, no error active',
+    });
+    expect(s1.retryAttempt).toBe(3);
+    expect(s1.canAutoRetry).toBe(true);
+  });
+
+  // The original ref-based design incremented the attempt counter inside
+  // the retry timer callback — i.e. when a retry was about to FIRE, not
+  // when the prior attempt FAILED. That preserved delay[0] for the first
+  // retry. RETRY_ATTEMPT_ADVANCE is the reducer-side replacement for that
+  // write; SAVE_FAILED itself does not increment (see reducer comment).
+  test('RETRY_ATTEMPT_ADVANCE increments retryAttempt from any starting value', () => {
+    const cases = [0, 1, 3, 7];
+    for (const start of cases) {
+      const s0: EditorState = { ...seededState(), retryAttempt: start };
+      const s1 = reducer(s0, { type: 'RETRY_ATTEMPT_ADVANCE' });
+      expect(s1.retryAttempt).toBe(start + 1);
+    }
+  });
+
+  test('SAVED_IF_MATCHES resets retryAttempt to 0', () => {
+    const s0Initial = seededState();
+    const s0: EditorState = {
+      ...s0Initial,
+      saveError: 'prior error',
+      retryAttempt: 4,
+      canAutoRetry: true,
+    };
+    const s1 = reducer(s0, {
+      type: 'SAVED_IF_MATCHES',
+      snapshotDoc: s0.doc,
+    });
+    expect(s1.retryAttempt).toBe(0);
+    expect(s1.saveError).toBeNull();
   });
 });

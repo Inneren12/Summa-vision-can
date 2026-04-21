@@ -290,6 +290,8 @@ export function checkWorkflowPermission(
     case "SAVED_IF_MATCHES":
     case "SAVE_FAILED":
     case "DISMISS_SAVE_ERROR":
+    case "RETRY_RESET":
+    case "RETRY_ATTEMPT_ADVANCE":
       return { allowed: true };
 
     // Workflow transitions are validated by `canTransition` in the reducer,
