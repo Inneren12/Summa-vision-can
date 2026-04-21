@@ -2,17 +2,83 @@ import {
   hexToRgb,
   relativeLuminance,
   contrastRatio,
-  getBlockTextColor,
+  getBlockTextSlots,
   validateContrast,
   TEXT_BEARING_BLOCKS,
 } from "../../src/components/editor/validation/contrast";
+import { BG_META } from "../../src/components/editor/config/backgrounds";
 import { PALETTES } from "../../src/components/editor/config/palettes";
+import { TK } from "../../src/components/editor/config/tokens";
 import { TPLS, mkDoc } from "../../src/components/editor/registry/templates";
-import type { CanonicalDocument } from "../../src/components/editor/types";
+import type { CanonicalDocument, Palette } from "../../src/components/editor/types";
 
 function cloneDoc(tid: string): CanonicalDocument {
   return JSON.parse(JSON.stringify(mkDoc(tid, TPLS[tid])));
 }
+
+function makeDoc(
+  blockType: string,
+  options?: { palette?: string; background?: string; visible?: boolean },
+): CanonicalDocument {
+  return {
+    schemaVersion: 2,
+    templateId: "test",
+    page: {
+      size: "square",
+      background: options?.background ?? "solid_dark",
+      palette: options?.palette ?? "housing",
+    },
+    sections: [{ id: "section-1", type: "hero", blockIds: ["block-1"] }],
+    blocks: {
+      "block-1": {
+        id: "block-1",
+        type: blockType,
+        props: {},
+        visible: options?.visible ?? true,
+      },
+    },
+    meta: {
+      createdAt: "2026-04-21T00:00:00.000Z",
+      updatedAt: "2026-04-21T00:00:00.000Z",
+      version: 1,
+      history: [],
+    },
+    review: {
+      workflow: "draft",
+      history: [],
+      comments: [],
+    },
+  };
+}
+
+// NOTE: mutates module-level registry. Safe only with sequential test execution.
+function registerPalette(id: string, palette: Palette): void {
+  (PALETTES as Record<string, Palette>)[id] = palette;
+}
+
+function registerBackground(
+  id: string,
+  background: { base: string; lightestStop?: string; isGradient: boolean },
+): void {
+  (BG_META as Record<string, { base: string; lightestStop?: string; isGradient: boolean }>)[id] =
+    background;
+}
+
+function unregisterThemeFixture(id: string): void {
+  delete (PALETTES as Record<string, Palette>)[id];
+  delete (BG_META as Record<string, { base: string; lightestStop?: string; isGradient: boolean }>)[id];
+}
+
+afterEach(() => {
+  unregisterThemeFixture("test_comparison_palette");
+  unregisterThemeFixture("test_hero_label_palette");
+  unregisterThemeFixture("test_hero_value_palette");
+  unregisterThemeFixture("test_table_header_bg");
+  unregisterThemeFixture("test_table_header_palette");
+  unregisterThemeFixture("test_table_score_palette");
+  unregisterThemeFixture("test_mid_bg");
+  unregisterThemeFixture("test_dark_bg");
+});
 
 describe("hexToRgb", () => {
   test("parses uppercase and lowercase", () => {
@@ -74,55 +140,92 @@ describe("contrastRatio — WebAIM reference values", () => {
   });
 });
 
-describe("getBlockTextColor", () => {
+describe("getBlockTextSlots", () => {
   const housing = PALETTES.housing;
 
   test("headline_editorial → TK.c.txtP", () => {
-    expect(getBlockTextColor("headline_editorial", housing)).toBe("#F3F4F6");
+    expect(getBlockTextSlots("headline_editorial", housing)).toEqual([
+      { slot: "primary", color: TK.c.txtP, isLarge: true },
+    ]);
   });
 
   test("hero_stat default slot → pal.p", () => {
-    expect(getBlockTextColor("hero_stat", housing)).toBe(housing.p);
+    expect(getBlockTextSlots("hero_stat", housing)).toEqual([
+      { slot: "value", color: housing.p, isLarge: true },
+      { slot: "label", color: TK.c.txtS, isLarge: false },
+    ]);
   });
 
   test("hero_stat label slot → TK.c.txtS", () => {
-    expect(getBlockTextColor("hero_stat", housing, "label")).toBe("#8B949E");
+    expect(getBlockTextSlots("hero_stat", housing)[1]).toEqual({
+      slot: "label",
+      color: TK.c.txtS,
+      isLarge: false,
+    });
   });
 
   test("bar_horizontal value slot → txtP, default slot → txtS", () => {
-    expect(getBlockTextColor("bar_horizontal", housing, "value")).toBe("#F3F4F6");
-    expect(getBlockTextColor("bar_horizontal", housing)).toBe("#8B949E");
+    expect(getBlockTextSlots("bar_horizontal", housing)).toEqual([
+      { slot: "label", color: TK.c.txtS, isLarge: false },
+      { slot: "value", color: TK.c.txtP, isLarge: false },
+    ]);
   });
 
   test("comparison_kpi label slot → txtS, default → pal.p", () => {
-    expect(getBlockTextColor("comparison_kpi", housing, "label")).toBe("#8B949E");
-    expect(getBlockTextColor("comparison_kpi", housing)).toBe(housing.p);
+    const slots = getBlockTextSlots("comparison_kpi", housing);
+    const bySlot = Object.fromEntries(slots.map(({ slot, color }) => [slot, color]));
+    const byLarge = Object.fromEntries(slots.map(({ slot, isLarge }) => [slot, isLarge]));
+
+    expect(slots).toHaveLength(4);
+    expect(bySlot).toEqual({
+      value: TK.c.txtP,
+      delta_pos: housing.pos,
+      delta_neg: housing.neg,
+      label: TK.c.txtS,
+    });
+    expect(byLarge).toEqual({
+      value: true,
+      delta_pos: false,
+      delta_neg: false,
+      label: false,
+    });
   });
 
   test("table_enriched score slot → txtP, default → txtS", () => {
-    expect(getBlockTextColor("table_enriched", housing, "score")).toBe("#F3F4F6");
-    expect(getBlockTextColor("table_enriched", housing)).toBe("#8B949E");
+    expect(getBlockTextSlots("table_enriched", housing)).toEqual([
+      { slot: "header", color: TK.c.txtS, isLarge: false },
+      { slot: "rank", color: housing.p, isLarge: false },
+      { slot: "cell", color: TK.c.txtP, isLarge: false },
+      { slot: "metric", color: TK.c.txtS, isLarge: false },
+      { slot: "score", color: TK.c.txtP, isLarge: false },
+    ]);
   });
 
   test("brand_stamp → TK.c.acc", () => {
-    expect(getBlockTextColor("brand_stamp", housing)).toBe("#FBBF24");
+    expect(getBlockTextSlots("brand_stamp", housing)).toEqual([
+      { slot: "primary", color: TK.c.acc, isLarge: false },
+    ]);
   });
 
   test("delta_badge → pal.neg (worst-case direction)", () => {
-    expect(getBlockTextColor("delta_badge", housing)).toBe(housing.neg);
+    expect(getBlockTextSlots("delta_badge", housing)).toEqual([
+      { slot: "primary", color: housing.neg, isLarge: false },
+    ]);
   });
 
   test("line_editorial → pal.p", () => {
-    expect(getBlockTextColor("line_editorial", housing)).toBe(housing.p);
+    expect(getBlockTextSlots("line_editorial", housing)).toEqual([
+      { slot: "primary", color: housing.p, isLarge: false },
+    ]);
   });
 
-  test("unknown block type → null", () => {
-    expect(getBlockTextColor("not_a_block", housing)).toBeNull();
+  test("unknown block type → []", () => {
+    expect(getBlockTextSlots("not_a_block", housing)).toEqual([]);
   });
 
-  test("every TEXT_BEARING_BLOCKS entry returns a non-null colour", () => {
+  test("every TEXT_BEARING_BLOCKS entry returns at least one slot", () => {
     for (const t of TEXT_BEARING_BLOCKS) {
-      expect(getBlockTextColor(t, housing)).not.toBeNull();
+      expect(getBlockTextSlots(t, housing).length).toBeGreaterThan(0);
     }
   });
 });
@@ -162,6 +265,188 @@ describe("validateContrast — integration", () => {
     expect(validateContrast(doc)).toEqual([]);
   });
 
+  test("comparison_kpi emits only the failing delta_neg slot", () => {
+    registerPalette("test_comparison_palette", {
+      n: "Test Comparison",
+      p: "#22D3EE",
+      s: "#3B82F6",
+      a: "#FBBF24",
+      pos: "#FFFFFF",
+      neg: "#111318",
+    });
+    registerBackground("test_dark_bg", {
+      base: "#0B0D11",
+      isGradient: false,
+    });
+
+    const issues = validateContrast(
+      makeDoc("comparison_kpi", {
+        palette: "test_comparison_palette",
+        background: "test_dark_bg",
+      }),
+    );
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0].slot).toBe("delta_neg");
+    expect(issues[0].message.startsWith("comparison_kpi.delta_neg:")).toBe(true);
+  });
+
+  test("hero_stat emits only the failing label slot", () => {
+    registerPalette("test_hero_label_palette", {
+      n: "Test Hero Label",
+      p: "#FFFFFF",
+      s: "#3B82F6",
+      a: "#FBBF24",
+      pos: "#0D9488",
+      neg: "#F43F5E",
+    });
+    registerBackground("test_table_header_bg", {
+      base: "#4A5058",
+      isGradient: false,
+    });
+
+    const issues = validateContrast(
+      makeDoc("hero_stat", {
+        palette: "test_hero_label_palette",
+        background: "test_table_header_bg",
+      }),
+    );
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0].slot).toBe("label");
+    expect(issues[0].message.startsWith("hero_stat.label:")).toBe(true);
+  });
+
+  test("hero_stat emits only the failing value slot when pal.p loses contrast", () => {
+    registerPalette("test_hero_value_palette", {
+      n: "Test Hero Value",
+      p: "#111318",
+      s: "#3B82F6",
+      a: "#FBBF24",
+      pos: "#0D9488",
+      neg: "#F43F5E",
+    });
+    registerBackground("test_dark_bg", {
+      base: "#0B0D11",
+      isGradient: false,
+    });
+
+    const issues = validateContrast(
+      makeDoc("hero_stat", {
+        palette: "test_hero_value_palette",
+        background: "test_dark_bg",
+      }),
+    );
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0].slot).toBe("value");
+    expect(issues[0].message.startsWith("hero_stat.value:")).toBe(true);
+  });
+
+  test("table_enriched emits only the failing rank slot when pal.p loses contrast", () => {
+    registerPalette("test_table_score_palette", {
+      n: "Test Table Score",
+      p: "#111318",
+      s: "#3B82F6",
+      a: "#FBBF24",
+      pos: "#0D9488",
+      neg: "#F43F5E",
+    });
+    registerBackground("test_dark_bg", {
+      base: "#0B0D11",
+      isGradient: false,
+    });
+
+    const issues = validateContrast(
+      makeDoc("table_enriched", {
+        palette: "test_table_score_palette",
+        background: "test_dark_bg",
+      }),
+    );
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0].slot).toBe("rank");
+    expect(issues[0].message.startsWith("table_enriched.rank:")).toBe(true);
+  });
+
+  test("table_enriched checks header separately from score and rank", () => {
+    registerPalette("test_table_header_palette", {
+      n: "Test Table Header",
+      p: "#FFFFFF",
+      s: "#3B82F6",
+      a: "#FBBF24",
+      pos: "#0D9488",
+      neg: "#F43F5E",
+    });
+    registerBackground("test_mid_bg", {
+      base: "#626871",
+      isGradient: false,
+    });
+
+    const issues = validateContrast(
+      makeDoc("table_enriched", {
+        palette: "test_table_header_palette",
+        background: "test_mid_bg",
+      }),
+    );
+
+    expect(issues).toHaveLength(2);
+    expect(issues.map((issue) => issue.slot).sort()).toEqual(["header", "metric"]);
+    expect(issues.some((issue) => issue.message.startsWith("table_enriched.header:"))).toBe(true);
+    expect(issues.every((issue) => issue.slot !== "score" && issue.slot !== "rank")).toBe(true);
+  });
+
+  test("multi-slot blocks never emit the legacy primary slot label", () => {
+    registerPalette("test_comparison_palette", {
+      n: "Test Comparison",
+      p: "#22D3EE",
+      s: "#3B82F6",
+      a: "#FBBF24",
+      pos: "#FFFFFF",
+      neg: "#111318",
+    });
+    registerPalette("test_table_score_palette", {
+      n: "Test Table Score",
+      p: "#111318",
+      s: "#3B82F6",
+      a: "#FBBF24",
+      pos: "#0D9488",
+      neg: "#F43F5E",
+    });
+    registerBackground("test_dark_bg", {
+      base: "#0B0D11",
+      isGradient: false,
+    });
+
+    const issues = [
+      ...validateContrast(
+        makeDoc("comparison_kpi", {
+          palette: "test_comparison_palette",
+          background: "test_dark_bg",
+        }),
+      ),
+      ...validateContrast(
+        makeDoc("table_enriched", {
+          palette: "test_table_score_palette",
+          background: "test_dark_bg",
+        }),
+      ),
+    ];
+
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues.every((issue) => issue.slot !== "primary")).toBe(true);
+  });
+
+  test("non-text block returns no slots and emits no issues", () => {
+    const doc = makeDoc("not_a_block", {
+      palette: "housing",
+      background: "solid_dark",
+    });
+
+    expect(getBlockTextSlots("not_a_block", PALETTES.housing)).toEqual([]);
+    expect(validateContrast(doc)).toEqual([]);
+  });
+
   test("every emitted issue has valid shape and threshold 3 or 4.5", () => {
     // Exercise the iteration path against every palette × gradient combo.
     for (const pid of Object.keys(PALETTES)) {
@@ -171,7 +456,7 @@ describe("validateContrast — integration", () => {
         doc.page.background = bg;
         const issues = validateContrast(doc);
         for (const i of issues) {
-          expect(i.message).toMatch(/\d+(\.\d+)?:1/);
+          expect(i.message).toMatch(/^[a-z_]+\.[a-z_]+: contrast \d+(\.\d+)?:1/);
           expect(i.ratio).toBeGreaterThanOrEqual(1);
           expect([3, 4.5]).toContain(i.threshold);
           expect(["error", "warning"]).toContain(i.severity);
@@ -198,3 +483,4 @@ describe("validateContrast — integration", () => {
     }
   });
 });
+

@@ -23,8 +23,15 @@ export interface ContrastIssue {
   message: string;
 }
 
-/** WCAG-style large-text block types (threshold 3:1 instead of 4.5:1). */
-const LARGE_TEXT_BLOCKS = new Set<string>(['hero_stat', 'headline_editorial']);
+/** One text role rendered by a block, with the colour it actually uses. */
+export interface BlockTextSlot {
+  /** Semantic role within the block (e.g. 'value', 'label', 'delta_pos'). */
+  slot: string;
+  /** Hex colour the renderer paints for that slot (after theme resolution). */
+  color: string;
+  /** WCAG large-text threshold applies only when the rendered slot qualifies. */
+  isLarge: boolean;
+}
 
 /** Block types that render text at all. Everything else is skipped. */
 export const TEXT_BEARING_BLOCKS = new Set<string>([
@@ -50,42 +57,58 @@ export const TEXT_BEARING_BLOCKS = new Set<string>([
  * renderer changes, the validator must update in lockstep. A divergence
  * means the validator lies. Guarded by tests.
  */
-export function getBlockTextColor(
+export function getBlockTextSlots(
   blockType: string,
   pal: Palette,
-  slot: string = 'primary',
-): string | null {
+): BlockTextSlot[] {
   switch (blockType) {
     case 'eyebrow_tag':
-      return TK.c.txtM;
+      return [{ slot: "primary", color: TK.c.txtM, isLarge: false }];
     case 'headline_editorial':
-      return TK.c.txtP;
+      return [{ slot: "primary", color: TK.c.txtP, isLarge: true }];
     case 'subtitle_descriptor':
-      return TK.c.txtS;
+      return [{ slot: "primary", color: TK.c.txtS, isLarge: false }];
     case 'hero_stat':
-      return slot === 'label' ? TK.c.txtS : pal.p;
+      return [
+        { slot: 'value', color: pal.p, isLarge: true },
+        { slot: 'label', color: TK.c.txtS, isLarge: false },
+      ];
     case 'delta_badge':
       // Direction-dependent at render time; worst case for contrast
       // is pal.neg (red) on dark bg. Use it as the representative.
-      return pal.neg;
+      return [{ slot: "primary", color: pal.neg, isLarge: false }];
     case 'body_annotation':
-      return TK.c.txtS;
+      return [{ slot: "primary", color: TK.c.txtS, isLarge: false }];
     case 'source_footer':
-      return TK.c.txtM;
+      return [{ slot: "primary", color: TK.c.txtM, isLarge: false }];
     case 'brand_stamp':
-      return TK.c.acc;
+      return [{ slot: "primary", color: TK.c.acc, isLarge: false }];
     case 'bar_horizontal':
-      return slot === 'value' ? TK.c.txtP : TK.c.txtS;
+      return [
+        { slot: 'label', color: TK.c.txtS, isLarge: false },
+        { slot: 'value', color: TK.c.txtP, isLarge: false },
+      ];
     case 'line_editorial':
-      return pal.p;
+      return [{ slot: "primary", color: pal.p, isLarge: false }];
     case 'comparison_kpi':
-      return slot === 'label' ? TK.c.txtS : pal.p;
+      return [
+        { slot: 'value', color: TK.c.txtP, isLarge: true },
+        { slot: 'delta_pos', color: pal.pos, isLarge: false },
+        { slot: 'delta_neg', color: pal.neg, isLarge: false },
+        { slot: 'label', color: TK.c.txtS, isLarge: false },
+      ];
     case 'table_enriched':
-      return slot === 'score' ? TK.c.txtP : TK.c.txtS;
+      return [
+        { slot: 'header', color: TK.c.txtS, isLarge: false },
+        { slot: 'rank', color: pal.p, isLarge: false },
+        { slot: 'cell', color: TK.c.txtP, isLarge: false },
+        { slot: 'metric', color: TK.c.txtS, isLarge: false },
+        { slot: 'score', color: TK.c.txtP, isLarge: false },
+      ];
     case 'small_multiple':
-      return TK.c.txtP;
+      return [{ slot: "primary", color: TK.c.txtP, isLarge: false }];
     default:
-      return null;
+      return [];
   }
 }
 
@@ -153,44 +176,45 @@ export function validateContrast(doc: CanonicalDocument): ContrastIssue[] {
       if (!block || !block.visible) continue;
       if (!TEXT_BEARING_BLOCKS.has(block.type)) continue;
 
-      const textColor = getBlockTextColor(block.type, pal);
-      if (!textColor) continue;
+      const textSlots = getBlockTextSlots(block.type, pal);
 
-      const isLarge = LARGE_TEXT_BLOCKS.has(block.type);
-      const threshold = isLarge ? 3.0 : 4.5;
-
-      const baseRatio = contrastRatio(textColor, bgMeta.base);
-      if (baseRatio < threshold) {
-        issues.push({
-          blockId,
-          blockType: block.type,
-          slot: 'primary',
-          textColor,
-          bgColor: bgMeta.base,
-          bgPoint: 'base',
-          ratio: round2(baseRatio),
-          threshold,
-          severity: 'error',
-          message: `${block.type}: contrast ${round2(baseRatio)}:1 against background (needs ${threshold}:1)`,
-        });
-        continue;
-      }
-
-      if (bgMeta.isGradient && bgMeta.lightestStop) {
-        const lightRatio = contrastRatio(textColor, bgMeta.lightestStop);
-        if (lightRatio < threshold) {
+      for (const { slot, color, isLarge } of textSlots) {
+        const threshold = isLarge ? 3.0 : 4.5;
+        const baseRatio = contrastRatio(color, bgMeta.base);
+        if (baseRatio < threshold) {
+          const ratio = round2(baseRatio);
           issues.push({
             blockId,
             blockType: block.type,
-            slot: 'primary',
-            textColor,
-            bgColor: bgMeta.lightestStop,
-            bgPoint: 'lightestStop',
-            ratio: round2(lightRatio),
+            slot,
+            textColor: color,
+            bgColor: bgMeta.base,
+            bgPoint: 'base',
+            ratio,
             threshold,
-            severity: 'warning',
-            message: `${block.type}: contrast ${round2(lightRatio)}:1 at gradient's lightest point (needs ${threshold}:1)`,
+            severity: 'error',
+            message: `${block.type}.${slot}: contrast ${ratio.toFixed(2)}:1 below ${threshold}:1 on ${bgMeta.base}`,
           });
+          continue;
+        }
+
+        if (bgMeta.isGradient && bgMeta.lightestStop) {
+          const lightRatio = contrastRatio(color, bgMeta.lightestStop);
+          if (lightRatio < threshold) {
+            const ratio = round2(lightRatio);
+            issues.push({
+              blockId,
+              blockType: block.type,
+              slot,
+              textColor: color,
+              bgColor: bgMeta.lightestStop,
+              bgPoint: 'lightestStop',
+              ratio,
+              threshold,
+              severity: 'warning',
+              message: `${block.type}.${slot}: contrast ${ratio.toFixed(2)}:1 below ${threshold}:1 on ${bgMeta.lightestStop}`,
+            });
+          }
         }
       }
     }
