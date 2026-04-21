@@ -34,6 +34,7 @@ All i18n keys follow this pattern: `{term}.{grammatical_role}`
 | `.placeholder` | Input placeholder | `search.placeholder` | "Search…" |
 | `.empty` | Empty state message | `publications.empty` | "No publications yet." |
 | `.confirm` | Confirmation dialog body | `delete.confirm` | "Are you sure?" |
+| `.nav` (or `nav.*`) | Navigation control label | `nav.back` | "Back" |
 
 **Rule:** A term that appears in multiple grammatical roles MUST have separate keys.
 Never share one key between a button label and a status badge.
@@ -184,14 +185,14 @@ Verbs users invoke: publish, draft, save, export, validate, review, etc.
 | Export | Экспортировать |  |  | verb | Key: export.verb — action button. |
 | Import | Импортировать |  |  | verb | Key: import.verb — action button. |
 | Preview | Предпросмотр | *(none)* | *(none)* | noun/mode | Key: preview.mode — mode toggle label, NOT a verb. Button label is the noun form. |
-| Render | Рендерить |  |  | verb | Техничный термин, приемлем как отраслевой англицизм. |
+| Render | Рендерить | Визуализировать (if public-facing context required) | *(none)* | verb | Key: render.verb — EDITOR/INTERNAL ONLY. Do not use in public-facing UI or operator onboarding copy. If a user-friendly label is needed, use "Визуализировать" from allowed variants. |
 | Sync | Синхронизировать |  |  | verb | Запустить синхронизацию. |
 | Refresh | Обновить |  |  | verb | Обновить экран/данные. |
 | Cancel | Отменить |  |  | verb | Отмена действия/диалога. |
 | Close | Закрыть |  |  | verb | Закрыть окно/панель. |
 | Open | Открыть |  |  | verb | Открыть файл/экран. |
-| Back | Назад |  |  | verb | Навигационное действие. |
-| Next | Далее |  |  | verb | Переход к следующему шагу. |
+| Back | Назад | *(none)* | *(none)* | nav | Key: nav.back — navigation control label, not a grammatical verb. Used in back-buttons and breadcrumb navigation. |
+| Next | Далее | *(none)* | *(none)* | nav | Key: nav.next — navigation control label, not a grammatical verb. Used in wizard/step navigation. |
 | Apply | Применить |  |  | verb | Применить настройки/фильтр. |
 | Reset | Сбросить |  |  | verb | Сбросить значения к исходным. |
 | Search | Найти |  |  | verb | Кнопка поиска. |
@@ -227,7 +228,7 @@ Adjectives/nouns for state display: Published, Draft, Saving, Error, etc.
 | Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Part of speech | Notes |
 |---|---|---|---|---|---|
 | Draft | Черновик |  |  | noun | Key: draft.status — badge only. |
-| Published | Опубликовано |  |  | adjective | Краткая форма для бейджа статуса. |
+| Published | Опубликовано | *(none)* | *(none)* | adjective | Key: published.status — short predicative form (краткое причастие). Gender-neutral in badge context. Agrees with publication (ср.р.) by convention; do not inflect for other genders in UI. |
 | Saving | Сохранение... |  |  | noun | Процесс в реальном времени. |
 | Saved | Сохранено |  |  | adjective | Успешное сохранение завершено. |
 | Unsaved | Не сохранено |  |  | adjective | Есть несохраненные изменения. |
@@ -236,7 +237,7 @@ Adjectives/nouns for state display: Published, Draft, Saving, Error, etc.
 | Processing | Обработка... |  |  | noun | Фоновая обработка. |
 | Error | Ошибка |  |  | noun | Ошибочное состояние. |
 | Warning | Предупреждение |  |  | noun | Неблокирующая проблема. |
-| Success | Выполнено | Успешно (toast/result adverb only) | Готово (use completed.status instead) | adjective | Key: success.status — use for operation-result badges. For toast messages use adverb form "Успешно" as allowed variant. Do NOT use as generic universal status — prefer specific states (published.status, saved.status, completed.status). |
+| Success | Выполнено | Успешно (toast/result adverb only) | Готово (use completed.status instead) | adjective | Key: success.status — use for operation-result badges. For toast messages use adverb form "Успешно" as allowed variant. Do NOT use as generic universal status — prefer specific states (published.status, saved.status, completed.status). FUTURE: avoid new usages of success.status; this key is a transitional placeholder and may be deprecated post-launch. |
 | Pending | В ожидании |  |  | adjective | Ожидание обработки/решения. |
 | Completed | Завершено |  |  | adjective | Процесс завершен полностью. |
 | Failed | Не удалось | Не выполнено (process context) | Ошибка (use `error` key instead) | adjective | Операция завершилась неуспешно. |
