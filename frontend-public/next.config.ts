@@ -1,15 +1,22 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  compiler: {
-    // Strip dev-only console output at build; keep console.error so
-    // the logError indirection in lib/log-error.ts has a working
-    // runtime channel. Every real error path already routes through
-    // logError() per Task 10b.
-    removeConsole: {
-      exclude: ["error"],
+  // Strip dev-only console output at build; keep console.error so the
+  // logError indirection in lib/log-error.ts has a working runtime
+  // channel. Scoped to NODE_ENV === "production" so it affects only
+  // production builds. Dev builds (NODE_ENV === "development") keep
+  // all console output for debuggability. Jest (NODE_ENV === "test")
+  // keeps all console output so test spies on console.warn / log /
+  // debug / info continue to function — the Next.js Compiler is used
+  // as Jest's transform via next/jest and would otherwise apply this
+  // policy to test code.
+  ...(process.env.NODE_ENV === "production" && {
+    compiler: {
+      removeConsole: {
+        exclude: ["error"],
+      },
     },
-  },
+  }),
   // NEXT_PUBLIC_API_URL is exposed to the browser via NEXT_PUBLIC_ prefix.
   // In production: https://api.summa.vision
   // In development: http://localhost:8000

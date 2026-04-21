@@ -63,7 +63,7 @@ def test_health_cors_headers() -> None:
     """An ``Origin`` header in the request should trigger CORS response headers."""
     response = client.get(
         "/api/health",
-        headers={"Origin": "https://summa.vision"},
+        headers={"Origin": "http://localhost:3000"},
     )
     assert response.status_code == 200
     assert response.headers.get("access-control-allow-origin") is not None

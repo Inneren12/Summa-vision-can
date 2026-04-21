@@ -13,14 +13,13 @@ Task 10 was split across two PRs:
 
 ## console stripping
 
-`next.config.ts` sets `compiler.removeConsole: { exclude: ['error'] }`. Effect in production builds:
+`next.config.ts` sets `compiler.removeConsole: { exclude: ['error'] }` gated on `NODE_ENV === "production"`. Effect:
 
-- `console.log/warn/debug/info` — stripped
-- `console.error` — preserved (logError uses it)
+- **Production builds** (`next build`): `console.log/warn/debug/info` stripped; `console.error` preserved (logError uses it).
+- **Dev builds** (`next dev`): all console output preserved for debuggability.
+- **Jest tests** (`NODE_ENV=test`): all console output preserved. `next/jest` loads `next.config.ts` into the transform pipeline, so without this gate the compiler would strip console calls in test code too — breaking any test that spies on `console.warn` or similar.
 
-Dev builds are unaffected.
-
-Three call sites exist:
+Three client call sites route through logError in production:
 
 - Client: `LoadMoreButton.tsx`, `METRCalculator.tsx` — routed through `logError`
 - Server: `admin/editor/[id]/page.tsx` — stays as raw `console.error` (server logs, no client impact)
