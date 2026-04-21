@@ -51,6 +51,7 @@ function makeDoc(
   };
 }
 
+// NOTE: mutates module-level registry. Safe only with sequential test execution.
 function registerPalette(id: string, palette: Palette): void {
   (PALETTES as Record<string, Palette>)[id] = palette;
 }
@@ -208,11 +209,11 @@ describe("getBlockTextSlots", () => {
     ]);
   });
 
-  test("unknown block type → null", () => {
+  test("unknown block type → []", () => {
     expect(getBlockTextSlots("not_a_block", housing)).toEqual([]);
   });
 
-  test("every TEXT_BEARING_BLOCKS entry returns a non-null colour", () => {
+  test("every TEXT_BEARING_BLOCKS entry returns at least one slot", () => {
     for (const t of TEXT_BEARING_BLOCKS) {
       expect(getBlockTextSlots(t, housing).length).toBeGreaterThan(0);
     }
@@ -471,3 +472,4 @@ describe("validateContrast — integration", () => {
     }
   });
 });
+

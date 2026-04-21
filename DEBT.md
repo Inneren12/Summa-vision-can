@@ -102,7 +102,7 @@ Rules:
 | DEBT-018 | TESTING.md coverage table is stale | Docs & Quality | 2026-04-12 |
 | DEBT-019 | Orphaned LLM infrastructure outside services/ai/ | Dead Code Cleanup | 2026-04-12 |
 | DEBT-020 | CMHC and Tasks routers still mounted for deferred features | Dead Code Cleanup | 2026-04-12 |
-| DEBT-022 | Contrast validator only checks 'primary' slot per block | main | 2026-04-21 |
+| DEBT-028 | Contrast validator only checks 'primary' slot per block | Stage 4 post-merge fix | 2026-04-21 |
 | DEBT-022 | `validateImport` dual-signature (string + throwing) | Stage 3 PR 2a (`claude/add-workflow-state-machine-mUM3P`) | 2026-04-17 |
 | DEBT-023 | `validateImportStrict` does not deep-validate `Comment` entries | Stage 3 PR 2b (`claude/recon-comments-subsystem-HwvB1`) | 2026-04-17 |
 | DEBT-024 | Rename `validateDocumentShape` → `assertCanonicalDocumentV2Shape` | Stage 3 PR 4 (`claude/reconnaissance-persistence-cleanup-EJ4uX`) | 2026-04-19 |
