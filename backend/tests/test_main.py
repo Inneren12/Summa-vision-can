@@ -23,8 +23,8 @@ def test_health_cors_headers() -> None:
     """GET /api/health with an Origin header should return CORS allow-origin."""
     response = client.get(
         "/api/health",
-        headers={"Origin": "http://localhost:3000"},
+        headers={"Origin": "https://summa.vision"},
     )
 
     assert response.status_code == 200
-    assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    assert response.headers.get("access-control-allow-origin") == "https://summa.vision"
