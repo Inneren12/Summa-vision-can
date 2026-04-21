@@ -1,9 +1,4 @@
 import type { NextConfig } from "next";
-import bundleAnalyzer from "@next/bundle-analyzer";
-
-const withBundleAnalyzer = bundleAnalyzer({
-  enabled: process.env.ANALYZE === "true",
-});
 
 const nextConfig: NextConfig = {
   // NEXT_PUBLIC_API_URL is exposed to the browser via NEXT_PUBLIC_ prefix.
@@ -35,4 +30,16 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withBundleAnalyzer(nextConfig);
+// Gate @next/bundle-analyzer behind ANALYZE=true. The package is a
+// devDep; importing it unconditionally crashes config evaluation in
+// runtime images that strip devDependencies (e.g. multi-stage Docker
+// with `npm ci --omit=dev`). Normal builds, tests, and production
+// runs never touch this module.
+let configWithAnalyzer: NextConfig = nextConfig;
+if (process.env.ANALYZE === "true") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const bundleAnalyzer = require("@next/bundle-analyzer");
+  configWithAnalyzer = bundleAnalyzer({ enabled: true })(nextConfig);
+}
+
+export default configWithAnalyzer;
