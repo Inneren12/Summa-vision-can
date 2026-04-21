@@ -13,9 +13,11 @@ This file is organised into **concept layers**. Each section belongs to exactly 
 | Technical keep-EN list | §7 Technical terms | Reference list — do not translate |
 | Plural metadata | §9 Plural forms | ARB/ICU plural blocks |
 
-**Rule:** When writing i18n keys, use the layer to determine the key namespace prefix.
-A term in §4 (action) gets an `action.*` prefix. A term in §5 (status) gets a `status.*` prefix.
-See key naming scheme below.
+**Rule:** When writing i18n keys, use the layer to determine the appropriate role suffix.
+A term in §4 (action layer) should use an action-compatible role suffix such as `.verb` or `.action`
+(e.g. `publish.verb`, `draft.action`).
+A term in §5 (status layer) should use `.status` (e.g. `published.status`, `draft.status`).
+The full key format is always `{term}.{grammatical_role}` — see key naming scheme below.
 
 ## Key naming scheme (flat namespace, variant A)
 
@@ -54,7 +56,7 @@ Status: DRAFT — pending review by founder.
 
 Terms for core platform concepts, user-facing entities, document lifecycle.
 
-| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Part of speech | Notes |
+| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Grammar / UI role | Notes |
 |---|---|---|---|---|---|
 | publication | публикация |  |  | noun | Базовый термин для опубликованного материала. |
 | graphic | графика |  |  | noun | Для отдельной визуальной единицы. |
@@ -68,7 +70,7 @@ Terms for core platform concepts, user-facing entities, document lifecycle.
 | project | проект |  |  | noun | Рабочая сущность верхнего уровня. |
 | admin panel | панель администратора | админ-панель (informal only) | *(none)* | noun | Канон: "панель администратора". |
 | gallery | галерея |  |  | noun | Экран с карточками материалов. |
-| home | Главная |  |  | noun | Nav label only, not a general term. |
+| home | Главная |  |  | noun | Key: nav.home — navigation label only, not a general-purpose term. Always rendered Title Case ("Главная") in nav menus by UI convention. Do not use lowercase "главная" as a standalone label in buttons or headings. |
 | login | вход |  |  | noun | Существительное для названия экрана/пункта. |
 | logout | выход |  |  | noun | Существительное для пункта меню аккаунта. |
 | account | аккаунт |  | учетная запись | noun | Более естественно для продукта. |
@@ -79,7 +81,7 @@ Terms for core platform concepts, user-facing entities, document lifecycle.
 
 Terms specific to the infographic editor: blocks, layouts, palettes, typography, canvas, inspector.
 
-| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Part of speech | Notes |
+| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Grammar / UI role | Notes |
 |---|---|---|---|---|---|
 | block | блок |  |  | noun | Базовый элемент конструктора. |
 | chart | график |  |  | noun | Для chart как визуализации данных. |
@@ -121,7 +123,7 @@ Terms specific to the infographic editor: blocks, layouts, palettes, typography,
 
 Terms for StatCan/CMHC datasets, cubes, data binding, data fields, publication metadata.
 
-| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Part of speech | Notes |
+| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Grammar / UI role | Notes |
 |---|---|---|---|---|---|
 | dataset | набор данных |  |  | noun | Канонический термин в data-продуктах. |
 | cube | куб |  |  | noun | Термин для многомерного статистического куба. |
@@ -156,7 +158,7 @@ Terms for StatCan/CMHC datasets, cubes, data binding, data fields, publication m
 
 Verbs users invoke: publish, draft, save, export, validate, review, etc.
 
-| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Part of speech | Notes |
+| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Grammar / UI role | Notes |
 |---|---|---|---|---|---|
 | Save | Сохранить |  |  | verb | Кнопка действия. |
 | Publish | Опубликовать |  |  | verb | Кнопка публикации. |
@@ -195,7 +197,9 @@ Verbs users invoke: publish, draft, save, export, validate, review, etc.
 | Next | Далее | *(none)* | *(none)* | nav | Key: nav.next — navigation control label, not a grammatical verb. Used in wizard/step navigation. |
 | Apply | Применить |  |  | verb | Применить настройки/фильтр. |
 | Reset | Сбросить |  |  | verb | Сбросить значения к исходным. |
-| Search | Найти |  |  | verb | Кнопка поиска. |
+| Search | Найти | *(none)* | *(none)* | verb | Key: search.verb — search button label (imperative). |
+| Search (noun) | Поиск | *(none)* | *(none)* | noun | Key: search.noun — search section heading or field label. |
+| Search placeholder | Поиск… | Найти… | *(none)* | noun | Key: search.placeholder — input placeholder text. Use ellipsis (…), not three dots (...). |
 | Filter | Фильтровать |  |  | verb | Key: filter.verb — action button. |
 | Sort | Сортировать |  |  | verb | Действие сортировки. |
 | Try again | Повторить |  |  | verb | Повторить неуспешную операцию. |
@@ -207,7 +211,7 @@ Verbs users invoke: publish, draft, save, export, validate, review, etc.
 Count-based nouns used across UI layers that do not belong to a specific domain section.
 These are referenced by the plural table in Section 9.
 
-| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Part of speech | Notes |
+| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Grammar / UI role | Notes |
 |---|---|---|---|---|---|
 | result | результат | *(none)* | *(none)* | noun | Key: result.noun |
 | item | элемент | *(none)* | *(none)* | noun | Key: item.noun — generic list element |
@@ -225,7 +229,7 @@ These are referenced by the plural table in Section 9.
 
 Adjectives/nouns for state display: Published, Draft, Saving, Error, etc.
 
-| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Part of speech | Notes |
+| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Grammar / UI role | Notes |
 |---|---|---|---|---|---|
 | Draft | Черновик |  |  | noun | Key: draft.status — badge only. |
 | Published | Опубликовано | *(none)* | *(none)* | adjective | Key: published.status — short predicative form (краткое причастие). Gender-neutral in badge context. Agrees with publication (ср.р.) by convention; do not inflect for other genders in UI. |
@@ -256,7 +260,7 @@ Adjectives/nouns for state display: Published, Draft, Saving, Error, etc.
 
 Validation messages, error types.
 
-| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Part of speech | Notes |
+| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Grammar / UI role | Notes |
 |---|---|---|---|---|---|
 | Required field | Обязательное поле |  |  | phrase | Текст валидации формы. |
 | Invalid format | Неверный формат |  |  | phrase | Ошибка структуры ввода. |
@@ -321,7 +325,7 @@ Anglicisms and technical terms that stay English in Russian UI.
 
 StatCan / CMHC / Canadian real estate specific terminology.
 
-| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Part of speech | Notes |
+| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Grammar / UI role | Notes |
 |---|---|---|---|---|---|
 | Statistics Canada | Статистическое управление Канады |  |  | noun | Официальное русское описание организации. |
 | Statistique Canada | Статистическое управление Канады |  |  | noun | Франкоязычное официальное имя, в RU можно унифицировать перевод. |
