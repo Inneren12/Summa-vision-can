@@ -65,7 +65,7 @@ Terms for core platform concepts, user-facing entities, document lifecycle.
 | document | документ |  |  | noun | Универсальный контейнер контента. |
 | template | шаблон |  |  | noun | Предустановленная заготовка. |
 | project | проект |  |  | noun | Рабочая сущность верхнего уровня. |
-| admin panel | панель администратора | админ-панель (informal only) | учетная запись | noun | Канон: "панель администратора". |
+| admin panel | панель администратора | админ-панель (informal only) | *(none)* | noun | Канон: "панель администратора". |
 | gallery | галерея |  |  | noun | Экран с карточками материалов. |
 | home | Главная |  |  | noun | Nav label only, not a general term. |
 | login | вход |  |  | noun | Существительное для названия экрана/пункта. |
@@ -73,7 +73,6 @@ Terms for core platform concepts, user-facing entities, document lifecycle.
 | account | аккаунт |  | учетная запись | noun | Более естественно для продукта. |
 | subscription | подписка |  |  | noun | Тарифная/биллинг-сущность. |
 | pricing | тарифы |  |  | noun | Для страницы с планами и ценами. |
-| item | элемент |  |  | noun | Key: item.noun |
 
 ## Section 2 — Editor & design terms
 
@@ -163,7 +162,8 @@ Verbs users invoke: publish, draft, save, export, validate, review, etc.
 | Unpublish | Снять с публикации |  | Депаблишить, Снять публикацию | verb |  |
 | Draft | Сохранить как черновик |  |  | verb | Key: draft.action — button only. |
 | Submit | Отправить |  |  | verb | Отправить на проверку/согласование. |
-| Review | На проверку | Проверить (simpler contexts) | Рецензировать (too formal for UI) | verb | Key: review.action — workflow step label. |
+| Review (action) | Проверить | *(none)* | Рецензировать (too formal for UI) | verb | Key: review.verb — imperative button label |
+| In review (status) | На проверке | На проверку (transition label) | *(none)* | noun/status | Key: review.status — workflow step badge |
 | Approve | Одобрить |  |  | verb | Подтвердить публикацию/изменение. |
 | Reject | Отклонить |  |  | verb | Отклонить запрос/изменение. |
 | Delete | Удалить |  |  | verb | Удаление сущности окончательно. |
@@ -183,7 +183,7 @@ Verbs users invoke: publish, draft, save, export, validate, review, etc.
 | Download | Скачать |  |  | verb | Скачать файл из системы. |
 | Export | Экспортировать |  |  | verb | Key: export.verb — action button. |
 | Import | Импортировать |  |  | verb | Key: import.verb — action button. |
-| Preview | Предпросмотр |  |  | verb | Key: preview.mode — mode-toggle button. |
+| Preview | Предпросмотр | *(none)* | *(none)* | noun/mode | Key: preview.mode — mode toggle label, NOT a verb. Button label is the noun form. |
 | Render | Рендерить |  |  | verb | Техничный термин, приемлем как отраслевой англицизм. |
 | Sync | Синхронизировать |  |  | verb | Запустить синхронизацию. |
 | Refresh | Обновить |  |  | verb | Обновить экран/данные. |
@@ -200,7 +200,25 @@ Verbs users invoke: publish, draft, save, export, validate, review, etc.
 | Try again | Повторить |  |  | verb | Повторить неуспешную операцию. |
 | Continue | Продолжить |  |  | verb | Продолжить сценарий. |
 | Confirm | Подтвердить |  |  | verb | Подтвердить выбор/операцию. |
-| result | результат |  |  | noun | Key: result.noun |
+
+## Section 4b — Generic UI nouns
+
+Count-based nouns used across UI layers that do not belong to a specific domain section.
+These are referenced by the plural table in Section 9.
+
+| Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Part of speech | Notes |
+|---|---|---|---|---|---|
+| result | результат | *(none)* | *(none)* | noun | Key: result.noun |
+| item | элемент | *(none)* | *(none)* | noun | Key: item.noun — generic list element |
+| change | изменение | *(none)* | *(none)* | noun | Key: change.noun |
+| issue | проблема | *(none)* | *(none)* | noun | Key: issue.noun — validation/QA context |
+| day | день | *(none)* | *(none)* | noun | Key: time.day — used in duration/date labels |
+| week | неделя | *(none)* | *(none)* | noun | Key: time.week |
+| month | месяц | *(none)* | *(none)* | noun | Key: time.month |
+| year | год | *(none)* | *(none)* | noun | Key: time.year |
+| hour | час | *(none)* | *(none)* | noun | Key: time.hour |
+| minute | минута | *(none)* | *(none)* | noun | Key: time.minute |
+| second | секунда | *(none)* | *(none)* | noun | Key: time.second |
 
 ## Section 5 — Status & state terms
 
@@ -218,7 +236,7 @@ Adjectives/nouns for state display: Published, Draft, Saving, Error, etc.
 | Processing | Обработка... |  |  | noun | Фоновая обработка. |
 | Error | Ошибка |  |  | noun | Ошибочное состояние. |
 | Warning | Предупреждение |  |  | noun | Неблокирующая проблема. |
-| Success | Успешно |  | Готово (use only for `completed`) | adjective | Короткий позитивный статус. |
+| Success | Выполнено | Успешно (toast/result adverb only) | Готово (use completed.status instead) | adjective | Key: success.status — use for operation-result badges. For toast messages use adverb form "Успешно" as allowed variant. Do NOT use as generic universal status — prefer specific states (published.status, saved.status, completed.status). |
 | Pending | В ожидании |  |  | adjective | Ожидание обработки/решения. |
 | Completed | Завершено |  |  | adjective | Процесс завершен полностью. |
 | Failed | Не удалось | Не выполнено (process context) | Ошибка (use `error` key instead) | adjective | Операция завершилась неуспешно. |
@@ -232,7 +250,6 @@ Adjectives/nouns for state display: Published, Draft, Saving, Error, etc.
 | Disconnected | Отключено | Соединение разорвано (verbose) |  | adjective |  |
 | Required | Обязательно |  |  | adjective | Обязательное поле/параметр. |
 | Optional | Необязательно |  |  | adjective | Необязательное поле/параметр. |
-| change | изменение |  |  | noun | Key: change.noun |
 
 ## Section 6 — Validation & error terms
 
@@ -258,7 +275,6 @@ Validation messages, error types.
 | unauthorized | не авторизован |  |  | phrase | Нет действительной авторизации. |
 | forbidden | доступ запрещен |  |  | phrase | Авторизация есть, но прав недостаточно. |
 | not found | не найдено |  |  | phrase | Ресурс отсутствует. |
-| issue | проблема |  |  | noun | Key: issue.noun |
 
 ## Section 7 — Technical terms (kept in English)
 
@@ -359,14 +375,14 @@ List all count-based nouns from previous sections with their three forms:
 | column | §3 | столбец | столбца | столбцов |
 | error | §6 | ошибка | ошибки | ошибок |
 | warning | §6 | предупреждение | предупреждения | предупреждений |
-| day | §9 | день | дня | дней |
-| week | §9 | неделя | недели | недель |
-| month | §9 | месяц | месяца | месяцев |
-| year | §9 | год | года | лет |
-| hour | §9 | час | часа | часов |
-| minute | §9 | минута | минуты | минут |
-| second | §9 | секунда | секунды | секунд |
-| change | §5 | изменение | изменения | изменений |
-| issue | §6 | проблема | проблемы | проблем |
-| item | §1 | элемент | элемента | элементов |
-| result | §4 | результат | результата | результатов |
+| day | §4b | день | дня | дней |
+| week | §4b | неделя | недели | недель |
+| month | §4b | месяц | месяца | месяцев |
+| year | §4b | год | года | лет |
+| hour | §4b | час | часа | часов |
+| minute | §4b | минута | минуты | минут |
+| second | §4b | секунда | секунды | секунд |
+| change | §4b | изменение | изменения | изменений |
+| issue | §4b | проблема | проблемы | проблем |
+| item | §4b | элемент | элемента | элементов |
+| result | §4b | результат | результата | результатов |
