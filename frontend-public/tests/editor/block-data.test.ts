@@ -210,7 +210,7 @@ describe("validateSmallMultipleData", () => {
   test("rejects non-finite per-item values", () => {
     const r = validateSmallMultipleData({ items: [{ label: "A", flag: "", data: [1, NaN] }] });
     expect(r.valid).toBe(false);
-    expect(hasValidationKey(r.errors, 'validation.series.non_finite_values')).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.small_multiple.non_finite_values')).toBe(true);
   });
 });
 
