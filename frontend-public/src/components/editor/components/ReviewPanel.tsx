@@ -11,7 +11,6 @@ import type {
 } from '../types';
 import { TK } from '../config/tokens';
 import {
-  blockDisplayLabel,
   buildThreads,
   CommentThreadNode,
   isThreadResolved,
@@ -122,7 +121,9 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
   const openAddCommentModal = () => {
     if (!selId) return;
     const blockType = state.doc.blocks[selId]?.type;
-    const blockLabel = blockType ? tBlockType(`${blockType}.name`) : blockDisplayLabel(blockType);
+    const blockLabel = blockType
+      ? tBlockType(`${blockType}.name`)
+      : tReview('comment.block_generic');
     onRequestNote({
       title: tReview('comment.add_on_block', { block: blockLabel }),
       label: tReview('comment.label'),
@@ -358,7 +359,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
               {tReview('comment.on_block', {
                 block: state.doc.blocks[selId]?.type
                   ? tBlockType(`${state.doc.blocks[selId].type}.name`)
-                  : blockDisplayLabel(state.doc.blocks[selId]?.type),
+                  : tReview('comment.block_generic'),
               })}
             </div>
             <button
@@ -536,7 +537,7 @@ function ThreadCard({
             textTransform: 'uppercase',
           }}
         >
-          {blockType ? tBlockType(`${blockType}.name`) : blockDisplayLabel(blockType)}
+          {blockType ? tBlockType(`${blockType}.name`) : tReview('comment.block_generic')}
         </span>
         {unresolved > 0 && (
           <span

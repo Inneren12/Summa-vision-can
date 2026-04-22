@@ -283,7 +283,8 @@
       "reopen": "Переоткрыть",
       "resolve": "Решить",
       "edit_action": "Редактировать",
-      "delete": "Удалить"
+      "delete": "Удалить",
+      "block_generic": "блок"
     },
     "reply": {
       "action": "Ответить",
@@ -419,6 +420,30 @@
       },
       "flag": {
         "title": "Флаг"
+      },
+      "text": {
+        "label": "Текст"
+      },
+      "yUnit": {
+        "label": "Единица по оси Y"
+      },
+      "unit": {
+        "label": "Единица"
+      },
+      "showBenchmark": {
+        "label": "Линия ориентира"
+      },
+      "benchmarkValue": {
+        "short_label": "Знач. ориент."
+      },
+      "benchmarkLabel": {
+        "short_label": "Подпись ориентира"
+      },
+      "showArea": {
+        "label": "Заливка области"
+      },
+      "methodology": {
+        "short_label": "Метод"
       }
     },
     "option": {
@@ -434,7 +459,9 @@
       },
       "position": {
         "bottom_left": "слева снизу",
-        "bottom_right": "справа снизу"
+        "bottom_right": "справа снизу",
+        "bottom-left": "слева снизу",
+        "bottom-right": "справа снизу"
       }
     },
     "series": {

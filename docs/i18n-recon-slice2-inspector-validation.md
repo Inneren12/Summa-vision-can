@@ -324,3 +324,25 @@ are available for dialog/menu/tooltip contexts where natural language reads bett
 
 This policy mirrors `inspector.meta.*` (TYPE/STATUS/SECTIONS/MAX) and `debug.overlay.*` from
 earlier slices — dev/chrome-facing short tokens stay EN for consistency across the tool.
+
+## Consolidated EN-kept policy (all slices)
+
+The following categories are intentionally kept in English in both locales.
+
+1. **Short toolbar/debug tokens**
+   - `SAVE`, `IMPORT`, `EXPORT`, `JSON`, `DBG`
+   - `TYPE`, `STATUS`, `SECTIONS`, `MAX`
+
+2. **Dev/debug labels and overlays**
+   - `debug.overlay.*` labels (for operator/developer diagnostics)
+   - `inspector.meta.*` compact metadata tokens
+
+3. **Operator-facing technical identifiers**
+   - JSON/import-validation field identifiers such as `xLabels`, `items`, `series`, `vals`, `label`, `value`, `data`
+   - Validation key-like prefixes used in import guard / diagnostics output
+
+4. **Data-viz terminology and template family names**
+   - `Small Multiples`
+   - template family names rendered from registry metadata (e.g. `Single Stat Hero`, `Insight Card`, `Ranked Bars`, `Line Editorial`, `Comparison`, `Visual Table`)
+
+Rationale: these strings are either compact UI chrome tokens, developer/operator diagnostics, or canonical visualization terms where forced translation reduces clarity and consistency.

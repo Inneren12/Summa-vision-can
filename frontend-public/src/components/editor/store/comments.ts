@@ -129,6 +129,10 @@ const BLOCK_LABELS: Record<string, string> = {
   small_multiple: "Small multiples",
 };
 
+/**
+ * @deprecated Dev-only helper for reducer-level audit/log text.
+ * Use `useTranslations('block.type')(\`${type}.name\`)` for user-visible labels.
+ */
 export function blockDisplayLabel(blockType: string | undefined): string {
   if (!blockType) return "block";
   return BLOCK_LABELS[blockType] ?? blockType;

@@ -15,9 +15,12 @@ export interface ValidationMessage {
   prefix?: string;
 }
 
-// Backward-compat helper for tests and debug overlay that may log raw messages.
-// Produces a human-readable string from a ValidationMessage — EN only.
-// Do NOT use this in production UI paths.
+/**
+ * Dev/debug/test-only validation message formatter. Produces EN debug strings like
+ * `validation.items.too_many (count=31, max=30)` for log lines and import-guard error text.
+ *
+ * Do NOT use in user-facing UI — use `renderValidationMessage` with a translator instead.
+ */
 export function formatValidationMessageDev(msg: ValidationMessage): string {
   const paramStr = msg.params
     ? Object.entries(msg.params).map(([k, v]) => `${k}=${v}`).join(', ')
