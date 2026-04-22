@@ -28,5 +28,48 @@
       "hydration": "Import error: {message}",
       "validation": "Import error: {message}"
     }
+  },
+  "inspector": {
+    "title": "Inspector",
+    "empty": {
+      "select_block": "Select a block",
+      "from_blocks_tab": "from Blocks tab"
+    },
+    "hidden": {
+      "status": "HIDDEN"
+    },
+    "badge": {
+      "required_locked": "REQ·🔒",
+      "required_editable": "REQ",
+      "optional_default": "OPT·ON",
+      "optional_available": "OPT"
+    },
+    "template_mode": {
+      "short": "TPL"
+    },
+    "meta": {
+      "type": "TYPE",
+      "status": "STATUS",
+      "sections": "SECTIONS",
+      "max": "MAX"
+    }
+  },
+  "right_rail": {
+    "aria_label": "Right rail",
+    "tab": {
+      "review": "Review"
+    }
+  },
+  "validation": {
+    "contrast": {
+      "title": "Contrast",
+      "gradient_suffix": " (gradient)"
+    }
+  },
+  "common": {
+    "toggle": {
+      "on": "✓ On",
+      "off": "○ Off"
+    }
   }
 }

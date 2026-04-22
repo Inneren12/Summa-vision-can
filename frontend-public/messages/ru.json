@@ -28,5 +28,48 @@
       "hydration": "Ошибка импорта: {message}",
       "validation": "Ошибка импорта: {message}"
     }
+  },
+  "inspector": {
+    "title": "Инспектор",
+    "empty": {
+      "select_block": "Выберите блок",
+      "from_blocks_tab": "из вкладки «Блоки»"
+    },
+    "hidden": {
+      "status": "СКРЫТ"
+    },
+    "badge": {
+      "required_locked": "ОБЯЗ·🔒",
+      "required_editable": "ОБЯЗ",
+      "optional_default": "ДОП·ВКЛ",
+      "optional_available": "ДОП"
+    },
+    "template_mode": {
+      "short": "ШБЛ"
+    },
+    "meta": {
+      "type": "TYPE",
+      "status": "STATUS",
+      "sections": "SECTIONS",
+      "max": "MAX"
+    }
+  },
+  "right_rail": {
+    "aria_label": "Правая панель",
+    "tab": {
+      "review": "Проверка"
+    }
+  },
+  "validation": {
+    "contrast": {
+      "title": "Контраст",
+      "gradient_suffix": " (градиент)"
+    }
+  },
+  "common": {
+    "toggle": {
+      "on": "✓ Вкл",
+      "off": "○ Выкл"
+    }
   }
 }
