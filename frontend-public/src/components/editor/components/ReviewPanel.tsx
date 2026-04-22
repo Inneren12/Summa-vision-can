@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type {
   Comment,
   EditorAction,
@@ -35,38 +36,39 @@ function describeTransition(
   from: WorkflowState,
   to: WorkflowState,
   doc: EditorState['doc'],
+  tReview: (key: string, values?: Record<string, unknown>) => string,
 ): TransitionDescriptor | null {
   if (from === 'draft' && to === 'in_review') {
-    return { kind: 'direct', action: { type: 'SUBMIT_FOR_REVIEW' }, label: '→ In review' };
+    return { kind: 'direct', action: { type: 'SUBMIT_FOR_REVIEW' }, label: tReview('transition.in_review') };
   }
   if (from === 'in_review' && to === 'approved') {
-    return { kind: 'direct', action: { type: 'APPROVE' }, label: '→ Approved' };
+    return { kind: 'direct', action: { type: 'APPROVE' }, label: tReview('transition.approved') };
   }
   if (from === 'in_review' && to === 'draft') {
     return {
       kind: 'note',
       actionType: 'REQUEST_CHANGES',
-      label: '→ Draft',
-      modalTitle: 'Request changes',
+      label: tReview('transition.draft'),
+      modalTitle: tReview('request_changes.title'),
     };
   }
   if (from === 'approved' && to === 'draft') {
     return {
       kind: 'note',
       actionType: 'RETURN_TO_DRAFT',
-      label: '→ Draft',
-      modalTitle: 'Return to draft',
+      label: tReview('transition.draft'),
+      modalTitle: tReview('return_to_draft.title'),
     };
   }
   if (from === 'approved' && to === 'exported') {
     const filename = `${doc.templateId}-${Date.now()}.png`;
-    return { kind: 'direct', action: { type: 'MARK_EXPORTED', filename }, label: '→ Exported' };
+    return { kind: 'direct', action: { type: 'MARK_EXPORTED', filename }, label: tReview('transition.exported') };
   }
   if (from === 'exported' && to === 'published') {
     return {
       kind: 'direct',
       action: { type: 'MARK_PUBLISHED', channel: 'manual' },
-      label: '→ Published',
+      label: tReview('transition.published'),
     };
   }
   return null;
@@ -98,6 +100,7 @@ export interface ReviewPanelProps {
 }
 
 export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps) {
+  const tReview = useTranslations('review');
   const [showResolved, setShowResolved] = useState<boolean>(false);
   const [historyExpanded, setHistoryExpanded] = useState<boolean>(false);
 
@@ -120,11 +123,11 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
     const blockType = state.doc.blocks[selId]?.type;
     const blockLabel = blockDisplayLabel(blockType);
     onRequestNote({
-      title: `Add comment on ${blockLabel}`,
-      label: 'Comment',
+      title: tReview('comment.add_on_block', { block: blockLabel }),
+      label: tReview('comment.label'),
       required: true,
-      submitLabel: 'Add',
-      placeholder: 'Type your comment...',
+      submitLabel: tReview('comment.add_button'),
+      placeholder: tReview('comment.placeholder'),
       onSubmit: (text) => {
         dispatch({ type: 'ADD_COMMENT', blockId: selId, text });
       },
@@ -133,11 +136,11 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
 
   const openReplyModal = (parentId: string) => {
     onRequestNote({
-      title: 'Reply to comment',
-      label: 'Reply',
+      title: tReview('reply.to_comment'),
+      label: tReview('reply.action'),
       required: true,
-      submitLabel: 'Reply',
-      placeholder: 'Type your reply...',
+      submitLabel: tReview('reply.action'),
+      placeholder: tReview('reply.placeholder'),
       onSubmit: (text) => {
         dispatch({ type: 'REPLY_TO_COMMENT', parentId, text });
       },
@@ -146,11 +149,11 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
 
   const openEditModal = (comment: Comment) => {
     onRequestNote({
-      title: 'Edit comment',
-      label: 'Comment',
+      title: tReview('comment.edit'),
+      label: tReview('comment.label'),
       required: true,
       initialValue: comment.text,
-      submitLabel: 'Save',
+      submitLabel: tReview('note.save'),
       onSubmit: (text) => {
         dispatch({ type: 'EDIT_COMMENT', commentId: comment.id, text });
       },
@@ -164,10 +167,10 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
     }
     onRequestNote({
       title: descriptor.modalTitle,
-      label: 'Note (optional)',
+      label: tReview('note.optional'),
       required: false,
-      submitLabel: 'Confirm',
-      placeholder: 'Optional context for this transition...',
+      submitLabel: tReview('note.confirm'),
+      placeholder: tReview('note.placeholder'),
       onSubmit: (text) => {
         const note = text.length > 0 ? text : undefined;
         if (descriptor.actionType === 'REQUEST_CHANGES') {
@@ -180,7 +183,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
   };
 
   const transitions = (availableTransitions(workflow) as readonly WorkflowState[])
-    .map((to) => describeTransition(workflow, to, state.doc))
+    .map((to) => describeTransition(workflow, to, state.doc, tReview))
     .filter((d): d is TransitionDescriptor => d !== null);
 
   const showDuplicate = workflow === 'exported' || workflow === 'published';
@@ -236,7 +239,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
               data-testid="transition-DUPLICATE_AS_DRAFT"
               style={transitionButtonStyle(false)}
             >
-              Duplicate as draft
+              {tReview('transition.duplicate_as_draft')}
             </button>
           )}
           {transitions.length === 0 && !showDuplicate && (
@@ -248,7 +251,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
                 textTransform: 'uppercase',
               }}
             >
-              No transitions available
+              {tReview('transitions.empty')}
             </span>
           )}
         </div>
@@ -282,7 +285,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
               letterSpacing: '0.4px',
             }}
           >
-            Threads ({visibleThreads.length})
+            {tReview('threads.title_count', { count: visibleThreads.length })}
           </span>
           <label
             style={{
@@ -301,7 +304,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
               onChange={(e) => setShowResolved(e.target.checked)}
               data-testid="show-resolved-toggle"
             />
-            Show resolved
+            {tReview('threads.show_resolved')}
           </label>
         </div>
         {visibleThreads.length === 0 && (
@@ -313,7 +316,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
               padding: '12px 0',
             }}
           >
-            No threads to show.
+            {tReview('threads.empty')}
           </div>
         )}
         {visibleThreads.map((t) => (
@@ -325,6 +328,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
             dispatch={dispatch}
             onReply={openReplyModal}
             onEdit={openEditModal}
+            tReview={tReview}
           />
         ))}
 
@@ -347,17 +351,17 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
                 marginBottom: '6px',
               }}
             >
-              On {blockDisplayLabel(state.doc.blocks[selId]?.type)}
+              {tReview('comment.on_block', { block: blockDisplayLabel(state.doc.blocks[selId]?.type) })}
             </div>
             <button
               type="button"
               onClick={openAddCommentModal}
               disabled={!canCommentNow}
-              title={canCommentNow ? 'Add comment' : commentBlockedReason}
+              title={canCommentNow ? tReview('comment.add') : commentBlockedReason}
               data-testid="add-comment-button"
               style={addCommentButtonStyle(!canCommentNow)}
             >
-              Add comment
+              {tReview('comment.add')}
             </button>
           </div>
         )}
@@ -389,7 +393,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
               letterSpacing: '0.4px',
             }}
           >
-            History ({history.length})
+            {tReview('history.title_count', { count: history.length })}
           </span>
           {history.length > HISTORY_COLLAPSED_LIMIT && (
             <button
@@ -407,8 +411,8 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
               }}
             >
               {historyExpanded
-                ? 'Collapse'
-                : `Show all ${history.length}`}
+                ? tReview('history.collapse')
+                : tReview('history.show_all', { count: history.length })}
             </button>
           )}
         </div>
@@ -421,7 +425,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
               padding: '6px 0',
             }}
           >
-            No events yet.
+            {tReview('history.empty')}
           </div>
         )}
         <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
@@ -469,6 +473,7 @@ interface ThreadCardProps {
   dispatch: React.Dispatch<EditorAction>;
   onReply: (parentId: string) => void;
   onEdit: (comment: Comment) => void;
+  tReview: (key: string, values?: Record<string, unknown>) => string;
 }
 
 function ThreadCard({
@@ -478,6 +483,7 @@ function ThreadCard({
   dispatch,
   onReply,
   onEdit,
+  tReview,
 }: ThreadCardProps) {
   const replyCheck = checkWorkflowPermission(workflow, { type: 'REPLY_TO_COMMENT' });
   const resolveCheck = checkWorkflowPermission(workflow, { type: 'RESOLVE_COMMENT' });
@@ -549,14 +555,15 @@ function ThreadCard({
         </span>
       </button>
 
-      <CommentBody
-        comment={thread}
+        <CommentBody
+          comment={thread}
         workflow={workflow}
         resolveAllowed={resolveCheck.allowed}
         resolveReason={resolveCheck.reason}
-        dispatch={dispatch}
-        onEdit={onEdit}
-      />
+          dispatch={dispatch}
+          onEdit={onEdit}
+          tReview={tReview}
+        />
 
       {thread.replies.length > 0 && (
         <div
@@ -578,6 +585,7 @@ function ThreadCard({
               resolveReason={resolveCheck.reason}
               dispatch={dispatch}
               onEdit={onEdit}
+              tReview={tReview}
             />
           ))}
         </div>
@@ -588,11 +596,11 @@ function ThreadCard({
           type="button"
           onClick={() => onReply(thread.id)}
           disabled={!replyCheck.allowed}
-          title={replyCheck.allowed ? 'Reply to thread' : replyCheck.reason}
+          title={replyCheck.allowed ? tReview('reply.to_thread') : replyCheck.reason}
           data-testid="reply-button"
           style={smallButtonStyle(!replyCheck.allowed)}
         >
-          Reply
+          {tReview('reply.action')}
         </button>
       </div>
     </div>
@@ -606,6 +614,7 @@ interface CommentBodyProps {
   resolveReason?: string;
   dispatch: React.Dispatch<EditorAction>;
   onEdit: (comment: Comment) => void;
+  tReview: (key: string, values?: Record<string, unknown>) => string;
 }
 
 function CommentBody({
@@ -615,6 +624,7 @@ function CommentBody({
   resolveReason,
   dispatch,
   onEdit,
+  tReview,
 }: CommentBodyProps) {
   const isTombstone =
     comment.author === TOMBSTONE_AUTHOR && comment.text === TOMBSTONE_TEXT;
@@ -634,7 +644,7 @@ function CommentBody({
           fontStyle: 'italic',
         }}
       >
-        Comment deleted
+        {tReview('comment.deleted')}
       </div>
     );
   }
@@ -666,7 +676,7 @@ function CommentBody({
           }}
         >
           {formatTimestamp(comment.createdAt)}
-          {comment.updatedAt ? ' (edited)' : ''}
+          {comment.updatedAt ? tReview('comment.edited_suffix') : ''}
         </span>
         {comment.resolved && (
           <span
@@ -677,7 +687,7 @@ function CommentBody({
               textTransform: 'uppercase',
             }}
           >
-            Resolved
+            {tReview('comment.resolved')}
           </span>
         )}
       </div>
@@ -698,22 +708,22 @@ function CommentBody({
             type="button"
             onClick={() => dispatch({ type: 'REOPEN_COMMENT', commentId: comment.id })}
             disabled={!resolveAllowed}
-            title={resolveAllowed ? 'Reopen' : resolveReason}
+            title={resolveAllowed ? tReview('comment.reopen') : resolveReason}
             data-testid="reopen-button"
             style={smallButtonStyle(!resolveAllowed)}
           >
-            Reopen
+            {tReview('comment.reopen')}
           </button>
         ) : (
           <button
             type="button"
             onClick={() => dispatch({ type: 'RESOLVE_COMMENT', commentId: comment.id })}
             disabled={!resolveAllowed}
-            title={resolveAllowed ? 'Resolve' : resolveReason}
+            title={resolveAllowed ? tReview('comment.resolve') : resolveReason}
             data-testid="resolve-button"
             style={smallButtonStyle(!resolveAllowed)}
           >
-            Resolve
+            {tReview('comment.resolve')}
           </button>
         )}
         {isOwn && (
@@ -722,21 +732,21 @@ function CommentBody({
               type="button"
               onClick={() => onEdit(comment)}
               disabled={!editCheck.allowed}
-              title={editCheck.allowed ? 'Edit' : editCheck.reason}
+              title={editCheck.allowed ? tReview('comment.edit_action') : editCheck.reason}
               data-testid="edit-button"
               style={smallButtonStyle(!editCheck.allowed)}
             >
-              Edit
+              {tReview('comment.edit_action')}
             </button>
             <button
               type="button"
               onClick={() => dispatch({ type: 'DELETE_COMMENT', commentId: comment.id })}
               disabled={!deleteCheck.allowed}
-              title={deleteCheck.allowed ? 'Delete' : deleteCheck.reason}
+              title={deleteCheck.allowed ? tReview('comment.delete') : deleteCheck.reason}
               data-testid="delete-button"
               style={smallButtonStyle(!deleteCheck.allowed)}
             >
-              Delete
+              {tReview('comment.delete')}
             </button>
           </>
         )}

@@ -27,7 +27,9 @@
     "error": {
       "hydration": "Import error: {message}",
       "validation": "Import error: {message}"
-    }
+    },
+    "document_json": "Import document from JSON",
+    "label_short": "IMPORT"
   },
   "inspector": {
     "title": "Inspector",
@@ -182,6 +184,125 @@
     "toggle": {
       "on": "✓ On",
       "off": "○ Off"
+    }
+  },
+  "qa": {
+    "title": "QA",
+    "expand": {
+      "aria": "Expand QA panel"
+    },
+    "mode": {
+      "aria": "QA mode"
+    },
+    "summary": {
+      "compact": "{errors} errors · {warnings} warnings"
+    }
+  },
+  "debug": {
+    "overlay": {
+      "enable": "Enable debug overlay",
+      "disable": "Disable debug overlay",
+      "on": "Debug overlay ON (Ctrl+Shift+D)",
+      "off": "Debug overlay OFF (Ctrl+Shift+D)"
+    }
+  },
+  "export": {
+    "png": {
+      "verb": "Export as PNG"
+    },
+    "document_json": "Export document as JSON",
+    "disabled": {
+      "loading_fonts": "Export disabled: loading fonts…",
+      "validation_errors": "Export disabled: {count, plural, one {# validation error} other {# validation errors}}"
+    },
+    "label_short": "EXPORT",
+    "json_label_short": "JSON"
+  },
+  "editor": {
+    "mode": {
+      "aria": "Editor mode",
+      "switch_to": "Switch to {mode} mode"
+    }
+  },
+  "undo": {
+    "verb": "Undo",
+    "shortcut": "Undo (Ctrl+Z)"
+  },
+  "redo": {
+    "verb": "Redo",
+    "shortcut": "Redo (Ctrl+Y)"
+  },
+  "save": {
+    "verb": "Save",
+    "shortcut": "Save (Ctrl+S)",
+    "label_short": "SAVE"
+  },
+  "draft": {
+    "save": {
+      "unsaved": "Save draft (unsaved changes)",
+      "unchanged": "Save draft (no changes)"
+    },
+    "status": "draft"
+  },
+  "publish": {
+    "verb": "publish"
+  },
+  "review": {
+    "transition": {
+      "in_review": "→ In review",
+      "approved": "→ Approved",
+      "draft": "→ Draft",
+      "exported": "→ Exported",
+      "published": "→ Published",
+      "duplicate_as_draft": "Duplicate as draft"
+    },
+    "transitions": {
+      "empty": "No transitions available"
+    },
+    "request_changes": {
+      "title": "Request changes"
+    },
+    "return_to_draft": {
+      "title": "Return to draft"
+    },
+    "comment": {
+      "add": "Add comment",
+      "add_button": "Add",
+      "add_on_block": "Add comment on {block}",
+      "on_block": "On {block}",
+      "label": "Comment",
+      "placeholder": "Type your comment...",
+      "edit": "Edit comment",
+      "deleted": "Comment deleted",
+      "edited_suffix": " (edited)",
+      "resolved": "Resolved",
+      "reopen": "Reopen",
+      "resolve": "Resolve",
+      "edit_action": "Edit",
+      "delete": "Delete"
+    },
+    "reply": {
+      "action": "Reply",
+      "to_comment": "Reply to comment",
+      "to_thread": "Reply to thread",
+      "placeholder": "Type your reply..."
+    },
+    "threads": {
+      "title_count": "Threads ({count})",
+      "show_resolved": "Show resolved",
+      "empty": "No threads to show."
+    },
+    "note": {
+      "optional": "Note (optional)",
+      "confirm": "Confirm",
+      "placeholder": "Optional context for this transition...",
+      "save": "Save"
+    },
+    "history": {
+      "title_count": "History ({count})",
+      "collapse": "Collapse",
+      "show_all": "Show all {count}",
+      "empty": "No events yet."
     }
   }
 }
