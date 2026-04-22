@@ -27,8 +27,8 @@ describe("editor UI a11y + import warnings", () => {
     // least one tabpanel is reachable rather than a singular one.
     expect(screen.getAllByRole("tabpanel").length).toBeGreaterThan(0);
 
-    expect(screen.getByRole("tablist", { name: /editor mode/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /import document from json/i })).toBeInTheDocument();
+    expect(screen.getByRole("tablist", { name: /editor\.mode\.aria/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /import\.document_json/i })).toBeInTheDocument();
 
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(["bad"], "bad.json", { type: "application/json" });
@@ -72,7 +72,7 @@ describe("Stage 3 PR 3 — full-tree integration", () => {
     fireEvent.click(screen.getByRole("tab", { name: /review/i }));
     fireEvent.click(screen.getByTestId("transition-SUBMIT_FOR_REVIEW"));
     // Workflow gate now blocks UNDO. Click the Undo button.
-    const undoBtn = await screen.findByRole("button", { name: /^undo$/i });
+    const undoBtn = await screen.findByRole("button", { name: /^undo\.verb$/i });
     fireEvent.click(undoBtn);
     const banner = await screen.findByTestId("notification-banner");
     expect(banner).toHaveAttribute("data-kind", "rejection");
@@ -99,7 +99,7 @@ describe("Stage 3 PR 3 — full-tree integration", () => {
     const ta = await screen.findByRole("textbox");
     await user.click(ta);
     await user.keyboard("first comment");
-    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.click(screen.getByRole("button", { name: "review.comment.add_button" }));
     // Thread appears in ReviewPanel.
     await waitFor(() => {
       expect(screen.getAllByTestId("thread-card")).toHaveLength(1);

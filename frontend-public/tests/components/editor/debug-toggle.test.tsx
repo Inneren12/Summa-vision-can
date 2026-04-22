@@ -27,9 +27,9 @@ describe('Debug overlay toggle', () => {
     setNodeEnv('development');
     const { getByText, queryByLabelText } = render(<InfographicEditor />);
     const btn = getByText('DBG').closest('button')!;
-    expect(btn.getAttribute('aria-label')).toMatch(/enable debug overlay/i);
+    expect(btn.getAttribute('aria-label')).toMatch(/debug\.overlay\.enable/i);
     fireEvent.click(btn);
-    expect(queryByLabelText(/disable debug overlay/i)).not.toBeNull();
+    expect(queryByLabelText(/debug\.overlay\.disable/i)).not.toBeNull();
   });
 
   test('DBG button hidden in production without ?debug=1', () => {
@@ -57,11 +57,11 @@ describe('Debug overlay toggle', () => {
     setNodeEnv('development');
     const { getByText, queryByLabelText } = render(<InfographicEditor />);
     expect(getByText('DBG')).toBeInTheDocument();
-    expect(queryByLabelText(/enable debug overlay/i)).not.toBeNull();
+    expect(queryByLabelText(/debug\.overlay\.enable/i)).not.toBeNull();
     fireEvent.keyDown(window, { key: 'd', ctrlKey: true, shiftKey: true });
-    expect(queryByLabelText(/disable debug overlay/i)).not.toBeNull();
+    expect(queryByLabelText(/debug\.overlay\.disable/i)).not.toBeNull();
     fireEvent.keyDown(window, { key: 'd', ctrlKey: true, shiftKey: true });
-    expect(queryByLabelText(/enable debug overlay/i)).not.toBeNull();
+    expect(queryByLabelText(/debug\.overlay\.enable/i)).not.toBeNull();
   });
 
   test('Ctrl+Shift+D is ignored in production without ?debug=1', () => {

@@ -19,7 +19,7 @@ import type { CanonicalDocument } from '@/components/editor/types';
 import { mockDocumentFontsReady } from '../../editor/components/_helpers';
 
 function getExportButton(): HTMLButtonElement {
-  return screen.getByRole('button', { name: /export as png|export disabled/i }) as HTMLButtonElement;
+  return screen.getByRole('button', { name: /export\.png\.verb|export\.disabled\./i }) as HTMLButtonElement;
 }
 
 function makeTestDoc(): CanonicalDocument {
@@ -57,7 +57,7 @@ describe('Font gate (Stage 4 Task 3)', () => {
 
       const btn = getExportButton();
       expect(btn).toBeDisabled();
-      expect(btn.getAttribute('title')).toMatch(/loading fonts/i);
+      expect(btn.getAttribute('title')).toBe('export.disabled.loading_fonts');
 
       await act(async () => {
         fonts.resolve();
@@ -65,7 +65,7 @@ describe('Font gate (Stage 4 Task 3)', () => {
       });
 
       expect(btn).not.toBeDisabled();
-      expect(btn.getAttribute('title')).toBe('Export as PNG');
+      expect(btn.getAttribute('title')).toBe('export.png.verb');
     } finally {
       fonts.restore();
     }
@@ -80,8 +80,8 @@ describe('Font gate (Stage 4 Task 3)', () => {
 
       const btn = getExportButton();
       expect(btn).toBeDisabled();
-      expect(btn.getAttribute('title')).toMatch(/validation error/i);
-      expect(btn.getAttribute('title')).not.toMatch(/loading fonts/i);
+      expect(btn.getAttribute('title')).toBe('export.disabled.validation_errors');
+      expect(btn.getAttribute('title')).not.toBe('export.disabled.loading_fonts');
 
       await act(async () => {
         fonts.resolve();
@@ -90,7 +90,7 @@ describe('Font gate (Stage 4 Task 3)', () => {
 
       // Fonts resolved but validation still blocks export.
       expect(btn).toBeDisabled();
-      expect(btn.getAttribute('title')).toMatch(/validation error/i);
+      expect(btn.getAttribute('title')).toBe('export.disabled.validation_errors');
     } finally {
       fonts.restore();
     }

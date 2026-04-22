@@ -305,3 +305,22 @@ names stay EN as stable identifiers.
 
 This applies only to operator-facing QA / import diagnostics. Pure UI labels
 ("Выберите блок", "Сохранить") continue to be fully translated.
+
+## Translation policy: short toolbar labels
+
+Short uppercase toolbar labels are kept as EN tokens in both locales:
+
+- `SAVE`, `EXPORT`, `IMPORT`, `JSON`, `DBG`
+- Any future single-word uppercase chrome label ≤ 6 characters
+
+**Rationale:** These labels function as compact tool-chrome tokens, not natural-language UI
+text. Translating `SAVE` to `СОХР` or similar abbreviations introduces cognitive friction
+without adding clarity — the button adjacency and icon context already communicate the
+action. Full verb forms (`save.verb = "Сохранить"`, `export.png.verb = "Экспортировать в PNG"`)
+are available for dialog/menu/tooltip contexts where natural language reads better.
+
+**Scope:** Applies only to uppercase ≤ 6-char toolbar tokens. Normal verb/noun labels
+(`save.verb`, `export.png.verb`, `import.document_json`) are fully translated per standard policy.
+
+This policy mirrors `inspector.meta.*` (TYPE/STATUS/SECTIONS/MAX) and `debug.overlay.*` from
+earlier slices — dev/chrome-facing short tokens stay EN for consistency across the tool.

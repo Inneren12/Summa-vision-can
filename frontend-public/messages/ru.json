@@ -27,7 +27,9 @@
     "error": {
       "hydration": "Ошибка импорта: {message}",
       "validation": "Ошибка импорта: {message}"
-    }
+    },
+    "document_json": "Импортировать документ из JSON",
+    "label_short": "IMPORT"
   },
   "inspector": {
     "title": "Инспектор",
@@ -182,6 +184,129 @@
     "toggle": {
       "on": "✓ Вкл",
       "off": "○ Выкл"
+    }
+  },
+  "qa": {
+    "title": "QA",
+    "expand": {
+      "aria": "Развернуть панель QA"
+    },
+    "mode": {
+      "aria": "Режим QA",
+      "draft": "черновик",
+      "publish": "публикация"
+    },
+    "summary": {
+      "compact": "{errors} ош. · {warnings} пред."
+    }
+  },
+  "debug": {
+    "overlay": {
+      "enable": "Enable debug overlay",
+      "disable": "Disable debug overlay",
+      "on": "Debug overlay ON (Ctrl+Shift+D)",
+      "off": "Debug overlay OFF (Ctrl+Shift+D)"
+    }
+  },
+  "export": {
+    "png": {
+      "verb": "Экспортировать в PNG"
+    },
+    "document_json": "Экспортировать документ в JSON",
+    "disabled": {
+      "loading_fonts": "Экспорт отключён: загрузка шрифтов…",
+      "validation_errors": "Экспорт отключён: {count, plural, one {# ошибка валидации} few {# ошибки валидации} many {# ошибок валидации} other {# ошибки валидации}}"
+    },
+    "label_short": "EXPORT",
+    "json_label_short": "JSON"
+  },
+  "editor": {
+    "mode": {
+      "aria": "Режим редактора",
+      "switch_to": "Переключиться в режим {mode}",
+      "template": "шаблон",
+      "design": "дизайн"
+    }
+  },
+  "undo": {
+    "verb": "Отменить",
+    "shortcut": "Отменить (Ctrl+Z)"
+  },
+  "redo": {
+    "verb": "Повторить",
+    "shortcut": "Повторить (Ctrl+Y)"
+  },
+  "save": {
+    "verb": "Сохранить",
+    "shortcut": "Сохранить (Ctrl+S)",
+    "label_short": "SAVE"
+  },
+  "draft": {
+    "save": {
+      "unsaved": "Сохранить черновик (есть несохранённые изменения)",
+      "unchanged": "Сохранить черновик (нет изменений)"
+    },
+    "status": "черновик"
+  },
+  "publish": {
+    "verb": "опубликовать"
+  },
+  "review": {
+    "transition": {
+      "in_review": "→ На проверке",
+      "approved": "→ Одобрено",
+      "draft": "→ Черновик",
+      "exported": "→ Экспортировано",
+      "published": "→ Опубликовано",
+      "duplicate_as_draft": "Дублировать как черновик"
+    },
+    "transitions": {
+      "empty": "Нет доступных переходов"
+    },
+    "request_changes": {
+      "title": "Запросить изменения"
+    },
+    "return_to_draft": {
+      "title": "Вернуть в черновик"
+    },
+    "comment": {
+      "add": "Добавить комментарий",
+      "add_button": "Добавить",
+      "add_on_block": "Добавить комментарий к блоку {block}",
+      "on_block": "К блоку {block}",
+      "label": "Комментарий",
+      "placeholder": "Введите комментарий...",
+      "edit": "Редактировать комментарий",
+      "deleted": "Комментарий удалён",
+      "edited_suffix": " (изменён)",
+      "resolved": "Решено",
+      "reopen": "Переоткрыть",
+      "resolve": "Решить",
+      "edit_action": "Редактировать",
+      "delete": "Удалить"
+    },
+    "reply": {
+      "action": "Ответить",
+      "to_comment": "Ответить на комментарий",
+      "to_thread": "Ответить в ветку",
+      "placeholder": "Введите ответ..."
+    },
+    "threads": {
+      "title_count": "Ветки ({count})",
+      "show_resolved": "Показать решённые",
+      "empty": "Нет веток для показа."
+    },
+    "note": {
+      "optional": "Примечание (необязательно)",
+      "confirm": "Подтвердить",
+      "placeholder": "Необязательный контекст для этого перехода...",
+      "save": "Сохранить"
+    },
+    "history": {
+      "title_count": "История ({count})",
+      "collapse": "Свернуть",
+      "show_all": "Показать все {count}",
+      "empty": "Событий пока нет."
     }
   }
 }
