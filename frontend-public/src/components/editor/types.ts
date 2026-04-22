@@ -131,6 +131,8 @@ export interface ControlDef {
   k: string;
   t: string;
   l: string;
+  i18nKey?: string;
+  labelKind?: 'label' | 'short_label';
   ml?: number;
   opts?: string[];
 }
@@ -189,7 +191,9 @@ export interface TemplateSection {
 export interface TemplateEntry {
   fam: string;
   vr: string;
+  variantKey: string;
   desc: string;
+  descKey: string;
   defaultPal?: string;
   defaultBg?: string;
   defaultSize?: string;

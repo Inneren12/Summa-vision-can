@@ -64,11 +64,11 @@ describe('Canvas click-to-select wiring', () => {
     // then click empty canvas area; the LeftPanel aria-pressed should flip.
     const { container, getAllByRole } = render(<InfographicEditor />);
     // Switch to Blocks tab
-    const blocksTab = getAllByRole('tab').find(t => /blocks tab/i.test(t.getAttribute('aria-label') ?? ''));
+    const blocksTab = document.getElementById('left-tab-blocks');
     expect(blocksTab).toBeDefined();
     fireEvent.click(blocksTab!);
 
-    const selectButtons = getAllByRole('button').filter(b => /^Select block/i.test(b.getAttribute('aria-label') ?? ''));
+    const selectButtons = getAllByRole('button').filter(b => /^block\.select\.aria/i.test(b.getAttribute('aria-label') ?? ''));
     expect(selectButtons.length).toBeGreaterThan(0);
     fireEvent.click(selectButtons[0]);
     expect(selectButtons[0].getAttribute('aria-pressed')).toBe('true');

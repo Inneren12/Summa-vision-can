@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import type { Direction, KPIItem } from '../../types';
 import { TK } from '../../config/tokens';
 import { makeId } from '../../utils/ids';
@@ -15,6 +16,9 @@ interface KPIItemsEditorProps {
 }
 
 export function KPIItemsEditor({ items, onChange, canEditValues, canEditStructure }: KPIItemsEditorProps) {
+  const tKpiCards = useTranslations('block.kpi_cards');
+  const tField = useTranslations('block.field');
+  const tKpi = useTranslations('block.kpi');
   const upd = <K extends keyof KPIItem>(idx: number, key: K, val: KPIItem[K]) => {
     const next = [...items];
     next[idx] = { ...next[idx], [key]: val };
@@ -26,7 +30,7 @@ export function KPIItemsEditor({ items, onChange, canEditValues, canEditStructur
     onChange([
       ...items,
       {
-        label: "New Metric",
+        label: tKpi('new_metric.default_label'),
         value: "0",
         delta: "",
         direction: "neutral" as Direction,
@@ -44,7 +48,7 @@ export function KPIItemsEditor({ items, onChange, canEditValues, canEditStructur
   const sty: React.CSSProperties = { fontSize: "9px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.txtP, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", padding: "3px 5px", outline: "none", boxSizing: "border-box" };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-      <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase" }}>KPI CARDS ({items.length})</div>
+      <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase" }}>{tKpiCards('title_count', { count: items.length })}</div>
       {items.map((it, i) => (
         <div key={it._id} style={{ padding: "4px", border: `1px solid ${TK.c.brd}`, borderRadius: "3px", marginBottom: "3px", position: "relative" }}>
           {/* Remove button — only in structural-edit mode (Design) */}
@@ -63,13 +67,13 @@ export function KPIItemsEditor({ items, onChange, canEditValues, canEditStructur
                 fontSize: "10px",
                 padding: "2px 4px",
               }}
-              title="Remove KPI"
+              title={tKpi('remove.title')}
             >{"\u00D7"}</button>
           )}
-          <input value={it.label} onChange={e => canEditValues && upd(i, "label", e.target.value)} placeholder="Label" style={{ ...sty, width: "100%", marginBottom: "2px" }} disabled={!canEditValues} />
+          <input value={it.label} onChange={e => canEditValues && upd(i, "label", e.target.value)} placeholder={tField('label.placeholder')} style={{ ...sty, width: "100%", marginBottom: "2px" }} disabled={!canEditValues} />
           <div style={{ display: "flex", gap: "2px" }}>
-            <input value={it.value} onChange={e => canEditValues && upd(i, "value", e.target.value)} placeholder="Value" style={{ ...sty, flex: 1 }} disabled={!canEditValues} />
-            <input value={it.delta} onChange={e => canEditValues && upd(i, "delta", e.target.value)} placeholder="Delta" style={{ ...sty, flex: 1 }} disabled={!canEditValues} />
+            <input value={it.value} onChange={e => canEditValues && upd(i, "value", e.target.value)} placeholder={tField('value.placeholder')} style={{ ...sty, flex: 1 }} disabled={!canEditValues} />
+            <input value={it.delta} onChange={e => canEditValues && upd(i, "delta", e.target.value)} placeholder={tField('delta.placeholder')} style={{ ...sty, flex: 1 }} disabled={!canEditValues} />
             <select value={it.direction} onChange={e => canEditValues && upd(i, "direction", e.target.value as Direction)} style={{ ...sty, width: "50px" }} disabled={!canEditValues}>
               <option value="positive">{"\u2191"}</option><option value="negative">{"\u2193"}</option><option value="neutral">{"\u2013"}</option>
             </select>
@@ -92,7 +96,7 @@ export function KPIItemsEditor({ items, onChange, canEditValues, canEditStructur
             cursor: "pointer",
             width: "100%",
           }}
-        >+ ADD KPI</button>
+        >{tKpi('add.action')}</button>
       )}
     </div>
   );

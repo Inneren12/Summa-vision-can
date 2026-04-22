@@ -253,11 +253,11 @@
   },
   "review": {
     "transition": {
-      "in_review": "→ На проверке",
-      "approved": "→ Одобрено",
-      "draft": "→ Черновик",
-      "exported": "→ Экспортировано",
-      "published": "→ Опубликовано",
+      "in_review": "На проверке",
+      "approved": "Одобрено",
+      "draft": "Черновик",
+      "exported": "Экспортировано",
+      "published": "Опубликовано",
       "duplicate_as_draft": "Дублировать как черновик"
     },
     "transitions": {
@@ -307,6 +307,277 @@
       "collapse": "Свернуть",
       "show_all": "Показать все {count}",
       "empty": "Событий пока нет."
+    },
+    "unresolved_comments": {
+      "title_count": "{count, plural, one {# нерешённый комментарий} few {# нерешённых комментария} many {# нерешённых комментариев} other {# нерешённых комментариев}}"
+    }
+  },
+  "block": {
+    "type": {
+      "eyebrow_tag": {
+        "name": "Надзаголовок"
+      },
+      "headline_editorial": {
+        "name": "Заголовок"
+      },
+      "subtitle_descriptor": {
+        "name": "Подзаголовок"
+      },
+      "hero_stat": {
+        "name": "Ключевой показатель"
+      },
+      "delta_badge": {
+        "name": "Маркер изменения"
+      },
+      "body_annotation": {
+        "name": "Аннотация"
+      },
+      "source_footer": {
+        "name": "Источник"
+      },
+      "brand_stamp": {
+        "name": "Бренд"
+      },
+      "bar_horizontal": {
+        "name": "Ранжированная диаграмма"
+      },
+      "line_editorial": {
+        "name": "Линейный график"
+      },
+      "comparison_kpi": {
+        "name": "KPI-сравнение"
+      },
+      "table_enriched": {
+        "name": "Визуальная таблица"
+      },
+      "small_multiple": {
+        "name": "Small Multiples"
+      }
+    },
+    "field": {
+      "headline": {
+        "label": "Заголовок"
+      },
+      "subtitle": {
+        "label": "Подзаголовок"
+      },
+      "tag": {
+        "label": "Метка"
+      },
+      "value": {
+        "label": "Значение",
+        "placeholder": "Значение",
+        "title": "Значение"
+      },
+      "label": {
+        "label": "Метка",
+        "placeholder": "Метка",
+        "title": "Метка"
+      },
+      "delta": {
+        "label": "Изменение",
+        "placeholder": "Изменение"
+      },
+      "source": {
+        "label": "Источник"
+      },
+      "note": {
+        "label": "Примечание"
+      },
+      "align": {
+        "label": "Выравнивание"
+      },
+      "y_unit": {
+        "label": "Единица по оси Y"
+      },
+      "unit_suffix": {
+        "label": "Суффикс единицы"
+      },
+      "position": {
+        "label": "Позиция"
+      },
+      "direction": {
+        "short_label": "Напр."
+      },
+      "method": {
+        "short_label": "Метод"
+      },
+      "benchmark_line": {
+        "label": "Линия ориентира"
+      },
+      "benchmark_value": {
+        "short_label": "Знач. ориент."
+      },
+      "benchmark_label": {
+        "short_label": "Подпись ориентира"
+      },
+      "area_fill": {
+        "label": "Заливка области"
+      },
+      "highlight": {
+        "title": "Выделить"
+      },
+      "flag": {
+        "title": "Флаг"
+      }
+    },
+    "option": {
+      "align": {
+        "left": "по левому краю",
+        "center": "по центру",
+        "right": "по правому краю"
+      },
+      "direction": {
+        "positive": "положительный",
+        "negative": "отрицательный",
+        "neutral": "нейтральный"
+      },
+      "position": {
+        "bottom_left": "слева снизу",
+        "bottom_right": "справа снизу"
+      }
+    },
+    "series": {
+      "role": {
+        "primary": "основной",
+        "benchmark": "ориентир",
+        "secondary": "вторичный"
+      },
+      "title_count": "РЯДЫ ({count})",
+      "remove": {
+        "title": "Удалить ряд"
+      },
+      "name": {
+        "placeholder": "Название ряда"
+      },
+      "values": {
+        "comma_hint": {
+          "title": "значения через запятую"
+        }
+      },
+      "add": {
+        "action": "+ ДОБАВИТЬ РЯД"
+      },
+      "new": {
+        "default_label": "Новый ряд"
+      }
+    },
+    "x_labels": {
+      "title": "ПОДПИСИ ОСИ X",
+      "comma_hint": {
+        "title": "подписи через запятую"
+      }
+    },
+    "data_items": {
+      "title_count": "ЭЛЕМЕНТЫ ДАННЫХ ({count})"
+    },
+    "item": {
+      "remove": {
+        "title": "Удалить"
+      },
+      "add": {
+        "action": "+ ДОБАВИТЬ ЭЛЕМЕНТ"
+      },
+      "new": {
+        "default_label": "Новый"
+      }
+    },
+    "kpi_cards": {
+      "title_count": "KPI-КАРТОЧКИ ({count})"
+    },
+    "kpi": {
+      "remove": {
+        "title": "Удалить KPI"
+      },
+      "add": {
+        "action": "+ ДОБАВИТЬ KPI"
+      },
+      "new_metric": {
+        "default_label": "Новая метрика"
+      }
+    },
+    "select": {
+      "aria": "Выбрать блок: {name}"
+    },
+    "visibility": {
+      "hide": {
+        "aria": "Скрыть {name}",
+        "title": "Скрыть блок"
+      },
+      "show": {
+        "aria": "Показать {name}",
+        "title": "Показать блок"
+      }
+    }
+  },
+  "left_panel": {
+    "sections": {
+      "aria": "Разделы левой панели"
+    },
+    "tab": {
+      "templates": {
+        "short": "Tpl"
+      },
+      "blocks": {
+        "short": "Blk"
+      },
+      "theme": {
+        "short": "Thm"
+      },
+      "aria": "вкладка {name}"
+    },
+    "footer": {
+      "summary": "v{schema} · {sections} разд · {blocks} бл"
+    }
+  },
+  "theme": {
+    "palette": {
+      "title": "Палитра"
+    },
+    "background": {
+      "title": "Фон"
+    },
+    "size": {
+      "title": "Размер"
+    },
+    "option": {
+      "palette": {
+        "aria": "Палитра: {name}"
+      },
+      "background": {
+        "aria": "Фон: {name}"
+      },
+      "size": {
+        "aria": "Размер: {name} {width}x{height}"
+      }
+    }
+  },
+  "template": {
+    "variant": {
+      "number_plus_delta": "Число + изменение",
+      "number_plus_note": "Число + примечание",
+      "minimal": "Минимальный",
+      "before_after": "До / После",
+      "fact_context": "Факт + контекст",
+      "social_post": "Пост в соцсеть",
+      "simple_ranking": "Простой рейтинг",
+      "single_plus_area": "Один ряд + заливка",
+      "three_kpi_cards": "3 KPI-карточки",
+      "heatmap_rankings": "Тепловой рейтинг",
+      "2x3_grid": "Сетка 2×3"
+    },
+    "desc": {
+      "giant_number_with_change": "Огромное число с изменением",
+      "number_with_annotation": "Число с аннотацией",
+      "clean_centered": "Чистый центрированный макет",
+      "two_numbers_contrasted": "Сопоставление двух значений",
+      "key_insight_with_analysis": "Ключевой вывод с аналитикой",
+      "shareable_stat": "Статистика для публикации",
+      "horizontal_bars_by_value": "Горизонтальные бары по значению",
+      "time_series_with_area_fill": "Временной ряд с заливкой",
+      "three_metrics_side_by_side": "Три метрики рядом",
+      "table_with_conditional_format": "Таблица с условным форматированием",
+      "same_chart_repeated": "Повтор одного графика"
     }
   }
 }

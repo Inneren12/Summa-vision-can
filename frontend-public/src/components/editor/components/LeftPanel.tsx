@@ -1,6 +1,7 @@
 'use client';
 
 import React, { memo, useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import type { CanonicalDocument, EditorAction, PermissionSet, BlockRegistryEntry, LeftTab, TemplateEntry } from '../types';
 import { TK } from '../config/tokens';
 import { PALETTES } from '../config/palettes';
@@ -8,6 +9,7 @@ import { BGS } from '../config/backgrounds';
 import { SIZES } from '../config/sizes';
 import { BREG } from '../registry/blocks';
 import { TPLS } from '../registry/templates';
+import { badgeColor, badgeLabel } from '../utils/badge';
 import {
   buildThreads,
   isThreadResolved,
@@ -38,15 +40,17 @@ interface LeftPanelProps {
   effectivePerms: PermissionSet;
 }
 
-function badge(st: string) {
-  const c: Record<string, string> = { required_locked: TK.c.err, required_editable: TK.c.acc, optional_default: TK.c.pos, optional_available: TK.c.txtM };
-  const l: Record<string, string> = { required_locked: "REQ\u00B7\uD83D\uDD12", required_editable: "REQ", optional_default: "OPT\u00B7ON", optional_available: "OPT" };
-  return { color: c[st] || TK.c.txtM, label: l[st] || st };
-}
-
 const tb = (a: boolean): React.CSSProperties => ({ padding: "5px 7px", fontSize: "8px", fontFamily: TK.font.data, textTransform: "uppercase", letterSpacing: "0.4px", cursor: "pointer", background: a ? TK.c.bgAct : "transparent", color: a ? TK.c.acc : TK.c.txtM, border: "none", borderBottom: a ? `2px solid ${TK.c.acc}` : "2px solid transparent", whiteSpace: "nowrap" });
 
 function LeftPanelImpl({ doc, dispatch, selId, ltab, setLtab, effectivePerms }: LeftPanelProps) {
+  const tLeftPanel = useTranslations('left_panel');
+  const tBlock = useTranslations('block');
+  const tBlockType = useTranslations('block.type');
+  const tInspector = useTranslations('inspector');
+  const tTheme = useTranslations('theme');
+  const tReview = useTranslations('review');
+  const tTemplateVariant = useTranslations('template.variant');
+  const tTemplateDesc = useTranslations('template.desc');
   const canToggle = (reg: BlockRegistryEntry) => effectivePerms.toggleVisibility(reg);
 
   const unresolvedByBlock = useMemo(() => {
@@ -71,8 +75,12 @@ function LeftPanelImpl({ doc, dispatch, selId, ltab, setLtab, effectivePerms }: 
 
   return (
     <div style={{ width: "220px", minWidth: "220px", borderRight: `1px solid ${TK.c.brd}`, display: "flex", flexDirection: "column" }}>
-      <div role="tablist" aria-label="Left panel sections" style={{ display: "flex", borderBottom: `1px solid ${TK.c.brd}` }}>
-        {([["templates", "Tpl"], ["blocks", "Blk"], ["theme", "Thm"]] as const).map(([k, l]) => <button type="button" key={k} id={tabIds[k]} role="tab" aria-selected={ltab === k} aria-controls={panelIds[k]} aria-label={`${k} tab`} onClick={() => setLtab(k)} style={tb(ltab === k)}>{l}</button>)}
+      <div role="tablist" aria-label={tLeftPanel('sections.aria')} style={{ display: "flex", borderBottom: `1px solid ${TK.c.brd}` }}>
+        {([
+          ["templates", tLeftPanel('tab.templates.short')],
+          ["blocks", tLeftPanel('tab.blocks.short')],
+          ["theme", tLeftPanel('tab.theme.short')],
+        ] as const).map(([k, l]) => <button type="button" key={k} id={tabIds[k]} role="tab" aria-selected={ltab === k} aria-controls={panelIds[k]} aria-label={tLeftPanel('tab.aria', { name: l })} onClick={() => setLtab(k)} style={tb(ltab === k)}>{l}</button>)}
       </div>
       <div
         id={panelIds[ltab]}
@@ -84,9 +92,9 @@ function LeftPanelImpl({ doc, dispatch, selId, ltab, setLtab, effectivePerms }: 
           <div key={f} style={{ marginBottom: "10px" }}>
             <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: "3px" }}>{f}</div>
             <div role="radiogroup" aria-label={`${f} templates`}>
-              {ts.map(t => <button type="button" role="radio" key={t.id} onClick={() => effectivePerms.switchTemplate && dispatch({ type: "SWITCH_TPL", tid: t.id })} disabled={!effectivePerms.switchTemplate} aria-label={`Template ${t.vr} — ${t.desc}`} aria-checked={doc.templateId === t.id} style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 8px", marginBottom: "2px", background: doc.templateId === t.id ? TK.c.bgAct : TK.c.bgSurf, border: `1px solid ${doc.templateId === t.id ? TK.c.acc + "40" : TK.c.brd}`, borderRadius: "4px", cursor: effectivePerms.switchTemplate ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: (!effectivePerms.switchTemplate && doc.templateId !== t.id) ? 0.4 : 1 }}>
-                <div style={{ fontSize: "10px", fontWeight: 500 }}>{t.vr}</div>
-                <div style={{ fontSize: "8px", color: TK.c.txtM, marginTop: "1px" }}>{t.desc}</div>
+              {ts.map(t => <button type="button" role="radio" key={t.id} onClick={() => effectivePerms.switchTemplate && dispatch({ type: "SWITCH_TPL", tid: t.id })} disabled={!effectivePerms.switchTemplate} aria-label={`Template ${tTemplateVariant(t.variantKey)} — ${tTemplateDesc(t.descKey)}`} aria-checked={doc.templateId === t.id} style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 8px", marginBottom: "2px", background: doc.templateId === t.id ? TK.c.bgAct : TK.c.bgSurf, border: `1px solid ${doc.templateId === t.id ? TK.c.acc + "40" : TK.c.brd}`, borderRadius: "4px", cursor: effectivePerms.switchTemplate ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: (!effectivePerms.switchTemplate && doc.templateId !== t.id) ? 0.4 : 1 }}>
+                <div style={{ fontSize: "10px", fontWeight: 500 }}>{tTemplateVariant(t.variantKey)}</div>
+                <div style={{ fontSize: "8px", color: TK.c.txtM, marginTop: "1px" }}>{tTemplateDesc(t.descKey)}</div>
               </button>)}
             </div>
           </div>
@@ -99,22 +107,21 @@ function LeftPanelImpl({ doc, dispatch, selId, ltab, setLtab, effectivePerms }: 
               if (!b) return null;
               const r = BREG[b.type];
               if (!r) return null;
-              const bd = badge(r.status);
               const unresolved = unresolvedByBlock.get(bid) ?? 0;
               return (
                 <div key={bid} style={{ display: "flex", alignItems: "center", gap: "3px", marginBottom: "1px" }}>
-                  <button type="button" onClick={() => dispatch({ type: "SELECT", blockId: bid })} aria-label={`Select block: ${r.name}`} aria-pressed={selId === bid} style={{ flex: 1, display: "flex", alignItems: "center", gap: "4px", textAlign: "left", padding: "4px 6px", fontSize: "9px", background: selId === bid ? TK.c.bgAct : "transparent", border: selId === bid ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: "pointer", color: b.visible ? TK.c.txtP : TK.c.txtM, textDecoration: b.visible ? "none" : "line-through", opacity: b.visible ? 1 : .5 }}>
-                    <span style={{ fontSize: "6px", color: bd.color }}>{bd.label}</span><span>{r.name}</span>
+                  <button type="button" onClick={() => dispatch({ type: "SELECT", blockId: bid })} aria-label={tBlock('select.aria', { name: tBlockType(`${b.type}.name`) })} aria-pressed={selId === bid} style={{ flex: 1, display: "flex", alignItems: "center", gap: "4px", textAlign: "left", padding: "4px 6px", fontSize: "9px", background: selId === bid ? TK.c.bgAct : "transparent", border: selId === bid ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: "pointer", color: b.visible ? TK.c.txtP : TK.c.txtM, textDecoration: b.visible ? "none" : "line-through", opacity: b.visible ? 1 : .5 }}>
+                    <span style={{ fontSize: "6px", color: badgeColor(r.status, TK.c) }}>{badgeLabel(tInspector, r.status)}</span><span>{tBlockType(`${b.type}.name`)}</span>
                     {unresolved > 0 && (
                       <span
                         data-testid="block-unresolved-pill"
                         data-block-id={bid}
-                        title={`${unresolved} unresolved comment${unresolved === 1 ? "" : "s"}`}
+                        title={tReview('unresolved_comments.title_count', { count: unresolved })}
                         style={{ marginLeft: "auto", padding: "1px 5px", background: TK.c.accM, color: TK.c.acc, borderRadius: "2px", fontFamily: TK.font.data, fontSize: "8px" }}
                       >{unresolved}</span>
                     )}
                   </button>
-                  {canToggle(r) && <button type="button" onClick={() => dispatch({ type: "TOGGLE_VIS", blockId: bid })} aria-label={b.visible ? `Hide ${r.name}` : `Show ${r.name}`} aria-pressed={b.visible} title={b.visible ? "Hide block" : "Show block"} style={{ background: "none", border: "none", color: b.visible ? TK.c.pos : TK.c.txtM, cursor: "pointer", fontSize: "10px", padding: "2px 4px" }}>{b.visible ? "\u25C9" : "\u25CB"}</button>}
+                  {canToggle(r) && <button type="button" onClick={() => dispatch({ type: "TOGGLE_VIS", blockId: bid })} aria-label={b.visible ? tBlock('visibility.hide.aria', { name: tBlockType(`${b.type}.name`) }) : tBlock('visibility.show.aria', { name: tBlockType(`${b.type}.name`) })} aria-pressed={b.visible} title={b.visible ? tBlock('visibility.hide.title') : tBlock('visibility.show.title')} style={{ background: "none", border: "none", color: b.visible ? TK.c.pos : TK.c.txtM, cursor: "pointer", fontSize: "10px", padding: "2px 4px" }}>{b.visible ? "\u25C9" : "\u25CB"}</button>}
                 </div>
               );
             })}
@@ -123,22 +130,26 @@ function LeftPanelImpl({ doc, dispatch, selId, ltab, setLtab, effectivePerms }: 
         {ltab === "theme" && (
           <>
             <div style={{ marginBottom: "10px" }}>
-              <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginBottom: "3px" }}>Palette</div>
-              {Object.entries(PALETTES).map(([k, v]) => <button type="button" key={k} onClick={() => effectivePerms.changePalette && dispatch({ type: "CHANGE_PAGE", key: "palette", value: k })} disabled={!effectivePerms.changePalette} aria-label={`Palette: ${v.n}`} aria-pressed={doc.page.palette === k} style={{ display: "flex", alignItems: "center", gap: "6px", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.palette === k ? TK.c.bgAct : "transparent", border: doc.page.palette === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: effectivePerms.changePalette ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: effectivePerms.changePalette ? 1 : 0.5 }}><div style={{ width: "10px", height: "10px", borderRadius: "2px", background: v.p }} />{v.n}</button>)}
+              <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginBottom: "3px" }}>{tTheme('palette.title')}</div>
+              {Object.entries(PALETTES).map(([k, v]) => <button type="button" key={k} onClick={() => effectivePerms.changePalette && dispatch({ type: "CHANGE_PAGE", key: "palette", value: k })} disabled={!effectivePerms.changePalette} aria-label={tTheme('option.palette.aria', { name: v.n })} aria-pressed={doc.page.palette === k} style={{ display: "flex", alignItems: "center", gap: "6px", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.palette === k ? TK.c.bgAct : "transparent", border: doc.page.palette === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: effectivePerms.changePalette ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: effectivePerms.changePalette ? 1 : 0.5 }}><div style={{ width: "10px", height: "10px", borderRadius: "2px", background: v.p }} />{v.n}</button>)}
             </div>
             <div style={{ marginBottom: "10px" }}>
-              <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginBottom: "3px" }}>Background</div>
-              {Object.entries(BGS).map(([k, v]) => <button type="button" key={k} onClick={() => effectivePerms.changeBackground && dispatch({ type: "CHANGE_PAGE", key: "background", value: k })} disabled={!effectivePerms.changeBackground} aria-label={`Background: ${v.n}`} aria-pressed={doc.page.background === k} style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.background === k ? TK.c.bgAct : "transparent", border: doc.page.background === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: effectivePerms.changeBackground ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: effectivePerms.changeBackground ? 1 : 0.5 }}>{v.n}</button>)}
+              <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginBottom: "3px" }}>{tTheme('background.title')}</div>
+              {Object.entries(BGS).map(([k, v]) => <button type="button" key={k} onClick={() => effectivePerms.changeBackground && dispatch({ type: "CHANGE_PAGE", key: "background", value: k })} disabled={!effectivePerms.changeBackground} aria-label={tTheme('option.background.aria', { name: v.n })} aria-pressed={doc.page.background === k} style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.background === k ? TK.c.bgAct : "transparent", border: doc.page.background === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: effectivePerms.changeBackground ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: effectivePerms.changeBackground ? 1 : 0.5 }}>{v.n}</button>)}
             </div>
             <div>
-              <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginBottom: "3px" }}>Size</div>
-              {Object.entries(SIZES).map(([k, v]) => <button type="button" key={k} onClick={() => effectivePerms.changeSize && dispatch({ type: "CHANGE_PAGE", key: "size", value: k })} disabled={!effectivePerms.changeSize} aria-label={`Size: ${v.n} ${v.w}x${v.h}`} aria-pressed={doc.page.size === k} style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.size === k ? TK.c.bgAct : "transparent", border: doc.page.size === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: effectivePerms.changeSize ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: effectivePerms.changeSize ? 1 : 0.5 }}>{v.n} <span style={{ color: TK.c.txtM }}>{v.w}{"\u00D7"}{v.h}</span></button>)}
+              <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginBottom: "3px" }}>{tTheme('size.title')}</div>
+              {Object.entries(SIZES).map(([k, v]) => <button type="button" key={k} onClick={() => effectivePerms.changeSize && dispatch({ type: "CHANGE_PAGE", key: "size", value: k })} disabled={!effectivePerms.changeSize} aria-label={tTheme('option.size.aria', { name: v.n, width: v.w, height: v.h })} aria-pressed={doc.page.size === k} style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.size === k ? TK.c.bgAct : "transparent", border: doc.page.size === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: effectivePerms.changeSize ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: effectivePerms.changeSize ? 1 : 0.5 }}>{v.n} <span style={{ color: TK.c.txtM }}>{v.w}{"\u00D7"}{v.h}</span></button>)}
             </div>
           </>
         )}
       </div>
       <div style={{ padding: "4px 8px", borderTop: `1px solid ${TK.c.brd}`, fontSize: "7px", fontFamily: TK.font.data, color: TK.c.txtM }}>
-        v{doc.schemaVersion} {"\u00B7"} {doc.sections.length}sec {"\u00B7"} {Object.keys(doc.blocks).length}blk
+        {tLeftPanel('footer.summary', {
+          schema: doc.schemaVersion,
+          sections: doc.sections.length,
+          blocks: Object.keys(doc.blocks).length,
+        })}
       </div>
     </div>
   );

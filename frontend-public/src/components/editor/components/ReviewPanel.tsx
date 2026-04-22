@@ -101,6 +101,7 @@ export interface ReviewPanelProps {
 
 export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps) {
   const tReview = useTranslations('review');
+  const tBlockType = useTranslations('block.type');
   const [showResolved, setShowResolved] = useState<boolean>(false);
   const [historyExpanded, setHistoryExpanded] = useState<boolean>(false);
 
@@ -121,7 +122,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
   const openAddCommentModal = () => {
     if (!selId) return;
     const blockType = state.doc.blocks[selId]?.type;
-    const blockLabel = blockDisplayLabel(blockType);
+    const blockLabel = blockType ? tBlockType(`${blockType}.name`) : blockDisplayLabel(blockType);
     onRequestNote({
       title: tReview('comment.add_on_block', { block: blockLabel }),
       label: tReview('comment.label'),
@@ -218,6 +219,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
               t.kind === 'direct' ? t.action.type : t.actionType;
             const probe = checkWorkflowPermission(workflow, { type: actionType });
             const disabled = !probe.allowed;
+            const showArrow = actionType !== 'DUPLICATE_AS_DRAFT';
             return (
               <button
                 key={`${t.label}_${actionType}`}
@@ -228,6 +230,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
                 data-testid={`transition-${actionType}`}
                 style={transitionButtonStyle(disabled)}
               >
+                {showArrow && <span aria-hidden="true">→ </span>}
                 {t.label}
               </button>
             );
@@ -329,6 +332,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
             onReply={openReplyModal}
             onEdit={openEditModal}
             tReview={tReview}
+            tBlockType={tBlockType}
           />
         ))}
 
@@ -351,7 +355,11 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
                 marginBottom: '6px',
               }}
             >
-              {tReview('comment.on_block', { block: blockDisplayLabel(state.doc.blocks[selId]?.type) })}
+              {tReview('comment.on_block', {
+                block: state.doc.blocks[selId]?.type
+                  ? tBlockType(`${state.doc.blocks[selId].type}.name`)
+                  : blockDisplayLabel(state.doc.blocks[selId]?.type),
+              })}
             </div>
             <button
               type="button"
@@ -474,6 +482,7 @@ interface ThreadCardProps {
   onReply: (parentId: string) => void;
   onEdit: (comment: Comment) => void;
   tReview: (key: string, values?: Record<string, unknown>) => string;
+  tBlockType: (key: string, values?: Record<string, unknown>) => string;
 }
 
 function ThreadCard({
@@ -484,6 +493,7 @@ function ThreadCard({
   onReply,
   onEdit,
   tReview,
+  tBlockType,
 }: ThreadCardProps) {
   const replyCheck = checkWorkflowPermission(workflow, { type: 'REPLY_TO_COMMENT' });
   const resolveCheck = checkWorkflowPermission(workflow, { type: 'RESOLVE_COMMENT' });
@@ -526,7 +536,7 @@ function ThreadCard({
             textTransform: 'uppercase',
           }}
         >
-          {blockDisplayLabel(blockType)}
+          {blockType ? tBlockType(`${blockType}.name`) : blockDisplayLabel(blockType)}
         </span>
         {unresolved > 0 && (
           <span
