@@ -19,6 +19,16 @@ Phase 1 (Next.js admin + editor) closed 2026-04-22.
 **Policy reference:** `docs/i18n-recon-slice2-inspector-validation.md` → "Consolidated EN-kept policy"
 
 
+## i18n effort — roadmap
+
+- **Phase 1** — Next.js admin + editor — ✅ COMPLETE (2026-04-22)
+- **Phase 2** — not a separate implementation phase in the current codebase. It was originally
+  planned for additional admin shell routes that do not exist yet; future admin shell work should
+  follow the “new admin route” checklist in `docs/i18n-developer-guide.md`.
+- **Phase 3** — Flutter app (Queue / Editor / Preview / future data worker surfaces) — in planning;
+  blocker from earlier roadmap checks: Cyrillic font coverage.
+
+
 ### Tests and guardrails
 - `tests/i18n/catalog-coverage.test.ts` — BREG-catalog coverage gate
 - `tests/integration/i18n-ru-render-smoke.test.tsx` — RU render smoke test using a

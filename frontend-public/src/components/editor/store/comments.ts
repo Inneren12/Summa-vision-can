@@ -130,8 +130,13 @@ const BLOCK_LABELS: Record<string, string> = {
 };
 
 /**
- * @deprecated Dev-only helper for reducer-level audit/log text.
- * Use `useTranslations('block.type')(\`${type}.name\`)` for user-visible labels.
+ * Internal dev/fallback helper. Returns EN block name from BREG.
+ *
+ * NOT for direct use in user-visible UI — use `resolveBlockLabel` from
+ * `utils/block-label.ts` instead, which routes through i18n first and falls back
+ * here only for missing-translation / legacy-data safety.
+ *
+ * Also used for console logs, reducer debug output, and import-guard messages.
  */
 export function blockDisplayLabel(blockType: string | undefined): string {
   if (!blockType) return "block";

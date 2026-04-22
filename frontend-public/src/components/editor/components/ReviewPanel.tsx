@@ -21,6 +21,7 @@ import {
 } from '../store/comments';
 import { availableTransitions } from '../store/workflow';
 import { checkWorkflowPermission } from '../store/permissions';
+import { resolveBlockLabel } from '../utils/block-label';
 import { StatusBadge } from './StatusBadge';
 import type { NoteRequestConfig } from './noteRequest';
 
@@ -121,9 +122,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
   const openAddCommentModal = () => {
     if (!selId) return;
     const blockType = state.doc.blocks[selId]?.type;
-    const blockLabel = blockType
-      ? tBlockType(`${blockType}.name`)
-      : tReview('comment.block_generic');
+    const blockLabel = resolveBlockLabel(blockType, tBlockType, tReview);
     onRequestNote({
       title: tReview('comment.add_on_block', { block: blockLabel }),
       label: tReview('comment.label'),
@@ -357,9 +356,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
               }}
             >
               {tReview('comment.on_block', {
-                block: state.doc.blocks[selId]?.type
-                  ? tBlockType(`${state.doc.blocks[selId].type}.name`)
-                  : tReview('comment.block_generic'),
+                block: resolveBlockLabel(state.doc.blocks[selId]?.type, tBlockType, tReview),
               })}
             </div>
             <button
@@ -537,7 +534,7 @@ function ThreadCard({
             textTransform: 'uppercase',
           }}
         >
-          {blockType ? tBlockType(`${blockType}.name`) : tReview('comment.block_generic')}
+          {resolveBlockLabel(blockType, tBlockType, tReview)}
         </span>
         {unresolved > 0 && (
           <span
