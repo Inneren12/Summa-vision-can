@@ -554,17 +554,17 @@
   },
   "template": {
     "variant": {
-      "number_plus_delta": "Number + Delta",
-      "number_plus_note": "Number + Note",
-      "minimal": "Minimal",
-      "before_after": "Before / After",
-      "fact_context": "Fact + Context",
-      "social_post": "Social Post",
-      "simple_ranking": "Simple Ranking",
-      "single_plus_area": "Single + Area",
-      "three_kpi_cards": "3 KPI Cards",
-      "heatmap_rankings": "Heatmap Rankings",
-      "2x3_grid": "2×3 Grid"
+      "number_plus_delta": "Число + изменение",
+      "number_plus_note": "Число + примечание",
+      "minimal": "Минимальный",
+      "before_after": "До / После",
+      "fact_context": "Факт + контекст",
+      "social_post": "Пост в соцсеть",
+      "simple_ranking": "Простой рейтинг",
+      "single_plus_area": "Один ряд + заливка",
+      "three_kpi_cards": "3 KPI-карточки",
+      "heatmap_rankings": "Тепловой рейтинг",
+      "2x3_grid": "Сетка 2×3"
     },
     "desc": {
       "giant_number_with_change": "Огромное число с изменением",

@@ -21,27 +21,6 @@ interface InspectorProps {
   contrastIssues: ContrastIssue[];
 }
 
-const CONTROL_FIELD_KEY_BY_LABEL: Record<string, string> = {
-  Headline: 'headline',
-  Subtitle: 'subtitle',
-  Tag: 'tag',
-  Value: 'value',
-  Label: 'label',
-  Delta: 'delta',
-  Source: 'source',
-  Note: 'note',
-  Align: 'align',
-  'Y unit': 'y_unit',
-  'Unit suffix': 'unit_suffix',
-  Position: 'position',
-  Dir: 'direction',
-  Method: 'method',
-  'Benchmark line': 'benchmark_line',
-  'Bench value': 'benchmark_value',
-  'Bench label': 'benchmark_label',
-  'Area fill': 'area_fill',
-};
-
 // Helper: read an arbitrary prop value with a fallback if it isn't the expected type.
 function getStringProp(block: Block, key: string): string {
   const v = block.props[key];
@@ -50,10 +29,6 @@ function getStringProp(block: Block, key: string): string {
 function getBoolProp(block: Block, key: string): boolean {
   const v = block.props[key];
   return typeof v === "boolean" ? v : false;
-}
-
-function getControlFieldKey(label: string, controlKey: string): string {
-  return CONTROL_FIELD_KEY_BY_LABEL[label] ?? controlKey;
 }
 
 function InspectorImpl({ selB, selR, selId, mode, canEdit, dispatch, contrastIssues }: InspectorProps) {
@@ -149,7 +124,7 @@ function InspectorImpl({ selB, selR, selId, mode, canEdit, dispatch, contrastIss
               const strVal = getStringProp(selB, c.k);
               const boolVal = getBoolProp(selB, c.k);
               const charLen = strVal.replace(/\n/g, "").length;
-              const fieldKey = getControlFieldKey(c.l, c.k);
+              const fieldKey = c.i18nKey ?? c.k;
               const kind = c.labelKind ?? 'label';
               return (
                 <div key={c.k} style={{ opacity: ed ? 1 : .4 }}>

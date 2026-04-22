@@ -131,6 +131,7 @@ export interface ControlDef {
   k: string;
   t: string;
   l: string;
+  i18nKey?: string;
   labelKind?: 'label' | 'short_label';
   ml?: number;
   opts?: string[];
