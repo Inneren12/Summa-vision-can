@@ -30,7 +30,7 @@ describe('AdminIndexPage', () => {
     mockFetchList.mockResolvedValue([]);
     const ui = await AdminIndexPage();
     render(ui);
-    expect(screen.getByText(/No publications yet/i)).toBeInTheDocument();
+    expect(screen.getByText("publications.empty")).toBeInTheDocument();
   });
 
   it('renders a card for each publication with link to the editor', async () => {
