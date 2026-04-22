@@ -64,6 +64,7 @@ export function TopBar({
   const tExport = useTranslations('export');
   const tImport = useTranslations('import');
   const tEditor = useTranslations('editor');
+  const tEditorMode = useTranslations('editor.mode');
   const tUndo = useTranslations('undo');
   const tRedo = useTranslations('redo');
   const tSave = useTranslations('save');
@@ -88,7 +89,7 @@ export function TopBar({
         <span style={{ fontSize: "8px", color: TK.c.txtM, fontFamily: TK.font.data, padding: "2px 5px", background: TK.c.bgAct, borderRadius: "2px", marginLeft: "4px" }}>{TPLS[doc.templateId]?.fam} {"\u2014"} {TPLS[doc.templateId]?.vr}</span>
         <StatusBadge workflow={doc.review.workflow} size="compact" />
         <div role="tablist" aria-label={tEditor('mode.aria')} style={{ display: "flex", gap: "1px", background: TK.c.bgSurf, borderRadius: "3px", padding: "1px", border: `1px solid ${TK.c.brd}`, marginLeft: "6px" }}>
-          {(["template", "design"] as const).map(m => <button type="button" key={m} role="tab" aria-selected={mode === m} onClick={() => setMode(m)} aria-label={tEditor('mode.switch_to', { mode: m })} style={{ padding: "2px 7px", fontSize: "8px", fontFamily: TK.font.data, textTransform: "uppercase", background: mode === m ? TK.c.bgAct : "transparent", color: mode === m ? TK.c.acc : TK.c.txtM, border: "none", borderRadius: "2px", cursor: "pointer" }}>{m}</button>)}
+          {(["template", "design"] as const).map(m => <button type="button" key={m} role="tab" aria-selected={mode === m} onClick={() => setMode(m)} aria-label={tEditor('mode.switch_to', { mode: tEditorMode(m) })} style={{ padding: "2px 7px", fontSize: "8px", fontFamily: TK.font.data, textTransform: "uppercase", background: mode === m ? TK.c.bgAct : "transparent", color: mode === m ? TK.c.acc : TK.c.txtM, border: "none", borderRadius: "2px", cursor: "pointer" }}>{tEditorMode(m)}</button>)}
         </div>
         <div style={{ display: "flex", gap: "2px", marginLeft: "8px" }}>
           <button type="button" onClick={() => dispatch({ type: "UNDO" })} disabled={!undoStack.length} aria-label={tUndo('verb')} style={{ padding: "2px 6px", fontSize: "10px", background: "transparent", border: "none", color: undoStack.length ? TK.c.txtS : TK.c.txtM, cursor: undoStack.length ? "pointer" : "default", opacity: undoStack.length ? 1 : .3 }} title={tUndo('shortcut')}>{"\u21A9"}</button>

@@ -192,7 +192,9 @@
       "aria": "Expand QA panel"
     },
     "mode": {
-      "aria": "QA mode"
+      "aria": "QA mode",
+      "draft": "draft",
+      "publish": "publish"
     },
     "summary": {
       "compact": "{errors}err · {warnings}warn"
@@ -221,7 +223,9 @@
   "editor": {
     "mode": {
       "aria": "Editor mode",
-      "switch_to": "Switch to {mode} mode"
+      "switch_to": "Switch to {mode} mode",
+      "template": "template",
+      "design": "design"
     }
   },
   "undo": {

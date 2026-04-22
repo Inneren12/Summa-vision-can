@@ -217,6 +217,7 @@ These are referenced by the plural table in Section 9.
 | item | элемент | *(none)* | *(none)* | noun | Key: item.noun — generic list element |
 | change | изменение | *(none)* | *(none)* | noun | Key: change.noun |
 | issue | проблема | *(none)* | *(none)* | noun | Key: issue.noun — validation/QA context |
+| thread | ветка | *(none)* | тред (loanword, grammatically unstable) | noun | Key: thread.noun — used for comment threads in review/discussion contexts. Plural: ветка / ветки / веток. |
 | day | день | *(none)* | *(none)* | noun | Key: time.day — used in duration/date labels |
 | week | неделя | *(none)* | *(none)* | noun | Key: time.week |
 | month | месяц | *(none)* | *(none)* | noun | Key: time.month |
@@ -389,5 +390,6 @@ List all count-based nouns from previous sections with their three forms:
 | second | §4b | секунда | секунды | секунд |
 | change | §4b | изменение | изменения | изменений |
 | issue | §4b | проблема | проблемы | проблем |
+| thread | §4b | ветка | ветки | веток |
 | item | §4b | элемент | элемента | элементов |
 | result | §4b | результат | результата | результатов |

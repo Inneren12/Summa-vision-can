@@ -192,7 +192,9 @@
       "aria": "Развернуть панель QA"
     },
     "mode": {
-      "aria": "Режим QA"
+      "aria": "Режим QA",
+      "draft": "черновик",
+      "publish": "публикация"
     },
     "summary": {
       "compact": "{errors} ош. · {warnings} пред."
@@ -221,7 +223,9 @@
   "editor": {
     "mode": {
       "aria": "Режим редактора",
-      "switch_to": "Переключиться в режим {mode}"
+      "switch_to": "Переключиться в режим {mode}",
+      "template": "шаблон",
+      "design": "дизайн"
     }
   },
   "undo": {
@@ -277,7 +281,7 @@
       "edited_suffix": " (изменён)",
       "resolved": "Решено",
       "reopen": "Переоткрыть",
-      "resolve": "Закрыть",
+      "resolve": "Решить",
       "edit_action": "Редактировать",
       "delete": "Удалить"
     },
@@ -288,9 +292,9 @@
       "placeholder": "Введите ответ..."
     },
     "threads": {
-      "title_count": "Треды ({count})",
+      "title_count": "Ветки ({count})",
       "show_resolved": "Показать решённые",
-      "empty": "Нет тредов для показа."
+      "empty": "Нет веток для показа."
     },
     "note": {
       "optional": "Примечание (необязательно)",

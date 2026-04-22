@@ -18,8 +18,6 @@ interface QAPanelProps {
 
 export function QAPanel({ qaOpen, setQaOpen, qaMode, setQaMode, vr, dispErr, si }: QAPanelProps) {
   const tQa = useTranslations('qa');
-  const tDraft = useTranslations('draft');
-  const tPublish = useTranslations('publish');
   const tValidation = useTranslations('validation');
   if (!qaOpen) {
     return (
@@ -32,7 +30,7 @@ export function QAPanel({ qaOpen, setQaOpen, qaMode, setQaMode, vr, dispErr, si 
       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "3px" }}>
         <span style={{ fontSize: "7px", fontFamily: TK.font.data, color: TK.c.txtS, textTransform: "uppercase" }}>{tQa('title')}</span>
         <div role="tablist" aria-label={tQa('mode.aria')} style={{ display: "flex", gap: "1px", background: TK.c.bgApp, borderRadius: "2px", padding: "1px" }}>
-          {(["draft", "publish"] as const).map(m => <button type="button" key={m} role="tab" aria-selected={qaMode === m} onClick={() => setQaMode(m)} style={{ padding: "1px 6px", fontSize: "7px", fontFamily: TK.font.data, textTransform: "uppercase", background: qaMode === m ? TK.c.bgAct : "transparent", color: qaMode === m ? TK.c.acc : TK.c.txtM, border: "none", borderRadius: "2px", cursor: "pointer" }}>{m === "draft" ? tDraft('status') : tPublish('verb')}</button>)}
+          {(["draft", "publish"] as const).map(m => <button type="button" key={m} role="tab" aria-selected={qaMode === m} onClick={() => setQaMode(m)} style={{ padding: "1px 6px", fontSize: "7px", fontFamily: TK.font.data, textTransform: "uppercase", background: qaMode === m ? TK.c.bgAct : "transparent", color: qaMode === m ? TK.c.acc : TK.c.txtM, border: "none", borderRadius: "2px", cursor: "pointer" }}>{m === "draft" ? tQa('mode.draft') : tQa('mode.publish')}</button>)}
         </div>
         <button type="button" onClick={() => setQaOpen(false)} style={{ marginLeft: "auto", background: "none", border: "none", color: TK.c.txtM, cursor: "pointer", fontSize: "9px" }}>{"\u2715"}</button>
       </div>
