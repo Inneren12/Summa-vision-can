@@ -253,11 +253,11 @@
   },
   "review": {
     "transition": {
-      "in_review": "→ На проверке",
-      "approved": "→ Одобрено",
-      "draft": "→ Черновик",
-      "exported": "→ Экспортировано",
-      "published": "→ Опубликовано",
+      "in_review": "На проверке",
+      "approved": "Одобрено",
+      "draft": "Черновик",
+      "exported": "Экспортировано",
+      "published": "Опубликовано",
       "duplicate_as_draft": "Дублировать как черновик"
     },
     "transitions": {

@@ -253,11 +253,11 @@
   },
   "review": {
     "transition": {
-      "in_review": "→ In review",
-      "approved": "→ Approved",
-      "draft": "→ Draft",
-      "exported": "→ Exported",
-      "published": "→ Published",
+      "in_review": "In review",
+      "approved": "Approved",
+      "draft": "Draft",
+      "exported": "Exported",
+      "published": "Published",
       "duplicate_as_draft": "Duplicate as draft"
     },
     "transitions": {
