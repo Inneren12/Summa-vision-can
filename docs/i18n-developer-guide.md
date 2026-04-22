@@ -55,6 +55,8 @@ Any new admin page (e.g. `/admin/leads`, `/admin/jobs`) must be i18n-aware from 
       `Intl.NumberFormat`, `useFormatter` from next-intl) — NOT hardcoded formats
 - [ ] New translation keys added to both `en.json` and `ru.json` in same PR
 - [ ] Tests assert on `namespace.key` format, not literal text
+- [ ] If this PR touches a term listed in `docs/phase-3-plan.md` Appendix C, update both
+      the glossary and Appendix C in this same PR
 
 ## Checklist — adding a new block type or control
 
