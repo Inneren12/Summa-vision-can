@@ -64,7 +64,122 @@
   "validation": {
     "contrast": {
       "title": "Контраст",
-      "gradient_suffix": " (градиент)"
+      "gradient_suffix": " (градиент)",
+      "below_threshold_base": "{blockType}.{slot}: контраст {ratio}:1 ниже {threshold}:1 на {background}",
+      "below_threshold_gradient": "{blockType}.{slot}: контраст {ratio}:1 ниже {threshold}:1 на {background}"
+    },
+    "page": {
+      "unknown_palette": "Неизвестная палитра: «{palette}»",
+      "unknown_background": "Неизвестный фон: «{background}»",
+      "unknown_size": "Неизвестный размер: «{size}»"
+    },
+    "required_block": {
+      "present": "{blockName} присутствует",
+      "missing": "{blockName} обязателен"
+    },
+    "headline": {
+      "empty": "Заголовок пуст"
+    },
+    "hero_number": {
+      "empty": "Число hero-блока пусто"
+    },
+    "max_chars": {
+      "overflow": "{blockName}: {count}/{max} ПЕРЕПОЛНЕНИЕ",
+      "near_limit": "{blockName}: {count}/{max} символов"
+    },
+    "max_lines": {
+      "near_limit": "{blockName}: {count}/{max} строк"
+    },
+    "section": {
+      "duplicate_id": "Дублирующийся id раздела: «{id}»",
+      "duplicate_block_id": "Раздел «{sectionId}» содержит дублирующийся blockId: «{blockId}»",
+      "block_not_allowed": "{blockName} недопустим в {sectionType}",
+      "max_per_section": "{blockName}: {count}x в {sectionType} (максимум {max})"
+    },
+    "block_data": {
+      "prefixed_error": "{name}: {error}"
+    },
+    "items": {
+      "array_required": "items должно быть массивом",
+      "min_one": "требуется хотя бы один элемент",
+      "too_many": "слишком много элементов: {count} (максимум {max})"
+    },
+    "item": {
+      "label_required": "item[{index}]: label должно быть непустой строкой",
+      "value_finite": "item[{index}]: value должно быть конечным числом"
+    },
+    "benchmark": {
+      "value_finite_when_enabled": "showBenchmark включён, но benchmarkValue не является конечным числом"
+    },
+    "series": {
+      "array_required": "series должно быть массивом",
+      "min_one": "требуется хотя бы один ряд",
+      "label_required": "series[{index}]: label должно быть непустой строкой",
+      "role_invalid": "series[{index}]: role должен быть одним из {allowed}",
+      "data_array_required": "series[{index}]: data должно быть массивом",
+      "points_mismatch": "series[{index}] «{label}»: {points} точек, но {xLabels} xLabels",
+      "non_finite_values": "series[{index}] «{label}»: содержит неконечные значения"
+    },
+    "xlabels": {
+      "array_required": "xLabels должно быть массивом",
+      "non_empty": "xLabels не может быть пустым",
+      "all_non_empty": "все xLabels должны быть непустыми строками"
+    },
+    "kpi": {
+      "min_two": "требуется не менее 2 KPI-элементов",
+      "max_items": "слишком много элементов: {count} (максимум {max})",
+      "label_required": "kpi[{index}]: label должно быть непустой строкой",
+      "value_required": "kpi[{index}]: value должно быть непустой строкой",
+      "delta_string": "kpi[{index}]: delta должно быть строкой",
+      "direction_invalid": "kpi[{index}]: direction должен быть одним из {allowed}"
+    },
+    "table": {
+      "columns_array_required": "columns должно быть массивом",
+      "rows_array_required": "rows должно быть массивом",
+      "columns_min_two": "требуется минимум 2 столбца",
+      "rows_min_one": "требуется хотя бы одна строка"
+    },
+    "row": {
+      "country_required": "row[{index}]: country должно быть непустой строкой",
+      "rank_finite": "row[{index}]: rank должно быть конечным числом",
+      "vals_count_mismatch": "row[{index}]: {vals} vals, но {dataColumns} столбцов данных",
+      "vals_array_required": "TBD:validation.row.vals_array_required"
+    },
+    "small_multiple": {
+      "data_array_required": "TBD:validation.small_multiple.data_array_required",
+      "data_empty": "TBD:validation.small_multiple.data_empty",
+      "non_finite_values": "TBD:validation.small_multiple.non_finite_values"
+    },
+    "color": {
+      "invalid_hex": "Неверный hex-цвет: {hex}"
+    },
+    "integrity": {
+      "dangling_ref": "Раздел «{sectionId}» ссылается на отсутствующий блок «{blockId}»",
+      "duplicate_ref": "Блок «{blockId}» используется в нескольких разделах",
+      "orphan_block": "Блок «{blockId}» не привязан ни к одному разделу",
+      "required_block_missing": "Требуемый тип блока «{type}» не найден",
+      "unknown_block_type": "Неизвестный тип блока: «{type}»",
+      "wrong_section": "Блок «{blockName}» в разделе «{sectionType}» (допустимо: {allowed})",
+      "id_mismatch": "TBD:validation.integrity.id_mismatch"
+    },
+    "density": {
+      "ranked_bars_dense": "Ranked Bars: {count} элементов — может быть плотно",
+      "ranked_bars_height": "Ranked Bars: слишком много элементов для этой высоты холста",
+      "line_chart_overlap": "Line Chart: {count} x-подписей — могут перекрываться",
+      "kpi_compare_cramped": "KPI Compare: более 4 элементов может быть тесно",
+      "visual_table_overflow": "Visual Table: {count} строк — может не уместиться на {size}",
+      "small_multiples_dense": "Small Multiples: более 9 ячеек может быть слишком плотно"
+    },
+    "layout": {
+      "headline_shorter": "Заголовок {count} символов — короче может работать лучше",
+      "headline_line_overflow": "Строка заголовка {count} символов — может не уместиться на малых размерах",
+      "annotation_landscape": "Аннотация может не уместиться на альбомных размерах",
+      "table_narrow": "Visual Table может быть тесной на узком холсте",
+      "annotation_empty": "Блок аннотации пуст",
+      "section_overflow": "Раздел «{sectionType}» может переполниться: ~{usedPx}px использовано / {availablePx}px доступно"
+    },
+    "source_footer": {
+      "default_text": "Источник всё ещё по умолчанию"
     }
   },
   "common": {

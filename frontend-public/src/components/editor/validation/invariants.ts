@@ -1,9 +1,10 @@
 import type { CanonicalDocument } from '../types';
 import { BREG } from '../registry/blocks';
+import type { ValidationMessage } from './types';
 
 export interface InvariantViolation {
   code: string;
-  message: string;
+  message: ValidationMessage;
   severity: 'error' | 'warning';
 }
 
@@ -25,14 +26,14 @@ export function assertDocumentIntegrity(doc: CanonicalDocument): InvariantViolat
       if (!doc.blocks[bid]) {
         violations.push({
           code: 'DANGLING_REF',
-          message: `Section "${sec.id}" references missing block "${bid}"`,
+          message: { key: 'validation.integrity.dangling_ref', params: { sectionId: sec.id, blockId: bid } },
           severity: 'error',
         });
       }
       if (referencedIds.has(bid)) {
         violations.push({
           code: 'DUPLICATE_REF',
-          message: `Block "${bid}" referenced by multiple sections`,
+          message: { key: 'validation.integrity.duplicate_ref', params: { blockId: bid } },
           severity: 'error',
         });
       }
@@ -45,7 +46,7 @@ export function assertDocumentIntegrity(doc: CanonicalDocument): InvariantViolat
     if (!referencedIds.has(bid)) {
       violations.push({
         code: 'ORPHAN_BLOCK',
-        message: `Block "${bid}" not referenced by any section`,
+        message: { key: 'validation.integrity.orphan_block', params: { blockId: bid } },
         severity: 'warning',
       });
     }
@@ -58,7 +59,7 @@ export function assertDocumentIntegrity(doc: CanonicalDocument): InvariantViolat
     if (!found) {
       violations.push({
         code: 'MISSING_REQUIRED',
-        message: `Required block type "${reqType}" not found`,
+        message: { key: 'validation.integrity.required_block_missing', params: { type: reqType } },
         severity: 'error',
       });
     }
@@ -73,7 +74,7 @@ export function assertDocumentIntegrity(doc: CanonicalDocument): InvariantViolat
       if (!reg) {
         violations.push({
           code: 'UNKNOWN_TYPE',
-          message: `Unknown block type: "${block.type}"`,
+          message: { key: 'validation.integrity.unknown_block_type', params: { type: block.type } },
           severity: 'error',
         });
         return;
@@ -81,7 +82,10 @@ export function assertDocumentIntegrity(doc: CanonicalDocument): InvariantViolat
       if (!reg.allowedSections.includes(sec.type)) {
         violations.push({
           code: 'WRONG_SECTION',
-          message: `Block "${reg.name}" in "${sec.type}" section (allowed: ${reg.allowedSections.join(', ')})`,
+          message: {
+            key: 'validation.integrity.wrong_section',
+            params: { blockName: reg.name, sectionType: sec.type, allowed: reg.allowedSections.join(', ' ) },
+          },
           severity: 'error',
         });
       }
@@ -93,7 +97,7 @@ export function assertDocumentIntegrity(doc: CanonicalDocument): InvariantViolat
     if (block.id !== key) {
       violations.push({
         code: 'ID_MISMATCH',
-        message: `Block key "${key}" does not match block.id "${block.id}"`,
+        message: { key: 'validation.integrity.id_mismatch', params: { key, blockId: block.id } },
         severity: 'error',
       });
     }

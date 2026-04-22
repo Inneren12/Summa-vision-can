@@ -1,5 +1,6 @@
 import type { Direction } from '../types';
 import { SERIES_ROLES } from '../types';
+import type { ValidationMessage } from './types';
 
 /**
  * Per-block-type semantic data validators.
@@ -21,7 +22,7 @@ import { SERIES_ROLES } from '../types';
 
 export interface BlockDataValidation {
   valid: boolean;
-  errors: string[];
+  errors: ValidationMessage[];
 }
 
 export interface BlockDataNormalization {
@@ -34,7 +35,7 @@ const VALID_SERIES_ROLES: readonly string[] = SERIES_ROLES;
 
 const OK: BlockDataValidation = { valid: true, errors: [] };
 
-function result(errors: string[]): BlockDataValidation {
+function result(errors: ValidationMessage[]): BlockDataValidation {
   return { valid: errors.length === 0, errors };
 }
 
@@ -43,31 +44,29 @@ function deterministicNestedId(blockId: string, key: string, idx: number): strin
 }
 
 export function validateBarHorizontalData(props: any): BlockDataValidation {
-  const errors: string[] = [];
+  const errors: ValidationMessage[] = [];
 
   if (!Array.isArray(props?.items)) {
-    return { valid: false, errors: ["items must be an array"] };
+    return { valid: false, errors: [{ key: 'validation.items.array_required' }] };
   }
   if (props.items.length === 0) {
-    errors.push("at least one item required");
+    errors.push({ key: 'validation.items.min_one' });
   }
   if (props.items.length > 30) {
-    errors.push(`too many items: ${props.items.length} (max 30)`);
+    errors.push({ key: 'validation.items.too_many', params: { count: props.items.length, max: 30 } });
   }
   props.items.forEach((it: any, i: number) => {
     if (typeof it?.label !== "string" || !it.label.trim()) {
-      errors.push(`item[${i}]: label must be non-empty string`);
+      errors.push({ key: 'validation.item.label_required', params: { index: i } });
     }
     if (typeof it?.value !== "number" || !Number.isFinite(it.value)) {
-      errors.push(`item[${i}]: value must be a finite number`);
+      errors.push({ key: 'validation.item.value_finite', params: { index: i } });
     }
   });
 
-  // Benchmark overlay must carry a finite number when enabled; otherwise the
-  // renderer either skips it or draws at a NaN y-coordinate.
   if (props.showBenchmark === true) {
     if (typeof props.benchmarkValue !== "number" || !Number.isFinite(props.benchmarkValue)) {
-      errors.push("showBenchmark is true but benchmarkValue is not a finite number");
+      errors.push({ key: 'validation.benchmark.value_finite_when_enabled' });
     }
   }
 
@@ -75,36 +74,39 @@ export function validateBarHorizontalData(props: any): BlockDataValidation {
 }
 
 export function validateLineEditorialData(props: any): BlockDataValidation {
-  const errors: string[] = [];
+  const errors: ValidationMessage[] = [];
 
   if (!Array.isArray(props?.series)) {
-    return { valid: false, errors: ["series must be an array"] };
+    return { valid: false, errors: [{ key: 'validation.series.array_required' }] };
   }
   if (!Array.isArray(props.xLabels)) {
-    return { valid: false, errors: ["xLabels must be an array"] };
+    return { valid: false, errors: [{ key: 'validation.xlabels.array_required' }] };
   }
-  if (props.series.length === 0) errors.push("at least one series required");
-  if (props.xLabels.length === 0) errors.push("xLabels cannot be empty");
+  if (props.series.length === 0) errors.push({ key: 'validation.series.min_one' });
+  if (props.xLabels.length === 0) errors.push({ key: 'validation.xlabels.non_empty' });
   if (!props.xLabels.every((l: any) => typeof l === "string" && l.trim() !== "")) {
-    errors.push("all xLabels must be non-empty strings");
+    errors.push({ key: 'validation.xlabels.all_non_empty' });
   }
 
   props.series.forEach((s: any, i: number) => {
     if (typeof s?.label !== "string" || !s.label.trim()) {
-      errors.push(`series[${i}]: label must be non-empty string`);
+      errors.push({ key: 'validation.series.label_required', params: { index: i } });
     }
     if (!VALID_SERIES_ROLES.includes(s?.role)) {
-      errors.push(`series[${i}]: role must be one of ${VALID_SERIES_ROLES.join(", ")}`);
+      errors.push({ key: 'validation.series.role_invalid', params: { index: i, allowed: VALID_SERIES_ROLES.join(', ') } });
     }
     if (!Array.isArray(s?.data)) {
-      errors.push(`series[${i}]: data must be an array`);
+      errors.push({ key: 'validation.series.data_array_required', params: { index: i } });
       return;
     }
     if (s.data.length !== props.xLabels.length) {
-      errors.push(`series[${i}] "${s.label}": ${s.data.length} points but ${props.xLabels.length} xLabels`);
+      errors.push({
+        key: 'validation.series.points_mismatch',
+        params: { index: i, label: s.label, points: s.data.length, xLabels: props.xLabels.length },
+      });
     }
     if (!s.data.every((v: any) => typeof v === "number" && Number.isFinite(v))) {
-      errors.push(`series[${i}] "${s.label}": contains non-finite values`);
+      errors.push({ key: 'validation.series.non_finite_values', params: { index: i, label: s.label } });
     }
   });
 
@@ -112,26 +114,26 @@ export function validateLineEditorialData(props: any): BlockDataValidation {
 }
 
 export function validateComparisonKpiData(props: any): BlockDataValidation {
-  const errors: string[] = [];
+  const errors: ValidationMessage[] = [];
 
   if (!Array.isArray(props?.items)) {
-    return { valid: false, errors: ["items must be an array"] };
+    return { valid: false, errors: [{ key: 'validation.items.array_required' }] };
   }
-  if (props.items.length < 2) errors.push("at least 2 KPI items required");
-  if (props.items.length > 4) errors.push(`too many items: ${props.items.length} (max 4)`);
+  if (props.items.length < 2) errors.push({ key: 'validation.kpi.min_two' });
+  if (props.items.length > 4) errors.push({ key: 'validation.kpi.max_items', params: { count: props.items.length, max: 4 } });
 
   props.items.forEach((it: any, i: number) => {
     if (typeof it?.label !== "string" || !it.label.trim()) {
-      errors.push(`kpi[${i}]: label must be non-empty string`);
+      errors.push({ key: 'validation.kpi.label_required', params: { index: i } });
     }
     if (typeof it?.value !== "string" || !it.value.trim()) {
-      errors.push(`kpi[${i}]: value must be non-empty string`);
+      errors.push({ key: 'validation.kpi.value_required', params: { index: i } });
     }
     if (typeof it?.delta !== "string") {
-      errors.push(`kpi[${i}]: delta must be string`);
+      errors.push({ key: 'validation.kpi.delta_string', params: { index: i } });
     }
     if (!VALID_DIRECTIONS.includes(it?.direction)) {
-      errors.push(`kpi[${i}]: direction must be one of ${VALID_DIRECTIONS.join(", ")}`);
+      errors.push({ key: 'validation.kpi.direction_invalid', params: { index: i, allowed: VALID_DIRECTIONS.join(', ') } });
     }
   });
 
@@ -139,30 +141,33 @@ export function validateComparisonKpiData(props: any): BlockDataValidation {
 }
 
 export function validateTableEnrichedData(props: any): BlockDataValidation {
-  const errors: string[] = [];
+  const errors: ValidationMessage[] = [];
 
   if (!Array.isArray(props?.columns)) {
-    return { valid: false, errors: ["columns must be an array"] };
+    return { valid: false, errors: [{ key: 'validation.table.columns_array_required' }] };
   }
   if (!Array.isArray(props.rows)) {
-    return { valid: false, errors: ["rows must be an array"] };
+    return { valid: false, errors: [{ key: 'validation.table.rows_array_required' }] };
   }
-  if (props.columns.length < 2) errors.push("at least 2 columns required");
-  if (props.rows.length === 0) errors.push("at least one row required");
+  if (props.columns.length < 2) errors.push({ key: 'validation.table.columns_min_two' });
+  if (props.rows.length === 0) errors.push({ key: 'validation.table.rows_min_one' });
 
   props.rows.forEach((r: any, i: number) => {
     if (typeof r?.country !== "string" || !r.country.trim()) {
-      errors.push(`row[${i}]: country must be non-empty string`);
+      errors.push({ key: 'validation.row.country_required', params: { index: i } });
     }
     if (typeof r?.rank !== "number" || !Number.isFinite(r.rank)) {
-      errors.push(`row[${i}]: rank must be a finite number`);
+      errors.push({ key: 'validation.row.rank_finite', params: { index: i } });
     }
     if (!Array.isArray(r?.vals)) {
-      errors.push(`row[${i}]: vals must be an array`);
+      errors.push({ key: 'validation.row.vals_array_required', params: { index: i } });
       return;
     }
     if (r.vals.length !== props.columns.length - 1) {
-      errors.push(`row[${i}]: ${r.vals.length} vals but ${props.columns.length - 1} data columns`);
+      errors.push({
+        key: 'validation.row.vals_count_mismatch',
+        params: { index: i, vals: r.vals.length, dataColumns: props.columns.length - 1 },
+      });
     }
   });
 
@@ -170,37 +175,32 @@ export function validateTableEnrichedData(props: any): BlockDataValidation {
 }
 
 export function validateSmallMultipleData(props: any): BlockDataValidation {
-  const errors: string[] = [];
+  const errors: ValidationMessage[] = [];
 
   if (!Array.isArray(props?.items)) {
-    return { valid: false, errors: ["items must be an array"] };
+    return { valid: false, errors: [{ key: 'validation.items.array_required' }] };
   }
-  if (props.items.length === 0) errors.push("at least one item required");
+  if (props.items.length === 0) errors.push({ key: 'validation.items.min_one' });
 
   props.items.forEach((it: any, i: number) => {
     if (typeof it?.label !== "string" || !it.label.trim()) {
-      errors.push(`item[${i}]: label must be non-empty string`);
+      errors.push({ key: 'validation.item.label_required', params: { index: i } });
     }
     if (!Array.isArray(it?.data)) {
-      errors.push(`item[${i}]: data must be an array`);
+      errors.push({ key: 'validation.small_multiple.data_array_required', params: { index: i } });
       return;
     }
     if (it.data.length === 0) {
-      errors.push(`item[${i}] "${it.label}": data is empty`);
+      errors.push({ key: 'validation.small_multiple.data_empty', params: { index: i, label: it.label } });
     }
     if (!it.data.every((v: any) => typeof v === "number" && Number.isFinite(v))) {
-      errors.push(`item[${i}] "${it.label}": contains non-finite values`);
+      errors.push({ key: 'validation.small_multiple.non_finite_values', params: { index: i, label: it.label } });
     }
   });
 
   return result(errors);
 }
 
-/**
- * Dispatch a block type to its semantic validator. Unknown types are
- * treated as valid (no data constraints) — unknown-type rejection is the
- * registry's job, not the data validator's.
- */
 export function validateBlockData(type: string, props: any): BlockDataValidation {
   switch (type) {
     case "bar_horizontal": return validateBarHorizontalData(props);
@@ -212,14 +212,6 @@ export function validateBlockData(type: string, props: any): BlockDataValidation
   }
 }
 
-/**
- * Normalize nested structured data that requires stable identity for editor
- * draft state. Deterministic IDs are derived from block id + array key + index
- * so repeated imports of the same legacy JSON are stable.
- * NOTE: table_enriched.rows and small_multiple.items are not currently edited
- * via row-level draft inputs keyed by item id, so they intentionally do not
- * receive synthesized `_id` fields.
- */
 export function normalizeBlockData(
   type: string,
   props: any,

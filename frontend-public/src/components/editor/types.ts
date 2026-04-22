@@ -1,4 +1,5 @@
 import type { ContrastIssue } from './validation/contrast';
+import type { ValidationMessage } from './validation/types';
 
 export type EditorMode = 'template' | 'design';
 export type QAMode = 'draft' | 'publish';
@@ -147,10 +148,10 @@ export interface BlockRegistryEntry {
 }
 
 export interface ValidationResult {
-  errors: string[];
-  warnings: string[];
-  info: string[];
-  passed: string[];
+  errors: ValidationMessage[];
+  warnings: ValidationMessage[];
+  info: ValidationMessage[];
+  passed: ValidationMessage[];
   /**
    * Structured per-block contrast issues. String summaries are also
    * pushed to `errors` / `warnings` for QAPanel; this field preserves

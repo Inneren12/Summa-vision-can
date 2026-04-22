@@ -64,7 +64,122 @@
   "validation": {
     "contrast": {
       "title": "Contrast",
-      "gradient_suffix": " (gradient)"
+      "gradient_suffix": " (gradient)",
+      "below_threshold_base": "{blockType}.{slot}: contrast {ratio}:1 below {threshold}:1 on {background}",
+      "below_threshold_gradient": "{blockType}.{slot}: contrast {ratio}:1 below {threshold}:1 on {background}"
+    },
+    "page": {
+      "unknown_palette": "Unknown palette: \"{palette}\"",
+      "unknown_background": "Unknown background: \"{background}\"",
+      "unknown_size": "Unknown size: \"{size}\""
+    },
+    "required_block": {
+      "present": "{blockName} present",
+      "missing": "{blockName} is required"
+    },
+    "headline": {
+      "empty": "Headline is empty"
+    },
+    "hero_number": {
+      "empty": "Hero number is empty"
+    },
+    "max_chars": {
+      "overflow": "{blockName}: {count}/{max} OVERFLOW",
+      "near_limit": "{blockName}: {count}/{max} chars"
+    },
+    "max_lines": {
+      "near_limit": "{blockName}: {count}/{max} lines"
+    },
+    "section": {
+      "duplicate_id": "Duplicate section id: \"{id}\"",
+      "duplicate_block_id": "Section \"{sectionId}\" has duplicate blockId: \"{blockId}\"",
+      "block_not_allowed": "{blockName} not allowed in {sectionType}",
+      "max_per_section": "{blockName}: {count}x in {sectionType} (max {max})"
+    },
+    "block_data": {
+      "prefixed_error": "{name}: {error}"
+    },
+    "items": {
+      "array_required": "items must be an array",
+      "min_one": "at least one item required",
+      "too_many": "too many items: {count} (max {max})"
+    },
+    "item": {
+      "label_required": "item[{index}]: label must be non-empty string",
+      "value_finite": "item[{index}]: value must be a finite number"
+    },
+    "benchmark": {
+      "value_finite_when_enabled": "showBenchmark is true but benchmarkValue is not a finite number"
+    },
+    "series": {
+      "array_required": "series must be an array",
+      "min_one": "at least one series required",
+      "label_required": "series[{index}]: label must be non-empty string",
+      "role_invalid": "series[{index}]: role must be one of {allowed}",
+      "data_array_required": "series[{index}]: data must be an array",
+      "points_mismatch": "series[{index}] \"{label}\": {points} points but {xLabels} xLabels",
+      "non_finite_values": "series[{index}] \"{label}\": contains non-finite values"
+    },
+    "xlabels": {
+      "array_required": "xLabels must be an array",
+      "non_empty": "xLabels cannot be empty",
+      "all_non_empty": "all xLabels must be non-empty strings"
+    },
+    "kpi": {
+      "min_two": "at least 2 KPI items required",
+      "max_items": "too many items: {count} (max {max})",
+      "label_required": "kpi[{index}]: label must be non-empty string",
+      "value_required": "kpi[{index}]: value must be non-empty string",
+      "delta_string": "kpi[{index}]: delta must be string",
+      "direction_invalid": "kpi[{index}]: direction must be one of {allowed}"
+    },
+    "table": {
+      "columns_array_required": "columns must be an array",
+      "rows_array_required": "rows must be an array",
+      "columns_min_two": "at least 2 columns required",
+      "rows_min_one": "at least one row required"
+    },
+    "row": {
+      "country_required": "row[{index}]: country must be non-empty string",
+      "rank_finite": "row[{index}]: rank must be a finite number",
+      "vals_count_mismatch": "row[{index}]: {vals} vals but {dataColumns} data columns",
+      "vals_array_required": "row[{index}]: vals must be an array"
+    },
+    "small_multiple": {
+      "data_array_required": "item[{index}]: data must be an array",
+      "data_empty": "item[{index}] \"{label}\": data is empty",
+      "non_finite_values": "item[{index}] \"{label}\": contains non-finite values"
+    },
+    "color": {
+      "invalid_hex": "Invalid hex colour: {hex}"
+    },
+    "integrity": {
+      "dangling_ref": "Section \"{sectionId}\" references missing block \"{blockId}\"",
+      "duplicate_ref": "Block \"{blockId}\" referenced by multiple sections",
+      "orphan_block": "Block \"{blockId}\" not referenced by any section",
+      "required_block_missing": "Required block type \"{type}\" not found",
+      "unknown_block_type": "Unknown block type: \"{type}\"",
+      "wrong_section": "Block \"{blockName}\" in \"{sectionType}\" section (allowed: {allowed})",
+      "id_mismatch": "Block key \"{key}\" does not match block.id \"{blockId}\""
+    },
+    "density": {
+      "ranked_bars_dense": "Ranked Bars: {count} items — may be dense",
+      "ranked_bars_height": "Ranked Bars: too many items for this canvas height",
+      "line_chart_overlap": "Line Chart: {count} x-labels — may overlap",
+      "kpi_compare_cramped": "KPI Compare: more than 4 items may be cramped",
+      "visual_table_overflow": "Visual Table: {count} rows — may overflow on {size}",
+      "small_multiples_dense": "Small Multiples: more than 9 cells may be too dense"
+    },
+    "layout": {
+      "headline_shorter": "Headline {count} chars — shorter may work better",
+      "headline_line_overflow": "Headline line {count} chars — may overflow small sizes",
+      "annotation_landscape": "Annotation may not fit on landscape sizes",
+      "table_narrow": "Visual Table may be cramped on narrow canvas",
+      "annotation_empty": "Annotation block is empty",
+      "section_overflow": "Section \"{sectionType}\" may overflow: ~{usedPx}px used / {availablePx}px available"
+    },
+    "source_footer": {
+      "default_text": "Source is still default"
     }
   },
   "common": {

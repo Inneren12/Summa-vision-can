@@ -2,6 +2,7 @@ import type { CanonicalDocument, Palette } from '../types';
 import { PALETTES } from '../config/palettes';
 import { BG_META } from '../config/backgrounds';
 import { TK } from '../config/tokens';
+import type { ValidationMessage } from './types';
 
 /**
  * Structured contrast issue. One per (block, text role) below threshold.
@@ -20,7 +21,7 @@ export interface ContrastIssue {
   ratio: number;
   threshold: number;
   severity: 'error' | 'warning';
-  message: string;
+  message: ValidationMessage;
 }
 
 /** One text role rendered by a block, with the colour it actually uses. */
@@ -117,7 +118,7 @@ export function getBlockTextSlots(
 /** Parse #RRGGBB → {r, g, b} as 0-255 integers. Throws on malformed input. */
 export function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) throw new Error(`Invalid hex colour: ${hex}`);
+  if (!m) throw new Error(`validation.color.invalid_hex (hex=${hex})`);
   const n = parseInt(m[1], 16);
   return { r: (n >> 16) & 0xff, g: (n >> 8) & 0xff, b: n & 0xff };
 }
@@ -193,7 +194,16 @@ export function validateContrast(doc: CanonicalDocument): ContrastIssue[] {
             ratio,
             threshold,
             severity: 'error',
-            message: `${block.type}.${slot}: contrast ${ratio.toFixed(2)}:1 below ${threshold}:1 on ${bgMeta.base}`,
+            message: {
+              key: 'validation.contrast.below_threshold_base',
+              params: {
+                blockType: block.type,
+                slot,
+                ratio: ratio.toFixed(2),
+                threshold,
+                background: bgMeta.base,
+              },
+            },
           });
           continue;
         }
@@ -212,7 +222,16 @@ export function validateContrast(doc: CanonicalDocument): ContrastIssue[] {
               ratio,
               threshold,
               severity: 'warning',
-              message: `${block.type}.${slot}: contrast ${ratio.toFixed(2)}:1 below ${threshold}:1 on ${bgMeta.lightestStop}`,
+              message: {
+                key: 'validation.contrast.below_threshold_gradient',
+                params: {
+                  blockType: block.type,
+                  slot,
+                  ratio: ratio.toFixed(2),
+                  threshold,
+                  background: bgMeta.lightestStop,
+                },
+              },
             });
           }
         }

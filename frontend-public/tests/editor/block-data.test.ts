@@ -6,6 +6,11 @@ import {
   validateSmallMultipleData,
   validateBlockData,
 } from "../../src/components/editor/validation/block-data";
+import type { ValidationMessage } from "../../src/components/editor/validation/types";
+
+function hasValidationKey(messages: ValidationMessage[], key: string): boolean {
+  return messages.some(m => m.key === key);
+}
 
 describe("validateBarHorizontalData", () => {
   const ok = {
@@ -23,38 +28,38 @@ describe("validateBarHorizontalData", () => {
   test("rejects non-array items", () => {
     const r = validateBarHorizontalData({ items: "x" });
     expect(r.valid).toBe(false);
-    expect(r.errors[0]).toMatch(/items must be an array/);
+    expect(r.errors[0]?.key).toBe('validation.items.array_required');
   });
 
   test("rejects empty items", () => {
     const r = validateBarHorizontalData({ items: [] });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /at least one/i.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.items.min_one')).toBe(true);
   });
 
   test("rejects more than 30 items", () => {
     const items = Array.from({ length: 31 }, (_, i) => ({ label: `L${i}`, value: i, flag: "", highlight: false }));
     const r = validateBarHorizontalData({ items });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /too many items/i.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.items.too_many')).toBe(true);
   });
 
   test("rejects items with empty label", () => {
     const r = validateBarHorizontalData({ items: [{ label: "", value: 1, flag: "", highlight: false }] });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /label/i.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.item.label_required')).toBe(true);
   });
 
   test("rejects non-finite values", () => {
     const r = validateBarHorizontalData({ items: [{ label: "A", value: NaN, flag: "", highlight: false }] });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /finite/i.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.item.value_finite')).toBe(true);
   });
 
   test("requires finite benchmarkValue when showBenchmark is true", () => {
     const r = validateBarHorizontalData({ ...ok, showBenchmark: true });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /benchmarkValue/.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.benchmark.value_finite_when_enabled')).toBe(true);
     expect(validateBarHorizontalData({ ...ok, showBenchmark: true, benchmarkValue: 5 }).valid).toBe(true);
   });
 });
@@ -73,13 +78,13 @@ describe("validateLineEditorialData", () => {
   test("rejects non-array series", () => {
     const r = validateLineEditorialData({ series: "x", xLabels: [] });
     expect(r.valid).toBe(false);
-    expect(r.errors[0]).toMatch(/series must be an array/);
+    expect(r.errors[0]?.key).toBe('validation.series.array_required');
   });
 
   test("rejects non-array xLabels", () => {
     const r = validateLineEditorialData({ series: [], xLabels: "x" });
     expect(r.valid).toBe(false);
-    expect(r.errors[0]).toMatch(/xLabels must be an array/);
+    expect(r.errors[0]?.key).toBe('validation.xlabels.array_required');
   });
 
   test("rejects series.data length mismatch with xLabels", () => {
@@ -88,7 +93,7 @@ describe("validateLineEditorialData", () => {
       xLabels: ["2020", "2021", "2022"],
     });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /points but/.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.series.points_mismatch')).toBe(true);
   });
 
   test("rejects invalid series role", () => {
@@ -97,7 +102,7 @@ describe("validateLineEditorialData", () => {
       xLabels: ["2020", "2021", "2022"],
     });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /role must be/.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.series.role_invalid')).toBe(true);
   });
 
   test("rejects non-finite data values", () => {
@@ -106,7 +111,7 @@ describe("validateLineEditorialData", () => {
       xLabels: ["2020", "2021", "2022"],
     });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /non-finite/.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.small_multiple.non_finite_values')).toBe(true);
   });
 });
 
@@ -125,14 +130,14 @@ describe("validateComparisonKpiData", () => {
   test("rejects fewer than 2 items", () => {
     const r = validateComparisonKpiData({ items: [ok.items[0]] });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /at least 2/.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.kpi.min_two')).toBe(true);
   });
 
   test("rejects more than 4 items", () => {
     const items = Array.from({ length: 5 }, (_, i) => ({ label: `L${i}`, value: "1", delta: "", direction: "neutral" }));
     const r = validateComparisonKpiData({ items });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /too many/.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.kpi.max_items')).toBe(true);
   });
 
   test("rejects invalid direction", () => {
@@ -140,7 +145,7 @@ describe("validateComparisonKpiData", () => {
       items: [ok.items[0], { label: "B", value: "2", delta: "", direction: "up" }],
     });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /direction/.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.kpi.direction_invalid')).toBe(true);
   });
 });
 
@@ -163,19 +168,19 @@ describe("validateTableEnrichedData", () => {
       rows: [{ country: "Canada", flag: "", vals: [1], rank: 1 }],
     });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /vals but/.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.row.vals_count_mismatch')).toBe(true);
   });
 
   test("rejects fewer than 2 columns", () => {
     const r = validateTableEnrichedData({ columns: ["Country"], rows: [{ country: "Canada", flag: "", vals: [], rank: 1 }] });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /columns/.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.table.columns_min_two')).toBe(true);
   });
 
   test("rejects empty rows", () => {
     const r = validateTableEnrichedData({ columns: ["Country", "A"], rows: [] });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /row required/.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.table.rows_min_one')).toBe(true);
   });
 });
 
@@ -199,13 +204,13 @@ describe("validateSmallMultipleData", () => {
   test("rejects empty per-item data", () => {
     const r = validateSmallMultipleData({ items: [{ label: "A", flag: "", data: [] }] });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /data is empty/.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.small_multiple.data_empty')).toBe(true);
   });
 
   test("rejects non-finite per-item values", () => {
     const r = validateSmallMultipleData({ items: [{ label: "A", flag: "", data: [1, NaN] }] });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => /non-finite/.test(e))).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.small_multiple.non_finite_values')).toBe(true);
   });
 });
 
