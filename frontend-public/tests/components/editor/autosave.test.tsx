@@ -327,7 +327,7 @@ describe('Autosave — 404 produces the dedicated error message', () => {
     await flushMicrotasks();
 
     const banner = screen.getByTestId('notification-banner');
-    expect(banner.textContent).toMatch(/reload the page/i);
+    expect(banner.textContent).toMatch(/publication\.not_found\.reload/i);
   });
 });
 
