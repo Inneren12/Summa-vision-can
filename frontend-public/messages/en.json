@@ -65,8 +65,7 @@
     "contrast": {
       "title": "Contrast",
       "gradient_suffix": " (gradient)",
-      "below_threshold_base": "{blockType}.{slot}: contrast {ratio}:1 below {threshold}:1 on {background}",
-      "below_threshold_gradient": "{blockType}.{slot}: contrast {ratio}:1 below {threshold}:1 on {background}"
+      "below_threshold": "{blockType}.{slot}: contrast {ratio}:1 below {threshold}:1 on {background}"
     },
     "page": {
       "unknown_palette": "Unknown palette: \"{palette}\"",

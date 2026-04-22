@@ -65,8 +65,7 @@
     "contrast": {
       "title": "Контраст",
       "gradient_suffix": " (градиент)",
-      "below_threshold_base": "{blockType}.{slot}: контраст {ratio}:1 ниже {threshold}:1 на {background}",
-      "below_threshold_gradient": "{blockType}.{slot}: контраст {ratio}:1 ниже {threshold}:1 на {background}"
+      "below_threshold": "{blockType}.{slot}: контраст {ratio}:1 ниже {threshold}:1 на {background}"
     },
     "page": {
       "unknown_palette": "Неизвестная палитра: «{palette}»",

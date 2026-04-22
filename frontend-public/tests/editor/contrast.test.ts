@@ -288,7 +288,7 @@ describe("validateContrast — integration", () => {
 
     expect(issues).toHaveLength(1);
     expect(issues[0].slot).toBe("delta_neg");
-    expect(issues[0].message.key).toBe("validation.contrast.below_threshold_base");
+    expect(issues[0].message.key).toBe("validation.contrast.below_threshold");
   });
 
   test("hero_stat emits only the failing label slot", () => {
@@ -314,7 +314,7 @@ describe("validateContrast — integration", () => {
 
     expect(issues).toHaveLength(1);
     expect(issues[0].slot).toBe("label");
-    expect(issues[0].message.key).toBe("validation.contrast.below_threshold_base");
+    expect(issues[0].message.key).toBe("validation.contrast.below_threshold");
   });
 
   test("hero_stat emits only the failing value slot when pal.p loses contrast", () => {
@@ -340,7 +340,7 @@ describe("validateContrast — integration", () => {
 
     expect(issues).toHaveLength(1);
     expect(issues[0].slot).toBe("value");
-    expect(issues[0].message.key).toBe("validation.contrast.below_threshold_base");
+    expect(issues[0].message.key).toBe("validation.contrast.below_threshold");
   });
 
   test("table_enriched emits only the failing rank slot when pal.p loses contrast", () => {
@@ -366,7 +366,7 @@ describe("validateContrast — integration", () => {
 
     expect(issues).toHaveLength(1);
     expect(issues[0].slot).toBe("rank");
-    expect(issues[0].message.key).toBe("validation.contrast.below_threshold_base");
+    expect(issues[0].message.key).toBe("validation.contrast.below_threshold");
   });
 
   test("table_enriched checks header separately from score and rank", () => {
@@ -456,7 +456,7 @@ describe("validateContrast — integration", () => {
         doc.page.background = bg;
         const issues = validateContrast(doc);
         for (const i of issues) {
-          expect(["validation.contrast.below_threshold_base", "validation.contrast.below_threshold_gradient"]).toContain(i.message.key);
+          expect(["validation.contrast.below_threshold"]).toContain(i.message.key);
           expect(i.ratio).toBeGreaterThanOrEqual(1);
           expect([3, 4.5]).toContain(i.threshold);
           expect(["error", "warning"]).toContain(i.severity);

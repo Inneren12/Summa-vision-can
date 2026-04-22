@@ -1,4 +1,8 @@
-export type ValidationMessageKey = string;
+/**
+ * Template literal type ensures every ValidationMessage key starts with `validation.`.
+ * This is a weak-but-useful guard: it catches typos like `validtion.*` at compile time.
+ */
+export type ValidationMessageKey = `validation.${string}`;
 
 export type ValidationMessageParams = Record<string, string | number | undefined>;
 

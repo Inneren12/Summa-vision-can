@@ -223,7 +223,7 @@ export function validateContrast(doc: CanonicalDocument): ContrastIssue[] {
             threshold,
             severity: 'error',
             message: {
-              key: 'validation.contrast.below_threshold_base',
+              key: 'validation.contrast.below_threshold',
               params: {
                 blockType: block.type,
                 slot,
@@ -270,7 +270,7 @@ export function validateContrast(doc: CanonicalDocument): ContrastIssue[] {
               threshold,
               severity: 'warning',
               message: {
-                key: 'validation.contrast.below_threshold_gradient',
+                key: 'validation.contrast.below_threshold',
                 params: {
                   blockType: block.type,
                   slot,

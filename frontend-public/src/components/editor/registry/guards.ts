@@ -353,6 +353,11 @@ function validateRegistryConstraints(doc: CanonicalDocument): string | null {
 
     const blockDataValidation = validateBlockData(block.type, block.props);
     if (!blockDataValidation.valid) {
+      // INTENTIONAL: dev/import-guard path. Uses debug formatter because this error is
+      // thrown during JSON import validation and surfaced to operators as a technical
+      // import diagnostic, not as a localized UI message. Do NOT i18n-ify this without
+      // redesigning the import error surface — see i18n recon docs and render.tsx for
+      // the user-facing localized render path.
       return `Invalid props for ${block.type} (${id}): ${blockDataValidation.errors.map(formatValidationMessageDev).join("; ")}`;
     }
 

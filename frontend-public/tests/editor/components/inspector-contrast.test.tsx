@@ -16,7 +16,7 @@ function mockIssue(over: Partial<ContrastIssue> = {}): ContrastIssue {
     ratio: 3.27,
     threshold: 4.5,
     severity: "error",
-    message: { key: "validation.contrast.below_threshold_base", params: { blockType: "headline_editorial", slot: "primary", ratio: "3.27", threshold: 4.5, background: "#0B0D11" } },
+    message: { key: "validation.contrast.below_threshold", params: { blockType: "headline_editorial", slot: "primary", ratio: "3.27", threshold: 4.5, background: "#0B0D11" } },
     ...over,
   };
 }
