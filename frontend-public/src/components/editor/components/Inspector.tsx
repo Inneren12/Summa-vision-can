@@ -31,7 +31,7 @@ function badgeLabel(tInspector: (key: string) => string, st: string): string {
     case 'optional_available':
       return tInspector('badge.optional_available');
     default:
-      return st;
+      return 'UNKNOWN';
   }
 }
 

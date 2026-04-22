@@ -46,7 +46,6 @@ function RightRailImpl({
   onRequestNote,
   contrastIssues,
 }: RightRailProps) {
-  const tInspector = useTranslations('inspector');
   const tRightRail = useTranslations('right_rail');
   const [tab, setTab] = useState<RightRailTab>('inspector');
   const inspectorTabId = useId();
@@ -117,7 +116,7 @@ function RightRailImpl({
           onKeyDown={handleTabKey}
           style={tabButtonStyle(tab === 'inspector')}
         >
-          {tInspector('title')}
+          {tRightRail('tab.inspector')}
         </button>
         <button
           type="button"

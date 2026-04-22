@@ -57,6 +57,7 @@
   "right_rail": {
     "aria_label": "Right rail",
     "tab": {
+      "inspector": "Inspector",
       "review": "Review"
     }
   },

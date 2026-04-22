@@ -57,6 +57,7 @@
   "right_rail": {
     "aria_label": "Правая панель",
     "tab": {
+      "inspector": "Инспектор",
       "review": "Проверка"
     }
   },
