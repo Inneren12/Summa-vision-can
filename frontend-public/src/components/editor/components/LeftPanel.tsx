@@ -9,6 +9,7 @@ import { BGS } from '../config/backgrounds';
 import { SIZES } from '../config/sizes';
 import { BREG } from '../registry/blocks';
 import { TPLS } from '../registry/templates';
+import { badgeColor, badgeLabel } from '../utils/badge';
 import {
   buildThreads,
   isThreadResolved,
@@ -39,18 +40,13 @@ interface LeftPanelProps {
   effectivePerms: PermissionSet;
 }
 
-function badge(st: string) {
-  const c: Record<string, string> = { required_locked: TK.c.err, required_editable: TK.c.acc, optional_default: TK.c.pos, optional_available: TK.c.txtM };
-  const l: Record<string, string> = { required_locked: "REQ\u00B7\uD83D\uDD12", required_editable: "REQ", optional_default: "OPT\u00B7ON", optional_available: "OPT" };
-  return { color: c[st] || TK.c.txtM, label: l[st] || st };
-}
-
 const tb = (a: boolean): React.CSSProperties => ({ padding: "5px 7px", fontSize: "8px", fontFamily: TK.font.data, textTransform: "uppercase", letterSpacing: "0.4px", cursor: "pointer", background: a ? TK.c.bgAct : "transparent", color: a ? TK.c.acc : TK.c.txtM, border: "none", borderBottom: a ? `2px solid ${TK.c.acc}` : "2px solid transparent", whiteSpace: "nowrap" });
 
 function LeftPanelImpl({ doc, dispatch, selId, ltab, setLtab, effectivePerms }: LeftPanelProps) {
   const tLeftPanel = useTranslations('left_panel');
   const tBlock = useTranslations('block');
   const tBlockType = useTranslations('block.type');
+  const tInspector = useTranslations('inspector');
   const tTheme = useTranslations('theme');
   const tReview = useTranslations('review');
   const tTemplateVariant = useTranslations('template.variant');
@@ -111,12 +107,11 @@ function LeftPanelImpl({ doc, dispatch, selId, ltab, setLtab, effectivePerms }: 
               if (!b) return null;
               const r = BREG[b.type];
               if (!r) return null;
-              const bd = badge(r.status);
               const unresolved = unresolvedByBlock.get(bid) ?? 0;
               return (
                 <div key={bid} style={{ display: "flex", alignItems: "center", gap: "3px", marginBottom: "1px" }}>
                   <button type="button" onClick={() => dispatch({ type: "SELECT", blockId: bid })} aria-label={tBlock('select.aria', { name: tBlockType(`${b.type}.name`) })} aria-pressed={selId === bid} style={{ flex: 1, display: "flex", alignItems: "center", gap: "4px", textAlign: "left", padding: "4px 6px", fontSize: "9px", background: selId === bid ? TK.c.bgAct : "transparent", border: selId === bid ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: "pointer", color: b.visible ? TK.c.txtP : TK.c.txtM, textDecoration: b.visible ? "none" : "line-through", opacity: b.visible ? 1 : .5 }}>
-                    <span style={{ fontSize: "6px", color: bd.color }}>{bd.label}</span><span>{tBlockType(`${b.type}.name`)}</span>
+                    <span style={{ fontSize: "6px", color: badgeColor(r.status, TK.c) }}>{badgeLabel(tInspector, r.status)}</span><span>{tBlockType(`${b.type}.name`)}</span>
                     {unresolved > 0 && (
                       <span
                         data-testid="block-unresolved-pill"
