@@ -75,3 +75,12 @@ Action items for Phase 3 Slice 1 (planning):
 - Founder: run quick visual check using `lib/dev/font_cyrillic_test.dart` (optional if swap decision is pre-approved)
 - Phase 3 Slice 1: integrate font mitigation into i18n technical plan
 - Phase 3 Slice 2: hardcoded-string recon for Queue / Editor / Preview flows
+
+## 8. Resolution
+
+Font swap implemented 2026-04-22 — Bricolage Grotesque replaced with Manrope in `lib/core/theme/app_theme.dart`. Display headings now render Cyrillic correctly. Body (DM Sans) and data (JetBrains Mono) fonts unchanged.
+
+Phase 3 is now UNBLOCKED on the font axis.
+
+Next step: Phase 3 Slice 1 (detailed i18n plan for Queue / Editor / Preview screens).
+
