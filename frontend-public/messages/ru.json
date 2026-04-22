@@ -195,7 +195,7 @@
       "aria": "Режим QA"
     },
     "summary": {
-      "compact": "{errors} ошибок · {warnings} предупреждений"
+      "compact": "{errors} ош. · {warnings} пред."
     }
   },
   "debug": {

@@ -195,7 +195,7 @@
       "aria": "QA mode"
     },
     "summary": {
-      "compact": "{errors} errors · {warnings} warnings"
+      "compact": "{errors}err · {warnings}warn"
     }
   },
   "debug": {
