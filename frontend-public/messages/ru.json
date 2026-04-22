@@ -1,0 +1,32 @@
+{
+  "admin": {
+    "meta": {
+      "title": "Администратор — Summa Vision"
+    },
+    "header": {
+      "brand": "Summa Vision · Администратор",
+      "internal_tool": "Внутренний инструмент"
+    }
+  },
+  "publications": {
+    "title": "Публикации",
+    "empty": "Публикаций пока нет."
+  },
+  "publication": {
+    "load_failed": {
+      "fallback": "Не удалось загрузить публикацию — применены настройки по умолчанию. {error}"
+    },
+    "not_found": {
+      "reload": "Публикация не найдена — перезагрузите страницу"
+    }
+  },
+  "import": {
+    "invalid_json": "Неверный формат JSON",
+    "hydration_failed": "Не удалось загрузить данные",
+    "validation_failed": "Ошибка проверки данных",
+    "error": {
+      "hydration": "Ошибка импорта: {message}",
+      "validation": "Ошибка импорта: {message}"
+    }
+  }
+}

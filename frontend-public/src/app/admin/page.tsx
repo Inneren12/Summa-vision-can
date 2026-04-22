@@ -1,23 +1,25 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { fetchAdminPublicationListServer } from '@/lib/api/admin-server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminIndexPage() {
+  const t = await getTranslations('publications');
   const publications = await fetchAdminPublicationListServer({ limit: 100 });
 
   if (publications.length === 0) {
     return (
       <div>
-        <h1 className="text-2xl font-display font-semibold mb-4">Publications</h1>
-        <p className="text-text-secondary">No publications yet.</p>
+        <h1 className="text-2xl font-display font-semibold mb-4">{t('title')}</h1>
+        <p className="text-text-secondary">{t('empty')}</p>
       </div>
     );
   }
 
   return (
     <div>
-      <h1 className="text-2xl font-display font-semibold mb-6">Publications</h1>
+      <h1 className="text-2xl font-display font-semibold mb-6">{t('title')}</h1>
       <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {publications.map((p) => (
           <li key={p.id}>
