@@ -35,7 +35,7 @@ describe("editor UI a11y + import warnings", () => {
     fireEvent.change(fileInput, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(screen.getByText("Invalid JSON file")).toBeInTheDocument();
+      expect(screen.getByText("import.invalid_json")).toBeInTheDocument();
     });
     expect(alertSpy).not.toHaveBeenCalled();
 

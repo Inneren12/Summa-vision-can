@@ -1,4 +1,7 @@
+import createNextIntlPlugin from 'next-intl/plugin';
 import type { NextConfig } from "next";
+
+const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const nextConfig: NextConfig = {
   // Strip dev-only console output at build; keep console.error so the
@@ -54,4 +57,4 @@ if (process.env.ANALYZE === "true") {
   configWithAnalyzer = bundleAnalyzer({ enabled: true })(nextConfig);
 }
 
-export default configWithAnalyzer;
+export default withNextIntl(configWithAnalyzer);

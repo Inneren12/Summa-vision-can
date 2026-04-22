@@ -1,0 +1,32 @@
+{
+  "admin": {
+    "meta": {
+      "title": "Admin — Summa Vision"
+    },
+    "header": {
+      "brand": "Summa Vision · Admin",
+      "internal_tool": "Internal tool"
+    }
+  },
+  "publications": {
+    "title": "Publications",
+    "empty": "No publications yet."
+  },
+  "publication": {
+    "load_failed": {
+      "fallback": "Failed to load publication — using template defaults. {error}"
+    },
+    "not_found": {
+      "reload": "Publication not found — reload the page"
+    }
+  },
+  "import": {
+    "invalid_json": "Invalid JSON file",
+    "hydration_failed": "hydration failed",
+    "validation_failed": "validation failed",
+    "error": {
+      "hydration": "Import error: {message}",
+      "validation": "Import error: {message}"
+    }
+  }
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'react';
+import { useTranslations } from 'next-intl';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { EditorMode, QAMode, LeftTab, BlockRegistryEntry, CanonicalDocument, SaveStatus, EditorAction } from './types';
 import { TK } from './config/tokens';
@@ -116,6 +117,8 @@ export default function InfographicEditor({
   initialDoc,
   publicationId,
 }: InfographicEditorProps = {}) {
+  const tPublication = useTranslations('publication');
+  const tImport = useTranslations('import');
   const cvs = useRef<HTMLCanvasElement>(null);
   const overlay = useRef<HTMLCanvasElement>(null);
   const debugCvs = useRef<HTMLCanvasElement | null>(null);
@@ -214,7 +217,7 @@ export default function InfographicEditor({
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [importError, setImportError] = useState<string | null>(
     initialValidationError
-      ? `Failed to load publication — using template defaults. ${initialValidationError}`
+      ? tPublication('load_failed.fallback', { error: initialValidationError })
       : null,
   );
   const fileRef = useRef<HTMLInputElement>(null);
@@ -568,7 +571,7 @@ export default function InfographicEditor({
           // re-arms canAutoRetry.
           dispatch({
             type: "SAVE_FAILED",
-            error: 'Publication not found — reload the page',
+            error: tPublication('not_found.reload'),
             canAutoRetry: false,
           });
           // IMPORTANT: do NOT increment saveFailureGen here. The retry effect
@@ -591,7 +594,7 @@ export default function InfographicEditor({
       .finally(() => {
         savingRef.current = false;
       });
-  }, [dirty, doc, dispatch, publicationId]);
+  }, [dirty, doc, dispatch, publicationId, tPublication]);
 
   // Debounced autosave (Stage 4 Task 2). Every mutating reducer action
   // produces a new `state.doc` reference; navigational actions (SELECT,
@@ -853,7 +856,7 @@ export default function InfographicEditor({
         try {
           raw = JSON.parse(ev.target?.result as string);
         } catch {
-          setImportError("Invalid JSON file");
+          setImportError(tImport('invalid_json'));
           setImportWarnings([]);
           return;
         }
@@ -861,7 +864,7 @@ export default function InfographicEditor({
         try {
           result = hydrateImportedDoc(raw);
         } catch (hydrationErr: any) {
-          setImportError(`Import error: ${hydrationErr?.message ?? "hydration failed"}`);
+          setImportError(tImport('error.hydration', { message: hydrationErr?.message ?? tImport('hydration_failed') }));
           setImportWarnings([]);
           return;
         }
@@ -869,7 +872,7 @@ export default function InfographicEditor({
         try {
           validated = validateImportStrict(result.doc);
         } catch (validationErr: any) {
-          setImportError(`Import error: ${validationErr?.message ?? "validation failed"}`);
+          setImportError(tImport('error.validation', { message: validationErr?.message ?? tImport('validation_failed') }));
           setImportWarnings(result.warnings);
           return;
         }
