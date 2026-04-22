@@ -57,7 +57,7 @@ describe('InfographicEditor — initialDoc prop', () => {
     // NotificationBanner surfaces the validation error as an import error.
     const banner = screen.getByTestId('notification-banner');
     expect(banner).toHaveAttribute('data-kind', 'import-error');
-    expect(banner.textContent).toMatch(/Failed to load publication/);
+    expect(banner.textContent).toMatch(/publication\.load_failed\.fallback/);
 
     // Dev-only console.error fires on validation failure.
     expect(consoleSpy).toHaveBeenCalled();
