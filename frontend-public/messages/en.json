@@ -96,9 +96,6 @@
       "block_not_allowed": "{blockName} not allowed in {sectionType}",
       "max_per_section": "{blockName}: {count}x in {sectionType} (max {max})"
     },
-    "block_data": {
-      "prefixed_error": "{name}: {error}"
-    },
     "items": {
       "array_required": "items must be an array",
       "min_one": "at least one item required",
@@ -146,9 +143,9 @@
       "vals_array_required": "row[{index}]: vals must be an array"
     },
     "small_multiple": {
-      "data_array_required": "item[{index}]: data must be an array",
-      "data_empty": "item[{index}] \"{label}\": data is empty",
-      "non_finite_values": "item[{index}] \"{label}\": contains non-finite values"
+      "data_array_required": "small_multiple[{index}]: data must be an array",
+      "data_empty": "small_multiple[{index}]: data cannot be empty",
+      "non_finite_values": "small_multiple[{index}] \"{label}\": contains non-finite values"
     },
     "color": {
       "invalid_hex": "Invalid hex colour: {hex}"
@@ -160,7 +157,7 @@
       "required_block_missing": "Required block type \"{type}\" not found",
       "unknown_block_type": "Unknown block type: \"{type}\"",
       "wrong_section": "Block \"{blockName}\" in \"{sectionType}\" section (allowed: {allowed})",
-      "id_mismatch": "Block key \"{key}\" does not match block.id \"{blockId}\""
+      "id_mismatch": "Block id mismatch: expected \"{expected}\", got \"{actual}\""
     },
     "density": {
       "ranked_bars_dense": "Ranked Bars: {count} items — may be dense",

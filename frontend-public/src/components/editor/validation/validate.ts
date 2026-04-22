@@ -6,8 +6,11 @@ import { BGS } from '../config/backgrounds';
 import { validateBlockData } from './block-data';
 import { validateContrast } from './contrast';
 import { measureLayout } from '../renderer/measure';
-import { formatValidationMessageDev } from './types';
 
+// Block type names from BREG (e.g. "Ranked Bars", "KPI Compare") flow through
+// validation messages as `{blockName}` params unchanged. They remain EN in both
+// locales for this slice. Full localization of BREG block type names happens in
+// Phase 1 Slice 3 (block editors + registry migration).
 export function validate(doc: CanonicalDocument): ValidationResult {
   const R: ValidationResult = { errors: [], warnings: [], info: [], passed: [], contrastIssues: [] };
   const blocks = Object.values(doc.blocks).filter(b => b.visible);
@@ -89,8 +92,8 @@ export function validate(doc: CanonicalDocument): ValidationResult {
     if (!dv.valid) {
       const name = BREG[b.type]?.name || b.type;
       dv.errors.forEach(err => R.errors.push({
-        key: 'validation.block_data.prefixed_error',
-        params: { name, error: formatValidationMessageDev(err) },
+        ...err,
+        prefix: name,
       }));
     }
   });

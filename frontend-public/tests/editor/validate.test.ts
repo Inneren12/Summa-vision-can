@@ -87,7 +87,7 @@ describe("validate / delegates to validateBlockData", () => {
     const bid = findBlockIdByType(doc, "line_editorial");
     doc.blocks[bid].props.series = [{ label: "X", role: "primary", data: [1, 2] }];
     const r = validate(doc);
-    expect(hasValidationKey(r.errors, 'validation.block_data.prefixed_error')).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.series.points_mismatch')).toBe(true);
   });
 
   test("surfaces invalid bar data (empty items) via the shared validator", () => {
@@ -95,7 +95,7 @@ describe("validate / delegates to validateBlockData", () => {
     const bid = findBlockIdByType(doc, "bar_horizontal");
     doc.blocks[bid].props.items = [];
     const r = validate(doc);
-    expect(hasValidationKey(r.errors, 'validation.block_data.prefixed_error')).toBe(true);
+    expect(hasValidationKey(r.errors, 'validation.items.min_one')).toBe(true);
   });
 
   test("validateImportStrict and validate agree on block-data rules", () => {
@@ -105,7 +105,7 @@ describe("validate / delegates to validateBlockData", () => {
     const importErr = importMessage(doc);
     const validation = validate(doc);
     expect(importErr).toMatch(/Invalid props for line_editorial/);
-    expect(hasValidationKey(validation.errors, 'validation.block_data.prefixed_error')).toBe(true);
+    expect(hasValidationKey(validation.errors, 'validation.series.points_mismatch')).toBe(true);
   });
 });
 

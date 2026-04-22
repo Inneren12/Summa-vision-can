@@ -118,7 +118,7 @@ export function getBlockTextSlots(
 /** Parse #RRGGBB → {r, g, b} as 0-255 integers. Throws on malformed input. */
 export function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) throw new Error(`validation.color.invalid_hex (hex=${hex})`);
+  if (!m) throw new Error(`Invalid hex colour: ${hex}`);
   const n = parseInt(m[1], 16);
   return { r: (n >> 16) & 0xff, g: (n >> 8) & 0xff, b: n & 0xff };
 }
@@ -148,6 +148,15 @@ export function contrastRatio(fg: string, bg: string): number {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+function safeContrastRatio(fg: string, bg: string): { ratio?: number; invalidHex?: string } {
+  try {
+    return { ratio: contrastRatio(fg, bg) };
+  } catch {
+    const candidate = [fg, bg].find(hex => !/^#?[0-9a-f]{6}$/i.test(hex.trim()));
+    return { invalidHex: candidate ?? fg };
+  }
 }
 
 // ---- Validator ----------------------------------------------------------
@@ -181,7 +190,26 @@ export function validateContrast(doc: CanonicalDocument): ContrastIssue[] {
 
       for (const { slot, color, isLarge } of textSlots) {
         const threshold = isLarge ? 3.0 : 4.5;
-        const baseRatio = contrastRatio(color, bgMeta.base);
+        const baseCheck = safeContrastRatio(color, bgMeta.base);
+        if (baseCheck.invalidHex) {
+          issues.push({
+            blockId,
+            blockType: block.type,
+            slot,
+            textColor: color,
+            bgColor: bgMeta.base,
+            bgPoint: 'base',
+            ratio: 0,
+            threshold,
+            severity: 'error',
+            message: {
+              key: 'validation.color.invalid_hex',
+              params: { hex: baseCheck.invalidHex },
+            },
+          });
+          continue;
+        }
+        const baseRatio = baseCheck.ratio as number;
         if (baseRatio < threshold) {
           const ratio = round2(baseRatio);
           issues.push({
@@ -209,7 +237,26 @@ export function validateContrast(doc: CanonicalDocument): ContrastIssue[] {
         }
 
         if (bgMeta.isGradient && bgMeta.lightestStop) {
-          const lightRatio = contrastRatio(color, bgMeta.lightestStop);
+          const gradientCheck = safeContrastRatio(color, bgMeta.lightestStop);
+          if (gradientCheck.invalidHex) {
+            issues.push({
+              blockId,
+              blockType: block.type,
+              slot,
+              textColor: color,
+              bgColor: bgMeta.lightestStop,
+              bgPoint: 'lightestStop',
+              ratio: 0,
+              threshold,
+              severity: 'error',
+              message: {
+                key: 'validation.color.invalid_hex',
+                params: { hex: gradientCheck.invalidHex },
+              },
+            });
+            continue;
+          }
+          const lightRatio = gradientCheck.ratio as number;
           if (lightRatio < threshold) {
             const ratio = round2(lightRatio);
             issues.push({

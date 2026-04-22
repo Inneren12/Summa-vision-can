@@ -283,3 +283,9 @@ List includes every item marked **new** or phrase-level **partial** where exact 
 4. **`frontend-public/src/components/editor/validation/contrast.ts` and `validation/validate.ts`** — central message emitters; migrate interpolated patterns to ICU placeholders.
 5. **`frontend-public/src/components/editor/validation/block-data.ts` + `validation/invariants.ts`** — standardize low-level validator messages and ensure consistent key strategy for index-based errors.
 
+
+## Known limitations carried to Slice 3
+
+- Block type names (BREG `.name` fields — "Ranked Bars", "KPI Compare", "Single Stat Hero",
+  etc.) remain EN in validation messages regardless of locale. These will be migrated to
+  `block.type.*.name` translation keys in Slice 3.

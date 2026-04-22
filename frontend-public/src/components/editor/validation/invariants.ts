@@ -97,7 +97,7 @@ export function assertDocumentIntegrity(doc: CanonicalDocument): InvariantViolat
     if (block.id !== key) {
       violations.push({
         code: 'ID_MISMATCH',
-        message: { key: 'validation.integrity.id_mismatch', params: { key, blockId: block.id } },
+        message: { key: 'validation.integrity.id_mismatch', params: { expected: key, actual: block.id } },
         severity: 'error',
       });
     }

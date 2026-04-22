@@ -96,9 +96,6 @@
       "block_not_allowed": "{blockName} недопустим в {sectionType}",
       "max_per_section": "{blockName}: {count}x в {sectionType} (максимум {max})"
     },
-    "block_data": {
-      "prefixed_error": "{name}: {error}"
-    },
     "items": {
       "array_required": "items должно быть массивом",
       "min_one": "требуется хотя бы один элемент",
@@ -143,12 +140,12 @@
       "country_required": "row[{index}]: country должно быть непустой строкой",
       "rank_finite": "row[{index}]: rank должно быть конечным числом",
       "vals_count_mismatch": "row[{index}]: {vals} vals, но {dataColumns} столбцов данных",
-      "vals_array_required": "TBD:validation.row.vals_array_required"
+      "vals_array_required": "row[{index}]: vals должно быть массивом"
     },
     "small_multiple": {
-      "data_array_required": "TBD:validation.small_multiple.data_array_required",
-      "data_empty": "TBD:validation.small_multiple.data_empty",
-      "non_finite_values": "TBD:validation.small_multiple.non_finite_values"
+      "data_array_required": "small_multiple[{index}]: data должно быть массивом",
+      "data_empty": "small_multiple[{index}]: data не может быть пустым",
+      "non_finite_values": "small_multiple[{index}] «{label}»: содержит неконечные значения"
     },
     "color": {
       "invalid_hex": "Неверный hex-цвет: {hex}"
@@ -160,7 +157,7 @@
       "required_block_missing": "Требуемый тип блока «{type}» не найден",
       "unknown_block_type": "Неизвестный тип блока: «{type}»",
       "wrong_section": "Блок «{blockName}» в разделе «{sectionType}» (допустимо: {allowed})",
-      "id_mismatch": "TBD:validation.integrity.id_mismatch"
+      "id_mismatch": "Несоответствие id блока: ожидалось «{expected}», получено «{actual}»"
     },
     "density": {
       "ranked_bars_dense": "Ranked Bars: {count} элементов — может быть плотно",
