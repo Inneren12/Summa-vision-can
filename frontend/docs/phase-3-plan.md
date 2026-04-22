@@ -267,7 +267,8 @@ Enforced in CI via a health-check test in Slice 3.11 (can land earlier):
 - Placeholder names match exactly between locales for each key
 - Placeholder types match exactly between locales for each key
 - Pluralized messages preserve all required RU forms (`one`/`few`/`many`/`other`)
-- `@@locale` and `@metadata` entries are excluded from parity check
+- `@@locale` and ARB metadata entries (any key prefixed with `@`) are excluded from
+  parity check
 - Orphan keys in RU absent from EN are flagged as error unless explicitly allowlisted
 
 Placeholder parity is particularly important: ARB codegen derives Dart method signatures
@@ -291,6 +292,30 @@ Notes:
 
 - SharedPreferences load is async: app bootstrap must account for preloaded locale state.
 - Avoid frame-flash by resolving locale before first meaningful UI or using a controlled bootstrap placeholder.
+
+#### Bootstrap ownership
+
+Locale bootstrap logic must have a **single ownership point** in the app.
+
+**Preferred ownership:** a dedicated bootstrap provider (e.g., `appBootstrapProvider`
+returning an `AsyncValue<AppBootstrapState>` that includes resolved locale) OR an app
+settings controller that owns locale alongside other app-level preferences.
+
+**Anti-pattern — do NOT:**
+- Duplicate locale resolution logic across `main.dart`, router redirects, and shell
+  widgets
+- Resolve locale in multiple providers that read SharedPreferences independently
+- Mix async locale loading with router-level async redirect logic (creates race
+  conditions)
+
+**Implementation guidance for Slice 3.2b:**
+- One provider owns the locale bootstrap and reads SharedPreferences
+- `MaterialApp.router` reads from that provider only
+- Language switcher writes to that provider only (which persists to SharedPreferences)
+- Router and other consumers READ the resolved locale, never resolve it themselves
+
+This prevents first-frame EN flash, avoids double-reads of SharedPreferences, and
+centralizes rollback/debug if locale bootstrap misbehaves.
 
 ### 3d. Language switcher UI
 
@@ -342,11 +367,15 @@ locale text. Flutter-specific strategy is more explicit about what categories mu
 #### Tier 1 — Widget tests (default, per-screen)
 
 - Wrap widgets with test `AppLocalizations` delegate.
-- Assert that visible text comes from `AppLocalizations`, not from hardcoded string
-  literals. Method: render widget → read found text → verify it matches an expected
-  `AppLocalizations` method output, not a hand-written string.
+- Assert expected localized output for the active locale. Prefer assertions against
+  `AppLocalizations.of(context)!....` derived values where practical (e.g.,
+  `expect(find.text(appLoc.queueTitle), findsOneWidget)`).
+- Widget runtime tests can verify rendered output matches the expected localized value,
+  but cannot definitively prove the source of a string is `AppLocalizations` vs a
+  coincidentally-equal hardcoded literal. Catching literal leakage is the job of Tier 2b
+  denied-EN smoke tests, not Tier 1.
 - Do NOT assert exact RU copy in widget tests — copy iterates during glossary refinement
-  and tests become brittle.
+  and tests become brittle. Assert keys/method-derived values instead.
 
 #### Tier 2 — Mandatory smoke tests (three categories)
 
@@ -362,16 +391,30 @@ locale text. Flutter-specific strategy is more explicit about what categories mu
   (drawer, app bar, common buttons). Example denied list: `"Brief Queue"`, `"Cubes"`,
   `"Jobs"` — whichever translations exist per policy.
 - Allowlist for documented EN-kept exceptions (KPI, JSON, IDs)
+- The specific denied list must be generated per recon-approved translation policy for
+  that surface; do not hardcode a global denied list that conflicts with EN-kept
+  exceptions defined in §3k.
 - Catches hardcoded literals that slipped through widget tests
 
-**2c. Missing-localization fallback smoke**
-- Pump app with an incomplete ARB (dev scenario — not production)
-- Verify no raw keys leak into visible UI
-- Either missing keys fail fast, or a documented fallback pattern is used
+**2c. Missing-localization fail-fast policy**
+
+Policy for this project: **missing localizations fail in development and CI. Production
+must never rely on silent raw-key fallback in UI.**
+
+- Incomplete ARB is considered a build/test failure, not a runtime fallback feature
+- ARB parity check (Tier 3) catches missing keys before build
+- AppLocalizations codegen enforces compile-time method existence (can't reference a
+  missing key without Dart analyzer error)
+- Any runtime AppLocalizations lookup returning null is a bug to fix, not to tolerate
+
+Rationale: raw keys in production UI ("queueTitle" displayed as-is) are worse than a
+clean build failure. Failing fast forces translation gap to be addressed, not
+papered over.
 
 #### Tier 3 — Catalog health checks (CI gate)
 
 - **ARB parity**: every non-metadata key in `app_en.arb` exists in `app_ru.arb`
+  (`@@locale` and ARB metadata entries, any key prefixed with `@`, are excluded)
 - **Placeholder parity**: placeholder names AND types match between EN and RU for each key
 - **Plural form completeness**: every RU plural has `one`, `few`, `many`, `other`
 - **Orphan key detection** (optional consolidation check): warn on keys in RU not in EN
@@ -506,9 +549,16 @@ adds Flutter-specific cases.
 
 #### Ambiguous cases (flag for explicit decision in recon slice)
 
-- Navigation labels that are also product concepts (e.g., "Jobs", "Cubes") — if operator
-  memory has established EN usage for these, keep EN; otherwise translate. Resolve in
-  Slice 3.3 recon with founder input.
+- Navigation labels that are also product concepts (e.g., "Jobs", "Cubes"): **default
+  is to translate**. Keep EN only if one of the following is true:
+  1. Glossary or policy already locks EN for that term
+  2. Operators explicitly use EN in day-to-day workflow (confirmed by founder, not
+     assumed by agent)
+  3. Translation reduces clarity (e.g., technical term with no good RU equivalent)
+  4. Translation conflicts with backend naming in a way that would create mixed-signal
+     UX
+  If none of the above applies, translate. Resolve specific cases in Slice 3.3 recon
+  with founder input on each ambiguous label; do NOT silently default to EN.
 - Status badge labels (e.g., `DRAFT`, `READY`, `FAILED`) — Phase 1 translated these;
   default is to translate unless operator convention says otherwise.
 
@@ -567,8 +617,10 @@ The baseline decomposition is adjusted to reflect currently observed Flutter sur
 | 3.6 | Implementation: Editor | 90-170 | Medium-High | Includes plural/validation checks |
 | 3.7 | Recon: Preview + Graphics Config (polling lifecycle + errors) | 70-130 | Medium | Include backend-message exposure map |
 | 3.8 | Implementation: Preview + Graphics Config | 70-130 | Medium | Include async state copy + fallbacks |
-| 3.9 | Recon+Impl: Jobs + KPI | 80-140 | Medium | May merge if low churn |
-| 3.10 | Recon+Impl: Cubes + Data Preview | 100-180 | Medium-High | Data-heavy labels/filters |
+| 3.9a | Recon: Jobs + KPI | 80-140 | Low-Med | String inventory + EN-kept classification |
+| 3.9b | Implementation: Jobs + KPI | 80-140 | Medium | May merge with 3.9a only if recon confirms low churn and limited literal count |
+| 3.10a | Recon: Cubes + Data Preview | 100-180 | Medium | Higher backend-label exposure; flag every ambiguous case |
+| 3.10b | Implementation: Cubes + Data Preview | 100-180 | Medium-High | Data-heavy labels/filters; strict backend boundary per §3j |
 | 3.11 | Consolidation: ARB parity checks, unused-key scan, switcher polish, EN/RU smoke tests, design QA checklist, docs update | — | Low | Final hardening |
 
 #### Phase 3b — deferred expanded-surface work
@@ -667,8 +719,15 @@ Baseline estimate updated for observed surface area expansion.
 
 ### 7.1 Core (Queue/Editor/Preview-first) estimate
 
-Estimates are given as ranges: agent-best-case (smaller) and safe-planning (larger). Use
-safe-planning for scheduling and promises; best-case is achievable with clean review rounds.
+Estimates are given as two ranges:
+
+- **best-case**: clean implementation path with minimal review churn, no architectural
+  surprises, catalogs merge on first attempt
+- **safe-planning**: expected number including normal review iteration (2-3 rounds of
+  reviewer feedback per slice, one or two minor rework cycles)
+
+Use safe-planning for scheduling and external promises. Best-case is achievable with
+unusually clean execution; do not commit to timelines on best-case numbers.
 
 - Slice 3.2a (infra foundation): 1.5-2h best / 2.5-3.5h safe
 - Slice 3.2b (locale state + switcher): 2-3h best / 3-4.5h safe
@@ -679,9 +738,9 @@ safe-planning for scheduling and promises; best-case is achievable with clean re
 
 ### 7.2 Expanded surfaces estimate (already present routes)
 
-- Slice 3.9 (Jobs + KPI): 3-5h best / 5-8h safe
-- Slice 3.10 (Cubes + Data Preview): 4-6h best / 7-12h safe (data-heavy + backend
-  boundary complexity)
+- Slice 3.9a/b (Jobs + KPI recon + impl): 3-5h best / 5-8h safe combined
+- Slice 3.10a/b (Cubes + Data Preview recon + impl): 4-6h best / 7-12h safe combined
+  (data-heavy + backend boundary complexity)
 - Slice 3.11 (consolidation/polish/docs): 2-3h best / 3-5h safe
 - **Expanded subtotal: 9-14h best / 15-25h safe**
 
@@ -704,7 +763,7 @@ above best-case due to review rounds — expect similar here.
 - [ ] Founder approves infrastructure choice (framework, ARB, provider pattern)
 - [ ] Founder confirms Phase 3 scope boundary (core only vs all current routes)
 - [ ] Founder resolves open decisions in Section 5
-- [ ] Proceed to Slice 3.2 (scaffolding)
+- [ ] Proceed to Slice 3.2a (infra foundation)
 
 ---
 
@@ -742,12 +801,17 @@ Planning-only seed list (not implementation):
 
 This starter set is intentionally minimal and shell-focused; feature keys are scoped to recon slices.
 
-
 ## Appendix C — Shared-term reuse mapping (Phase 1 → Flutter ARB)
 
 These terms were canonicalized in Phase 1 glossary and must be reused with identical RU
-translations in Flutter ARB. Do NOT re-translate these in Phase 3 slices — look up the
-canonical RU from the glossary and use it.
+translations in Flutter ARB. Do NOT re-translate these in Phase 3 slices.
+
+**Source-of-truth note:**
+- `docs/i18n-glossary.md` is the single source of truth for canonical translations
+- This Appendix C is a convenience mirror, kept for quick reference
+- If the glossary and Appendix C disagree, **the glossary wins**
+- When updating the glossary, the same PR must update Appendix C to match (both or neither)
+- A sync-check item for this is in the i18n developer guide's slice checklist
 
 | Phase 1 JSON key | Canonical RU | Flutter ARB key |
 |---|---|---|
@@ -766,25 +830,36 @@ canonical RU from the glossary and use it.
 
 This table is seed; recon slices are expected to add to it when touching more shared
 terms. Update this appendix in the same PR as the addition.
-
+**Maintenance rule:** Every glossary update that touches a term listed in this appendix
+must update this appendix in the same PR. Drift between glossary and Appendix C is
+treated as a review-blocking defect.
 ## Appendix D — Backend error code mapping (Phase 3 scope)
-
 Backend error codes are mapped to ARB keys in a single location:
 `lib/l10n/backend_errors.dart`.
 
-Structure:
+**Structure (illustrative; exact shape chosen in implementation slice):**
+
+The mapping layer is a centralized lookup from backend `error_code` to a localized
+renderer function. The renderer may return a plain string for simple cases or a
+parameterized localized message for errors that carry context (e.g., `{briefId}`,
+`{field}`).
+
+Illustrative simple shape:
 
 ```dart
-/// Maps backend error codes (from `error_code` field in structured responses)
-/// to AppLocalizations methods. Unit test `backend_errors_test.dart` verifies
-/// every code known to the backend contract has a mapping entry.
-Map<String, String Function(AppLocalizations)> backendErrorMessages = {
+// Planning-only sketch. Exact type and signature chosen in implementation slice
+// to accommodate parameterized messages, not bound to this shape.
+Map<String, String Function(AppLocalizations)> backendErrorMessagesSimple = {
   'brief_not_found': (l) => l.errorBriefNotFound,
   'brief_locked': (l) => l.errorBriefLocked,
   'task_not_ready': (l) => l.errorTaskNotReady,
-  // ... etc
 };
 ```
+
+For parameterized error messages (e.g., `errorFieldInvalid(field)`), the real signature
+will need to carry parameters through the lookup. The implementation slice (Slice 3.7 or
+3.8) chooses the final type — may be a sealed class hierarchy, a function with dynamic
+params, or a builder pattern. Do NOT commit to the simple map signature at planning time.
 
 A unit test in `test/l10n/backend_errors_test.dart` verifies that every known backend
 code has a mapping entry. This test is updated alongside backend contract changes.
