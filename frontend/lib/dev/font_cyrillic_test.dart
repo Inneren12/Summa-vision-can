@@ -14,8 +14,8 @@ class FontCyrillicTest extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Display (Bricolage): Ключевой показатель',
-              style: GoogleFonts.bricolageGrotesque(
+              'Display (Manrope): Ключевой показатель',
+              style: GoogleFonts.manrope(
                 fontSize: 24,
                 color: Colors.white,
               ),
