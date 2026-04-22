@@ -259,6 +259,21 @@ Policy for parity:
 - Keep **semantic namespace concept** from Phase 1.
 - Adapt to **ARB/Dart method naming** for generated API ergonomics.
 
+#### ARB parity must-have checks
+
+Enforced in CI via a health-check test in Slice 3.11 (can land earlier):
+
+- Every non-metadata key in `app_en.arb` exists in `app_ru.arb`
+- Placeholder names match exactly between locales for each key
+- Placeholder types match exactly between locales for each key
+- Pluralized messages preserve all required RU forms (`one`/`few`/`many`/`other`)
+- `@@locale` and `@metadata` entries are excluded from parity check
+- Orphan keys in RU absent from EN are flagged as error unless explicitly allowlisted
+
+Placeholder parity is particularly important: ARB codegen derives Dart method signatures
+from placeholder declarations. Mismatched types between locales either break codegen or
+cause runtime errors on locale switch.
+
 ### 3c. Locale persistence
 
 Default plan:
@@ -321,22 +336,51 @@ Guardrail:
 
 ### 3f. Test strategy
 
-Carry Phase 1 philosophy: tests assert stable identifiers/semantics, not fragile literal locale text.
+Carry Phase 1 philosophy: tests assert stable identifiers/semantics, not fragile literal
+locale text. Flutter-specific strategy is more explicit about what categories must exist.
 
-Proposed Flutter testing tiers:
+#### Tier 1 — Widget tests (default, per-screen)
 
-1. **Widget tests (default):**
-   - Wrap widgets with test localization delegate.
-   - Assert key-driven outputs/semantic labels.
-2. **Locale-switch integration smoke:**
-   - Verify toggle updates visible language and persistence path.
-3. **Catalog health checks:**
-   - Script/test ensures key parity between `app_en.arb` and `app_ru.arb`.
-   - Optional check to detect unused keys (consolidation slice).
+- Wrap widgets with test `AppLocalizations` delegate.
+- Assert that visible text comes from `AppLocalizations`, not from hardcoded string
+  literals. Method: render widget → read found text → verify it matches an expected
+  `AppLocalizations` method output, not a hand-written string.
+- Do NOT assert exact RU copy in widget tests — copy iterates during glossary refinement
+  and tests become brittle.
 
-Explicit anti-pattern:
+#### Tier 2 — Mandatory smoke tests (three categories)
 
-- Do not make most tests assert exact RU copy (too brittle for glossary iteration).
+**2a. Locale-switch smoke**
+- Pump app in EN, capture several visible shell strings
+- Switch locale via provider / switcher
+- Assert at least 3 visible strings changed to a non-EN variant
+- Verifies end-to-end locale wiring (provider → MaterialApp → rebuild)
+
+**2b. Denied-EN phrase shell smoke**
+- Pump app in RU mode
+- Assert that specific EN strings are NOT present in rendered DOM of shared chrome
+  (drawer, app bar, common buttons). Example denied list: `"Brief Queue"`, `"Cubes"`,
+  `"Jobs"` — whichever translations exist per policy.
+- Allowlist for documented EN-kept exceptions (KPI, JSON, IDs)
+- Catches hardcoded literals that slipped through widget tests
+
+**2c. Missing-localization fallback smoke**
+- Pump app with an incomplete ARB (dev scenario — not production)
+- Verify no raw keys leak into visible UI
+- Either missing keys fail fast, or a documented fallback pattern is used
+
+#### Tier 3 — Catalog health checks (CI gate)
+
+- **ARB parity**: every non-metadata key in `app_en.arb` exists in `app_ru.arb`
+- **Placeholder parity**: placeholder names AND types match between EN and RU for each key
+- **Plural form completeness**: every RU plural has `one`, `few`, `many`, `other`
+- **Orphan key detection** (optional consolidation check): warn on keys in RU not in EN
+
+#### Explicit anti-pattern
+
+- Do not make most tests assert exact RU copy. One or two smoke assertions per critical
+  shell element are enough; broader coverage comes from Tier 1 (source-of-string check)
+  plus Tier 3 (catalog health).
 
 ### 3g. Design system / font state
 
@@ -387,6 +431,124 @@ Flutter-specific additions:
 - New operational terms discovered in future slices are appended to glossary in focused follow-up PRs.
 - Do not invent ad-hoc alternate translations when glossary has canonical mapping.
 
+### 3j. Localization boundary: UI chrome vs backend/content payload
+
+Explicit policy on what gets localized and what stays as-is. This boundary prevents
+recon debates on data-heavy screens (Cubes, Data Preview, Jobs).
+
+#### Localize (frontend responsibility)
+
+- UI chrome: app bar, drawer, tabs, buttons, menus
+- Widget labels, field labels, placeholders, hint text
+- Empty states, loading states, skeleton text
+- Validation messages (including locally-derived ones)
+- Client-side error messages and fallbacks
+- Confirmation dialogs and prompts
+- Locally-formatted status / badge / chip text
+
+#### Do NOT localize (display as-is)
+
+- Backend content payload: dataset names, cube names/IDs, source titles,
+  metadata field labels coming from StatCan/CMHC/etc.
+- User-generated content: brief text, operator comments, document titles
+- Raw metric codes, product IDs (`36100434`), task IDs, job IDs
+- Technical identifiers: `taskId`, `briefId`, `jobId`, URLs
+- Timestamps (format for locale, but don't translate the underlying values)
+
+#### Structured backend codes (map to localized wrappers)
+
+- `error_code`, structured validation keys from backend → Flutter maps to ARB keys
+- Example: backend returns `{"error_code": "brief_not_found"}` → Flutter renders
+  `AppLocalizations.errorBriefNotFound` localized value
+- Mapping lives in `lib/l10n/backend_errors.dart` (see §3h)
+
+#### Raw backend free-text (edge case)
+
+- If backend emits raw EN text as `detail` or `error_message` and no code is available,
+  display under a localized wrapper phrase. Example:
+  `AppLocalizations.errorWithBackendDetail(detail)` renders as
+  `"Ошибка: {detail}"` where `{detail}` stays EN.
+- Log these cases as explicit tech debt for backend contract cleanup.
+- Do NOT attempt to translate backend free-text heuristically.
+
+### 3k. EN-kept policy (Flutter-specific)
+
+Carries forward Phase 1's 4-category EN-kept policy (see
+`docs/i18n-recon-slice2-inspector-validation.md` → "Consolidated EN-kept policy") and
+adds Flutter-specific cases.
+
+#### Category A — Technical abbreviations kept EN (Phase 1 carryover)
+
+- `QA`, `JSON`, `ID`, `API`
+- `KPI` (industry-standard financial/operational term)
+- Short toolbar chrome tokens (if introduced): `SAVE`, `IMPORT`, `EXPORT`
+- Tab short labels if used: `Tpl`, `Blk`, `Thm` (not expected in Flutter shell; listed for
+  consistency)
+
+#### Category B — Dev / debug / diagnostic labels kept EN
+
+- Development overlays, debug panels, console / log labels
+- Performance monitor labels
+- Feature flag names if surfaced
+
+#### Category C — Machine identifiers (NEVER translate)
+
+- `taskId`, `briefId`, `jobId`, `productId`, `userId`
+- Cube product IDs (`36100434`)
+- Metric codes, column codes, series codes from backend
+- URL paths, endpoint names
+
+#### Category D — Data-viz terminology (Phase 1 carryover)
+
+- `Small Multiples`
+- Visualization family names if introduced in Flutter (Single Stat Hero, Insight Card,
+  Ranked Bars, Line Editorial, Comparison, Visual Table)
+
+#### Ambiguous cases (flag for explicit decision in recon slice)
+
+- Navigation labels that are also product concepts (e.g., "Jobs", "Cubes") — if operator
+  memory has established EN usage for these, keep EN; otherwise translate. Resolve in
+  Slice 3.3 recon with founder input.
+- Status badge labels (e.g., `DRAFT`, `READY`, `FAILED`) — Phase 1 translated these;
+  default is to translate unless operator convention says otherwise.
+
+#### Decision rule
+
+When recon encounters a candidate for EN-kept, classify into A/B/C/D/ambiguous and
+document in the recon doc. Do not silently decide to keep EN without a category.
+
+### 3l. Migration rule for implementation slices
+
+Each implementation slice touches a bounded scope (Queue screen, Editor screen, etc.).
+When an implementation slice touches a widget, the following rule applies:
+
+#### Localize the whole visible surface in touched scope
+
+- Do not leave half-localized widgets after merge.
+- If a widget contains 10 strings and the slice migrates 7, the remaining 3 must either:
+  (a) be migrated in the same PR, OR
+  (b) be explicitly deferred with a `// TODO(i18n-slice-X)` comment and a line in the
+      recon doc explaining why it was deferred.
+
+#### No mixed-mode zebra widgets
+
+- A widget rendering "Sources: источник:" (EN label + RU value) is forbidden unless
+  documented as an intentional backend-payload boundary (see §3j).
+- Reviewer must reject PRs that introduce EN/RU zebra within a single widget without
+  explicit justification.
+
+#### Bounded partial rewrites
+
+- If a deeply-nested component tree can't be fully localized in one PR, define the
+  boundary by widget file or logical subtree and document it in the recon doc.
+- Deferred subtrees must be listed with ownership and target slice.
+
+#### Recon artifact obligation
+
+- Every recon slice outputs a list of deferred literals (if any)
+- Every implementation slice verifies its touched scope has no remaining deferred
+  literals unless explicitly carried forward
+
 ---
 
 ## 4. Slice decomposition (table)
@@ -397,7 +559,8 @@ The baseline decomposition is adjusted to reflect currently observed Flutter sur
 |---|---|---:|---|---|
 | 3.0 ✅ | Font blocker check + display font swap | — | Done | Completed 2026-04-22 |
 | 3.1 ✅ | Detailed planning doc (`docs/phase-3-plan.md`) | — | Planning | This document |
-| 3.2 | Infra scaffolding: localizations deps, `l10n.yaml`, empty ARBs, `MaterialApp` wiring, `localeProvider`, persistence, language switcher shell hook | 20-40 infra keys | Medium | No feature-local recon here |
+| 3.2a | Infra foundation: add `flutter_localizations` + `intl` deps, create `l10n.yaml`, add empty `app_en.arb` + `app_ru.arb`, generate `AppLocalizations`, wire `MaterialApp.router` delegates + supportedLocales + fixed locale. App compiles and renders with hardcoded locale. | 10-15 infra keys | Low-Med | No user-visible locale switching yet |
+| 3.2b | Locale state + persistence + switcher: `localeProvider` (Riverpod), SharedPreferences persistence, bootstrap resolution (persisted → device → EN), visible switcher in shared chrome, locale-switch smoke tests | 10-25 shell keys | Medium | Depends on 3.2a merged |
 | 3.3 | Recon: Queue + shared shell/chrome (drawer/header/common controls) | 80-140 | Low-Med | String inventory + key map only |
 | 3.4 | Implementation: Queue + shared shell/chrome | 80-140 | Medium | Includes tests for queue/shell locale behavior |
 | 3.5 | Recon: Editor (+ related validation/status touchpoints) | 90-170 | Medium | Highest density risk surface |
@@ -408,7 +571,23 @@ The baseline decomposition is adjusted to reflect currently observed Flutter sur
 | 3.10 | Recon+Impl: Cubes + Data Preview | 100-180 | Medium-High | Data-heavy labels/filters |
 | 3.11 | Consolidation: ARB parity checks, unused-key scan, switcher polish, EN/RU smoke tests, design QA checklist, docs update | — | Low | Final hardening |
 
-If founder wants strict adherence to original 3-screen scope first, slices 3.9 and 3.10 can be explicitly deferred to “Phase 3b”.
+#### Phase 3b — deferred expanded-surface work
+
+**Scope:** Jobs, KPI, Cubes, Data Preview (current Slices 3.9 and 3.10).
+
+**Entry criteria:**
+- Phase 3 core merged and deployed
+- Operators have used Phase 3 core for at least 1-2 weeks
+- Backend error/label contract direction decided (either stable code-based contract
+  confirmed, or explicit debt item with target date)
+
+**Why separate:**
+- Backend-label-heavy screens benefit less from frontend i18n until backend contracts
+  stabilize
+- Allows Phase 3 core to ship and gather real operator feedback before expanding
+- Keeps Phase 3 scope tight enough to merge within 1-1.5 weeks of focused work
+
+**Trigger:** Founder announces Phase 3b launch; no automatic continuation.
 
 ---
 
@@ -434,9 +613,17 @@ If founder wants strict adherence to original 3-screen scope first, slices 3.9 a
    - Decision: key/semantic assertions vs literal EN assertions.  
    - Default: **Key/semantic-first assertions**, with minimal locale-literal smoke coverage.
 
-6. **Scope handling for expanded Flutter surfaces**  
-   - Decision: include Jobs/KPI/Cubes/Data Preview in Phase 3 now or defer after Queue/Editor/Preview.  
-   - Default: **Implement Queue/Editor/Preview first, then continue in same phase for remaining already-present routes unless schedule pressure requires defer.**
+6. **Scope handling for expanded Flutter surfaces**
+   - Decision: include Jobs/KPI/Cubes/Data Preview in Phase 3 now (full surface) vs
+     split into Phase 3 (core) + Phase 3b (expanded) with a pause between.
+   - Default: **Phase 3 closes at core (Queue/Editor/Preview/Graphics) completion.
+     Phase 3b is a separately-scoped follow-up that covers Jobs/KPI + Cubes/Data
+     Preview, launched after operators have used Phase 3 core for at least 1-2 weeks
+     and confirmed backend error contract direction.**
+   - Rationale: Cubes and Data Preview are data-heavy screens where ~60%+ of visible
+     text comes from backend payload (StatCan field labels, source titles, metric
+     codes). Frontend i18n benefit is limited until backend error/label contract is
+     clarified. Avoid investing 10+ hours in Cubes i18n while backend is still EN-heavy.
 
 7. **Glossary update cadence for Flutter-only terms**  
    - Decision: one bulk glossary update vs per-slice updates.  
@@ -480,28 +667,35 @@ Baseline estimate updated for observed surface area expansion.
 
 ### 7.1 Core (Queue/Editor/Preview-first) estimate
 
-- Slice 3.2 (infra scaffolding): **2-3h**
-- Slice 3.3/3.4 (Queue + shell): **3-4h**
-- Slice 3.5/3.6 (Editor): **3-5h**
-- Slice 3.7/3.8 (Preview + Graphics Config): **3-5h**
-- Core subtotal: **11-17 agent hours**
+Estimates are given as ranges: agent-best-case (smaller) and safe-planning (larger). Use
+safe-planning for scheduling and promises; best-case is achievable with clean review rounds.
+
+- Slice 3.2a (infra foundation): 1.5-2h best / 2.5-3.5h safe
+- Slice 3.2b (locale state + switcher): 2-3h best / 3-4.5h safe
+- Slice 3.3/3.4 (Queue + shell): 3-4h best / 5-7h safe
+- Slice 3.5/3.6 (Editor): 3-5h best / 5-8h safe
+- Slice 3.7/3.8 (Preview + Graphics Config): 3-5h best / 5-8h safe
+- **Core subtotal: 12.5-19h best / 20.5-31h safe**
 
 ### 7.2 Expanded surfaces estimate (already present routes)
 
-- Slice 3.9 (Jobs + KPI): **3-5h**
-- Slice 3.10 (Cubes + Data Preview): **4-6h**
-- Slice 3.11 (consolidation/polish/docs): **2-3h**
-- Expanded subtotal: **9-14 agent hours**
+- Slice 3.9 (Jobs + KPI): 3-5h best / 5-8h safe
+- Slice 3.10 (Cubes + Data Preview): 4-6h best / 7-12h safe (data-heavy + backend
+  boundary complexity)
+- Slice 3.11 (consolidation/polish/docs): 2-3h best / 3-5h safe
+- **Expanded subtotal: 9-14h best / 15-25h safe**
 
 ### 7.3 Total scenarios
 
-- **Scenario A (core only now):** ~11-17h, ~2-3 elapsed days
-- **Scenario B (full current Flutter surface):** ~20-31h, ~4-6 elapsed days
+- **Scenario A (core only now):** 12.5-19h best / 20.5-31h safe, ~3-5 elapsed days
+- **Scenario B (full current Flutter surface):** ~22-33h best / ~36-56h safe, ~5-9 elapsed days
 
-Founder review load estimate:
+Founder review load:
+- Scenario A: ~1.5-2h best / ~2.5-3.5h safe
+- Scenario B: ~2.5-3.5h best / ~4-5h safe
 
-- Scenario A: ~1-1.5h
-- Scenario B: ~2-3h
+**Recommendation:** Plan on safe-planning numbers. Phase 1 actuals tracked 30-50%
+above best-case due to review rounds — expect similar here.
 
 ---
 
@@ -547,4 +741,55 @@ Planning-only seed list (not implementation):
 - `errorsUnknown`
 
 This starter set is intentionally minimal and shell-focused; feature keys are scoped to recon slices.
+
+
+## Appendix C — Shared-term reuse mapping (Phase 1 → Flutter ARB)
+
+These terms were canonicalized in Phase 1 glossary and must be reused with identical RU
+translations in Flutter ARB. Do NOT re-translate these in Phase 3 slices — look up the
+canonical RU from the glossary and use it.
+
+| Phase 1 JSON key | Canonical RU | Flutter ARB key |
+|---|---|---|
+| `common.cancel.verb` | Отменить | `commonCancelVerb` |
+| `common.save.verb` | Сохранить | `commonSaveVerb` |
+| `common.delete.verb` | Удалить | `commonDeleteVerb` |
+| `common.edit.verb` | Редактировать | `commonEditVerb` |
+| `common.confirm.verb` | Подтвердить | `commonConfirmVerb` |
+| `common.loading` | Загрузка... | `commonLoading` |
+| `common.retry.verb` | Повторить | `commonRetryVerb` |
+| `workflow.draft.status` | Черновик | `statusDraft` |
+| `workflow.published.status` | Опубликовано | `statusPublished` |
+| `workflow.exported.status` | Экспортировано | `statusExported` |
+| `workflow.in_review.status` | На проверке | `statusInReview` |
+| `workflow.approved.status` | Одобрено | `statusApproved` |
+
+This table is seed; recon slices are expected to add to it when touching more shared
+terms. Update this appendix in the same PR as the addition.
+
+## Appendix D — Backend error code mapping (Phase 3 scope)
+
+Backend error codes are mapped to ARB keys in a single location:
+`lib/l10n/backend_errors.dart`.
+
+Structure:
+
+```dart
+/// Maps backend error codes (from `error_code` field in structured responses)
+/// to AppLocalizations methods. Unit test `backend_errors_test.dart` verifies
+/// every code known to the backend contract has a mapping entry.
+Map<String, String Function(AppLocalizations)> backendErrorMessages = {
+  'brief_not_found': (l) => l.errorBriefNotFound,
+  'brief_locked': (l) => l.errorBriefLocked,
+  'task_not_ready': (l) => l.errorTaskNotReady,
+  // ... etc
+};
+```
+
+A unit test in `test/l10n/backend_errors_test.dart` verifies that every known backend
+code has a mapping entry. This test is updated alongside backend contract changes.
+
+**Where raw backend codes come from:** backend API documentation, OpenAPI schema, or
+explicit code audit. Capture the list in Slice 3.7 recon (Preview/Graphics Config has
+the highest surface for backend error visibility).
 
