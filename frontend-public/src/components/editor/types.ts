@@ -189,7 +189,9 @@ export interface TemplateSection {
 export interface TemplateEntry {
   fam: string;
   vr: string;
+  variantKey: string;
   desc: string;
+  descKey: string;
   defaultPal?: string;
   defaultBg?: string;
   defaultSize?: string;

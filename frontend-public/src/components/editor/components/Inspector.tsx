@@ -52,6 +52,9 @@ function getBoolProp(block: Block, key: string): boolean {
 
 function InspectorImpl({ selB, selR, selId, mode, canEdit, dispatch, contrastIssues }: InspectorProps) {
   const tInspector = useTranslations('inspector');
+  const tBlockType = useTranslations('block.type');
+  const tBlockField = useTranslations('block.field');
+  const tBlockOption = useTranslations('block.option');
   const tValidation = useTranslations('validation');
   const tCommon = useTranslations('common');
   const statusBadge = selR ? badge(tInspector, selR.status) : null;
@@ -105,7 +108,7 @@ function InspectorImpl({ selB, selR, selId, mode, canEdit, dispatch, contrastIss
   return (
     <div style={{ width: "100%", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "7px 10px", borderBottom: `1px solid ${TK.c.brd}`, fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtS, textTransform: "uppercase", letterSpacing: "0.3px", display: "flex", justifyContent: "space-between" }}>
-        <span>{tInspector('title')} {selR ? `\u00B7 ${selR.name}` : ""}</span>
+        <span>{tInspector('title')} {selR ? `\u00B7 ${selB ? tBlockType(`${selB.type}.name`) : selR.name}` : ""}</span>
         {mode === "template" && <span style={{ color: TK.c.acc, fontSize: "7px" }}>{tInspector('template_mode.short')}</span>}
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px" }}>
@@ -143,11 +146,16 @@ function InspectorImpl({ selB, selR, selId, mode, canEdit, dispatch, contrastIss
               return (
                 <div key={c.k} style={{ opacity: ed ? 1 : .4 }}>
                   <label style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", letterSpacing: "0.3px", display: "block", marginBottom: "2px" }}>
-                    {c.l}{c.ml && <span style={{ float: "right", color: charLen > c.ml * .9 ? TK.c.acc : TK.c.txtM }}>{charLen}/{c.ml}</span>}
+                    {tBlockField.has(`${c.k}.label`)
+                      ? tBlockField(`${c.k}.label`)
+                      : tBlockField.has(`${c.k}.short_label`)
+                        ? tBlockField(`${c.k}.short_label`)
+                        : c.l}
+                    {c.ml && <span style={{ float: "right", color: charLen > c.ml * .9 ? TK.c.acc : TK.c.txtM }}>{charLen}/{c.ml}</span>}
                   </label>
                   {c.t === "text" && <input type="text" value={strVal} onChange={e => ed && dispatch({ type: "UPDATE_PROP", blockId: selId, key: c.k, value: e.target.value })} maxLength={c.ml} disabled={!ed} style={{ width: "100%", padding: "5px 7px", fontSize: "10px", fontFamily: TK.font.body, background: TK.c.bgSurf, color: TK.c.txtP, border: `1px solid ${TK.c.brd}`, borderRadius: "3px", outline: "none", boxSizing: "border-box" }} />}
                   {c.t === "textarea" && <textarea value={strVal} onChange={e => ed && dispatch({ type: "UPDATE_PROP", blockId: selId, key: c.k, value: e.target.value })} maxLength={c.ml} rows={2} disabled={!ed} style={{ width: "100%", padding: "5px 7px", fontSize: "10px", fontFamily: TK.font.body, background: TK.c.bgSurf, color: TK.c.txtP, border: `1px solid ${TK.c.brd}`, borderRadius: "3px", outline: "none", resize: "vertical", boxSizing: "border-box" }} />}
-                  {c.t === "seg" && <div style={{ display: "flex", gap: "1px", background: TK.c.bgSurf, borderRadius: "3px", padding: "1px", border: `1px solid ${TK.c.brd}` }}>{c.opts!.map(o => <button type="button" key={o} onClick={() => ed && dispatch({ type: "UPDATE_PROP", blockId: selId, key: c.k, value: o })} disabled={!ed} style={{ flex: 1, padding: "3px 2px", fontSize: "8px", fontFamily: TK.font.data, background: strVal === o ? TK.c.bgAct : "transparent", color: strVal === o ? TK.c.acc : TK.c.txtM, border: "none", borderRadius: "2px", cursor: ed ? "pointer" : "not-allowed", textTransform: "uppercase" }}>{o}</button>)}</div>}
+                  {c.t === "seg" && <div style={{ display: "flex", gap: "1px", background: TK.c.bgSurf, borderRadius: "3px", padding: "1px", border: `1px solid ${TK.c.brd}` }}>{c.opts!.map(o => <button type="button" key={o} onClick={() => ed && dispatch({ type: "UPDATE_PROP", blockId: selId, key: c.k, value: o })} disabled={!ed} style={{ flex: 1, padding: "3px 2px", fontSize: "8px", fontFamily: TK.font.data, background: strVal === o ? TK.c.bgAct : "transparent", color: strVal === o ? TK.c.acc : TK.c.txtM, border: "none", borderRadius: "2px", cursor: ed ? "pointer" : "not-allowed", textTransform: "uppercase" }}>{tBlockOption.has(`${c.k}.${o}`) ? tBlockOption(`${c.k}.${o}`) : o}</button>)}</div>}
                   {c.t === "toggle" && <button type="button" onClick={() => ed && dispatch({ type: "UPDATE_PROP", blockId: selId, key: c.k, value: !boolVal })} disabled={!ed} style={{ padding: "4px 8px", fontSize: "9px", fontFamily: TK.font.data, background: boolVal ? TK.c.acc + "20" : TK.c.bgSurf, color: boolVal ? TK.c.acc : TK.c.txtM, border: `1px solid ${boolVal ? TK.c.acc + "40" : TK.c.brd}`, borderRadius: "3px", cursor: ed ? "pointer" : "not-allowed", width: "100%", textAlign: "left" }}>{boolVal ? tCommon('toggle.on') : tCommon('toggle.off')}</button>}
                 </div>
               );

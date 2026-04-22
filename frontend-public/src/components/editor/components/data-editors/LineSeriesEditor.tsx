@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { SeriesItem, SeriesRole } from '../../types';
 import { isSeriesRole } from '../../types';
 import { TK } from '../../config/tokens';
@@ -18,6 +19,8 @@ interface LineSeriesEditorProps {
 }
 
 export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, canEditStructure }: LineSeriesEditorProps) {
+  const tSeries = useTranslations('block.series');
+  const tXLabels = useTranslations('block.x_labels');
   const [seriesDrafts, setSeriesDrafts] = useState<Record<string, string>>({});
 
   const updSeries = <K extends keyof SeriesItem>(idx: number, key: K, val: SeriesItem[K]) => {
@@ -73,7 +76,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
     const newData = new Array(xLabels.length).fill(0);
     onChange({
       series: [...series, {
-        label: "New Series",
+        label: tSeries('new.default_label'),
         role: "secondary" as SeriesRole,
         data: newData,
         _id: makeId(),
@@ -94,10 +97,10 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
   const sty: React.CSSProperties = { fontSize: "9px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.txtP, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", padding: "3px 5px", outline: "none", boxSizing: "border-box" };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-      <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase" }}>X LABELS</div>
+      <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase" }}>{tXLabels('title')}</div>
       {/* xLabels is structural: template mode can edit series values but not axis shape */}
-      <input value={xLabels.join(", ")} onChange={e => updXLabels(e.target.value)} style={{ ...sty, width: "100%" }} disabled={!canEditStructure} title="Comma-separated labels" />
-      <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginTop: "4px" }}>SERIES ({series.length})</div>
+      <input value={xLabels.join(", ")} onChange={e => updXLabels(e.target.value)} style={{ ...sty, width: "100%" }} disabled={!canEditStructure} title={tXLabels('comma_hint.title')} />
+      <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginTop: "4px" }}>{tSeries('title_count', { count: series.length })}</div>
       {series.map((s, i) => (
         <div key={s._id} style={{ padding: "4px", border: `1px solid ${TK.c.brd}`, borderRadius: "3px", position: "relative" }}>
           {/* Remove button — only in structural-edit mode (Design) */}
@@ -116,11 +119,11 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
                 fontSize: "10px",
                 padding: "2px 4px",
               }}
-              title="Remove series"
+              title={tSeries('remove.title')}
             >{"\u00D7"}</button>
           )}
           <div style={{ display: "flex", gap: "2px", marginBottom: "2px" }}>
-            <input value={s.label} onChange={e => canEditValues && updSeries(i, "label", e.target.value)} style={{ ...sty, flex: 1 }} disabled={!canEditValues} placeholder="Series name" />
+            <input value={s.label} onChange={e => canEditValues && updSeries(i, "label", e.target.value)} style={{ ...sty, flex: 1 }} disabled={!canEditValues} placeholder={tSeries('name.placeholder')} />
             <select
               value={s.role}
               onChange={e => {
@@ -133,7 +136,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
               style={{ ...sty, width: "70px" }}
               disabled={!canEditValues}
             >
-              <option value="primary">Primary</option><option value="benchmark">Benchmark</option><option value="secondary">Secondary</option>
+              <option value="primary">{tSeries('role.primary')}</option><option value="benchmark">{tSeries('role.benchmark')}</option><option value="secondary">{tSeries('role.secondary')}</option>
             </select>
           </div>
           <input
@@ -142,7 +145,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
             onBlur={() => commitSeriesDraft(s._id)}
             style={{ ...sty, width: "100%" }}
             disabled={!canEditValues}
-            title="Comma-separated values"
+            title={tSeries('values.comma_hint.title')}
           />
         </div>
       ))}
@@ -162,7 +165,7 @@ export function LineSeriesEditor({ series, xLabels, onChange, canEditValues, can
             cursor: "pointer",
             width: "100%",
           }}
-        >+ ADD SERIES</button>
+        >{tSeries('add.action')}</button>
       )}
     </div>
   );

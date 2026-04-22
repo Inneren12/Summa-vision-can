@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { BarItem } from '../../types';
 import { TK } from '../../config/tokens';
 import { makeId } from '../../utils/ids';
@@ -15,6 +16,9 @@ interface BarItemsEditorProps {
 }
 
 export function BarItemsEditor({ items, onChange, canEditValues, canEditStructure }: BarItemsEditorProps) {
+  const tDataItems = useTranslations('block.data_items');
+  const tField = useTranslations('block.field');
+  const tItem = useTranslations('block.item');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   const upd = <K extends keyof BarItem>(idx: number, key: K, val: BarItem[K]) => {
@@ -23,7 +27,7 @@ export function BarItemsEditor({ items, onChange, canEditValues, canEditStructur
     onChange(next);
   };
   const del = (idx: number) => onChange(items.filter((_, i) => i !== idx));
-  const add = () => onChange([...items, { label: "New", value: 0, flag: "", highlight: false, _id: makeId() }]);
+  const add = () => onChange([...items, { label: tItem('new.default_label'), value: 0, flag: "", highlight: false, _id: makeId() }]);
 
   const handleValueChange = (id: string, rawStr: string) => {
     setDrafts(prev => ({ ...prev, [`${id}_value`]: rawStr }));
@@ -45,12 +49,12 @@ export function BarItemsEditor({ items, onChange, canEditValues, canEditStructur
   const sty: React.CSSProperties = { fontSize: "9px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.txtP, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", padding: "3px 5px", outline: "none", boxSizing: "border-box" };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-      <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase" }}>DATA ITEMS ({items.length})</div>
+      <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase" }}>{tDataItems('title_count', { count: items.length })}</div>
       <div style={{ maxHeight: "180px", overflowY: "auto" }}>
         {items.map((it, i) => (
           <div key={it._id} style={{ display: "flex", gap: "2px", alignItems: "center", marginBottom: "2px" }}>
-            <input value={it.flag || ""} onChange={e => canEditValues && upd(i, "flag", e.target.value)} style={{ ...sty, width: "24px", textAlign: "center" }} disabled={!canEditValues} title="Flag" />
-            <input value={it.label} onChange={e => canEditValues && upd(i, "label", e.target.value)} style={{ ...sty, flex: 1 }} disabled={!canEditValues} title="Label" />
+            <input value={it.flag || ""} onChange={e => canEditValues && upd(i, "flag", e.target.value)} style={{ ...sty, width: "24px", textAlign: "center" }} disabled={!canEditValues} title={tField('flag.title')} />
+            <input value={it.label} onChange={e => canEditValues && upd(i, "label", e.target.value)} style={{ ...sty, flex: 1 }} disabled={!canEditValues} title={tField('label.title')} />
             <input
               type="number"
               value={drafts[`${it._id}_value`] ?? String(it.value)}
@@ -58,16 +62,16 @@ export function BarItemsEditor({ items, onChange, canEditValues, canEditStructur
               onBlur={() => commitValueDraft(it._id)}
               style={{ ...sty, width: "50px" }}
               disabled={!canEditValues}
-              title="Value"
+              title={tField('value.title')}
             />
-            <button type="button" onClick={() => canEditValues && upd(i, "highlight", !it.highlight)} style={{ ...sty, background: it.highlight ? TK.c.acc + "30" : TK.c.bgSurf, color: it.highlight ? TK.c.acc : TK.c.txtM, cursor: canEditValues ? "pointer" : "default", width: "18px", textAlign: "center" }} disabled={!canEditValues} title="Highlight">{"\u2605"}</button>
+            <button type="button" onClick={() => canEditValues && upd(i, "highlight", !it.highlight)} style={{ ...sty, background: it.highlight ? TK.c.acc + "30" : TK.c.bgSurf, color: it.highlight ? TK.c.acc : TK.c.txtM, cursor: canEditValues ? "pointer" : "default", width: "18px", textAlign: "center" }} disabled={!canEditValues} title={tField('highlight.title')}>{"\u2605"}</button>
             {/* Remove button — only in structural-edit mode (Design) */}
-            {canEditStructure && <button type="button" onClick={() => del(i)} style={{ ...sty, color: TK.c.err, cursor: "pointer", width: "18px", textAlign: "center" }} title="Remove">{"\u00D7"}</button>}
+            {canEditStructure && <button type="button" onClick={() => del(i)} style={{ ...sty, color: TK.c.err, cursor: "pointer", width: "18px", textAlign: "center" }} title={tItem('remove.title')}>{"\u00D7"}</button>}
           </div>
         ))}
       </div>
       {/* Add button — only in structural-edit mode (Design) */}
-      {canEditStructure && <button type="button" onClick={add} style={{ fontSize: "8px", fontFamily: TK.font.data, background: TK.c.bgAct, color: TK.c.acc, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", padding: "3px 8px", cursor: "pointer", width: "100%" }}>+ ADD ITEM</button>}
+      {canEditStructure && <button type="button" onClick={add} style={{ fontSize: "8px", fontFamily: TK.font.data, background: TK.c.bgAct, color: TK.c.acc, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", padding: "3px 8px", cursor: "pointer", width: "100%" }}>{tItem('add.action')}</button>}
     </div>
   );
 }

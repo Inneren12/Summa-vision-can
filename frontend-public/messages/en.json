@@ -307,6 +307,277 @@
       "collapse": "Collapse",
       "show_all": "Show all {count}",
       "empty": "No events yet."
+    },
+    "unresolved_comments": {
+      "title_count": "{count, plural, one {# unresolved comment} other {# unresolved comments}}"
+    }
+  },
+  "block": {
+    "type": {
+      "eyebrow_tag": {
+        "name": "Eyebrow"
+      },
+      "headline_editorial": {
+        "name": "Headline"
+      },
+      "subtitle_descriptor": {
+        "name": "Subtitle"
+      },
+      "hero_stat": {
+        "name": "Hero Number"
+      },
+      "delta_badge": {
+        "name": "Delta Badge"
+      },
+      "body_annotation": {
+        "name": "Annotation"
+      },
+      "source_footer": {
+        "name": "Source"
+      },
+      "brand_stamp": {
+        "name": "Brand"
+      },
+      "bar_horizontal": {
+        "name": "Ranked Bars"
+      },
+      "line_editorial": {
+        "name": "Line Chart"
+      },
+      "comparison_kpi": {
+        "name": "KPI Compare"
+      },
+      "table_enriched": {
+        "name": "Visual Table"
+      },
+      "small_multiple": {
+        "name": "Small Multiples"
+      }
+    },
+    "field": {
+      "headline": {
+        "label": "Headline"
+      },
+      "subtitle": {
+        "label": "Subtitle"
+      },
+      "tag": {
+        "label": "Tag"
+      },
+      "value": {
+        "label": "Value",
+        "placeholder": "Value",
+        "title": "Value"
+      },
+      "label": {
+        "label": "Label",
+        "placeholder": "Label",
+        "title": "Label"
+      },
+      "delta": {
+        "label": "Delta",
+        "placeholder": "Delta"
+      },
+      "source": {
+        "label": "Source"
+      },
+      "note": {
+        "label": "Note"
+      },
+      "align": {
+        "label": "Align"
+      },
+      "y_unit": {
+        "label": "Y unit"
+      },
+      "unit_suffix": {
+        "label": "Unit suffix"
+      },
+      "position": {
+        "label": "Position"
+      },
+      "direction": {
+        "short_label": "Dir"
+      },
+      "method": {
+        "short_label": "Method"
+      },
+      "benchmark_line": {
+        "label": "Benchmark line"
+      },
+      "benchmark_value": {
+        "short_label": "Bench value"
+      },
+      "benchmark_label": {
+        "short_label": "Bench label"
+      },
+      "area_fill": {
+        "label": "Area fill"
+      },
+      "highlight": {
+        "title": "Highlight"
+      },
+      "flag": {
+        "title": "Flag"
+      }
+    },
+    "option": {
+      "align": {
+        "left": "left",
+        "center": "center",
+        "right": "right"
+      },
+      "direction": {
+        "positive": "positive",
+        "negative": "negative",
+        "neutral": "neutral"
+      },
+      "position": {
+        "bottom_left": "bottom-left",
+        "bottom_right": "bottom-right"
+      }
+    },
+    "series": {
+      "role": {
+        "primary": "Primary",
+        "benchmark": "Benchmark",
+        "secondary": "Secondary"
+      },
+      "title_count": "SERIES ({count})",
+      "remove": {
+        "title": "Remove series"
+      },
+      "name": {
+        "placeholder": "Series name"
+      },
+      "values": {
+        "comma_hint": {
+          "title": "Comma-separated values"
+        }
+      },
+      "add": {
+        "action": "+ ADD SERIES"
+      },
+      "new": {
+        "default_label": "New Series"
+      }
+    },
+    "x_labels": {
+      "title": "X LABELS",
+      "comma_hint": {
+        "title": "Comma-separated labels"
+      }
+    },
+    "data_items": {
+      "title_count": "DATA ITEMS ({count})"
+    },
+    "item": {
+      "remove": {
+        "title": "Remove"
+      },
+      "add": {
+        "action": "+ ADD ITEM"
+      },
+      "new": {
+        "default_label": "New"
+      }
+    },
+    "kpi_cards": {
+      "title_count": "KPI CARDS ({count})"
+    },
+    "kpi": {
+      "remove": {
+        "title": "Remove KPI"
+      },
+      "add": {
+        "action": "+ ADD KPI"
+      },
+      "new_metric": {
+        "default_label": "New Metric"
+      }
+    },
+    "select": {
+      "aria": "Select block: {name}"
+    },
+    "visibility": {
+      "hide": {
+        "aria": "Hide {name}",
+        "title": "Hide block"
+      },
+      "show": {
+        "aria": "Show {name}",
+        "title": "Show block"
+      }
+    }
+  },
+  "left_panel": {
+    "sections": {
+      "aria": "Left panel sections"
+    },
+    "tab": {
+      "templates": {
+        "short": "Tpl"
+      },
+      "blocks": {
+        "short": "Blk"
+      },
+      "theme": {
+        "short": "Thm"
+      },
+      "aria": "{name} tab"
+    },
+    "footer": {
+      "summary": "v{schema} · {sections} sec · {blocks} blk"
+    }
+  },
+  "theme": {
+    "palette": {
+      "title": "Palette"
+    },
+    "background": {
+      "title": "Background"
+    },
+    "size": {
+      "title": "Size"
+    },
+    "option": {
+      "palette": {
+        "aria": "Palette: {name}"
+      },
+      "background": {
+        "aria": "Background: {name}"
+      },
+      "size": {
+        "aria": "Size: {name} {width}x{height}"
+      }
+    }
+  },
+  "template": {
+    "variant": {
+      "number_plus_delta": "Number + Delta",
+      "number_plus_note": "Number + Note",
+      "minimal": "Minimal",
+      "before_after": "Before / After",
+      "fact_context": "Fact + Context",
+      "social_post": "Social Post",
+      "simple_ranking": "Simple Ranking",
+      "single_plus_area": "Single + Area",
+      "three_kpi_cards": "3 KPI Cards",
+      "heatmap_rankings": "Heatmap Rankings",
+      "2x3_grid": "2×3 Grid"
+    },
+    "desc": {
+      "giant_number_with_change": "Giant number with change",
+      "number_with_annotation": "Number with annotation",
+      "clean_centered": "Clean, centered",
+      "two_numbers_contrasted": "Two numbers contrasted",
+      "key_insight_with_analysis": "Key insight with analysis",
+      "shareable_stat": "Shareable stat",
+      "horizontal_bars_by_value": "Horizontal bars by value",
+      "time_series_with_area_fill": "Time series with area fill",
+      "three_metrics_side_by_side": "Three metrics side by side",
+      "table_with_conditional_format": "Table with conditional format",
+      "same_chart_repeated": "Same chart repeated"
     }
   }
 }
