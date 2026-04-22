@@ -22,7 +22,9 @@ describe("editor UI a11y + import warnings", () => {
     const { container } = render(<InfographicEditor />);
 
     expect(screen.getByRole("tablist", { name: /left_panel\.sections\.aria/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /left_panel\.tab\.aria/i })).toHaveAttribute("aria-controls");
+    const tabs = screen.getAllByRole("tab", { name: /left_panel\.tab\.aria/i });
+    expect(tabs.length).toBeGreaterThan(0);
+    expect(tabs[0]).toHaveAttribute("aria-controls");
     // PR 3 added the right-rail tabpanels alongside LeftPanel's; assert at
     // least one tabpanel is reachable rather than a singular one.
     expect(screen.getAllByRole("tabpanel").length).toBeGreaterThan(0);
