@@ -283,7 +283,8 @@
       "reopen": "Reopen",
       "resolve": "Resolve",
       "edit_action": "Edit",
-      "delete": "Delete"
+      "delete": "Delete",
+      "block_generic": "block"
     },
     "reply": {
       "action": "Reply",
@@ -419,6 +420,30 @@
       },
       "flag": {
         "title": "Flag"
+      },
+      "text": {
+        "label": "Text"
+      },
+      "yUnit": {
+        "label": "Y unit"
+      },
+      "unit": {
+        "label": "Unit"
+      },
+      "showBenchmark": {
+        "label": "Benchmark line"
+      },
+      "benchmarkValue": {
+        "short_label": "Bench value"
+      },
+      "benchmarkLabel": {
+        "short_label": "Bench label"
+      },
+      "showArea": {
+        "label": "Area fill"
+      },
+      "methodology": {
+        "short_label": "Method"
       }
     },
     "option": {
@@ -434,7 +459,9 @@
       },
       "position": {
         "bottom_left": "bottom-left",
-        "bottom_right": "bottom-right"
+        "bottom_right": "bottom-right",
+        "bottom-left": "bottom-left",
+        "bottom-right": "bottom-right"
       }
     },
     "series": {

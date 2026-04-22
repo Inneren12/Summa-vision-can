@@ -11,7 +11,6 @@ import type {
 } from '../types';
 import { TK } from '../config/tokens';
 import {
-  blockDisplayLabel,
   buildThreads,
   CommentThreadNode,
   isThreadResolved,
@@ -22,6 +21,7 @@ import {
 } from '../store/comments';
 import { availableTransitions } from '../store/workflow';
 import { checkWorkflowPermission } from '../store/permissions';
+import { resolveBlockLabel } from '../utils/block-label';
 import { StatusBadge } from './StatusBadge';
 import type { NoteRequestConfig } from './noteRequest';
 
@@ -122,7 +122,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
   const openAddCommentModal = () => {
     if (!selId) return;
     const blockType = state.doc.blocks[selId]?.type;
-    const blockLabel = blockType ? tBlockType(`${blockType}.name`) : blockDisplayLabel(blockType);
+    const blockLabel = resolveBlockLabel(blockType, tBlockType, tReview);
     onRequestNote({
       title: tReview('comment.add_on_block', { block: blockLabel }),
       label: tReview('comment.label'),
@@ -356,9 +356,7 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
               }}
             >
               {tReview('comment.on_block', {
-                block: state.doc.blocks[selId]?.type
-                  ? tBlockType(`${state.doc.blocks[selId].type}.name`)
-                  : blockDisplayLabel(state.doc.blocks[selId]?.type),
+                block: resolveBlockLabel(state.doc.blocks[selId]?.type, tBlockType, tReview),
               })}
             </div>
             <button
@@ -536,7 +534,7 @@ function ThreadCard({
             textTransform: 'uppercase',
           }}
         >
-          {blockType ? tBlockType(`${blockType}.name`) : blockDisplayLabel(blockType)}
+          {resolveBlockLabel(blockType, tBlockType, tReview)}
         </span>
         {unresolved > 0 && (
           <span

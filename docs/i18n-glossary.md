@@ -286,6 +286,9 @@ Validation messages, error types.
 
 Anglicisms and technical terms that stay English in Russian UI.
 
+> For the full operational EN-kept policy (short tokens, debug labels, data-viz terminology,
+> etc.) see `i18n-recon-slice2-inspector-validation.md` → "Consolidated EN-kept policy".
+
 | Term (EN) | Notes |
 |---|---|
 | API | Стандартный технический термин, не переводится. |
