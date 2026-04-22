@@ -24,7 +24,7 @@ const eslintConfig = defineConfig([
     rules: {
       "i18next/no-literal-string": ["warn", {
         markupOnly: true,
-        ignoreAttribute: ["data-testid", "className", "id", "role", "key", "type", "name", "value", "placeholder"],
+        ignoreAttribute: ["data-testid", "className", "id", "role", "key", "type", "name", "value"],
       }],
     },
   },

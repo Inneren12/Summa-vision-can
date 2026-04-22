@@ -85,10 +85,28 @@ Call site:
 t('unresolved_comments', { count: n })
 ```
 
-## Linting
+## Linting (heuristic)
 
-Run `npm run lint:i18n` before committing to catch hardcoded strings in admin/editor paths.
-Warnings are acceptable for documented EN-kept exceptions; errors indicate a missing migration.
+`npm run lint:i18n` runs `eslint-plugin-i18next` with the `no-literal-string` rule elevated
+to error level. It catches many hardcoded UI strings in admin/editor paths.
+
+**Limitations — this is a heuristic, not proof of full i18n coverage:**
+- `markupOnly: true` scopes detection to JSX markup. Literal strings in helper return values,
+  inline config objects, and some attribute constructions may not be caught.
+- Test-related attributes (`data-testid`, `className`, `id`, `role`, `key`, `type`, `name`,
+  `value`) are ignored because they contain identifiers, not UI text.
+- The rule cannot distinguish kept-EN policy exceptions (SAVE, DBG, etc.) from accidental
+  leaks — reviewers verify against the EN-kept policy list.
+
+The real regression prevention is `tests/i18n/catalog-coverage.test.ts` (catches missing
+translations for BREG entries) plus `tests/integration/i18n-ru-mode.test.tsx` (catches
+EN leaks at render time in a real provider). The ESLint rule is a fast feedback loop for
+developers while editing.
+
+**Workflow:**
+1. Run `npm run lint:i18n` locally — fix warnings that are real hardcoded strings
+2. Coverage test runs in CI — guards against BREG drift
+3. Integration test runs in CI — guards against provider wiring / runtime regressions
 
 ## When in doubt
 
