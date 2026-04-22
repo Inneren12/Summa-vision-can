@@ -12,7 +12,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:editor": "jest tests/editor",
-    "lint:i18n": "eslint 'src/app/admin/**/*.{ts,tsx}' 'src/components/editor/**/*.{ts,tsx}' 'src/components/admin/**/*.{ts,tsx}' --rule 'i18next/no-literal-string: error'"
+    "lint:i18n": "node scripts/lint-i18n.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

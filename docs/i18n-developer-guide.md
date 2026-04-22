@@ -99,9 +99,9 @@ to error level. It catches many hardcoded UI strings in admin/editor paths.
   leaks — reviewers verify against the EN-kept policy list.
 
 The real regression prevention is `tests/i18n/catalog-coverage.test.ts` (catches missing
-translations for BREG entries) plus `tests/integration/i18n-ru-mode.test.tsx` (catches
-EN leaks at render time in a real provider). The ESLint rule is a fast feedback loop for
-developers while editing.
+translations for BREG entries) plus `tests/integration/i18n-ru-render-smoke.test.tsx` — RU render smoke using a test-local
+provider shim. Complements (does not replace) coverage test + ESLint rule. The ESLint rule
+is a fast feedback loop for developers while editing.
 
 **Workflow:**
 1. Run `npm run lint:i18n` locally — fix warnings that are real hardcoded strings

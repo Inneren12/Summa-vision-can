@@ -21,8 +21,8 @@ Phase 1 (Next.js admin + editor) closed 2026-04-22.
 
 ### Tests and guardrails
 - `tests/i18n/catalog-coverage.test.ts` — BREG-catalog coverage gate
-- `tests/integration/i18n-ru-mode.test.tsx` — real `NextIntlClientProvider` smoke test + DOM
-  scan for EN leaks (first version was mock-backed; re-written in Slice 5 follow-up to use
-  real provider)
+- `tests/integration/i18n-ru-render-smoke.test.tsx` — RU render smoke test using a
+  test-local next-intl provider shim. Catches EN leakage in rendered output and missing
+  keys, but does NOT exercise real next-intl runtime. See JSDoc in the test file.
 - `npm run lint:i18n` — ESLint `no-literal-string` rule (heuristic, not proof; see
   `docs/i18n-developer-guide.md`)
