@@ -2,6 +2,7 @@ import type { CanonicalDocument, Palette } from '../types';
 import { PALETTES } from '../config/palettes';
 import { BG_META } from '../config/backgrounds';
 import { TK } from '../config/tokens';
+import type { ValidationMessage } from './types';
 
 /**
  * Structured contrast issue. One per (block, text role) below threshold.
@@ -20,7 +21,7 @@ export interface ContrastIssue {
   ratio: number;
   threshold: number;
   severity: 'error' | 'warning';
-  message: string;
+  message: ValidationMessage;
 }
 
 /** One text role rendered by a block, with the colour it actually uses. */
@@ -149,6 +150,15 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+function safeContrastRatio(fg: string, bg: string): { ratio?: number; invalidHex?: string } {
+  try {
+    return { ratio: contrastRatio(fg, bg) };
+  } catch {
+    const candidate = [fg, bg].find(hex => !/^#?[0-9a-f]{6}$/i.test(hex.trim()));
+    return { invalidHex: candidate ?? fg };
+  }
+}
+
 // ---- Validator ----------------------------------------------------------
 
 /**
@@ -180,7 +190,26 @@ export function validateContrast(doc: CanonicalDocument): ContrastIssue[] {
 
       for (const { slot, color, isLarge } of textSlots) {
         const threshold = isLarge ? 3.0 : 4.5;
-        const baseRatio = contrastRatio(color, bgMeta.base);
+        const baseCheck = safeContrastRatio(color, bgMeta.base);
+        if (baseCheck.invalidHex) {
+          issues.push({
+            blockId,
+            blockType: block.type,
+            slot,
+            textColor: color,
+            bgColor: bgMeta.base,
+            bgPoint: 'base',
+            ratio: 0,
+            threshold,
+            severity: 'error',
+            message: {
+              key: 'validation.color.invalid_hex',
+              params: { hex: baseCheck.invalidHex },
+            },
+          });
+          continue;
+        }
+        const baseRatio = baseCheck.ratio as number;
         if (baseRatio < threshold) {
           const ratio = round2(baseRatio);
           issues.push({
@@ -193,13 +222,41 @@ export function validateContrast(doc: CanonicalDocument): ContrastIssue[] {
             ratio,
             threshold,
             severity: 'error',
-            message: `${block.type}.${slot}: contrast ${ratio.toFixed(2)}:1 below ${threshold}:1 on ${bgMeta.base}`,
+            message: {
+              key: 'validation.contrast.below_threshold',
+              params: {
+                blockType: block.type,
+                slot,
+                ratio: ratio.toFixed(2),
+                threshold,
+                background: bgMeta.base,
+              },
+            },
           });
           continue;
         }
 
         if (bgMeta.isGradient && bgMeta.lightestStop) {
-          const lightRatio = contrastRatio(color, bgMeta.lightestStop);
+          const gradientCheck = safeContrastRatio(color, bgMeta.lightestStop);
+          if (gradientCheck.invalidHex) {
+            issues.push({
+              blockId,
+              blockType: block.type,
+              slot,
+              textColor: color,
+              bgColor: bgMeta.lightestStop,
+              bgPoint: 'lightestStop',
+              ratio: 0,
+              threshold,
+              severity: 'error',
+              message: {
+                key: 'validation.color.invalid_hex',
+                params: { hex: gradientCheck.invalidHex },
+              },
+            });
+            continue;
+          }
+          const lightRatio = gradientCheck.ratio as number;
           if (lightRatio < threshold) {
             const ratio = round2(lightRatio);
             issues.push({
@@ -212,7 +269,16 @@ export function validateContrast(doc: CanonicalDocument): ContrastIssue[] {
               ratio,
               threshold,
               severity: 'warning',
-              message: `${block.type}.${slot}: contrast ${ratio.toFixed(2)}:1 below ${threshold}:1 on ${bgMeta.lightestStop}`,
+              message: {
+                key: 'validation.contrast.below_threshold',
+                params: {
+                  blockType: block.type,
+                  slot,
+                  ratio: ratio.toFixed(2),
+                  threshold,
+                  background: bgMeta.lightestStop,
+                },
+              },
             });
           }
         }

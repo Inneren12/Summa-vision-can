@@ -288,7 +288,7 @@ describe("validateContrast — integration", () => {
 
     expect(issues).toHaveLength(1);
     expect(issues[0].slot).toBe("delta_neg");
-    expect(issues[0].message.startsWith("comparison_kpi.delta_neg:")).toBe(true);
+    expect(issues[0].message.key).toBe("validation.contrast.below_threshold");
   });
 
   test("hero_stat emits only the failing label slot", () => {
@@ -314,7 +314,7 @@ describe("validateContrast — integration", () => {
 
     expect(issues).toHaveLength(1);
     expect(issues[0].slot).toBe("label");
-    expect(issues[0].message.startsWith("hero_stat.label:")).toBe(true);
+    expect(issues[0].message.key).toBe("validation.contrast.below_threshold");
   });
 
   test("hero_stat emits only the failing value slot when pal.p loses contrast", () => {
@@ -340,7 +340,7 @@ describe("validateContrast — integration", () => {
 
     expect(issues).toHaveLength(1);
     expect(issues[0].slot).toBe("value");
-    expect(issues[0].message.startsWith("hero_stat.value:")).toBe(true);
+    expect(issues[0].message.key).toBe("validation.contrast.below_threshold");
   });
 
   test("table_enriched emits only the failing rank slot when pal.p loses contrast", () => {
@@ -366,7 +366,7 @@ describe("validateContrast — integration", () => {
 
     expect(issues).toHaveLength(1);
     expect(issues[0].slot).toBe("rank");
-    expect(issues[0].message.startsWith("table_enriched.rank:")).toBe(true);
+    expect(issues[0].message.key).toBe("validation.contrast.below_threshold");
   });
 
   test("table_enriched checks header separately from score and rank", () => {
@@ -392,7 +392,7 @@ describe("validateContrast — integration", () => {
 
     expect(issues).toHaveLength(2);
     expect(issues.map((issue) => issue.slot).sort()).toEqual(["header", "metric"]);
-    expect(issues.some((issue) => issue.message.startsWith("table_enriched.header:"))).toBe(true);
+    expect(issues.some((issue) => issue.slot === "header")).toBe(true);
     expect(issues.every((issue) => issue.slot !== "score" && issue.slot !== "rank")).toBe(true);
   });
 
@@ -456,7 +456,7 @@ describe("validateContrast — integration", () => {
         doc.page.background = bg;
         const issues = validateContrast(doc);
         for (const i of issues) {
-          expect(i.message).toMatch(/^[a-z_]+\.[a-z_]+: contrast \d+(\.\d+)?:1/);
+          expect(["validation.contrast.below_threshold"]).toContain(i.message.key);
           expect(i.ratio).toBeGreaterThanOrEqual(1);
           expect([3, 4.5]).toContain(i.threshold);
           expect(["error", "warning"]).toContain(i.severity);

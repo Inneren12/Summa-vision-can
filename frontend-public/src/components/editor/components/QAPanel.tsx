@@ -1,8 +1,10 @@
 'use client';
 
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import type { ValidationResult, QAMode } from '../types';
 import { TK } from '../config/tokens';
+import { renderValidationMessage } from '../validation/render';
 
 interface QAPanelProps {
   qaOpen: boolean;
@@ -10,11 +12,12 @@ interface QAPanelProps {
   qaMode: QAMode;
   setQaMode: (m: QAMode) => void;
   vr: ValidationResult;
-  dispErr: string[];
+  dispErr: ValidationResult['errors'];
   si: string;
 }
 
 export function QAPanel({ qaOpen, setQaOpen, qaMode, setQaMode, vr, dispErr, si }: QAPanelProps) {
+  const tValidation = useTranslations('validation');
   if (!qaOpen) {
     return (
       <button type="button" onClick={() => setQaOpen(true)} aria-label="Expand QA panel" style={{ padding: "2px 12px", background: TK.c.bgSurf, border: 0, borderTop: `1px solid ${TK.c.brd}`, color: TK.c.txtM, cursor: "pointer", fontSize: "7px", fontFamily: TK.font.data, textAlign: "left", flexShrink: 0 }}>{si} QA</button>
@@ -31,10 +34,10 @@ export function QAPanel({ qaOpen, setQaOpen, qaMode, setQaMode, vr, dispErr, si 
         <button type="button" onClick={() => setQaOpen(false)} style={{ marginLeft: "auto", background: "none", border: "none", color: TK.c.txtM, cursor: "pointer", fontSize: "9px" }}>{"\u2715"}</button>
       </div>
       <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "2px", flexWrap: "wrap" }}>
-        {vr.passed.map((m, i) => <span key={`p${i}`} style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.pos, whiteSpace: "nowrap" }}>{"\u2705"}{m}</span>)}
-        {dispErr.map((m, i) => <span key={`e${i}`} style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.err, whiteSpace: "nowrap" }}>{"\u274C"}{m}</span>)}
-        {vr.warnings.map((m, i) => <span key={`w${i}`} style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.acc, whiteSpace: "nowrap" }}>{"\u26A0\uFE0F"}{m}</span>)}
-        {vr.info.map((m, i) => <span key={`i${i}`} style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, whiteSpace: "nowrap" }}>{"\u2139\uFE0F"}{m}</span>)}
+        {vr.passed.map((m, i) => <span key={`p${i}`} style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.pos, whiteSpace: "nowrap" }}>{"\u2705"}{renderValidationMessage(m, tValidation)}</span>)}
+        {dispErr.map((m, i) => <span key={`e${i}`} style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.err, whiteSpace: "nowrap" }}>{"\u274C"}{renderValidationMessage(m, tValidation)}</span>)}
+        {vr.warnings.map((m, i) => <span key={`w${i}`} style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.acc, whiteSpace: "nowrap" }}>{"\u26A0\uFE0F"}{renderValidationMessage(m, tValidation)}</span>)}
+        {vr.info.map((m, i) => <span key={`i${i}`} style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, whiteSpace: "nowrap" }}>{"\u2139\uFE0F"}{renderValidationMessage(m, tValidation)}</span>)}
       </div>
     </div>
   );
