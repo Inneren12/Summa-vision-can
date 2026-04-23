@@ -1,0 +1,11 @@
+{
+  "@@locale": "ru",
+  "appTitle": "Summa Vision",
+  "navQueue": "Очередь брифов",
+  "navCubes": "Кубы",
+  "navJobs": "Задачи",
+  "navKpi": "KPI",
+  "commonLoading": "Загрузка...",
+  "commonRetry": "Повторить",
+  "commonCancel": "Отменить"
+}

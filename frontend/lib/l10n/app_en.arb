@@ -1,0 +1,35 @@
+{
+  "@@locale": "en",
+  "appTitle": "Summa Vision",
+  "@appTitle": {
+    "description": "Application title, shown in window chrome and drawer header"
+  },
+  "navQueue": "Brief Queue",
+  "@navQueue": {
+    "description": "Navigation label for the brief queue screen"
+  },
+  "navCubes": "Cubes",
+  "@navCubes": {
+    "description": "Navigation label for the StatCan cubes search/detail screens"
+  },
+  "navJobs": "Jobs",
+  "@navJobs": {
+    "description": "Navigation label for the async jobs monitoring screen"
+  },
+  "navKpi": "KPI",
+  "@navKpi": {
+    "description": "Navigation label for the KPI monitoring screen"
+  },
+  "commonLoading": "Loading...",
+  "@commonLoading": {
+    "description": "Generic loading state label"
+  },
+  "commonRetry": "Retry",
+  "@commonRetry": {
+    "description": "Retry action button label"
+  },
+  "commonCancel": "Cancel",
+  "@commonCancel": {
+    "description": "Cancel action button label"
+  }
+}
