@@ -37,10 +37,12 @@ class AppBootstrapNotifier extends AsyncNotifier<AppBootstrapState> {
       }
     }
 
-    final deviceLocale = WidgetsBinding.instance.platformDispatcher.locale;
-    final normalizedDevice = Locale(deviceLocale.languageCode);
-    if (_isSupported(normalizedDevice)) {
-      return normalizedDevice;
+    final deviceLocales = WidgetsBinding.instance.platformDispatcher.locales;
+    for (final deviceLocale in deviceLocales) {
+      final normalized = Locale(deviceLocale.languageCode);
+      if (_isSupported(normalized)) {
+        return normalized;
+      }
     }
 
     return const Locale('en');

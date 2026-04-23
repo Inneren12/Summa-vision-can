@@ -22,8 +22,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(Icons.menu));
-      await tester.pumpAndSettle();
+      await _openDrawer(tester);
 
       expect(find.text('Language'), findsOneWidget);
       expect(find.text('Brief Queue'), findsOneWidget);
@@ -45,8 +44,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(Icons.menu));
-      await tester.pumpAndSettle();
+      await _openDrawer(tester);
       await tester.tap(find.text('Russian'));
       await tester.pumpAndSettle();
 
@@ -54,6 +52,63 @@ void main() {
       expect(prefs.getString(kLocaleStorageKey), 'ru');
     });
   });
+
+  group('Bootstrap locale resolution', () {
+    testWidgets('boots with persisted ru', (tester) async {
+      SharedPreferences.setMockInitialValues({'selected_locale': 'ru'});
+
+      await tester.pumpWidget(
+        const ProviderScope(child: _TestShell()),
+      );
+      await tester.pumpAndSettle();
+
+      await _openDrawer(tester);
+      expect(find.text('Язык'), findsOneWidget);
+    });
+
+    testWidgets('boots with persisted en', (tester) async {
+      SharedPreferences.setMockInitialValues({'selected_locale': 'en'});
+
+      await tester.pumpWidget(
+        const ProviderScope(child: _TestShell()),
+      );
+      await tester.pumpAndSettle();
+
+      await _openDrawer(tester);
+      expect(find.text('Language'), findsOneWidget);
+    });
+
+    testWidgets('unsupported persisted locale falls back to EN', (tester) async {
+      SharedPreferences.setMockInitialValues({'selected_locale': 'fr'});
+
+      await tester.pumpWidget(
+        const ProviderScope(child: _TestShell()),
+      );
+      await tester.pumpAndSettle();
+
+      await _openDrawer(tester);
+      expect(find.text('Language'), findsOneWidget);
+    });
+
+    testWidgets('empty prefs + default device locale boots EN in test env', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+
+      await tester.pumpWidget(
+        const ProviderScope(child: _TestShell()),
+      );
+      await tester.pumpAndSettle();
+
+      await _openDrawer(tester);
+      expect(find.text('Language'), findsOneWidget);
+    });
+  });
+}
+
+Future<void> _openDrawer(WidgetTester tester) async {
+  await tester.tap(find.byIcon(Icons.menu));
+  await tester.pumpAndSettle();
 }
 
 class _TestShell extends ConsumerWidget {
@@ -81,7 +136,11 @@ class _TestShell extends ConsumerWidget {
     );
 
     return MaterialApp.router(
-      locale: bootstrap.valueOrNull?.locale ?? const Locale('en'),
+      locale: bootstrap.when(
+        data: (state) => state.locale,
+        loading: () => const Locale('en'),
+        error: (_, __) => const Locale('en'),
+      ),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       routerConfig: router,
