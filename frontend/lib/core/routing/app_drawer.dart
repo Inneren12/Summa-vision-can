@@ -20,10 +20,13 @@ class AppDrawer extends StatelessWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          DrawerHeader(
-            decoration: const BoxDecoration(color: AppTheme.surfaceDark),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
+            color: AppTheme.surfaceDark,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   loc.appTitle,
