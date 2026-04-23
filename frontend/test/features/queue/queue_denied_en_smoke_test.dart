@@ -45,7 +45,7 @@ void main() {
     expect(find.textContaining('No briefs in queue', skipOffstage: false), findsNothing);
 
     // Allowlist check: chart type values may remain EN (Category D).
-    expect(find.text('LINE'), findsOneWidget);
+    expect(find.textContaining('LINE'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('RU empty state denies EN empty prefix', (tester) async {

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:summa_vision_admin/core/app_bootstrap/app_bootstrap_provider.dart';
 import 'package:summa_vision_admin/core/routing/app_router.dart';
+import 'package:summa_vision_admin/core/shell/language_switcher.dart';
 import 'package:summa_vision_admin/features/queue/data/queue_repository.dart';
 import 'package:summa_vision_admin/features/queue/domain/content_brief.dart';
 import 'package:summa_vision_admin/features/queue/presentation/queue_screen.dart';
@@ -65,7 +66,17 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.menu));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Russian'));
+
+    final switcher = find.byType(LanguageSwitcher);
+    expect(switcher, findsOneWidget);
+
+    final russianButton = find.descendant(
+      of: switcher,
+      matching: find.widgetWithText(TextButton, 'Russian'),
+    );
+    expect(russianButton, findsOneWidget);
+
+    await tester.tap(russianButton);
     await tester.pumpAndSettle();
 
     expect(find.text('Очередь брифов'), findsOneWidget);
