@@ -18,20 +18,23 @@ class LanguageSwitcher extends ConsumerWidget {
         const Locale('en');
     final currentCode = currentLocale.languageCode;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 4,
+      runSpacing: 4,
       children: [
-        Text(
-          loc.languageLabel,
-          style: Theme.of(context).textTheme.labelSmall,
+        Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: Text(
+            loc.languageLabel,
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
         ),
-        const SizedBox(width: 8),
         _LanguageButton(
           label: loc.languageEnglish,
           code: 'en',
           active: currentCode == 'en',
         ),
-        const SizedBox(width: 4),
         _LanguageButton(
           label: loc.languageRussian,
           code: 'ru',
