@@ -793,8 +793,8 @@ Planning-only seed list (not implementation):
 - `navJobs`
 - `navKpi`
 - `commonLoading`
-- `commonRetry`
-- `commonCancel`
+- `commonRetryVerb`
+- `commonCancelVerb`
 - `statusLoading`
 - `statusFailed`
 - `errorsUnknown`
