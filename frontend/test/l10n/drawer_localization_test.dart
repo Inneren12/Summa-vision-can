@@ -89,7 +89,7 @@ void main() {
       // Translated.
       expect(find.text('Очередь брифов'), findsOneWidget);
       expect(find.text('Кубы'), findsOneWidget);
-      expect(find.text('Задачи'), findsOneWidget);
+      expect(find.text('Задания'), findsOneWidget);
 
       // Denied: previous EN literals must NOT be present.
       expect(find.text('Brief Queue'), findsNothing);

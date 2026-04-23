@@ -59,6 +59,8 @@ Terms for core platform concepts, user-facing entities, document lifecycle.
 | Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Grammar / UI role | Notes |
 |---|---|---|---|---|---|
 | publication | публикация |  |  | noun | Базовый термин для опубликованного материала. |
+| brief | бриф |  |  | noun | Операционный объект в workflow Queue/Editor (Brief Queue, empty states, карточки). |
+| queue | очередь |  |  | noun | Операционный контекст админ-приложения (Очередь брифов). |
 | graphic | графика |  |  | noun | Для отдельной визуальной единицы. |
 | infographic | инфографика |  |  | noun | Основной тип контента в продукте. |
 | dashboard | дашборд |  |  | noun | Устоявшийся термин в русскоязычной аналитике. |
@@ -76,6 +78,7 @@ Terms for core platform concepts, user-facing entities, document lifecycle.
 | account | аккаунт |  | учетная запись | noun | Более естественно для продукта. |
 | subscription | подписка |  |  | noun | Тарифная/биллинг-сущность. |
 | pricing | тарифы |  |  | noun | Для страницы с планами и ценами. |
+| jobs | задания |  | задачи | noun | Навигационная метка операционных задач (navJobs). Канон: «Задания». |
 
 ## Section 2 — Editor & design terms
 
@@ -190,6 +193,7 @@ Verbs users invoke: publish, draft, save, export, validate, review, etc.
 | Render | Рендерить | Визуализировать (if public-facing context required) | *(none)* | verb | Key: render.verb — EDITOR/INTERNAL ONLY. Do not use in public-facing UI or operator onboarding copy. If a user-friendly label is needed, use "Визуализировать" from allowed variants. |
 | Sync | Синхронизировать |  |  | verb | Запустить синхронизацию. |
 | Refresh | Обновить |  |  | verb | Обновить экран/данные. |
+| Refresh queue | Обновить очередь |  |  | verb | Tooltip/действие обновления очереди. Императивная форма. |
 | Cancel | Отменить |  |  | verb | Отмена действия/диалога. |
 | Close | Закрыть |  |  | verb | Закрыть окно/панель. |
 | Open | Открыть |  |  | verb | Открыть файл/экран. |
@@ -281,6 +285,7 @@ Validation messages, error types.
 | unauthorized | не авторизован |  |  | phrase | Нет действительной авторизации. |
 | forbidden | доступ запрещен |  |  | phrase | Авторизация есть, но прав недостаточно. |
 | not found | не найдено |  |  | phrase | Ресурс отсутствует. |
+| Failed to load queue | Не удалось загрузить очередь |  |  | phrase | Префикс ошибки загрузки очереди; `{error}` отображает backend detail без перевода. |
 
 ## Section 7 — Technical terms (kept in English)
 

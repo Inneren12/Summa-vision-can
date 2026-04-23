@@ -43,5 +43,35 @@
   "languageRussian": "Russian",
   "@languageRussian": {
     "description": "Name of the Russian locale in the language switcher"
+  },
+  "queueTitle": "Brief Queue",
+  "@queueTitle": {
+    "description": "AppBar title on the Queue screen. Semantically identical to navQueue but used as screen title rather than nav label; kept separate to allow divergent tuning per §3l migration rule."
+  },
+  "queueRefreshTooltip": "Refresh queue",
+  "@queueRefreshTooltip": {
+    "description": "Tooltip on the Queue screen refresh IconButton"
+  },
+  "queueLoadError": "Failed to load queue\\n{error}",
+  "@queueLoadError": {
+    "description": "Error message shown when /api/v1/admin/queue request fails. The {error} placeholder receives the backend error detail or exception message as-is.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "Connection timeout"
+      }
+    }
+  },
+  "queueEmptyState": "No briefs in queue.\\nTap refresh to fetch new ones.",
+  "@queueEmptyState": {
+    "description": "Empty state message on the Queue screen when no DRAFT briefs are available for review"
+  },
+  "queueRejectVerb": "Reject",
+  "@queueRejectVerb": {
+    "description": "Queue item action button — reject the brief (does not advance to PUBLISHED)"
+  },
+  "queueApproveVerb": "Approve",
+  "@queueApproveVerb": {
+    "description": "Queue item action button — approve the brief (advances to PUBLISHED)"
   }
 }

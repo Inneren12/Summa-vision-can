@@ -67,6 +67,11 @@ class _BootstrapError extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
+              // i18n-kept: category B (dev/diagnostic). AppLocalizations is
+              // not available in this bootstrap-error subtree because it is
+              // rendered via a fallback MaterialApp outside MaterialApp.router.
+              // See docs/phase-3-slice-3-recon.md Section 6. Debt tracked in
+              // DEBT-029 for locale-aware pre-localization fallback.
               'App bootstrap failed: $error',
               textAlign: TextAlign.center,
             ),

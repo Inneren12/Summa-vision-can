@@ -38,7 +38,7 @@ void main() {
 
       expect(find.text('Язык'), findsOneWidget);
       expect(find.text('Очередь брифов'), findsOneWidget);
-      expect(find.text('Задачи'), findsOneWidget);
+      expect(find.text('Задания'), findsOneWidget);
     });
 
     testWidgets('locale change persists to SharedPreferences', (tester) async {
