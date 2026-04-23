@@ -28,8 +28,13 @@ void main() {
       expect(find.text('Brief Queue'), findsOneWidget);
       expect(find.text('Jobs'), findsOneWidget);
 
+      // Switching locale via the drawer switcher also dismisses the drawer
+      // (standard Material behavior for tap inside Drawer).
       await tester.tap(find.text('Russian'));
       await tester.pumpAndSettle();
+
+      // Reopen drawer to verify shell content now renders in RU.
+      await _openDrawer(tester);
 
       expect(find.text('Язык'), findsOneWidget);
       expect(find.text('Очередь брифов'), findsOneWidget);
