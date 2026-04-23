@@ -56,7 +56,10 @@ void main() {
       await tester.tap(find.byIcon(Icons.menu));
       await tester.pumpAndSettle();
 
+      // EN-kept by policy: brand + product-line name (§3k Category A / D).
+      // Do not translate this; if it renders in Russian, catalog or code drifted.
       expect(find.text('Summa Vision Admin'), findsOneWidget);
+      // EN-kept by policy: industry-standard abbreviation (§3k Category A).
       expect(find.text('KPI'), findsOneWidget);
       expect(find.text('Очередь брифов'), findsOneWidget);
       expect(find.text('Кубы'), findsOneWidget);

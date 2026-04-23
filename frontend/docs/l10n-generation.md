@@ -24,9 +24,10 @@ this (see CI verification).
 
 ## CI verification
 
-CI runs:
+CI runs (from repository root):
 
 ```bash
+cd frontend
 flutter gen-l10n
 git diff --exit-code lib/l10n/generated/
 ```
@@ -38,4 +39,20 @@ regenerate, commit, push.
 
 - Stable review UX: reviewers see exact Dart output in PR diff
 - Deterministic across developer machines without relying on identical tooling state
-- Standard Flutter project convention
+- Chosen repository convention for deterministic review and CI sync (both commit and
+  regenerate-on-build are valid patterns in Flutter community; this repo picks commit
+  for review UX)
+
+
+## ARB metadata convention
+
+- `@@locale` required in every ARB file
+- `@key.description` entries live ONLY in `app_en.arb` (template ARB)
+- `app_ru.arb` (and any future locale ARB) does NOT duplicate descriptions
+- This follows `flutter_localizations` codegen defaults; descriptions are documentation
+  aid for translators and don't need per-locale copies
+
+When adding a new key:
+1. Add `"keyName": "English text"` to `app_en.arb`
+2. Add `"@keyName": { "description": "..." }` to `app_en.arb`
+3. Add `"keyName": "Translation"` to `app_ru.arb` (no `@keyName` block)
