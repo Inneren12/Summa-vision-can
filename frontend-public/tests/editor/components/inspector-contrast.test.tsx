@@ -16,7 +16,7 @@ function mockIssue(over: Partial<ContrastIssue> = {}): ContrastIssue {
     ratio: 3.27,
     threshold: 4.5,
     severity: "error",
-    message: "headline_editorial: contrast 3.27:1 against background (needs 4.5:1)",
+    message: { key: "validation.contrast.below_threshold", params: { blockType: "headline_editorial", slot: "primary", ratio: "3.27", threshold: 4.5, background: "#0B0D11" } },
     ...over,
   };
 }
@@ -59,7 +59,7 @@ describe("Inspector contrast surface", () => {
       contrastIssues: [mockIssue({ blockId: "block-1" })],
     });
     expect(screen.getByTestId("inspector-contrast")).toBeInTheDocument();
-    expect(screen.getByText("Contrast")).toBeInTheDocument();
+    expect(screen.getByText("validation.contrast.title")).toBeInTheDocument();
     expect(screen.getByText(/3\.27:1 vs 4\.5:1/)).toBeInTheDocument();
   });
 
@@ -75,7 +75,7 @@ describe("Inspector contrast surface", () => {
         ratio: 3.8,
       })],
     });
-    expect(screen.getByText(/3\.80:1 vs 4\.5:1 \(gradient\)/)).toBeInTheDocument();
+    expect(screen.getByText(/3\.80:1 vs 4\.5:1validation\.contrast\.gradient_suffix/)).toBeInTheDocument();
   });
 
   test("does not render contrast section when selected block has no issues", () => {
@@ -86,7 +86,7 @@ describe("Inspector contrast surface", () => {
       contrastIssues: [mockIssue({ blockId: "block-1" })],
     });
     expect(screen.queryByTestId("inspector-contrast")).not.toBeInTheDocument();
-    expect(screen.queryByText("Contrast")).not.toBeInTheDocument();
+    expect(screen.queryByText("validation.contrast.title")).not.toBeInTheDocument();
   });
 
   test("does not render contrast section when nothing is selected", () => {

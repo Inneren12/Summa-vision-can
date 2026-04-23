@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
 
 import '../theme/app_theme.dart';
 import 'app_router.dart';
@@ -11,6 +12,7 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentPath = GoRouterState.of(context).matchedLocation;
+    final loc = AppLocalizations.of(context)!;
 
     return Drawer(
       backgroundColor: AppTheme.backgroundDark,
@@ -19,8 +21,8 @@ class AppDrawer extends StatelessWidget {
         children: [
           DrawerHeader(
             decoration: const BoxDecoration(color: AppTheme.surfaceDark),
-            child: const Text(
-              'Summa Vision',
+            child: Text(
+              loc.appTitle,
               style: TextStyle(
                 color: AppTheme.neonGreen,
                 fontSize: 22,
@@ -30,25 +32,25 @@ class AppDrawer extends StatelessWidget {
           ),
           _NavTile(
             icon: Icons.list_alt,
-            label: 'Brief Queue',
+            label: loc.navQueue,
             route: AppRoutes.queue,
             selected: currentPath == AppRoutes.queue,
           ),
           _NavTile(
             icon: Icons.storage,
-            label: 'Cubes',
+            label: loc.navCubes,
             route: AppRoutes.cubeSearch,
             selected: currentPath.startsWith('/cubes'),
           ),
           _NavTile(
             icon: Icons.work_history,
-            label: 'Jobs',
+            label: loc.navJobs,
             route: AppRoutes.jobs,
             selected: currentPath == AppRoutes.jobs,
           ),
           _NavTile(
             icon: Icons.bar_chart,
-            label: 'KPI',
+            label: loc.navKpi,
             route: AppRoutes.kpi,
             selected: currentPath == AppRoutes.kpi,
           ),

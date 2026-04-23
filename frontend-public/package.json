@@ -11,11 +11,13 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:editor": "jest tests/editor"
+    "test:editor": "jest tests/editor",
+    "lint:i18n": "node scripts/lint-i18n.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "next": "16.2.0",
+    "next-intl": "^4.9.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.71.2",
@@ -35,6 +37,7 @@
     "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.0",
+    "eslint-plugin-i18next": "^6.1.4",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
     "tailwindcss": "^4",

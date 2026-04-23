@@ -59,11 +59,14 @@ async function flushMicrotasks(): Promise<void> {
  * autosave debounce timer.
  */
 function clickPalette(name: RegExp): void {
-  // Tab switch happens synchronously inside the click handler.
-  const themeTab = screen.getByRole('tab', { name: /theme tab/i });
-  fireEvent.click(themeTab);
-  const paletteButton = screen.getByRole('button', { name });
-  fireEvent.click(paletteButton);
+  const themeTab = document.getElementById('left-tab-theme');
+  expect(themeTab).toBeDefined();
+  fireEvent.click(themeTab!);
+  const paletteButton = screen
+    .getAllByRole('button', { name: /theme\.option\.palette\.aria/i })
+    .find((button) => name.test(`palette: ${button.textContent ?? ''}`));
+  expect(paletteButton).toBeDefined();
+  fireEvent.click(paletteButton!);
 }
 
 describe('Autosave — debounce', () => {
@@ -327,7 +330,7 @@ describe('Autosave — 404 produces the dedicated error message', () => {
     await flushMicrotasks();
 
     const banner = screen.getByTestId('notification-banner');
-    expect(banner.textContent).toMatch(/reload the page/i);
+    expect(banner.textContent).toMatch(/publication\.not_found\.reload/i);
   });
 });
 

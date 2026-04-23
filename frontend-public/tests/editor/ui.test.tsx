@@ -21,21 +21,23 @@ describe("editor UI a11y + import warnings", () => {
 
     const { container } = render(<InfographicEditor />);
 
-    expect(screen.getByRole("tablist", { name: /left panel sections/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /templates tab/i })).toHaveAttribute("aria-controls");
+    expect(screen.getByRole("tablist", { name: /left_panel\.sections\.aria/i })).toBeInTheDocument();
+    const tabs = screen.getAllByRole("tab", { name: /left_panel\.tab\.aria/i });
+    expect(tabs.length).toBeGreaterThan(0);
+    expect(tabs[0]).toHaveAttribute("aria-controls");
     // PR 3 added the right-rail tabpanels alongside LeftPanel's; assert at
     // least one tabpanel is reachable rather than a singular one.
     expect(screen.getAllByRole("tabpanel").length).toBeGreaterThan(0);
 
-    expect(screen.getByRole("tablist", { name: /editor mode/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /import document from json/i })).toBeInTheDocument();
+    expect(screen.getByRole("tablist", { name: /editor\.mode\.aria/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /import\.document_json/i })).toBeInTheDocument();
 
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(["bad"], "bad.json", { type: "application/json" });
     fireEvent.change(fileInput, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(screen.getByText("Invalid JSON file")).toBeInTheDocument();
+      expect(screen.getByText("import.invalid_json")).toBeInTheDocument();
     });
     expect(alertSpy).not.toHaveBeenCalled();
 
@@ -60,9 +62,10 @@ describe("Stage 3 PR 3 — full-tree integration", () => {
     const user = userEvent.setup();
     render(<InfographicEditor />);
     // Make an edit to populate the undo stack.
-    fireEvent.click(screen.getByRole("tab", { name: /blocks tab/i }));
-    const blocksTabpanel = screen.getByRole("tabpanel", { name: /blocks tab/i });
-    const blockBtns = within(blocksTabpanel).getAllByRole("button", { name: /select block/i });
+    const blocksTab = document.getElementById("left-tab-blocks");
+    expect(blocksTab).toBeDefined();
+    fireEvent.click(blocksTab!);
+    const blockBtns = screen.getAllByRole("button", { name: /^block\.select\.aria/i });
     fireEvent.click(blockBtns[0]);
     const textboxes = screen.queryAllByRole("textbox");
     if (textboxes.length > 0) {
@@ -72,7 +75,7 @@ describe("Stage 3 PR 3 — full-tree integration", () => {
     fireEvent.click(screen.getByRole("tab", { name: /review/i }));
     fireEvent.click(screen.getByTestId("transition-SUBMIT_FOR_REVIEW"));
     // Workflow gate now blocks UNDO. Click the Undo button.
-    const undoBtn = await screen.findByRole("button", { name: /^undo$/i });
+    const undoBtn = await screen.findByRole("button", { name: /^undo\.verb$/i });
     fireEvent.click(undoBtn);
     const banner = await screen.findByTestId("notification-banner");
     expect(banner).toHaveAttribute("data-kind", "rejection");
@@ -87,9 +90,10 @@ describe("Stage 3 PR 3 — full-tree integration", () => {
     const user = userEvent.setup();
     render(<InfographicEditor />);
     // Pick a block from LeftPanel Blocks tab.
-    fireEvent.click(screen.getByRole("tab", { name: /blocks tab/i }));
-    const blocksTabpanel = screen.getByRole("tabpanel", { name: /blocks tab/i });
-    const blockBtns = within(blocksTabpanel).getAllByRole("button", { name: /select block/i });
+    const blocksTab = document.getElementById("left-tab-blocks");
+    expect(blocksTab).toBeDefined();
+    fireEvent.click(blocksTab!);
+    const blockBtns = screen.getAllByRole("button", { name: /^block\.select\.aria/i });
     const targetBtn = blockBtns[0];
     fireEvent.click(targetBtn);
     expect(within(targetBtn).queryByTestId("block-unresolved-pill")).not.toBeInTheDocument();
@@ -99,15 +103,15 @@ describe("Stage 3 PR 3 — full-tree integration", () => {
     const ta = await screen.findByRole("textbox");
     await user.click(ta);
     await user.keyboard("first comment");
-    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.click(screen.getByRole("button", { name: "review.comment.add_button" }));
     // Thread appears in ReviewPanel.
     await waitFor(() => {
       expect(screen.getAllByTestId("thread-card")).toHaveLength(1);
     });
     expect(screen.getByTestId("review-tab-pill")).toHaveTextContent("1");
     // LeftPanel block row pill now shows 1.
-    const updated = within(blocksTabpanel)
-      .getAllByRole("button", { name: /select block/i })
+    const updated = screen
+      .getAllByRole("button", { name: /^block\.select\.aria/i })
       .find((btn) => within(btn).queryByTestId("block-unresolved-pill"));
     expect(updated).toBeDefined();
     expect(within(updated!).getByTestId("block-unresolved-pill")).toHaveTextContent("1");
@@ -125,9 +129,10 @@ describe("Stage 3 PR 3 — full-tree integration", () => {
     const banner = await screen.findByTestId("read-only-banner");
     expect(banner).toHaveAttribute("data-workflow", "approved");
     // Theme tab — palette buttons disabled by effectivePerms.
-    fireEvent.click(screen.getByRole("tab", { name: /theme tab/i }));
-    const themeTabpanel = screen.getByRole("tabpanel", { name: /theme tab/i });
-    const palBtns = within(themeTabpanel).getAllByRole("button", { name: /palette:/i });
+    const themeTab = document.getElementById("left-tab-theme");
+    expect(themeTab).toBeDefined();
+    fireEvent.click(themeTab!);
+    const palBtns = screen.getAllByRole("button", { name: /theme\.option\.palette\.aria/i });
     expect(palBtns.some((b) => (b as HTMLButtonElement).disabled)).toBe(true);
     // Per Issue 1+2: banner "Return to draft" routes through the shared
     // NoteModal — no direct dispatch. Fill the note, submit, banner clears.
@@ -149,15 +154,17 @@ describe("Stage 3 PR 3 — full-tree integration", () => {
     // positive/negative/neutral selector). In `in_review` the reducer
     // allows the former and rejects the latter; the Inspector must reflect
     // that asymmetry.
-    fireEvent.click(screen.getByRole("tab", { name: /blocks tab/i }));
-    const blocksTabpanel = screen.getByRole("tabpanel", { name: /blocks tab/i });
-    const deltaBtn = within(blocksTabpanel).getByRole("button", {
-      name: /select block: delta badge/i,
-    });
-    fireEvent.click(deltaBtn);
+    const blocksTab = document.getElementById("left-tab-blocks");
+    expect(blocksTab).toBeDefined();
+    fireEvent.click(blocksTab!);
+    const deltaBtn = screen
+      .getAllByRole("button", { name: /^block\.select\.aria/ })
+      .find((btn) => /block\.type\.delta_badge\.name/i.test(btn.textContent ?? ""));
+    expect(deltaBtn).toBeDefined();
+    fireEvent.click(deltaBtn!);
 
     // Baseline (draft): the direction segmented control is enabled.
-    const negativeBtn = screen.getByRole("button", { name: /^negative$/i });
+    const negativeBtn = screen.getByRole("button", { name: /^block\.option\.direction\.negative$/i });
     expect(negativeBtn).not.toBeDisabled();
 
     // Transition to in_review via ReviewPanel.
@@ -169,7 +176,7 @@ describe("Stage 3 PR 3 — full-tree integration", () => {
 
     // Data-category control (direction) is disabled — reducer would reject.
     const negativeBtnAfter = await screen.findByRole("button", {
-      name: /^negative$/i,
+      name: /^block\.option\.direction\.negative$/i,
     });
     expect(negativeBtnAfter).toBeDisabled();
 

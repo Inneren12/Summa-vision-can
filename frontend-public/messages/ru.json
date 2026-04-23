@@ -1,0 +1,610 @@
+{
+  "admin": {
+    "meta": {
+      "title": "Администратор — Summa Vision"
+    },
+    "header": {
+      "brand": "Summa Vision · Администратор",
+      "internal_tool": "Внутренний инструмент"
+    }
+  },
+  "publications": {
+    "title": "Публикации",
+    "empty": "Публикаций пока нет."
+  },
+  "publication": {
+    "load_failed": {
+      "fallback": "Не удалось загрузить публикацию — применены настройки по умолчанию. {error}"
+    },
+    "not_found": {
+      "reload": "Публикация не найдена — перезагрузите страницу"
+    }
+  },
+  "import": {
+    "invalid_json": "Неверный формат JSON",
+    "hydration_failed": "Не удалось загрузить данные",
+    "validation_failed": "Ошибка проверки данных",
+    "error": {
+      "hydration": "Ошибка импорта: {message}",
+      "validation": "Ошибка импорта: {message}"
+    },
+    "document_json": "Импортировать документ из JSON",
+    "label_short": "IMPORT"
+  },
+  "inspector": {
+    "title": "Инспектор",
+    "empty": {
+      "select_block": "Выберите блок",
+      "from_blocks_tab": "из вкладки «Блоки»"
+    },
+    "hidden": {
+      "status": "СКРЫТ"
+    },
+    "badge": {
+      "required_locked": "ОБЯЗ·🔒",
+      "required_editable": "ОБЯЗ",
+      "optional_default": "ДОП·ВКЛ",
+      "optional_available": "ДОП"
+    },
+    "template_mode": {
+      "short": "ШБЛ"
+    },
+    "meta": {
+      "type": "TYPE",
+      "status": "STATUS",
+      "sections": "SECTIONS",
+      "max": "MAX"
+    }
+  },
+  "right_rail": {
+    "aria_label": "Правая панель",
+    "tab": {
+      "inspector": "Инспектор",
+      "review": "Проверка"
+    }
+  },
+  "validation": {
+    "contrast": {
+      "title": "Контраст",
+      "gradient_suffix": " (градиент)",
+      "below_threshold": "{blockType}.{slot}: контраст {ratio}:1 ниже {threshold}:1 на {background}"
+    },
+    "page": {
+      "unknown_palette": "Неизвестная палитра: «{palette}»",
+      "unknown_background": "Неизвестный фон: «{background}»",
+      "unknown_size": "Неизвестный размер: «{size}»"
+    },
+    "required_block": {
+      "present": "{blockName} присутствует",
+      "missing": "{blockName} обязателен"
+    },
+    "headline": {
+      "empty": "Заголовок пуст"
+    },
+    "hero_number": {
+      "empty": "Число hero-блока пусто"
+    },
+    "max_chars": {
+      "overflow": "{blockName}: {count}/{max} ПЕРЕПОЛНЕНИЕ",
+      "near_limit": "{blockName}: {count}/{max} символов"
+    },
+    "max_lines": {
+      "near_limit": "{blockName}: {count}/{max} строк"
+    },
+    "section": {
+      "duplicate_id": "Дублирующийся id раздела: «{id}»",
+      "duplicate_block_id": "Раздел «{sectionId}» содержит дублирующийся blockId: «{blockId}»",
+      "block_not_allowed": "{blockName} недопустим в {sectionType}",
+      "max_per_section": "{blockName}: {count}x в {sectionType} (максимум {max})"
+    },
+    "items": {
+      "array_required": "items должно быть массивом",
+      "min_one": "требуется хотя бы один элемент",
+      "too_many": "слишком много элементов: {count} (максимум {max})"
+    },
+    "item": {
+      "label_required": "item[{index}]: label должно быть непустой строкой",
+      "value_finite": "item[{index}]: value должно быть конечным числом"
+    },
+    "benchmark": {
+      "value_finite_when_enabled": "showBenchmark включён, но benchmarkValue не является конечным числом"
+    },
+    "series": {
+      "array_required": "series должно быть массивом",
+      "min_one": "требуется хотя бы один ряд",
+      "label_required": "series[{index}]: label должно быть непустой строкой",
+      "role_invalid": "series[{index}]: role должен быть одним из {allowed}",
+      "data_array_required": "series[{index}]: data должно быть массивом",
+      "points_mismatch": "series[{index}] «{label}»: {points} точек, но {xLabels} xLabels",
+      "non_finite_values": "series[{index}] «{label}»: содержит неконечные значения"
+    },
+    "xlabels": {
+      "array_required": "xLabels должно быть массивом",
+      "non_empty": "xLabels не может быть пустым",
+      "all_non_empty": "все xLabels должны быть непустыми строками"
+    },
+    "kpi": {
+      "min_two": "требуется не менее 2 KPI-элементов",
+      "max_items": "слишком много элементов: {count} (максимум {max})",
+      "label_required": "kpi[{index}]: label должно быть непустой строкой",
+      "value_required": "kpi[{index}]: value должно быть непустой строкой",
+      "delta_string": "kpi[{index}]: delta должно быть строкой",
+      "direction_invalid": "kpi[{index}]: direction должен быть одним из {allowed}"
+    },
+    "table": {
+      "columns_array_required": "columns должно быть массивом",
+      "rows_array_required": "rows должно быть массивом",
+      "columns_min_two": "требуется минимум 2 столбца",
+      "rows_min_one": "требуется хотя бы одна строка"
+    },
+    "row": {
+      "country_required": "row[{index}]: country должно быть непустой строкой",
+      "rank_finite": "row[{index}]: rank должно быть конечным числом",
+      "vals_count_mismatch": "row[{index}]: {vals} vals, но {dataColumns} столбцов данных",
+      "vals_array_required": "row[{index}]: vals должно быть массивом"
+    },
+    "small_multiple": {
+      "data_array_required": "small_multiple[{index}]: data должно быть массивом",
+      "data_empty": "small_multiple[{index}]: data не может быть пустым",
+      "non_finite_values": "small_multiple[{index}] «{label}»: содержит неконечные значения"
+    },
+    "color": {
+      "invalid_hex": "Неверный hex-цвет: {hex}"
+    },
+    "integrity": {
+      "dangling_ref": "Раздел «{sectionId}» ссылается на отсутствующий блок «{blockId}»",
+      "duplicate_ref": "Блок «{blockId}» используется в нескольких разделах",
+      "orphan_block": "Блок «{blockId}» не привязан ни к одному разделу",
+      "required_block_missing": "Требуемый тип блока «{type}» не найден",
+      "unknown_block_type": "Неизвестный тип блока: «{type}»",
+      "wrong_section": "Блок «{blockName}» в разделе «{sectionType}» (допустимо: {allowed})",
+      "id_mismatch": "Несоответствие id блока: ожидалось «{expected}», получено «{actual}»"
+    },
+    "density": {
+      "ranked_bars_dense": "Ranked Bars: {count} элементов — может быть плотно",
+      "ranked_bars_height": "Ranked Bars: слишком много элементов для этой высоты холста",
+      "line_chart_overlap": "Line Chart: {count} x-подписей — могут перекрываться",
+      "kpi_compare_cramped": "KPI Compare: более 4 элементов может быть тесно",
+      "visual_table_overflow": "Visual Table: {count} строк — может не уместиться на {size}",
+      "small_multiples_dense": "Small Multiples: более 9 ячеек может быть слишком плотно"
+    },
+    "layout": {
+      "headline_shorter": "Заголовок {count} символов — короче может работать лучше",
+      "headline_line_overflow": "Строка заголовка {count} символов — может не уместиться на малых размерах",
+      "annotation_landscape": "Аннотация может не уместиться на альбомных размерах",
+      "table_narrow": "Visual Table может быть тесной на узком холсте",
+      "annotation_empty": "Блок аннотации пуст",
+      "section_overflow": "Раздел «{sectionType}» может переполниться: ~{usedPx}px использовано / {availablePx}px доступно"
+    },
+    "source_footer": {
+      "default_text": "Источник всё ещё по умолчанию"
+    }
+  },
+  "common": {
+    "toggle": {
+      "on": "✓ Вкл",
+      "off": "○ Выкл"
+    }
+  },
+  "qa": {
+    "title": "QA",
+    "expand": {
+      "aria": "Развернуть панель QA"
+    },
+    "mode": {
+      "aria": "Режим QA",
+      "draft": "черновик",
+      "publish": "публикация"
+    },
+    "summary": {
+      "compact": "{errors} ош. · {warnings} пред."
+    }
+  },
+  "debug": {
+    "overlay": {
+      "enable": "Enable debug overlay",
+      "disable": "Disable debug overlay",
+      "on": "Debug overlay ON (Ctrl+Shift+D)",
+      "off": "Debug overlay OFF (Ctrl+Shift+D)"
+    }
+  },
+  "export": {
+    "png": {
+      "verb": "Экспортировать в PNG"
+    },
+    "document_json": "Экспортировать документ в JSON",
+    "disabled": {
+      "loading_fonts": "Экспорт отключён: загрузка шрифтов…",
+      "validation_errors": "Экспорт отключён: {count, plural, one {# ошибка валидации} few {# ошибки валидации} many {# ошибок валидации} other {# ошибки валидации}}"
+    },
+    "label_short": "EXPORT",
+    "json_label_short": "JSON"
+  },
+  "editor": {
+    "mode": {
+      "aria": "Режим редактора",
+      "switch_to": "Переключиться в режим {mode}",
+      "template": "шаблон",
+      "design": "дизайн"
+    }
+  },
+  "undo": {
+    "verb": "Отменить",
+    "shortcut": "Отменить (Ctrl+Z)"
+  },
+  "redo": {
+    "verb": "Повторить",
+    "shortcut": "Повторить (Ctrl+Y)"
+  },
+  "save": {
+    "verb": "Сохранить",
+    "shortcut": "Сохранить (Ctrl+S)",
+    "label_short": "SAVE"
+  },
+  "draft": {
+    "save": {
+      "unsaved": "Сохранить черновик (есть несохранённые изменения)",
+      "unchanged": "Сохранить черновик (нет изменений)"
+    },
+    "status": "черновик"
+  },
+  "publish": {
+    "verb": "опубликовать"
+  },
+  "review": {
+    "transition": {
+      "in_review": "На проверке",
+      "approved": "Одобрено",
+      "draft": "Черновик",
+      "exported": "Экспортировано",
+      "published": "Опубликовано",
+      "duplicate_as_draft": "Дублировать как черновик"
+    },
+    "transitions": {
+      "empty": "Нет доступных переходов"
+    },
+    "request_changes": {
+      "title": "Запросить изменения"
+    },
+    "return_to_draft": {
+      "title": "Вернуть в черновик"
+    },
+    "comment": {
+      "add": "Добавить комментарий",
+      "add_button": "Добавить",
+      "add_on_block": "Добавить комментарий к блоку {block}",
+      "on_block": "К блоку {block}",
+      "label": "Комментарий",
+      "placeholder": "Введите комментарий...",
+      "edit": "Редактировать комментарий",
+      "deleted": "Комментарий удалён",
+      "edited_suffix": " (изменён)",
+      "resolved": "Решено",
+      "reopen": "Переоткрыть",
+      "resolve": "Решить",
+      "edit_action": "Редактировать",
+      "delete": "Удалить",
+      "block_generic": "блок"
+    },
+    "reply": {
+      "action": "Ответить",
+      "to_comment": "Ответить на комментарий",
+      "to_thread": "Ответить в ветку",
+      "placeholder": "Введите ответ..."
+    },
+    "threads": {
+      "title_count": "Ветки ({count})",
+      "show_resolved": "Показать решённые",
+      "empty": "Нет веток для показа."
+    },
+    "note": {
+      "optional": "Примечание (необязательно)",
+      "confirm": "Подтвердить",
+      "placeholder": "Необязательный контекст для этого перехода...",
+      "save": "Сохранить"
+    },
+    "history": {
+      "title_count": "История ({count})",
+      "collapse": "Свернуть",
+      "show_all": "Показать все {count}",
+      "empty": "Событий пока нет."
+    },
+    "unresolved_comments": {
+      "title_count": "{count, plural, one {# нерешённый комментарий} few {# нерешённых комментария} many {# нерешённых комментариев} other {# нерешённых комментариев}}"
+    }
+  },
+  "block": {
+    "type": {
+      "eyebrow_tag": {
+        "name": "Надзаголовок"
+      },
+      "headline_editorial": {
+        "name": "Заголовок"
+      },
+      "subtitle_descriptor": {
+        "name": "Подзаголовок"
+      },
+      "hero_stat": {
+        "name": "Ключевой показатель"
+      },
+      "delta_badge": {
+        "name": "Маркер изменения"
+      },
+      "body_annotation": {
+        "name": "Аннотация"
+      },
+      "source_footer": {
+        "name": "Источник"
+      },
+      "brand_stamp": {
+        "name": "Бренд"
+      },
+      "bar_horizontal": {
+        "name": "Ранжированная диаграмма"
+      },
+      "line_editorial": {
+        "name": "Линейный график"
+      },
+      "comparison_kpi": {
+        "name": "KPI-сравнение"
+      },
+      "table_enriched": {
+        "name": "Визуальная таблица"
+      },
+      "small_multiple": {
+        "name": "Small Multiples"
+      }
+    },
+    "field": {
+      "headline": {
+        "label": "Заголовок"
+      },
+      "subtitle": {
+        "label": "Подзаголовок"
+      },
+      "tag": {
+        "label": "Метка"
+      },
+      "value": {
+        "label": "Значение",
+        "placeholder": "Значение",
+        "title": "Значение"
+      },
+      "label": {
+        "label": "Метка",
+        "placeholder": "Метка",
+        "title": "Метка"
+      },
+      "delta": {
+        "label": "Изменение",
+        "placeholder": "Изменение"
+      },
+      "source": {
+        "label": "Источник"
+      },
+      "note": {
+        "label": "Примечание"
+      },
+      "align": {
+        "label": "Выравнивание"
+      },
+      "y_unit": {
+        "label": "Единица по оси Y"
+      },
+      "unit_suffix": {
+        "label": "Суффикс единицы"
+      },
+      "position": {
+        "label": "Позиция"
+      },
+      "direction": {
+        "short_label": "Напр."
+      },
+      "method": {
+        "short_label": "Метод"
+      },
+      "benchmark_line": {
+        "label": "Линия ориентира"
+      },
+      "benchmark_value": {
+        "short_label": "Знач. ориент."
+      },
+      "benchmark_label": {
+        "short_label": "Подпись ориентира"
+      },
+      "area_fill": {
+        "label": "Заливка области"
+      },
+      "highlight": {
+        "title": "Выделить"
+      },
+      "flag": {
+        "title": "Флаг"
+      },
+      "text": {
+        "label": "Текст"
+      },
+      "yUnit": {
+        "label": "Единица по оси Y"
+      },
+      "unit": {
+        "label": "Единица"
+      },
+      "showBenchmark": {
+        "label": "Линия ориентира"
+      },
+      "benchmarkValue": {
+        "short_label": "Знач. ориент."
+      },
+      "benchmarkLabel": {
+        "short_label": "Подпись ориентира"
+      },
+      "showArea": {
+        "label": "Заливка области"
+      },
+      "methodology": {
+        "short_label": "Метод"
+      }
+    },
+    "option": {
+      "align": {
+        "left": "по левому краю",
+        "center": "по центру",
+        "right": "по правому краю"
+      },
+      "direction": {
+        "positive": "положительный",
+        "negative": "отрицательный",
+        "neutral": "нейтральный"
+      },
+      "position": {
+        "bottom_left": "слева снизу",
+        "bottom_right": "справа снизу",
+        "bottom-left": "слева снизу",
+        "bottom-right": "справа снизу"
+      }
+    },
+    "series": {
+      "role": {
+        "primary": "основной",
+        "benchmark": "ориентир",
+        "secondary": "вторичный"
+      },
+      "title_count": "РЯДЫ ({count})",
+      "remove": {
+        "title": "Удалить ряд"
+      },
+      "name": {
+        "placeholder": "Название ряда"
+      },
+      "values": {
+        "comma_hint": {
+          "title": "значения через запятую"
+        }
+      },
+      "add": {
+        "action": "+ ДОБАВИТЬ РЯД"
+      },
+      "new": {
+        "default_label": "Новый ряд"
+      }
+    },
+    "x_labels": {
+      "title": "ПОДПИСИ ОСИ X",
+      "comma_hint": {
+        "title": "подписи через запятую"
+      }
+    },
+    "data_items": {
+      "title_count": "ЭЛЕМЕНТЫ ДАННЫХ ({count})"
+    },
+    "item": {
+      "remove": {
+        "title": "Удалить"
+      },
+      "add": {
+        "action": "+ ДОБАВИТЬ ЭЛЕМЕНТ"
+      },
+      "new": {
+        "default_label": "Новый"
+      }
+    },
+    "kpi_cards": {
+      "title_count": "KPI-КАРТОЧКИ ({count})"
+    },
+    "kpi": {
+      "remove": {
+        "title": "Удалить KPI"
+      },
+      "add": {
+        "action": "+ ДОБАВИТЬ KPI"
+      },
+      "new_metric": {
+        "default_label": "Новая метрика"
+      }
+    },
+    "select": {
+      "aria": "Выбрать блок: {name}"
+    },
+    "visibility": {
+      "hide": {
+        "aria": "Скрыть {name}",
+        "title": "Скрыть блок"
+      },
+      "show": {
+        "aria": "Показать {name}",
+        "title": "Показать блок"
+      }
+    }
+  },
+  "left_panel": {
+    "sections": {
+      "aria": "Разделы левой панели"
+    },
+    "tab": {
+      "templates": {
+        "short": "Tpl"
+      },
+      "blocks": {
+        "short": "Blk"
+      },
+      "theme": {
+        "short": "Thm"
+      },
+      "aria": "вкладка {name}"
+    },
+    "footer": {
+      "summary": "v{schema} · {sections} разд · {blocks} бл"
+    }
+  },
+  "theme": {
+    "palette": {
+      "title": "Палитра"
+    },
+    "background": {
+      "title": "Фон"
+    },
+    "size": {
+      "title": "Размер"
+    },
+    "option": {
+      "palette": {
+        "aria": "Палитра: {name}"
+      },
+      "background": {
+        "aria": "Фон: {name}"
+      },
+      "size": {
+        "aria": "Размер: {name} {width}x{height}"
+      }
+    }
+  },
+  "template": {
+    "variant": {
+      "number_plus_delta": "Число + изменение",
+      "number_plus_note": "Число + примечание",
+      "minimal": "Минимальный",
+      "before_after": "До / После",
+      "fact_context": "Факт + контекст",
+      "social_post": "Пост в соцсеть",
+      "simple_ranking": "Простой рейтинг",
+      "single_plus_area": "Один ряд + заливка",
+      "three_kpi_cards": "3 KPI-карточки",
+      "heatmap_rankings": "Тепловой рейтинг",
+      "2x3_grid": "Сетка 2×3"
+    },
+    "desc": {
+      "giant_number_with_change": "Огромное число с изменением",
+      "number_with_annotation": "Число с аннотацией",
+      "clean_centered": "Чистый центрированный макет",
+      "two_numbers_contrasted": "Сопоставление двух значений",
+      "key_insight_with_analysis": "Ключевой вывод с аналитикой",
+      "shareable_stat": "Статистика для публикации",
+      "horizontal_bars_by_value": "Горизонтальные бары по значению",
+      "time_series_with_area_fill": "Временной ряд с заливкой",
+      "three_metrics_side_by_side": "Три метрики рядом",
+      "table_with_conditional_format": "Таблица с условным форматированием",
+      "same_chart_repeated": "Повтор одного графика"
+    }
+  }
+}

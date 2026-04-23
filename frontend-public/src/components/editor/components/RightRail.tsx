@@ -1,6 +1,7 @@
 'use client';
 
 import React, { memo, useId, useMemo, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type {
   Block,
   BlockRegistryEntry,
@@ -45,6 +46,7 @@ function RightRailImpl({
   onRequestNote,
   contrastIssues,
 }: RightRailProps) {
+  const tRightRail = useTranslations('right_rail');
   const [tab, setTab] = useState<RightRailTab>('inspector');
   const inspectorTabId = useId();
   const reviewTabId = useId();
@@ -99,7 +101,7 @@ function RightRailImpl({
     >
       <div
         role="tablist"
-        aria-label="Right rail"
+        aria-label={tRightRail('aria_label')}
         style={{ display: 'flex', borderBottom: `1px solid ${TK.c.brd}` }}
       >
         <button
@@ -114,7 +116,7 @@ function RightRailImpl({
           onKeyDown={handleTabKey}
           style={tabButtonStyle(tab === 'inspector')}
         >
-          Inspector
+          {tRightRail('tab.inspector')}
         </button>
         <button
           type="button"
@@ -128,7 +130,7 @@ function RightRailImpl({
           onKeyDown={handleTabKey}
           style={tabButtonStyle(tab === 'review')}
         >
-          Review
+          {tRightRail('tab.review')}
           {unresolvedTotal > 0 && (
             <span
               data-testid="review-tab-pill"

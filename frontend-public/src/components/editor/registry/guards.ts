@@ -1,6 +1,7 @@
 import type { CanonicalDocument, LegacyDocumentV1, WorkflowState } from '../types';
 import { BREG } from './blocks';
 import { validateBlockData, normalizeBlockData } from '../validation/block-data';
+import { formatValidationMessageDev } from '../validation/types';
 
 export const SUPPORTED_SCHEMA_VERSIONS = [1, 2] as const;
 export const CURRENT_SCHEMA_VERSION = 2;
@@ -352,7 +353,12 @@ function validateRegistryConstraints(doc: CanonicalDocument): string | null {
 
     const blockDataValidation = validateBlockData(block.type, block.props);
     if (!blockDataValidation.valid) {
-      return `Invalid props for ${block.type} (${id}): ${blockDataValidation.errors.join("; ")}`;
+      // INTENTIONAL: dev/import-guard path. Uses debug formatter because this error is
+      // thrown during JSON import validation and surfaced to operators as a technical
+      // import diagnostic, not as a localized UI message. Do NOT i18n-ify this without
+      // redesigning the import error surface — see i18n recon docs and render.tsx for
+      // the user-facing localized render path.
+      return `Invalid props for ${block.type} (${id}): ${blockDataValidation.errors.map(formatValidationMessageDev).join("; ")}`;
     }
 
     if (requiredBlockTypes.has(block.type)) {

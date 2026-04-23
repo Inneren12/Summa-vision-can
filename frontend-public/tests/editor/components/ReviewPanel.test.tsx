@@ -70,7 +70,7 @@ describe("ReviewPanel — workflow header", () => {
     mount(setWorkflow(baseState(), "in_review"));
     fireEvent.click(screen.getByTestId("transition-REQUEST_CHANGES"));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Request changes")).toBeInTheDocument();
+    expect(screen.getByText("review.request_changes.title")).toBeInTheDocument();
   });
 
   test("submitting note dispatches REQUEST_CHANGES with the note", async () => {
@@ -80,7 +80,7 @@ describe("ReviewPanel — workflow header", () => {
     const ta = screen.getByRole("textbox");
     await user.click(ta);
     await user.keyboard("please fix copy");
-    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    await user.click(screen.getByRole("button", { name: "review.note.confirm" }));
     expect(dispatch).toHaveBeenCalledWith({
       type: "REQUEST_CHANGES",
       note: "please fix copy",
@@ -91,7 +91,7 @@ describe("ReviewPanel — workflow header", () => {
     const user = userEvent.setup();
     const { dispatch } = mount(setWorkflow(baseState(), "in_review"));
     fireEvent.click(screen.getByTestId("transition-REQUEST_CHANGES"));
-    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    await user.click(screen.getByRole("button", { name: "review.note.confirm" }));
     expect(dispatch).toHaveBeenCalledWith({ type: "REQUEST_CHANGES", note: undefined });
   });
 
@@ -160,7 +160,7 @@ describe("ReviewPanel — threads", () => {
       }),
     ]);
     mount(state);
-    expect(screen.getByText("Comment deleted")).toBeInTheDocument();
+    expect(screen.getByText("review.comment.deleted")).toBeInTheDocument();
     expect(screen.queryByTestId("edit-button")).not.toBeInTheDocument();
     expect(screen.queryByTestId("delete-button")).not.toBeInTheDocument();
   });
@@ -205,10 +205,10 @@ describe("ReviewPanel — threads", () => {
     const { dispatch } = mount(state);
     fireEvent.click(screen.getByTestId("reply-button"));
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText("Reply to comment")).toBeInTheDocument();
+    expect(within(dialog).getByText("review.reply.to_comment")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("textbox"));
     await user.keyboard("ack");
-    await user.click(within(dialog).getByRole("button", { name: "Reply" }));
+    await user.click(within(dialog).getByRole("button", { name: "review.reply.action" }));
     expect(dispatch).toHaveBeenCalledWith({
       type: "REPLY_TO_COMMENT",
       parentId: "root",
@@ -234,7 +234,7 @@ describe("ReviewPanel — threads", () => {
     fireEvent.click(screen.getByTestId("add-comment-button"));
     await user.click(screen.getByRole("textbox"));
     await user.keyboard("hello world");
-    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.click(screen.getByRole("button", { name: "review.comment.add_button" }));
     expect(dispatch).toHaveBeenCalledWith({
       type: "ADD_COMMENT",
       blockId: state.selectedBlockId,

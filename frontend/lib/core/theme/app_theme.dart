@@ -556,8 +556,10 @@ Map<String, double> spacingForDensity(DensityMode mode) {
 
 /// Builds the complete Summa Vision [ThemeData] with design tokens (v3.2 БЛОК 17).
 ///
-/// Uses Google Fonts: Bricolage Grotesque (display), DM Sans (body),
+/// Uses Google Fonts: Manrope (display), DM Sans (body),
 /// JetBrains Mono (data/monospace).
+/// Previously Bricolage Grotesque; swapped because Bricolage lacks Cyrillic glyphs.
+/// See docs/phase-3-slice-0-font-blocker-check.md.
 ThemeData buildSummaTheme({
   DensityMode density = DensityMode.comfortable,
   ChartMode chartMode = ChartMode.editorial,
@@ -578,7 +580,7 @@ ThemeData buildSummaTheme({
   // Typography — exact v3.2 БЛОК 17 values with tabular figures
   const tabularFigures = [FontFeature.tabularFigures()];
 
-  final displayLarge = GoogleFonts.bricolageGrotesque(
+  final displayLarge = GoogleFonts.manrope(
     fontSize: 64,
     fontWeight: FontWeight.w700,
     height: 1.0,
@@ -606,7 +608,7 @@ ThemeData buildSummaTheme({
   final bodyFont = GoogleFonts.dmSansTextTheme(
     ThemeData.dark().textTheme,
   );
-  final displayFont = GoogleFonts.bricolageGrotesqueTextTheme(
+  final displayFont = GoogleFonts.manropeTextTheme(
     ThemeData.dark().textTheme,
   );
   final dataFont = GoogleFonts.jetBrainsMonoTextTheme(

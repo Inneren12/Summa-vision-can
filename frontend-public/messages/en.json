@@ -1,0 +1,610 @@
+{
+  "admin": {
+    "meta": {
+      "title": "Admin — Summa Vision"
+    },
+    "header": {
+      "brand": "Summa Vision · Admin",
+      "internal_tool": "Internal tool"
+    }
+  },
+  "publications": {
+    "title": "Publications",
+    "empty": "No publications yet."
+  },
+  "publication": {
+    "load_failed": {
+      "fallback": "Failed to load publication — using template defaults. {error}"
+    },
+    "not_found": {
+      "reload": "Publication not found — reload the page"
+    }
+  },
+  "import": {
+    "invalid_json": "Invalid JSON file",
+    "hydration_failed": "hydration failed",
+    "validation_failed": "validation failed",
+    "error": {
+      "hydration": "Import error: {message}",
+      "validation": "Import error: {message}"
+    },
+    "document_json": "Import document from JSON",
+    "label_short": "IMPORT"
+  },
+  "inspector": {
+    "title": "Inspector",
+    "empty": {
+      "select_block": "Select a block",
+      "from_blocks_tab": "from Blocks tab"
+    },
+    "hidden": {
+      "status": "HIDDEN"
+    },
+    "badge": {
+      "required_locked": "REQ·🔒",
+      "required_editable": "REQ",
+      "optional_default": "OPT·ON",
+      "optional_available": "OPT"
+    },
+    "template_mode": {
+      "short": "TPL"
+    },
+    "meta": {
+      "type": "TYPE",
+      "status": "STATUS",
+      "sections": "SECTIONS",
+      "max": "MAX"
+    }
+  },
+  "right_rail": {
+    "aria_label": "Right rail",
+    "tab": {
+      "inspector": "Inspector",
+      "review": "Review"
+    }
+  },
+  "validation": {
+    "contrast": {
+      "title": "Contrast",
+      "gradient_suffix": " (gradient)",
+      "below_threshold": "{blockType}.{slot}: contrast {ratio}:1 below {threshold}:1 on {background}"
+    },
+    "page": {
+      "unknown_palette": "Unknown palette: \"{palette}\"",
+      "unknown_background": "Unknown background: \"{background}\"",
+      "unknown_size": "Unknown size: \"{size}\""
+    },
+    "required_block": {
+      "present": "{blockName} present",
+      "missing": "{blockName} is required"
+    },
+    "headline": {
+      "empty": "Headline is empty"
+    },
+    "hero_number": {
+      "empty": "Hero number is empty"
+    },
+    "max_chars": {
+      "overflow": "{blockName}: {count}/{max} OVERFLOW",
+      "near_limit": "{blockName}: {count}/{max} chars"
+    },
+    "max_lines": {
+      "near_limit": "{blockName}: {count}/{max} lines"
+    },
+    "section": {
+      "duplicate_id": "Duplicate section id: \"{id}\"",
+      "duplicate_block_id": "Section \"{sectionId}\" has duplicate blockId: \"{blockId}\"",
+      "block_not_allowed": "{blockName} not allowed in {sectionType}",
+      "max_per_section": "{blockName}: {count}x in {sectionType} (max {max})"
+    },
+    "items": {
+      "array_required": "items must be an array",
+      "min_one": "at least one item required",
+      "too_many": "too many items: {count} (max {max})"
+    },
+    "item": {
+      "label_required": "item[{index}]: label must be non-empty string",
+      "value_finite": "item[{index}]: value must be a finite number"
+    },
+    "benchmark": {
+      "value_finite_when_enabled": "showBenchmark is true but benchmarkValue is not a finite number"
+    },
+    "series": {
+      "array_required": "series must be an array",
+      "min_one": "at least one series required",
+      "label_required": "series[{index}]: label must be non-empty string",
+      "role_invalid": "series[{index}]: role must be one of {allowed}",
+      "data_array_required": "series[{index}]: data must be an array",
+      "points_mismatch": "series[{index}] \"{label}\": {points} points but {xLabels} xLabels",
+      "non_finite_values": "series[{index}] \"{label}\": contains non-finite values"
+    },
+    "xlabels": {
+      "array_required": "xLabels must be an array",
+      "non_empty": "xLabels cannot be empty",
+      "all_non_empty": "all xLabels must be non-empty strings"
+    },
+    "kpi": {
+      "min_two": "at least 2 KPI items required",
+      "max_items": "too many items: {count} (max {max})",
+      "label_required": "kpi[{index}]: label must be non-empty string",
+      "value_required": "kpi[{index}]: value must be non-empty string",
+      "delta_string": "kpi[{index}]: delta must be string",
+      "direction_invalid": "kpi[{index}]: direction must be one of {allowed}"
+    },
+    "table": {
+      "columns_array_required": "columns must be an array",
+      "rows_array_required": "rows must be an array",
+      "columns_min_two": "at least 2 columns required",
+      "rows_min_one": "at least one row required"
+    },
+    "row": {
+      "country_required": "row[{index}]: country must be non-empty string",
+      "rank_finite": "row[{index}]: rank must be a finite number",
+      "vals_count_mismatch": "row[{index}]: {vals} vals but {dataColumns} data columns",
+      "vals_array_required": "row[{index}]: vals must be an array"
+    },
+    "small_multiple": {
+      "data_array_required": "small_multiple[{index}]: data must be an array",
+      "data_empty": "small_multiple[{index}]: data cannot be empty",
+      "non_finite_values": "small_multiple[{index}] \"{label}\": contains non-finite values"
+    },
+    "color": {
+      "invalid_hex": "Invalid hex colour: {hex}"
+    },
+    "integrity": {
+      "dangling_ref": "Section \"{sectionId}\" references missing block \"{blockId}\"",
+      "duplicate_ref": "Block \"{blockId}\" referenced by multiple sections",
+      "orphan_block": "Block \"{blockId}\" not referenced by any section",
+      "required_block_missing": "Required block type \"{type}\" not found",
+      "unknown_block_type": "Unknown block type: \"{type}\"",
+      "wrong_section": "Block \"{blockName}\" in \"{sectionType}\" section (allowed: {allowed})",
+      "id_mismatch": "Block id mismatch: expected \"{expected}\", got \"{actual}\""
+    },
+    "density": {
+      "ranked_bars_dense": "Ranked Bars: {count} items — may be dense",
+      "ranked_bars_height": "Ranked Bars: too many items for this canvas height",
+      "line_chart_overlap": "Line Chart: {count} x-labels — may overlap",
+      "kpi_compare_cramped": "KPI Compare: more than 4 items may be cramped",
+      "visual_table_overflow": "Visual Table: {count} rows — may overflow on {size}",
+      "small_multiples_dense": "Small Multiples: more than 9 cells may be too dense"
+    },
+    "layout": {
+      "headline_shorter": "Headline {count} chars — shorter may work better",
+      "headline_line_overflow": "Headline line {count} chars — may overflow small sizes",
+      "annotation_landscape": "Annotation may not fit on landscape sizes",
+      "table_narrow": "Visual Table may be cramped on narrow canvas",
+      "annotation_empty": "Annotation block is empty",
+      "section_overflow": "Section \"{sectionType}\" may overflow: ~{usedPx}px used / {availablePx}px available"
+    },
+    "source_footer": {
+      "default_text": "Source is still default"
+    }
+  },
+  "common": {
+    "toggle": {
+      "on": "✓ On",
+      "off": "○ Off"
+    }
+  },
+  "qa": {
+    "title": "QA",
+    "expand": {
+      "aria": "Expand QA panel"
+    },
+    "mode": {
+      "aria": "QA mode",
+      "draft": "draft",
+      "publish": "publish"
+    },
+    "summary": {
+      "compact": "{errors}err · {warnings}warn"
+    }
+  },
+  "debug": {
+    "overlay": {
+      "enable": "Enable debug overlay",
+      "disable": "Disable debug overlay",
+      "on": "Debug overlay ON (Ctrl+Shift+D)",
+      "off": "Debug overlay OFF (Ctrl+Shift+D)"
+    }
+  },
+  "export": {
+    "png": {
+      "verb": "Export as PNG"
+    },
+    "document_json": "Export document as JSON",
+    "disabled": {
+      "loading_fonts": "Export disabled: loading fonts…",
+      "validation_errors": "Export disabled: {count, plural, one {# validation error} other {# validation errors}}"
+    },
+    "label_short": "EXPORT",
+    "json_label_short": "JSON"
+  },
+  "editor": {
+    "mode": {
+      "aria": "Editor mode",
+      "switch_to": "Switch to {mode} mode",
+      "template": "template",
+      "design": "design"
+    }
+  },
+  "undo": {
+    "verb": "Undo",
+    "shortcut": "Undo (Ctrl+Z)"
+  },
+  "redo": {
+    "verb": "Redo",
+    "shortcut": "Redo (Ctrl+Y)"
+  },
+  "save": {
+    "verb": "Save",
+    "shortcut": "Save (Ctrl+S)",
+    "label_short": "SAVE"
+  },
+  "draft": {
+    "save": {
+      "unsaved": "Save draft (unsaved changes)",
+      "unchanged": "Save draft (no changes)"
+    },
+    "status": "draft"
+  },
+  "publish": {
+    "verb": "publish"
+  },
+  "review": {
+    "transition": {
+      "in_review": "In review",
+      "approved": "Approved",
+      "draft": "Draft",
+      "exported": "Exported",
+      "published": "Published",
+      "duplicate_as_draft": "Duplicate as draft"
+    },
+    "transitions": {
+      "empty": "No transitions available"
+    },
+    "request_changes": {
+      "title": "Request changes"
+    },
+    "return_to_draft": {
+      "title": "Return to draft"
+    },
+    "comment": {
+      "add": "Add comment",
+      "add_button": "Add",
+      "add_on_block": "Add comment on {block}",
+      "on_block": "On {block}",
+      "label": "Comment",
+      "placeholder": "Type your comment...",
+      "edit": "Edit comment",
+      "deleted": "Comment deleted",
+      "edited_suffix": " (edited)",
+      "resolved": "Resolved",
+      "reopen": "Reopen",
+      "resolve": "Resolve",
+      "edit_action": "Edit",
+      "delete": "Delete",
+      "block_generic": "block"
+    },
+    "reply": {
+      "action": "Reply",
+      "to_comment": "Reply to comment",
+      "to_thread": "Reply to thread",
+      "placeholder": "Type your reply..."
+    },
+    "threads": {
+      "title_count": "Threads ({count})",
+      "show_resolved": "Show resolved",
+      "empty": "No threads to show."
+    },
+    "note": {
+      "optional": "Note (optional)",
+      "confirm": "Confirm",
+      "placeholder": "Optional context for this transition...",
+      "save": "Save"
+    },
+    "history": {
+      "title_count": "History ({count})",
+      "collapse": "Collapse",
+      "show_all": "Show all {count}",
+      "empty": "No events yet."
+    },
+    "unresolved_comments": {
+      "title_count": "{count, plural, one {# unresolved comment} other {# unresolved comments}}"
+    }
+  },
+  "block": {
+    "type": {
+      "eyebrow_tag": {
+        "name": "Eyebrow"
+      },
+      "headline_editorial": {
+        "name": "Headline"
+      },
+      "subtitle_descriptor": {
+        "name": "Subtitle"
+      },
+      "hero_stat": {
+        "name": "Hero Number"
+      },
+      "delta_badge": {
+        "name": "Delta Badge"
+      },
+      "body_annotation": {
+        "name": "Annotation"
+      },
+      "source_footer": {
+        "name": "Source"
+      },
+      "brand_stamp": {
+        "name": "Brand"
+      },
+      "bar_horizontal": {
+        "name": "Ranked Bars"
+      },
+      "line_editorial": {
+        "name": "Line Chart"
+      },
+      "comparison_kpi": {
+        "name": "KPI Compare"
+      },
+      "table_enriched": {
+        "name": "Visual Table"
+      },
+      "small_multiple": {
+        "name": "Small Multiples"
+      }
+    },
+    "field": {
+      "headline": {
+        "label": "Headline"
+      },
+      "subtitle": {
+        "label": "Subtitle"
+      },
+      "tag": {
+        "label": "Tag"
+      },
+      "value": {
+        "label": "Value",
+        "placeholder": "Value",
+        "title": "Value"
+      },
+      "label": {
+        "label": "Label",
+        "placeholder": "Label",
+        "title": "Label"
+      },
+      "delta": {
+        "label": "Delta",
+        "placeholder": "Delta"
+      },
+      "source": {
+        "label": "Source"
+      },
+      "note": {
+        "label": "Note"
+      },
+      "align": {
+        "label": "Align"
+      },
+      "y_unit": {
+        "label": "Y unit"
+      },
+      "unit_suffix": {
+        "label": "Unit suffix"
+      },
+      "position": {
+        "label": "Position"
+      },
+      "direction": {
+        "short_label": "Dir"
+      },
+      "method": {
+        "short_label": "Method"
+      },
+      "benchmark_line": {
+        "label": "Benchmark line"
+      },
+      "benchmark_value": {
+        "short_label": "Bench value"
+      },
+      "benchmark_label": {
+        "short_label": "Bench label"
+      },
+      "area_fill": {
+        "label": "Area fill"
+      },
+      "highlight": {
+        "title": "Highlight"
+      },
+      "flag": {
+        "title": "Flag"
+      },
+      "text": {
+        "label": "Text"
+      },
+      "yUnit": {
+        "label": "Y unit"
+      },
+      "unit": {
+        "label": "Unit"
+      },
+      "showBenchmark": {
+        "label": "Benchmark line"
+      },
+      "benchmarkValue": {
+        "short_label": "Bench value"
+      },
+      "benchmarkLabel": {
+        "short_label": "Bench label"
+      },
+      "showArea": {
+        "label": "Area fill"
+      },
+      "methodology": {
+        "short_label": "Method"
+      }
+    },
+    "option": {
+      "align": {
+        "left": "left",
+        "center": "center",
+        "right": "right"
+      },
+      "direction": {
+        "positive": "positive",
+        "negative": "negative",
+        "neutral": "neutral"
+      },
+      "position": {
+        "bottom_left": "bottom-left",
+        "bottom_right": "bottom-right",
+        "bottom-left": "bottom-left",
+        "bottom-right": "bottom-right"
+      }
+    },
+    "series": {
+      "role": {
+        "primary": "Primary",
+        "benchmark": "Benchmark",
+        "secondary": "Secondary"
+      },
+      "title_count": "SERIES ({count})",
+      "remove": {
+        "title": "Remove series"
+      },
+      "name": {
+        "placeholder": "Series name"
+      },
+      "values": {
+        "comma_hint": {
+          "title": "Comma-separated values"
+        }
+      },
+      "add": {
+        "action": "+ ADD SERIES"
+      },
+      "new": {
+        "default_label": "New Series"
+      }
+    },
+    "x_labels": {
+      "title": "X LABELS",
+      "comma_hint": {
+        "title": "Comma-separated labels"
+      }
+    },
+    "data_items": {
+      "title_count": "DATA ITEMS ({count})"
+    },
+    "item": {
+      "remove": {
+        "title": "Remove"
+      },
+      "add": {
+        "action": "+ ADD ITEM"
+      },
+      "new": {
+        "default_label": "New"
+      }
+    },
+    "kpi_cards": {
+      "title_count": "KPI CARDS ({count})"
+    },
+    "kpi": {
+      "remove": {
+        "title": "Remove KPI"
+      },
+      "add": {
+        "action": "+ ADD KPI"
+      },
+      "new_metric": {
+        "default_label": "New Metric"
+      }
+    },
+    "select": {
+      "aria": "Select block: {name}"
+    },
+    "visibility": {
+      "hide": {
+        "aria": "Hide {name}",
+        "title": "Hide block"
+      },
+      "show": {
+        "aria": "Show {name}",
+        "title": "Show block"
+      }
+    }
+  },
+  "left_panel": {
+    "sections": {
+      "aria": "Left panel sections"
+    },
+    "tab": {
+      "templates": {
+        "short": "Tpl"
+      },
+      "blocks": {
+        "short": "Blk"
+      },
+      "theme": {
+        "short": "Thm"
+      },
+      "aria": "{name} tab"
+    },
+    "footer": {
+      "summary": "v{schema} · {sections} sec · {blocks} blk"
+    }
+  },
+  "theme": {
+    "palette": {
+      "title": "Palette"
+    },
+    "background": {
+      "title": "Background"
+    },
+    "size": {
+      "title": "Size"
+    },
+    "option": {
+      "palette": {
+        "aria": "Palette: {name}"
+      },
+      "background": {
+        "aria": "Background: {name}"
+      },
+      "size": {
+        "aria": "Size: {name} {width}x{height}"
+      }
+    }
+  },
+  "template": {
+    "variant": {
+      "number_plus_delta": "Number + Delta",
+      "number_plus_note": "Number + Note",
+      "minimal": "Minimal",
+      "before_after": "Before / After",
+      "fact_context": "Fact + Context",
+      "social_post": "Social Post",
+      "simple_ranking": "Simple Ranking",
+      "single_plus_area": "Single + Area",
+      "three_kpi_cards": "3 KPI Cards",
+      "heatmap_rankings": "Heatmap Rankings",
+      "2x3_grid": "2×3 Grid"
+    },
+    "desc": {
+      "giant_number_with_change": "Giant number with change",
+      "number_with_annotation": "Number with annotation",
+      "clean_centered": "Clean, centered",
+      "two_numbers_contrasted": "Two numbers contrasted",
+      "key_insight_with_analysis": "Key insight with analysis",
+      "shareable_stat": "Shareable stat",
+      "horizontal_bars_by_value": "Horizontal bars by value",
+      "time_series_with_area_fill": "Time series with area fill",
+      "three_metrics_side_by_side": "Three metrics side by side",
+      "table_with_conditional_format": "Table with conditional format",
+      "same_chart_repeated": "Same chart repeated"
+    }
+  }
+}

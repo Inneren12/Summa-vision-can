@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'react';
+import { useTranslations } from 'next-intl';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { EditorMode, QAMode, LeftTab, BlockRegistryEntry, CanonicalDocument, SaveStatus, EditorAction } from './types';
 import { TK } from './config/tokens';
@@ -116,6 +117,8 @@ export default function InfographicEditor({
   initialDoc,
   publicationId,
 }: InfographicEditorProps = {}) {
+  const tPublication = useTranslations('publication');
+  const tImport = useTranslations('import');
   const cvs = useRef<HTMLCanvasElement>(null);
   const overlay = useRef<HTMLCanvasElement>(null);
   const debugCvs = useRef<HTMLCanvasElement | null>(null);
@@ -187,38 +190,34 @@ export default function InfographicEditor({
   // Debounce timer for autosave. Reset on every mutating doc change; cleared
   // on Ctrl+S, unmount, and when the effect finds nothing to save.
   const autosaveTimerRef = useRef<number | null>(null);
-  // Retry orchestration (Stage 4 Task 2). `retryAttemptRef` is 0-indexed
-  // into RETRY_DELAYS_MS; at length == RETRY_DELAYS_MS.length the budget
-  // is exhausted. `retryCountdownMs` drives the banner countdown text
-  // and is the only piece of retry state that needs to render.
+  // Retry orchestration (Stage 4 Task 2; DEBT-027 closure).
+  // `state.retryAttempt` (reducer-owned) is 0-indexed into RETRY_DELAYS_MS;
+  // at length == RETRY_DELAYS_MS.length the budget is exhausted.
+  // `state.canAutoRetry` (reducer-owned) is the auto-retry eligibility flag —
+  //   true:  error is transient (network, 5xx) → retry effect schedules backoff.
+  //   false: error is terminal (404 or other non-recoverable) → retry effect
+  //          skips scheduling; banner still shows with manual "Retry now".
+  //   It is reset to true by the reducer on (a) any user edit during error
+  //   state and (b) RETRY_RESET (manual "Retry now").
+  // `retryCountdownMs` drives the banner countdown text and is the only
+  // piece of retry state that needs to render between effect runs.
   //
   // `saveFailureGen` is a monotonic counter incremented on every
   // SAVE_FAILED dispatch. The retry effect depends on it so successive
   // failures with an identical error message still re-trigger the
   // effect (React dep comparison uses Object.is; the counter guarantees
   // a changed dep on every failure).
-  const retryAttemptRef = useRef<number>(0);
   const retryTimerRef = useRef<number | null>(null);
   const retryCountdownIntervalRef = useRef<number | null>(null);
   const [retryCountdownMs, setRetryCountdownMs] = useState<number | null>(null);
   const [saveFailureGen, setSaveFailureGen] = useState<number>(0);
-  // Auto-retry eligibility for the current saveError.
-  // - true  (default): error is transient (network, 5xx) → retry effect schedules backoff.
-  // - false: error is terminal (404 or other non-recoverable) → retry effect
-  //   skips scheduling; banner still shows with manual "Retry now" button.
-  //
-  // Reset to true on:
-  //   - any new user edit (edit-reset effect)
-  //   - manual "Retry now" click
-  //   - successful save (implicit — saveError clears, effect resets)
-  const canAutoRetryRef = useRef<boolean>(true);
   const [ltab, setLtab] = useState<LeftTab>("templates");
   const [qaOpen, setQaOpen] = useState(true);
   const [qaMode, setQaMode] = useState<QAMode>("publish");
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [importError, setImportError] = useState<string | null>(
     initialValidationError
-      ? `Failed to load publication — using template defaults. ${initialValidationError}`
+      ? tPublication('load_failed.fallback', { error: initialValidationError })
       : null,
   );
   const fileRef = useRef<HTMLInputElement>(null);
@@ -568,24 +567,25 @@ export default function InfographicEditor({
           // Terminal condition. Do NOT auto-retry — the resource does not
           // exist on the server, and repeat PATCHes will 404 identically.
           // Manual "Retry now" is still available (the user may have created
-          // the publication in another tab); it resets canAutoRetryRef.
-          canAutoRetryRef.current = false;
+          // the publication in another tab); it dispatches RETRY_RESET which
+          // re-arms canAutoRetry.
           dispatch({
             type: "SAVE_FAILED",
-            error: 'Publication not found — reload the page',
+            error: tPublication('not_found.reload'),
+            canAutoRetry: false,
           });
           // IMPORTANT: do NOT increment saveFailureGen here. The retry effect
-          // watches [state.saveError, saveFailureGen]; leaving gen unchanged
-          // still fires the effect (because saveError transitions null→string),
-          // but the canAutoRetryRef guard below makes it a no-op schedule.
+          // watches [state.saveError, saveFailureGen, ...]; leaving gen
+          // unchanged still fires the effect (because saveError transitions
+          // null→string), but the state.canAutoRetry guard below makes it a
+          // no-op schedule.
           setSaveStatus('error');
           return;
         }
 
         // Transient / unknown failure — retry with backoff.
-        canAutoRetryRef.current = true;
         const msg = err instanceof Error ? err.message : String(err);
-        dispatch({ type: "SAVE_FAILED", error: msg });
+        dispatch({ type: "SAVE_FAILED", error: msg, canAutoRetry: true });
         // Bump the failure generation so the retry effect re-runs even
         // when the error string is identical to a previous attempt.
         setSaveFailureGen((n) => n + 1);
@@ -594,7 +594,7 @@ export default function InfographicEditor({
       .finally(() => {
         savingRef.current = false;
       });
-  }, [dirty, doc, dispatch, publicationId]);
+  }, [dirty, doc, dispatch, publicationId, tPublication]);
 
   // Debounced autosave (Stage 4 Task 2). Every mutating reducer action
   // produces a new `state.doc` reference; navigational actions (SELECT,
@@ -619,18 +619,14 @@ export default function InfographicEditor({
     }
 
     // B5: Dismiss-bypass guard.
-    // When a terminal error (404) fires, canAutoRetryRef flips to false.
+    // When a terminal error (404) fires, state.canAutoRetry flips to false.
     // If the user dismisses the banner, state.saveError clears but the
     // server-side terminal condition has not changed — another PATCH
     // would fail identically. Honour the terminal-error contract by
-    // refusing to auto-schedule until either (a) a new user edit resets
-    // canAutoRetryRef.current to true via the edit-reset effect, or
-    // (b) the user explicitly clicks "Retry now" (handleManualRetry
-    // resets the flag directly). canAutoRetryRef is read, not depended
-    // on: the existing deps already re-run this effect on the
-    // state.saveError → null transition, which is when the current ref
-    // value matters.
-    if (!canAutoRetryRef.current) {
+    // refusing to auto-schedule until either (a) a new user edit re-arms
+    // state.canAutoRetry via the reducer's cross-cutting reset, or
+    // (b) the user explicitly clicks "Retry now" (RETRY_RESET re-arms it).
+    if (!state.canAutoRetry) {
       return;
     }
 
@@ -671,29 +667,15 @@ export default function InfographicEditor({
         autosaveTimerRef.current = null;
       }
     };
-  }, [doc, dirty, publicationId, performSave, state.saveError]);
+  }, [doc, dirty, publicationId, performSave, state.saveError, state.canAutoRetry]);
 
-  // A new user edit while in error state deserves a fresh attempt cycle.
-  // Reset the attempt counter so the retry orchestration effect re-enters
-  // at delay index 0. We intentionally do NOT depend on `state.saveError`
-  // here — including it would reset attempts on every SAVE_FAILED
-  // dispatch, defeating the exponential-backoff progression.
-  //
-  // Declared BEFORE the retry effect so the reset lands before the retry
-  // effect body reads `retryAttemptRef`. React runs useEffect bodies in
-  // declaration order on each commit; swapping these two effects would
-  // leave the retry effect reading a stale (pre-edit) attempt count and
-  // scheduling at the old delay index.
-  useEffect(() => {
-    if (state.saveError) {
-      retryAttemptRef.current = 0;
-      canAutoRetryRef.current = true;
-    }
-    // Intentional: react only to doc changes, not to saveError flipping.
-    // Including state.saveError would reset attempts on every SAVE_FAILED
-    // dispatch, defeating exponential-backoff progression.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc]);
+  // DEBT-027: a user edit during error state used to reset the retry
+  // budget via a useEffect([doc]) that excluded state.saveError from
+  // its deps using an exhaustive-deps suppression comment. The reset
+  // now lives in the reducer as a cross-cutting transition — every
+  // doc-mutating action re-arms `retryAttempt` and `canAutoRetry` when
+  // `state.saveError != null` (see store/reducer.ts at the end of the
+  // reducer body). Single source of truth, no lint suppression.
 
   // Retry orchestration (Stage 4 Task 2). Watches `state.saveError`;
   // schedules an exponential-backoff auto-retry (2s → 4s → 8s → 16s)
@@ -713,21 +695,21 @@ export default function InfographicEditor({
 
     if (!state.saveError) {
       // Saved successfully (SAVED_IF_MATCHES cleared saveError) or user
-      // dismissed. Reset the retry budget.
-      retryAttemptRef.current = 0;
+      // dismissed (DISMISS_SAVE_ERROR). The reducer already reset
+      // state.retryAttempt to 0 in either case.
       setRetryCountdownMs(null);
       return;
     }
 
     // Terminal error — no auto-retry. Banner shows with manual Retry button.
-    // Do not touch retryAttemptRef here; a user edit or manual Retry
-    // will reset it independently.
-    if (!canAutoRetryRef.current) {
+    // The reducer leaves state.retryAttempt as-is here; a user edit or
+    // manual Retry will re-arm both retryAttempt and canAutoRetry.
+    if (!state.canAutoRetry) {
       setRetryCountdownMs(null);
       return;
     }
 
-    const attempt = retryAttemptRef.current;
+    const attempt = state.retryAttempt;
     if (attempt >= RETRY_DELAYS_MS.length) {
       // Budget exhausted. Banner persists with manual Retry button.
       setRetryCountdownMs(null);
@@ -752,7 +734,11 @@ export default function InfographicEditor({
         window.clearInterval(retryCountdownIntervalRef.current);
         retryCountdownIntervalRef.current = null;
       }
-      retryAttemptRef.current = attempt + 1;
+      // Advance the delay index in the reducer BEFORE performSave runs.
+      // If the next attempt also fails, the retry effect will re-enter
+      // at the next slot in RETRY_DELAYS_MS. Mirrors the historical
+      // `attempt + 1` write performed inside the timer pre-DEBT-027.
+      dispatch({ type: "RETRY_ATTEMPT_ADVANCE" });
       setRetryCountdownMs(null);
       performSave();
     }, delay);
@@ -767,7 +753,7 @@ export default function InfographicEditor({
         retryCountdownIntervalRef.current = null;
       }
     };
-  }, [state.saveError, saveFailureGen, performSave]);
+  }, [state.saveError, state.canAutoRetry, state.retryAttempt, saveFailureGen, performSave, dispatch]);
 
   // Manual "Retry now" from the NotificationBanner. Cancels any scheduled
   // retry + countdown, resets the attempt budget, and fires the save
@@ -775,9 +761,9 @@ export default function InfographicEditor({
   const handleManualRetry = useCallback(() => {
     // User override: explicit "Retry now" resets both the attempt counter
     // and the terminal-error flag. If the next attempt fails terminally
-    // again, canAutoRetryRef flips back to false inside performSave.catch.
-    retryAttemptRef.current = 0;
-    canAutoRetryRef.current = true;
+    // again, the SAVE_FAILED dispatch in performSave.catch flips
+    // state.canAutoRetry back to false.
+    dispatch({ type: "RETRY_RESET" });
     if (retryTimerRef.current !== null) {
       window.clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
@@ -788,7 +774,7 @@ export default function InfographicEditor({
     }
     setRetryCountdownMs(null);
     performSave();
-  }, [performSave]);
+  }, [dispatch, performSave]);
 
   // beforeunload guard (Stage 4 Task 2). Covers the 2s debounce window
   // between an edit and the next scheduled save. Modern browsers ignore
@@ -870,7 +856,7 @@ export default function InfographicEditor({
         try {
           raw = JSON.parse(ev.target?.result as string);
         } catch {
-          setImportError("Invalid JSON file");
+          setImportError(tImport('invalid_json'));
           setImportWarnings([]);
           return;
         }
@@ -878,7 +864,7 @@ export default function InfographicEditor({
         try {
           result = hydrateImportedDoc(raw);
         } catch (hydrationErr: any) {
-          setImportError(`Import error: ${hydrationErr?.message ?? "hydration failed"}`);
+          setImportError(tImport('error.hydration', { message: hydrationErr?.message ?? tImport('hydration_failed') }));
           setImportWarnings([]);
           return;
         }
@@ -886,7 +872,7 @@ export default function InfographicEditor({
         try {
           validated = validateImportStrict(result.doc);
         } catch (validationErr: any) {
-          setImportError(`Import error: ${validationErr?.message ?? "validation failed"}`);
+          setImportError(tImport('error.validation', { message: validationErr?.message ?? tImport('validation_failed') }));
           setImportWarnings(result.warnings);
           return;
         }
