@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
+import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
 
 import '../../../core/routing/app_drawer.dart';
 import '../../../core/theme/app_theme.dart';
@@ -13,17 +13,18 @@ class QueueScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context).extension<SummaTheme>()!;
     final queueAsync = ref.watch(queueProvider);
 
     return Scaffold(
       drawer: const AppDrawer(),
       appBar: AppBar(
-        title: const Text('Brief Queue'),
+        title: Text(l10n.queueTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh queue',
+            tooltip: l10n.queueRefreshTooltip,
             onPressed: () => ref.invalidate(queueProvider),
           ),
         ],
@@ -37,14 +38,14 @@ class QueueScreen extends ConsumerWidget {
               Icon(Icons.error_outline, color: theme.destructive, size: 48),
               const SizedBox(height: 16),
               Text(
-                'Failed to load queue\n$err',
+                l10n.queueLoadError(err.toString()),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: theme.textSecondary),
               ),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () => ref.invalidate(queueProvider),
-                child: const Text('Retry'),
+                child: Text(l10n.commonRetryVerb),
               ),
             ],
           ),
@@ -75,10 +76,11 @@ class _EmptyQueueView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context).extension<SummaTheme>()!;
     return Center(
       child: Text(
-        'No briefs in queue.\nTap refresh to fetch new ones.',
+        l10n.queueEmptyState,
         textAlign: TextAlign.center,
         style: TextStyle(color: theme.textSecondary),
       ),
@@ -99,6 +101,7 @@ class _BriefCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context).extension<SummaTheme>()!;
 
     Color scoreColour(double score) {
@@ -177,12 +180,12 @@ class _BriefCard extends StatelessWidget {
                     foregroundColor: theme.destructive,
                     side: BorderSide(color: theme.destructive),
                   ),
-                  child: const Text('Reject'),
+                  child: Text(l10n.queueRejectVerb),
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
                   onPressed: onApprove,
-                  child: const Text('Approve'),
+                  child: Text(l10n.queueApproveVerb),
                 ),
               ],
             ),

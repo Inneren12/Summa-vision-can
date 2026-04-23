@@ -32,6 +32,19 @@ Rules:
 ## Active Debt
 
 
+
+### DEBT-029: Locale-aware bootstrap-error fallback in Flutter admin app
+
+- **Source:** Phase 3 Slice 3.3+3.4 recon (`docs/phase-3-slice-3-recon.md` §6)
+- **Added:** 2026-04-23
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** accepted
+- **Description:** `_BootstrapError` in `frontend/lib/main.dart` renders hardcoded EN text (`App bootstrap failed: $error`) as an EN-kept Category B diagnostic path.
+- **Impact:** In rare bootstrap-failure sessions, RU operators see an untranslated diagnostic message.
+- **Resolution:** Add locale-aware pre-localization fallback using `PlatformDispatcher.instance.locale` with a tiny EN/RU const map, defaulting to EN for unsupported locales.
+- **Target:** Opportunistic fix during future Flutter bootstrap refactor.
+
 ### DEBT-027: Autosave retry-reset effect uses exhaustive-deps exception
 
 - **Source:** Stage 4 Task 2 implementation (`claude/stage4-task2-autosave`)

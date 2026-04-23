@@ -3,12 +3,18 @@
   "appTitle": "Summa Vision Admin",
   "navQueue": "Очередь брифов",
   "navCubes": "Кубы",
-  "navJobs": "Задачи",
+  "navJobs": "Задания",
   "navKpi": "KPI",
   "commonLoading": "Загрузка...",
   "commonRetryVerb": "Повторить",
   "commonCancelVerb": "Отменить",
   "languageLabel": "Язык",
   "languageEnglish": "English",
-  "languageRussian": "Русский"
+  "languageRussian": "Русский",
+  "queueTitle": "Очередь брифов",
+  "queueRefreshTooltip": "Обновить очередь",
+  "queueLoadError": "Не удалось загрузить очередь\\n{error}",
+  "queueEmptyState": "В очереди нет брифов.\\nНажмите «Обновить», чтобы загрузить новые.",
+  "queueRejectVerb": "Отклонить",
+  "queueApproveVerb": "Одобрить"
 }
