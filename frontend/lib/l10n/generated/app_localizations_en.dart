@@ -4,7 +4,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn() : super('en');
 
   @override
-  String get appTitle => 'Summa Vision';
+  String get appTitle => 'Summa Vision Admin';
 
   @override
   String get navQueue => 'Brief Queue';
@@ -22,8 +22,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonLoading => 'Loading...';
 
   @override
-  String get commonRetry => 'Retry';
+  String get commonRetryVerb => 'Retry';
 
   @override
-  String get commonCancel => 'Cancel';
+  String get commonCancelVerb => 'Cancel';
 }

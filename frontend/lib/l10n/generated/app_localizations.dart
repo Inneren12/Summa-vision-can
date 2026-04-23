@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/widgets.dart';
 
 import 'app_localizations_en.dart';
@@ -23,14 +24,22 @@ abstract class AppLocalizations {
     Locale('ru'),
   ];
 
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
+      <LocalizationsDelegate<dynamic>>[
+        delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ];
+
   String get appTitle;
   String get navQueue;
   String get navCubes;
   String get navJobs;
   String get navKpi;
   String get commonLoading;
-  String get commonRetry;
-  String get commonCancel;
+  String get commonRetryVerb;
+  String get commonCancelVerb;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

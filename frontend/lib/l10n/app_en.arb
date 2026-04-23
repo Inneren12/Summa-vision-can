@@ -1,8 +1,8 @@
 {
   "@@locale": "en",
-  "appTitle": "Summa Vision",
+  "appTitle": "Summa Vision Admin",
   "@appTitle": {
-    "description": "Application title, shown in window chrome and drawer header"
+    "description": "Application title shown in window chrome and admin app shell header"
   },
   "navQueue": "Brief Queue",
   "@navQueue": {
@@ -24,12 +24,12 @@
   "@commonLoading": {
     "description": "Generic loading state label"
   },
-  "commonRetry": "Retry",
-  "@commonRetry": {
+  "commonRetryVerb": "Retry",
+  "@commonRetryVerb": {
     "description": "Retry action button label"
   },
-  "commonCancel": "Cancel",
-  "@commonCancel": {
+  "commonCancelVerb": "Cancel",
+  "@commonCancelVerb": {
     "description": "Cancel action button label"
   }
 }

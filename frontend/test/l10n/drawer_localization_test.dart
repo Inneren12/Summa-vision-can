@@ -1,52 +1,69 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:summa_vision_admin/core/routing/app_drawer.dart';
+import 'package:summa_vision_admin/core/routing/app_router.dart';
 import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
 
-void main() {
-  group('Drawer localization', () {
-    testWidgets('renders EN nav labels when locale is en', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          locale: const Locale('en'),
-          supportedLocales: const [Locale('en'), Locale('ru')],
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          home: const Scaffold(body: SizedBox.shrink()),
+Widget _wrap({required Locale locale}) {
+  final router = GoRouter(
+    initialLocation: AppRoutes.queue,
+    routes: [
+      GoRoute(
+        path: AppRoutes.queue,
+        builder: (context, state) => Scaffold(
+          drawer: const AppDrawer(),
+          body: Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          ),
         ),
-      );
+      ),
+    ],
+  );
 
-      final context = tester.element(find.byType(Scaffold));
-      final loc = AppLocalizations.of(context)!;
-      expect(loc.appTitle, 'Summa Vision');
-      expect(loc.navQueue, 'Brief Queue');
-      expect(loc.navKpi, 'KPI');
+  return ProviderScope(
+    child: MaterialApp.router(
+      locale: locale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      routerConfig: router,
+    ),
+  );
+}
+
+void main() {
+  group('AppDrawer localization', () {
+    testWidgets('renders EN nav labels when locale is en', (tester) async {
+      await tester.pumpWidget(_wrap(locale: const Locale('en')));
+
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Summa Vision Admin'), findsOneWidget);
+      expect(find.text('Brief Queue'), findsOneWidget);
+      expect(find.text('Cubes'), findsOneWidget);
+      expect(find.text('Jobs'), findsOneWidget);
+      expect(find.text('KPI'), findsOneWidget);
     });
 
     testWidgets('renders RU nav labels when locale is ru', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          locale: const Locale('ru'),
-          supportedLocales: const [Locale('en'), Locale('ru')],
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          home: const Scaffold(body: SizedBox.shrink()),
-        ),
-      );
+      await tester.pumpWidget(_wrap(locale: const Locale('ru')));
 
-      final context = tester.element(find.byType(Scaffold));
-      final loc = AppLocalizations.of(context)!;
-      expect(loc.appTitle, 'Summa Vision');
-      expect(loc.navQueue, 'Очередь брифов');
-      expect(loc.navKpi, 'KPI');
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Summa Vision Admin'), findsOneWidget);
+      expect(find.text('KPI'), findsOneWidget);
+      expect(find.text('Очередь брифов'), findsOneWidget);
+      expect(find.text('Кубы'), findsOneWidget);
+      expect(find.text('Задачи'), findsOneWidget);
+      expect(find.text('Brief Queue'), findsNothing);
+      expect(find.text('Cubes'), findsNothing);
+      expect(find.text('Jobs'), findsNothing);
     });
   });
 }

@@ -1,11 +1,11 @@
 {
   "@@locale": "ru",
-  "appTitle": "Summa Vision",
+  "appTitle": "Summa Vision Admin",
   "navQueue": "Очередь брифов",
   "navCubes": "Кубы",
   "navJobs": "Задачи",
   "navKpi": "KPI",
   "commonLoading": "Загрузка...",
-  "commonRetry": "Повторить",
-  "commonCancel": "Отменить"
+  "commonRetryVerb": "Повторить",
+  "commonCancelVerb": "Отменить"
 }
