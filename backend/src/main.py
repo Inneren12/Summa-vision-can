@@ -26,6 +26,7 @@ from src.core.error_handler import register_exception_handlers
 from src.core.logging import setup_logging
 from src.core.scheduler import shutdown_scheduler, start_scheduler
 from src.core.security.auth import AuthMiddleware
+from src.core.storage import get_storage_manager
 import structlog
 
 import sys
@@ -53,9 +54,12 @@ async def lifespan(app: FastAPI):
     """Manage startup/shutdown lifecycle events."""
     import src.services.jobs.handlers  # noqa: F401
 
-    start_scheduler(app=app)
-
     # --- Startup ---
+    app.state.settings = settings_on_startup
+    app.state.storage = get_storage_manager(settings_on_startup)
+
+    start_scheduler(settings=settings_on_startup, app=app)
+
     # Resource semaphores (R2)
     app.state.data_sem = asyncio.Semaphore(2)
     app.state.render_sem = asyncio.Semaphore(2)

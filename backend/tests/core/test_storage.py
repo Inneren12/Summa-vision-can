@@ -8,6 +8,8 @@ factory.  S3 tests are included using mocked ``aiobotocore`` sessions.
 from __future__ import annotations
 
 import io
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -20,6 +22,7 @@ from src.core.storage import (
     LocalStorageManager,
     S3StorageManager,
     StorageInterface,
+    StorageObjectMetadata,
     get_storage_manager,
 )
 
@@ -214,6 +217,55 @@ class TestLocalStorageManagerListObjects:
         await storage.upload_dataframe_as_csv(df, "only.csv")
         result = await storage.list_objects("only.csv")
         assert result == ["only.csv"]
+
+
+class TestLocalStorageManagerListObjectsWithMetadata:
+    """Tests for ``LocalStorageManager.list_objects_with_metadata``."""
+
+    @pytest.fixture()
+    def storage(self, tmp_path: Path) -> LocalStorageManager:
+        return LocalStorageManager(base_dir=str(tmp_path))
+
+    @pytest.mark.asyncio
+    async def test_list_objects_with_metadata_empty_prefix(
+        self, storage: LocalStorageManager
+    ) -> None:
+        """Listing a missing prefix should return an empty metadata list."""
+        result = await storage.list_objects_with_metadata("missing/")
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_list_objects_with_metadata_returns_key_size_and_timestamp(
+        self, storage: LocalStorageManager, tmp_path: Path
+    ) -> None:
+        """Metadata listing includes key, size, and UTC mtime."""
+        first_mtime = datetime(2026, 4, 20, 10, 0, 0, tzinfo=timezone.utc)
+        second_mtime = datetime(2026, 4, 20, 11, 30, 15, tzinfo=timezone.utc)
+
+        await storage.upload_bytes(b"abcd", "temp/uploads/a.parquet")
+        await storage.upload_bytes(b"xy", "temp/uploads/b.parquet")
+
+        first_path = tmp_path / "temp" / "uploads" / "a.parquet"
+        second_path = tmp_path / "temp" / "uploads" / "b.parquet"
+        first_ts = first_mtime.timestamp()
+        second_ts = second_mtime.timestamp()
+        os.utime(first_path, (first_ts, first_ts))
+        os.utime(second_path, (second_ts, second_ts))
+
+        result = await storage.list_objects_with_metadata("temp/uploads")
+
+        assert result == [
+            StorageObjectMetadata(
+                key="temp/uploads/a.parquet",
+                size_bytes=4,
+                last_modified=first_mtime,
+            ),
+            StorageObjectMetadata(
+                key="temp/uploads/b.parquet",
+                size_bytes=2,
+                last_modified=second_mtime,
+            ),
+        ]
 
 
 class TestLocalStorageManagerPresignedUrl:
@@ -417,6 +469,68 @@ class TestS3StorageManagerBytes:
         assert call_kwargs["Bucket"] == "test-bucket"
         assert call_kwargs["Key"] == "reports/data.parquet"
         assert call_kwargs["Body"] == b"binary data"
+
+
+class TestS3StorageManagerListObjectsWithMetadata:
+    """Tests for ``S3StorageManager.list_objects_with_metadata``."""
+
+    @pytest.mark.asyncio
+    async def test_list_objects_with_metadata_empty_bucket(self) -> None:
+        """An empty prefix should return an empty metadata list."""
+        mock_client = MagicMock()
+        mock_client.get_paginator.return_value = _FakeAsyncPaginator([{}])
+
+        mgr = _make_s3_manager(mock_client)
+        result = await mgr.list_objects_with_metadata("empty/")
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_list_objects_with_metadata_returns_key_size_and_timestamp(
+        self,
+    ) -> None:
+        """Metadata listing should preserve key, size, and LastModified."""
+        first_modified = datetime(2026, 4, 20, 10, 0, 0, tzinfo=timezone.utc)
+        second_modified = datetime(2026, 4, 20, 11, 30, 15, tzinfo=timezone.utc)
+        mock_client = MagicMock()
+        mock_client.get_paginator.return_value = _FakeAsyncPaginator(
+            [
+                {
+                    "Contents": [
+                        {
+                            "Key": "temp/uploads/a.parquet",
+                            "Size": 4,
+                            "LastModified": first_modified,
+                        }
+                    ]
+                },
+                {
+                    "Contents": [
+                        {
+                            "Key": "temp/uploads/b.parquet",
+                            "Size": 2,
+                            "LastModified": second_modified,
+                        }
+                    ]
+                },
+            ]
+        )
+
+        mgr = _make_s3_manager(mock_client)
+        result = await mgr.list_objects_with_metadata("temp/uploads/")
+
+        assert result == [
+            StorageObjectMetadata(
+                key="temp/uploads/a.parquet",
+                size_bytes=4,
+                last_modified=first_modified,
+            ),
+            StorageObjectMetadata(
+                key="temp/uploads/b.parquet",
+                size_bytes=2,
+                last_modified=second_modified,
+            ),
+        ]
 
     @pytest.mark.asyncio
     async def test_download_bytes_returns_data(self) -> None:

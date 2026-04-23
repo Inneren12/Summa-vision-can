@@ -46,7 +46,7 @@ from src.api.routers.public_graphics import (
 from src.core.database import Base
 from src.core.security.auth import AuthMiddleware
 from src.core.security.ip_rate_limiter import InMemoryRateLimiter
-from src.core.storage import StorageInterface
+from src.core.storage import StorageInterface, StorageObjectMetadata
 from src.models.audit_event import AuditEvent
 from src.repositories.publication_repository import PublicationRepository
 from src.services.audit import AuditWriter
@@ -548,6 +548,11 @@ class _ContractTestStorage(StorageInterface):
         return pd.DataFrame()
 
     async def list_objects(self, prefix: str) -> list[str]:
+        return []
+
+    async def list_objects_with_metadata(
+        self, prefix: str
+    ) -> list[StorageObjectMetadata]:
         return []
 
     async def generate_presigned_url(self, path: str, ttl: int = 3600) -> str:

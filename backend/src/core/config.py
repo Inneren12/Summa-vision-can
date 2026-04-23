@@ -8,7 +8,7 @@ the parsed, validated configuration — never import a global instance.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -90,7 +90,16 @@ class Settings(BaseSettings):
     # POST /api/v1/admin/graphics/generate-from-data.  Files older than
     # this are eligible for deletion by a (future) cleanup cron
     # (tracked as DEBT-021 until implemented).
-    temp_upload_ttl_hours: int = 24
+    temp_upload_ttl_hours: int = Field(
+        default=24,
+        ge=1,
+        description="TTL in hours for temp/uploads/ objects before cleanup.",
+    )
+    temp_upload_cleanup_interval_minutes: int = Field(
+        default=60,
+        ge=5,
+        description="How often the temp uploads cleanup task runs.",
+    )
 
     # --- Audit (R18) ---
     audit_retention_days: int = 90

@@ -1,7 +1,7 @@
 # Technical Debt Registry
 
 > Source of truth for known technical debt.
-> Maintained per-PR: creating debt → add entry; resolving → move to Resolved.
+> Maintained per-PR: creating debt -> add entry; resolving -> move to Resolved.
 
 ## Format
 
@@ -12,26 +12,49 @@
 | **Added** | Date added (YYYY-MM-DD) |
 | **Severity** | `critical` / `high` / `medium` / `low` |
 | **Category** | `architecture` / `testing` / `security` / `ops` / `code-quality` |
-| **Status** | `active` — confirmed, needs work; `accepted` — known, deferred intentionally; `in-progress` — being fixed |
+| **Status** | `active` -> confirmed, needs work; `accepted` -> known, deferred intentionally; `in-progress` -> being fixed |
 | **Description** | Factual statement of what the debt IS (not hypotheses) |
 | **Impact** | What breaks or degrades if not fixed |
 | **Resolution** | Concrete action to resolve |
-| **Target** | Specific PR, étape, or milestone |
+| **Target** | Specific PR, etape, or milestone |
 
 Rules:
 - Every entry must be a **verified fact**, not a hypothesis.
-- Do NOT add speculative or unverified items — verify first, then add.
+- Do NOT add speculative or unverified items -> verify first, then add.
 - Backlog features and future enhancements go in ROADMAP, not here.
 - When resolving: move entry to Resolved table with PR link and date.
 - When updating severity/target: edit in-place and append a changelog
   line at the bottom of the entry:
-  `> Updated YYYY-MM-DD: severity high→medium, moved target to B-3.`
+  `> Updated YYYY-MM-DD: severity high->medium, moved target to B-3.`
 
 ---
 
 ## Active Debt
 
 
+### DEBT-027: Autosave retry-reset effect uses exhaustive-deps exception
+
+- **Source:** Stage 4 Task 2 implementation (`claude/stage4-task2-autosave`)
+- **Added:** 2026-04-20
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** accepted
+- **Description:** In `frontend-public/src/components/editor/index.tsx` a
+  `useEffect(() => { if (state.saveError) retryAttemptRef.current = 0; },
+  [doc])` uses `// eslint-disable-next-line react-hooks/exhaustive-deps`
+  to avoid including `state.saveError` in its dependency array.
+  Including it would cause the effect to re-run on every `SAVE_FAILED`
+  dispatch, resetting the attempt counter and defeating the exponential
+  backoff progression. The effect is intended to reset retries only
+  when the user edits the doc during error state.
+- **Impact:** One ESLint disable directive. No runtime consequence ->
+  the behaviour is correct and fully covered by the autosave test
+  "user edit during error resets retry budget".
+- **Resolution:** Refactor autosave orchestration into a small reducer
+  (or a hand-rolled state machine) where attempt count lives alongside
+  saveError, replacing the pair of effect + ref with a single state
+  transition table. Out of scope for Task 2.
+- **Target:** Future autosave refactor (no concrete milestone).
 ### DEBT-021: Temp upload Parquet files not cleaned up
 
 - **Source:** JSON/CSV upload PR (`claude/add-data-upload-graphics-i8IWc`)
@@ -76,11 +99,12 @@ Rules:
 | DEBT-018 | TESTING.md coverage table is stale | Docs & Quality | 2026-04-12 |
 | DEBT-019 | Orphaned LLM infrastructure outside services/ai/ | Dead Code Cleanup | 2026-04-12 |
 | DEBT-020 | CMHC and Tasks routers still mounted for deferred features | Dead Code Cleanup | 2026-04-12 |
+| DEBT-021 | Temp upload Parquet files not cleaned up | codex/fix-contrast-slot-validation | 2026-04-20 |
 | DEBT-028 | Contrast validator only checks 'primary' slot per block | Stage 4 post-merge fix | 2026-04-21 |
 | DEBT-027 | Autosave retry-reset effect uses exhaustive-deps exception | claude/fix-autosave-deps-warning-NoqvL | 2026-04-21 |
 | DEBT-022 | `validateImport` dual-signature (string + throwing) | Stage 3 PR 2a (`claude/add-workflow-state-machine-mUM3P`) | 2026-04-17 |
 | DEBT-023 | `validateImportStrict` does not deep-validate `Comment` entries | Stage 3 PR 2b (`claude/recon-comments-subsystem-HwvB1`) | 2026-04-17 |
-| DEBT-024 | Rename `validateDocumentShape` → `assertCanonicalDocumentV2Shape` | Stage 3 PR 4 (`claude/reconnaissance-persistence-cleanup-EJ4uX`) | 2026-04-19 |
+| DEBT-024 | Rename `validateDocumentShape` -> `assertCanonicalDocumentV2Shape` | Stage 3 PR 4 (`claude/reconnaissance-persistence-cleanup-EJ4uX`) | 2026-04-19 |
 | DEBT-026 | Lossy round-trip between `CanonicalDocument` and `AdminPublicationResponse` | Stage 4 Task 0 full close (`claude/close-infographic-blockers-wkjVX`) | 2026-04-19 |
 
 ### DEBT-026: Lossy round-trip between CanonicalDocument and AdminPublicationResponse
@@ -90,7 +114,7 @@ Rules:
 - **Severity:** high
 - **Category:** architecture
 - **Status:** resolved
-- **Description:** `buildUpdatePayload` emitted only editorial / text / review fields; `hydrateDoc` reconstructed from a template and overlaid the narrow subset. Block-level props, chart data, and layout fields did not survive a save → reload cycle. Size mapping (`instagram_1080` / `instagram_port` → backend `instagram`) was additionally lossy on the inverse.
+- **Description:** `buildUpdatePayload` emitted only editorial / text / review fields; `hydrateDoc` reconstructed from a template and overlaid the narrow subset. Block-level props, chart data, and layout fields did not survive a save -> reload cycle. Size mapping (`instagram_1080` / `instagram_port` -> backend `instagram`) was additionally lossy on the inverse.
 - **Impact:** Opening an existing publication, pressing Ctrl+S, and reloading silently reset block props and chart data to template defaults. Effective data loss on every save of any doc whose state exceeded the mapped subset.
 - **Resolution:** Added opaque `document_state` JSON column on `Publication` (nullable, Alembic `a3e81c0f5d21`). Frontend sends the full canonical document as a JSON string in every PATCH; backend stores verbatim with no parsing or shape validation. Derived editorial columns (`headline`, `chart_type`, `visual_config`, `review`, `eyebrow`, `description`, `source_text`, `footnote`) are kept in sync for search indexing and the public gallery. `hydrateDoc` prefers `document_state` when present (parse + `validateImportStrict`); falls back to the legacy field-level hydrate with `deriveWorkflowFromStatus` for rows predating this column (those rows become lossless on first subsequent PATCH). `HydrationError` surfaces malformed `document_state` through `error.tsx`.
 - **Target:** Stage 4 Task 0 full close (`claude/close-infographic-blockers-wkjVX`)

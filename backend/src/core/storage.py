@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import abc
 import io
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import quote
@@ -30,6 +32,15 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Abstract interface
 # ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class StorageObjectMetadata:
+    """Metadata for an object returned by storage listings."""
+
+    key: str
+    size_bytes: int
+    last_modified: datetime
 
 
 class StorageInterface(abc.ABC):
@@ -123,6 +134,12 @@ class StorageInterface(abc.ABC):
         Returns:
             A list of matching object keys.
         """
+
+    @abc.abstractmethod
+    async def list_objects_with_metadata(
+        self, prefix: str
+    ) -> list[StorageObjectMetadata]:
+        """List objects under *prefix* with size and timestamp metadata."""
 
     @abc.abstractmethod
     async def generate_presigned_url(
@@ -286,6 +303,31 @@ class S3StorageManager(StorageInterface):
                     keys.append(obj["Key"])
         return keys
 
+    async def list_objects_with_metadata(
+        self, prefix: str
+    ) -> list[StorageObjectMetadata]:
+        """List S3 objects matching *prefix* with metadata."""
+        objects: list[StorageObjectMetadata] = []
+        async with self._session.create_client(
+            "s3", **self._client_kwargs()
+        ) as client:
+            client: S3Client  # type: ignore[no-redef]
+            paginator = client.get_paginator("list_objects_v2")
+            async for page in paginator.paginate(
+                Bucket=self._bucket, Prefix=prefix
+            ):
+                for obj in page.get("Contents", []):
+                    objects.append(
+                        StorageObjectMetadata(
+                            key=obj["Key"],
+                            size_bytes=int(obj["Size"]),
+                            last_modified=obj["LastModified"].astimezone(
+                                timezone.utc
+                            ),
+                        )
+                    )
+        return objects
+
     async def delete_object(self, key: str) -> None:
         """Delete an object from S3. Does not raise if key doesn't exist."""
         async with self._session.create_client(
@@ -417,6 +459,34 @@ class LocalStorageManager(StorageInterface):
                         str(item.relative_to(self._base)).replace("\\", "/")
                     )
         return sorted(results)
+
+    async def list_objects_with_metadata(
+        self, prefix: str
+    ) -> list[StorageObjectMetadata]:
+        """List files under *prefix* with size and timestamp metadata."""
+        search_root = self._base / prefix
+        if not search_root.exists():
+            return []
+
+        items: list[Path] = []
+        if search_root.is_file():
+            items.append(search_root)
+        else:
+            items.extend(item for item in search_root.rglob("*") if item.is_file())
+
+        results: list[StorageObjectMetadata] = []
+        for item in sorted(items):
+            stat_result = item.stat()
+            results.append(
+                StorageObjectMetadata(
+                    key=str(item.relative_to(self._base)).replace("\\", "/"),
+                    size_bytes=stat_result.st_size,
+                    last_modified=datetime.fromtimestamp(
+                        stat_result.st_mtime, tz=timezone.utc
+                    ),
+                )
+            )
+        return results
 
     async def delete_object(self, key: str) -> None:
         """Delete an object from local disk. Does not raise if missing."""
