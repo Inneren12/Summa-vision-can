@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:summa_vision_admin/core/app_bootstrap/app_bootstrap_provider.dart';
 import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
 
 import 'core/routing/app_router.dart';
@@ -17,13 +18,12 @@ class SummaVisionApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final bootstrap = ref.watch(appBootstrapProvider);
     final router = ref.watch(routerProvider);
     return MaterialApp.router(
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
       theme: buildSummaTheme(),
-      // Slice 3.2a: fixed locale bootstrap.
-      // Reactive locale state + SharedPreferences persistence land in Slice 3.2b.
-      locale: const Locale('en'),
+      locale: bootstrap.valueOrNull?.locale ?? const Locale('en'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       debugShowCheckedModeBanner: false,

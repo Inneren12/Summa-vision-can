@@ -26,4 +26,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonCancelVerb => 'Cancel';
+
+  @override
+  String get languageLabel => 'Language';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
+  String get languageRussian => 'Russian';
 }

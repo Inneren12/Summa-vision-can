@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:summa_vision_admin/core/app_bootstrap/app_bootstrap_provider.dart';
+import 'package:summa_vision_admin/core/app_bootstrap/app_bootstrap_state.dart';
 import 'package:summa_vision_admin/core/routing/app_drawer.dart';
 import 'package:summa_vision_admin/core/routing/app_router.dart';
 import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
@@ -69,4 +71,70 @@ void main() {
       expect(find.text('Jobs'), findsNothing);
     });
   });
+
+  group('AppDrawer locale from bootstrap provider', () {
+    testWidgets('renders EN when bootstrap provider returns en', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appBootstrapProvider.overrideWith(() => _FakeBootstrap('en')),
+          ],
+          child: const _ProviderBackedDrawerApp(),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Brief Queue'), findsOneWidget);
+      expect(find.text('Language'), findsOneWidget);
+      expect(find.text('English'), findsOneWidget);
+      expect(find.text('Russian'), findsOneWidget);
+    });
+  });
+}
+
+class _ProviderBackedDrawerApp extends ConsumerWidget {
+  const _ProviderBackedDrawerApp();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bootstrap = ref.watch(appBootstrapProvider);
+    final router = GoRouter(
+      initialLocation: AppRoutes.queue,
+      routes: [
+        GoRoute(
+          path: AppRoutes.queue,
+          builder: (context, state) => Scaffold(
+            drawer: const AppDrawer(),
+            body: Builder(
+              builder: (context) => IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: () => Scaffold.of(context).openDrawer(),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    return MaterialApp.router(
+      locale: bootstrap.valueOrNull?.locale ?? const Locale('en'),
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      routerConfig: router,
+    );
+  }
+}
+
+class _FakeBootstrap extends AppBootstrapNotifier {
+  _FakeBootstrap(this._languageCode);
+
+  final String _languageCode;
+
+  @override
+  Future<AppBootstrapState> build() async {
+    return AppBootstrapState(locale: Locale(_languageCode));
+  }
 }

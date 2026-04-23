@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:summa_vision_admin/core/shell/language_switcher.dart';
 import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
 
 import '../theme/app_theme.dart';
@@ -21,13 +22,20 @@ class AppDrawer extends StatelessWidget {
         children: [
           DrawerHeader(
             decoration: const BoxDecoration(color: AppTheme.surfaceDark),
-            child: Text(
-              loc.appTitle,
-              style: TextStyle(
-                color: AppTheme.neonGreen,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  loc.appTitle,
+                  style: const TextStyle(
+                    color: AppTheme.neonGreen,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const LanguageSwitcher(),
+              ],
             ),
           ),
           _NavTile(

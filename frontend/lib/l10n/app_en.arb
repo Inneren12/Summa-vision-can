@@ -31,5 +31,17 @@
   "commonCancelVerb": "Cancel",
   "@commonCancelVerb": {
     "description": "Cancel action button label"
+  },
+  "languageLabel": "Language",
+  "@languageLabel": {
+    "description": "Label preceding the language switcher control"
+  },
+  "languageEnglish": "English",
+  "@languageEnglish": {
+    "description": "Name of the English locale in the language switcher"
+  },
+  "languageRussian": "Russian",
+  "@languageRussian": {
+    "description": "Name of the Russian locale in the language switcher"
   }
 }

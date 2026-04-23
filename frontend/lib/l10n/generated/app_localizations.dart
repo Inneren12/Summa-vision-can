@@ -40,6 +40,9 @@ abstract class AppLocalizations {
   String get commonLoading;
   String get commonRetryVerb;
   String get commonCancelVerb;
+  String get languageLabel;
+  String get languageEnglish;
+  String get languageRussian;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

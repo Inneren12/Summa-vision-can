@@ -7,5 +7,8 @@
   "navKpi": "KPI",
   "commonLoading": "Загрузка...",
   "commonRetryVerb": "Повторить",
-  "commonCancelVerb": "Отменить"
+  "commonCancelVerb": "Отменить",
+  "languageLabel": "Язык",
+  "languageEnglish": "English",
+  "languageRussian": "Русский"
 }
