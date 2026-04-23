@@ -26,4 +26,13 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get commonCancelVerb => 'Отменить';
+
+  @override
+  String get languageLabel => 'Язык';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
+  String get languageRussian => 'Русский';
 }
