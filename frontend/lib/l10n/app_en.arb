@@ -22,7 +22,7 @@
   },
   "commonLoading": "Loading...",
   "@commonLoading": {
-    "description": "Generic loading state label"
+    "description": "Generic 'Loading...' label. RESERVED common vocabulary — currently unused in lib/ (AsyncValue.loading branches use CircularProgressIndicator directly in Queue/Editor; Graphics uses generationStatusSubmitting/generationStatusPolling). Preserved for future feature use without requiring a new ARB round-trip. See Phase 3 Slice 3.11 recon for dead-key policy."
   },
   "commonRetryVerb": "Retry",
   "@commonRetryVerb": {
@@ -144,7 +144,7 @@
   },
   "editorActionError": "Editor action failed: {error}",
   "@editorActionError": {
-    "description": "Generic wrapper for editor backend failure (save/publish/unpublish) when no structured error_code is available. Backend detail interpolated via {error} placeholder; per DEBT-030, this fallback will be replaced with code-based mapping once admin_publications emits structured error codes.",
+    "description": "Generic wrapper for editor backend action errors (PATCH /publications/{id}, publish, unpublish). Placeholder {error} receives backend detail or exception message as-is. RESERVED — not currently rendered; editor endpoints still lack structured error_codes (DEBT-030). Will be activated when backend admin_publications endpoints emit stable error_code values and the backend_errors.dart mapper is extended accordingly.",
     "placeholders": {
       "error": {
         "type": "String",
@@ -182,7 +182,7 @@
   },
   "generationStatusSucceeded": "Generation completed.",
   "@generationStatusSucceeded": {
-    "description": "Status label when generation succeeds. Covers both 'completed' phase (preview_screen) and 'success' phase (chart_config_screen). Per DEBT-031, the underlying enum divergence is out of i18n scope."
+    "description": "Status label when generation succeeds. Covers both 'completed' phase (preview_screen) and 'success' phase (chart_config_screen). Per DEBT-031, the underlying enum divergence is out of i18n scope. RESERVED — not currently rendered in either screen: both success paths transition directly to a result view without showing the status label. Retained for parity with other generationStatus* keys and for future UX that may show a completion confirmation before the result view."
   },
   "previewDownloadButton": "Download",
   "@previewDownloadButton": {

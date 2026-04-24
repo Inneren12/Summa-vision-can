@@ -621,7 +621,7 @@ The baseline decomposition is adjusted to reflect currently observed Flutter sur
 | 3.9b | Implementation: Jobs + KPI | 80-140 | Medium | May merge with 3.9a only if recon confirms low churn and limited literal count |
 | 3.10a | Recon: Cubes + Data Preview | 100-180 | Medium | Higher backend-label exposure; flag every ambiguous case |
 | 3.10b | Implementation: Cubes + Data Preview | 100-180 | Medium-High | Data-heavy labels/filters; strict backend boundary per §3j |
-| 3.11 | Consolidation: ARB parity checks, unused-key scan, switcher polish, EN/RU smoke tests, design QA checklist, docs update | — | Low | Final hardening |
+| 3.11 ✅ | Consolidation: parity script, dead-key metadata, switcher a11y, aggregator smoke, retrospective, DEBT cleanup | — | Hardening | See `docs/phase-3-slice-11-recon.md` + 4 pre-recon parts. Single PR per founder Q6. Phase 3b (Jobs/KPI/Cubes/DataPreview) remains deferred per roadmap. |
 
 #### Phase 3b — deferred expanded-surface work
 

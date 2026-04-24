@@ -115,3 +115,41 @@ is a fast feedback loop for developers while editing.
 - Check `docs/i18n-glossary.md` for canonical translations
 - Check `docs/i18n-recon-slice*.md` for specific inventory decisions
 - Ask before inventing a translation for a domain-specific term
+
+## Verification
+
+### ARB parity script
+
+Run locally before committing ARB changes:
+
+```bash
+python3 scripts/arb_parity.py
+```
+
+Checks performed:
+1. EN/RU key-set parity
+2. Placeholder parity per shared key
+3. EN `@<key>.placeholders` declaration matches actual `{token}` usage
+4. Value-key count sanity
+
+Exit codes:
+- `0` — all checks pass
+- `1` — parity drift (fix ARB content)
+- `2` — script error (missing file, invalid JSON)
+
+JSON mode for scripting:
+
+```bash
+python3 scripts/arb_parity.py --json
+```
+
+### CI integration (deferred)
+
+ARB parity CI integration is tracked for a future DEVOPS PR. Recommended
+insertion point: between "Install dependencies" and "Run tests" in
+`.github/workflows/frontend-admin.yml`:
+
+```yaml
+- name: ARB parity check
+  run: python3 scripts/arb_parity.py
+```
