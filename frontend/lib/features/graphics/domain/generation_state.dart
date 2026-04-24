@@ -15,6 +15,7 @@ class GenerationState {
     this.resultUrl,
     this.pollAttempts = 0,
     this.errorMessage,
+    this.errorCode,
   });
 
   final GenerationPhase phase;
@@ -22,6 +23,7 @@ class GenerationState {
   final String? resultUrl;
   final int pollAttempts;
   final String? errorMessage;
+  final String? errorCode;
 
   static const int maxPollAttempts = 60;
 
@@ -31,6 +33,7 @@ class GenerationState {
     String? resultUrl,
     int? pollAttempts,
     String? errorMessage,
+    String? errorCode,
   }) =>
       GenerationState(
         phase:        phase        ?? this.phase,
@@ -38,5 +41,6 @@ class GenerationState {
         resultUrl:    resultUrl    ?? this.resultUrl,
         pollAttempts: pollAttempts ?? this.pollAttempts,
         errorMessage: errorMessage ?? this.errorMessage,
+        errorCode:    errorCode    ?? this.errorCode,
       );
 }

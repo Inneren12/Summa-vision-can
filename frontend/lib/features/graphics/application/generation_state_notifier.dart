@@ -20,6 +20,7 @@ class ChartGenerationState with _$ChartGenerationState {
     String? jobId,
     GenerationResult? result,
     String? errorMessage,
+    String? errorCode,
     @Default(0) int pollCount,
   }) = _ChartGenerationState;
 }

@@ -4,6 +4,7 @@ import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../../l10n/generated/app_localizations.dart';
 import '../domain/raw_data_upload.dart';
 
 /// Widget that lets the admin pick a JSON or CSV file and emits the parsed
@@ -33,7 +34,7 @@ class _DataUploadWidgetState extends State<DataUploadWidget> {
   String? _fileName;
   String? _error;
 
-  Future<void> _pickFile() async {
+  Future<void> _pickFile(AppLocalizations l10n) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['json', 'csv'],
@@ -61,7 +62,7 @@ class _DataUploadWidgetState extends State<DataUploadWidget> {
       widget.onDataLoaded(_data!, _columns!);
     } catch (e) {
       setState(() {
-        _error = 'Failed to parse file: $e';
+        _error = l10n.chartConfigUploadParseError(e.toString());
         _data = null;
         _columns = null;
       });
@@ -132,20 +133,21 @@ class _DataUploadWidgetState extends State<DataUploadWidget> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FilledButton.icon(
           key: const Key('data_upload_pick_button'),
-          onPressed: _pickFile,
+          onPressed: () => _pickFile(l10n),
           icon: const Icon(Icons.upload_file),
-          label: const Text('Upload JSON / CSV'),
+          label: Text(l10n.chartConfigUploadPickButton),
         ),
         if (_fileName != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
-              'File: $_fileName',
+              l10n.chartConfigUploadFileLabel(_fileName!),
               key: const Key('data_upload_file_label'),
               style: theme.textTheme.bodySmall,
             ),
@@ -163,7 +165,7 @@ class _DataUploadWidgetState extends State<DataUploadWidget> {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
-              '${_data!.length} rows × ${_columns!.length} columns',
+              l10n.chartConfigUploadSummary(_data!.length, _columns!.length),
               key: const Key('data_upload_summary'),
               style: theme.textTheme.bodySmall,
             ),

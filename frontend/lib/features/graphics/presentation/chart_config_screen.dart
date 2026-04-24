@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/backend_errors.dart';
+import '../../../l10n/generated/app_localizations.dart';
 import '../../cubes/application/cube_providers.dart';
 import '../application/chart_config_notifier.dart';
 import '../application/generation_state_notifier.dart';
@@ -82,7 +84,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     super.dispose();
   }
 
-  void _onGenerate() {
+  void _onGenerate(AppLocalizations l10n) {
     if (!_formKey.currentState!.validate()) return;
 
     final config = ref.read(chartConfigNotifierProvider);
@@ -91,7 +93,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
       if (_uploadedData == null ||
           _uploadedData!.isEmpty ||
           _uploadedColumns == null) {
-        setState(() => _uploadError = 'Upload a JSON or CSV file first.');
+        setState(() => _uploadError = l10n.chartConfigUploadMissingError);
         return;
       }
       setState(() => _uploadError = null);
@@ -132,6 +134,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final config = ref.watch(chartConfigNotifierProvider);
     final genState = ref.watch(chartGenerationNotifierProvider);
 
@@ -157,7 +160,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chart Configuration'),
+        title: Text(l10n.chartConfigAppBarTitle),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go(
@@ -166,15 +169,21 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
         ),
       ),
       body: switch (genState.phase) {
-        GenerationPhase.idle => _buildConfigForm(),
-        GenerationPhase.submitting => _buildSubmittingView(),
-        GenerationPhase.polling => _buildPollingView(genState.pollCount),
-        GenerationPhase.success => _buildResultView(genState),
+        GenerationPhase.idle => _buildConfigForm(l10n),
+        GenerationPhase.submitting => _buildSubmittingView(l10n),
+        GenerationPhase.polling => _buildPollingView(l10n, genState.pollCount),
+        GenerationPhase.success => _buildResultView(l10n, genState),
         GenerationPhase.failed => _buildErrorView(
-            genState.errorMessage ?? 'Generation failed.',
+            l10n,
+            mapBackendErrorCode(genState.errorCode, l10n) ??
+                genState.errorMessage ??
+                l10n.generationStatusFailed,
+            isTimeout: false,
           ),
         GenerationPhase.timeout => _buildErrorView(
-            'Generation timed out after 2 minutes.',
+            l10n,
+            l10n.generationStatusTimeout,
+            isTimeout: true,
           ),
       },
     );
@@ -182,7 +191,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
 
   // --- Config Form ---
 
-  Widget _buildConfigForm() {
+  Widget _buildConfigForm(AppLocalizations l10n) {
     final config = ref.watch(chartConfigNotifierProvider);
 
     if (!_initialized) {
@@ -196,41 +205,41 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildDataSourceSelector(),
+            _buildDataSourceSelector(l10n),
             const SizedBox(height: 16),
             if (_dataSource == DataSource.statcan)
-              _buildDatasetHeader(config)
+              _buildDatasetHeader(l10n, config)
             else
-              _buildUploadSection(),
+              _buildUploadSection(l10n),
             const SizedBox(height: 24),
-            _buildChartTypeSelector(config),
+            _buildChartTypeSelector(l10n, config),
             const SizedBox(height: 24),
-            _buildSizePresetSelector(config),
+            _buildSizePresetSelector(l10n, config),
             const SizedBox(height: 24),
-            _buildCategorySelector(config),
+            _buildCategorySelector(l10n, config),
             const SizedBox(height: 24),
-            _buildTitleField(config),
+            _buildTitleField(l10n, config),
             const SizedBox(height: 32),
-            _buildGenerateButton(config),
+            _buildGenerateButton(l10n, config),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDataSourceSelector() {
+  Widget _buildDataSourceSelector(AppLocalizations l10n) {
     return SegmentedButton<DataSource>(
       key: const Key('data_source_selector'),
-      segments: const [
+      segments: [
         ButtonSegment(
           value: DataSource.statcan,
-          label: Text('StatCan Cube'),
-          icon: Icon(Icons.dataset, size: 18),
+          label: Text(l10n.chartConfigDataSourceStatcan),
+          icon: const Icon(Icons.dataset, size: 18),
         ),
         ButtonSegment(
           value: DataSource.upload,
-          label: Text('Upload Data'),
-          icon: Icon(Icons.upload_file, size: 18),
+          label: Text(l10n.chartConfigDataSourceUpload),
+          icon: const Icon(Icons.upload_file, size: 18),
         ),
       ],
       selected: {_dataSource},
@@ -240,7 +249,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     );
   }
 
-  Widget _buildUploadSection() {
+  Widget _buildUploadSection(AppLocalizations l10n) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -248,7 +257,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Custom Data',
+              l10n.chartConfigCustomDataSectionTitle,
               style: TextStyle(
                 color: _theme.textSecondary,
                 fontSize: 12,
@@ -298,7 +307,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     );
   }
 
-  Widget _buildDatasetHeader(ChartConfig config) {
+  Widget _buildDatasetHeader(AppLocalizations l10n, ChartConfig config) {
     final parts = config.dataKey.split('/');
     String label = config.dataKey;
     if (parts.length >= 2) {
@@ -314,7 +323,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Dataset',
+              l10n.chartConfigDatasetLabel,
               style: TextStyle(
                 color: _theme.textSecondary,
                 fontSize: 12,
@@ -333,7 +342,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
             if (config.sourceProductId != null) ...[
               const SizedBox(height: 2),
               Text(
-                'Product ID: ${config.sourceProductId}',
+                l10n.chartConfigProductIdLabel(config.sourceProductId!),
                 style: TextStyle(
                   color: _theme.textSecondary,
                   fontSize: 12,
@@ -346,12 +355,12 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     );
   }
 
-  Widget _buildChartTypeSelector(ChartConfig config) {
+  Widget _buildChartTypeSelector(AppLocalizations l10n, ChartConfig config) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Chart Type',
+          l10n.editorChartTypeLabel,
           style: TextStyle(
             color: _theme.textPrimary,
             fontSize: 14,
@@ -390,12 +399,12 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     );
   }
 
-  Widget _buildSizePresetSelector(ChartConfig config) {
+  Widget _buildSizePresetSelector(AppLocalizations l10n, ChartConfig config) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Size Preset',
+          l10n.chartConfigSizePresetLabel,
           style: TextStyle(
             color: _theme.textPrimary,
             fontSize: 14,
@@ -441,12 +450,12 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     );
   }
 
-  Widget _buildCategorySelector(ChartConfig config) {
+  Widget _buildCategorySelector(AppLocalizations l10n, ChartConfig config) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Background Category',
+          l10n.chartConfigBackgroundCategoryLabel,
           style: TextStyle(
             color: _theme.textPrimary,
             fontSize: 14,
@@ -461,7 +470,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
             final isSelected = config.category == cat;
             return ChoiceChip(
               key: Key('category_chip_${cat.apiValue}'),
-              label: Text(cat.displayName),
+              label: Text(cat.localizedLabel(l10n)),
               avatar: CircleAvatar(
                 backgroundColor: _categoryColor(cat),
                 radius: 8,
@@ -492,12 +501,12 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     );
   }
 
-  Widget _buildTitleField(ChartConfig config) {
+  Widget _buildTitleField(AppLocalizations l10n, ChartConfig config) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Chart Headline',
+          l10n.chartConfigHeadlineLabel,
           style: TextStyle(
             color: _theme.textPrimary,
             fontSize: 14,
@@ -510,7 +519,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
           controller: _titleController,
           style: TextStyle(color: _theme.textPrimary),
           decoration: InputDecoration(
-            hintText: 'Enter chart headline...',
+            hintText: l10n.chartConfigHeadlineHint,
             hintStyle: TextStyle(color: _theme.textSecondary),
             border: const OutlineInputBorder(),
             enabledBorder: OutlineInputBorder(
@@ -521,10 +530,10 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
           maxLength: 200,
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'Headline is required';
+              return l10n.chartConfigHeadlineRequired;
             }
             if (value.length > 200) {
-              return 'Maximum 200 characters';
+              return l10n.chartConfigHeadlineMaxChars;
             }
             return null;
           },
@@ -536,7 +545,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     );
   }
 
-  Widget _buildGenerateButton(ChartConfig config) {
+  Widget _buildGenerateButton(AppLocalizations l10n, ChartConfig config) {
     final titleMissing = config.title.trim().isEmpty;
     final uploadMissing = _dataSource == DataSource.upload &&
         (_uploadedData == null || _uploadedData!.isEmpty);
@@ -546,11 +555,11 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
       height: 52,
       child: ElevatedButton.icon(
         key: const Key('generate_button'),
-        onPressed: isDisabled ? null : _onGenerate,
+        onPressed: isDisabled ? null : () => _onGenerate(l10n),
         icon: const Icon(Icons.auto_awesome, size: 20),
-        label: const Text(
-          'Generate Graphic',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        label: Text(
+          l10n.editorGenerateGraphicButton,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
           disabledBackgroundColor: _theme.bgSurface,
@@ -562,7 +571,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
 
   // --- Generation Phase Views ---
 
-  Widget _buildSubmittingView() {
+  Widget _buildSubmittingView(AppLocalizations l10n) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -570,7 +579,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
           const CircularProgressIndicator(),
           const SizedBox(height: 16),
           Text(
-            'Submitting generation task...',
+            l10n.generationStatusSubmitting,
             style: TextStyle(color: _theme.textSecondary),
           ),
         ],
@@ -578,7 +587,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     );
   }
 
-  Widget _buildPollingView(int pollCount) {
+  Widget _buildPollingView(AppLocalizations l10n, int pollCount) {
     final remaining = ((ChartGenerationNotifier.maxPolls - pollCount) * 2);
 
     return Center(
@@ -593,7 +602,10 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Generating... (poll $pollCount/${ChartGenerationNotifier.maxPolls})',
+              l10n.generationStatusPolling(
+                pollCount,
+                ChartGenerationNotifier.maxPolls,
+              ),
               style: TextStyle(color: _theme.textPrimary),
             ),
             const SizedBox(height: 8),
@@ -604,7 +616,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Estimated time remaining: ~${remaining}s',
+              l10n.chartConfigEtaRemaining(remaining),
               style: TextStyle(
                 color: _theme.textSecondary,
                 fontSize: 12,
@@ -616,7 +628,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     );
   }
 
-  Widget _buildResultView(ChartGenerationState genState) {
+  Widget _buildResultView(AppLocalizations l10n, ChartGenerationState genState) {
     final result = genState.result!;
 
     return SingleChildScrollView(
@@ -659,7 +671,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Chip(
-                label: Text('Publication #${result.publicationId}'),
+                label: Text(l10n.chartConfigPublicationChip(result.publicationId)),
                 backgroundColor: _theme.bgSurface,
                 labelStyle: TextStyle(
                   color: _theme.textPrimary,
@@ -668,7 +680,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
               ),
               const SizedBox(width: 8),
               Chip(
-                label: Text('v${result.version}'),
+                label: Text(l10n.chartConfigVersionChip(result.version.toString())),
                 backgroundColor: _theme.bgSurface,
                 labelStyle: TextStyle(
                   color: _theme.textPrimary,
@@ -702,19 +714,21 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
                       await downloadAndSaveImage(result.cdnUrlLowres);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Saved: $path')),
+                      SnackBar(content: Text(l10n.previewDownloadSaved(path))),
                     );
                   }
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Download failed: $e')),
+                      SnackBar(
+                        content: Text(l10n.previewDownloadFailed(e.toString())),
+                      ),
                     );
                   }
                 }
               },
               icon: const Icon(Icons.download),
-              label: const Text('Download Preview'),
+              label: Text(l10n.chartConfigDownloadPreviewButton),
             ),
           ),
           const SizedBox(height: 12),
@@ -727,7 +741,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
                 ref.read(chartGenerationNotifierProvider.notifier).reset();
               },
               icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Generate Another'),
+              label: Text(l10n.chartConfigGenerateAnotherButton),
               style: OutlinedButton.styleFrom(
                 foregroundColor: _theme.accent,
                 side: BorderSide(color: _theme.accent),
@@ -744,7 +758,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
                 '/data/preview?key=${Uri.encodeComponent(widget.storageKey)}',
               ),
               icon: const Icon(Icons.arrow_back, size: 18),
-              label: const Text('Back to Preview'),
+              label: Text(l10n.chartConfigBackToPreviewButton),
               style: OutlinedButton.styleFrom(
                 foregroundColor: _theme.textSecondary,
                 side: BorderSide(color: _theme.textSecondary),
@@ -756,9 +770,11 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
     );
   }
 
-  Widget _buildErrorView(String message) {
-    final isTimed = message.contains('timed out');
-
+  Widget _buildErrorView(
+    AppLocalizations l10n,
+    String message, {
+    required bool isTimeout,
+  }) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -766,7 +782,7 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              isTimed ? Icons.timer_off : Icons.error_outline,
+              isTimeout ? Icons.timer_off : Icons.error_outline,
               color: _theme.destructive,
               size: 48,
             ),
@@ -783,7 +799,11 @@ class _ChartConfigScreenState extends ConsumerState<ChartConfigScreen> {
               onPressed: () {
                 ref.read(chartGenerationNotifierProvider.notifier).reset();
               },
-              child: Text(isTimed ? 'Retry' : 'Try Again'),
+              child: Text(
+                isTimeout
+                    ? l10n.commonRetryVerb
+                    : l10n.chartConfigTryAgainButton,
+              ),
             ),
           ],
         ),

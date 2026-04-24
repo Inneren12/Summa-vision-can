@@ -125,6 +125,12 @@ Terms specific to the infographic editor: blocks, layouts, palettes, typography,
 | brand stamp | фирменная метка |  |  | noun | Небольшой брендовый маркер; не "штамп" во избежание канцелярского оттенка. |
 | hero stat | ключевой показатель | главный показатель |  | noun | Крупное центральное значение в hero-блоке. |
 | data binding | привязка данных |  |  | noun | Связь поля данных с элементом интерфейса. |
+| Chart Configuration | Настройка графика |  |  | noun | AppBar title for graphics config route. |
+| Size Preset | Формат публикации |  |  | noun | Label in graphics config only (amended from "Пресет размера" per founder review — "Формат публикации" more clearly names what the selection does for operators). |
+| Background Category | Категория фона |  |  | noun | Field label for selectable category chips. |
+| Chart Headline | Заголовок графика |  |  | noun | Field label in graphics flow. |
+| Generate Another | Сгенерировать ещё |  |  | verb | Success-state action. |
+| Back to Preview | Назад к предпросмотру |  |  | phrase | Success-state navigation action. |
 
 ## Section 3 — Data & dataset terms
 
@@ -160,6 +166,8 @@ Terms for StatCan/CMHC datasets, cubes, data binding, data fields, publication m
 | record | запись |  |  | noun | Key: record.noun |
 | row | строка |  |  | noun | Key: row.noun |
 | column | столбец |  |  | noun | Key: column.noun |
+| Custom Data | Пользовательские данные |  |  | noun | Upload-source section heading. |
+| Product ID | ID продукта |  |  | noun | Metadata label wrapper. |
 
 ## Section 4 — Workflow & action terms
 
@@ -266,6 +274,10 @@ Adjectives/nouns for state display: Published, Draft, Saving, Error, etc.
 | Disconnected | Отключено | Соединение разорвано (verbose) |  | adjective |  |
 | Required | Обязательно |  |  | adjective | Обязательное поле/параметр. |
 | Optional | Необязательно |  |  | adjective | Необязательное поле/параметр. |
+| Submitting generation task... | Отправка задачи на генерацию... |  |  | phrase | Unified generation status. |
+| Generating... | Генерация... |  |  | phrase | Unified generation polling status. |
+| Generation completed. | Генерация завершена. |  |  | phrase | Unified success status. |
+| Generation timed out. | Время генерации истекло. |  |  | phrase | Unified timeout status. |
 
 ## Section 6 — Validation & error terms
 
@@ -293,6 +305,12 @@ Validation messages, error types.
 | not found | не найдено |  |  | phrase | Ресурс отсутствует. |
 | Failed to load queue | Не удалось загрузить очередь |  |  | phrase | Префикс ошибки загрузки очереди; `{error}` отображает backend detail без перевода. |
 | Editor action failed: {error} | Не удалось выполнить действие в редакторе: {error} |  |  | phrase | Generic wrapper when endpoint-specific error code is unavailable (DEBT-030 tracked). |
+| Headline is required | Требуется заголовок |  |  | phrase | Form validation. |
+| Maximum 200 characters | Не более 200 символов |  |  | phrase | Form validation (amended from "Максимум 200 символов" per founder review — "Не более" more idiomatic RU). |
+| Failed to parse file | Не удалось разобрать файл |  |  | phrase | Upload parse error wrapper. |
+| No data to chart | Нет данных для построения графика |  |  | phrase | Backend code mapping (CHART_EMPTY_DF). |
+| Not enough columns to build the chart | Недостаточно столбцов для построения графика |  |  | phrase | Backend code mapping (CHART_INSUFFICIENT_COLUMNS). |
+| Unsupported operation | Операция не поддерживается |  |  | phrase | Backend code mapping (NO_HANDLER_REGISTERED). |
 
 ## Section 7 — Technical terms (kept in English)
 

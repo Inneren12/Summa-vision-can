@@ -21,6 +21,7 @@ mixin _$ChartGenerationState {
   String? get jobId => throw _privateConstructorUsedError;
   GenerationResult? get result => throw _privateConstructorUsedError;
   String? get errorMessage => throw _privateConstructorUsedError;
+  String? get errorCode => throw _privateConstructorUsedError;
   int get pollCount => throw _privateConstructorUsedError;
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -40,6 +41,7 @@ abstract class $ChartGenerationStateCopyWith<$Res> {
     String? jobId,
     GenerationResult? result,
     String? errorMessage,
+    String? errorCode,
     int pollCount,
   });
 }
@@ -60,6 +62,7 @@ class _$ChartGenerationStateCopyWithImpl<$Res,
     Object? jobId = freezed,
     Object? result = freezed,
     Object? errorMessage = freezed,
+    Object? errorCode = freezed,
     Object? pollCount = null,
   }) {
     return _then(
@@ -76,6 +79,9 @@ class _$ChartGenerationStateCopyWithImpl<$Res,
             errorMessage: freezed == errorMessage
                 ? _value.errorMessage
                 : errorMessage as String?,
+            errorCode: freezed == errorCode
+                ? _value.errorCode
+                : errorCode as String?,
             pollCount: null == pollCount
                 ? _value.pollCount
                 : pollCount as int,
@@ -99,6 +105,7 @@ abstract class _$$ChartGenerationStateImplCopyWith<$Res>
     String? jobId,
     GenerationResult? result,
     String? errorMessage,
+    String? errorCode,
     int pollCount,
   });
 }
@@ -120,6 +127,7 @@ class __$$ChartGenerationStateImplCopyWithImpl<$Res>
     Object? jobId = freezed,
     Object? result = freezed,
     Object? errorMessage = freezed,
+    Object? errorCode = freezed,
     Object? pollCount = null,
   }) {
     return _then(
@@ -136,6 +144,9 @@ class __$$ChartGenerationStateImplCopyWithImpl<$Res>
         errorMessage: freezed == errorMessage
             ? _value.errorMessage
             : errorMessage as String?,
+        errorCode: freezed == errorCode
+            ? _value.errorCode
+            : errorCode as String?,
         pollCount: null == pollCount
             ? _value.pollCount
             : pollCount as int,
@@ -151,6 +162,7 @@ class _$ChartGenerationStateImpl implements _ChartGenerationState {
     this.jobId,
     this.result,
     this.errorMessage,
+    this.errorCode,
     this.pollCount = 0,
   });
 
@@ -164,12 +176,14 @@ class _$ChartGenerationStateImpl implements _ChartGenerationState {
   @override
   final String? errorMessage;
   @override
+  final String? errorCode;
+  @override
   @JsonKey()
   final int pollCount;
 
   @override
   String toString() {
-    return 'ChartGenerationState(phase: $phase, jobId: $jobId, result: $result, errorMessage: $errorMessage, pollCount: $pollCount)';
+    return 'ChartGenerationState(phase: $phase, jobId: $jobId, result: $result, errorMessage: $errorMessage, errorCode: $errorCode, pollCount: $pollCount)';
   }
 
   @override
@@ -182,13 +196,15 @@ class _$ChartGenerationStateImpl implements _ChartGenerationState {
             (identical(other.result, result) || other.result == result) &&
             (identical(other.errorMessage, errorMessage) ||
                 other.errorMessage == errorMessage) &&
+            (identical(other.errorCode, errorCode) ||
+                other.errorCode == errorCode) &&
             (identical(other.pollCount, pollCount) ||
                 other.pollCount == pollCount));
   }
 
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, phase, jobId, result, errorMessage, pollCount);
+  int get hashCode => Object.hash(
+      runtimeType, phase, jobId, result, errorMessage, errorCode, pollCount);
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
@@ -205,6 +221,7 @@ abstract class _ChartGenerationState implements ChartGenerationState {
     final String? jobId,
     final GenerationResult? result,
     final String? errorMessage,
+    final String? errorCode,
     final int pollCount,
   }) = _$ChartGenerationStateImpl;
 
@@ -216,6 +233,8 @@ abstract class _ChartGenerationState implements ChartGenerationState {
   GenerationResult? get result;
   @override
   String? get errorMessage;
+  @override
+  String? get errorCode;
   @override
   int get pollCount;
 

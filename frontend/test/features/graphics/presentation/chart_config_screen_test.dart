@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:summa_vision_admin/core/theme/app_theme.dart';
 import 'package:summa_vision_admin/features/graphics/application/chart_config_notifier.dart';
 import 'package:summa_vision_admin/features/graphics/application/generation_state_notifier.dart';
 import 'package:summa_vision_admin/features/graphics/domain/chart_constants.dart';
 import 'package:summa_vision_admin/features/graphics/domain/generation_result.dart';
 import 'package:summa_vision_admin/features/graphics/presentation/chart_config_screen.dart';
+import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
+
+import '../../../helpers/localized_pump.dart';
 
 // ---------------------------------------------------------------------------
 // Mock Notifiers
@@ -34,10 +36,11 @@ class _MockGenerationNotifier extends ChartGenerationNotifier {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: pump screen with overrides
+// Helper: pump screen with overrides through localized harness
 // ---------------------------------------------------------------------------
 
-Widget _buildScreen({
+Future<void> _pumpScreen(
+  WidgetTester tester, {
   ChartConfig? config,
   ChartGenerationState? genState,
   String storageKey = 'statcan/processed/13-10-0888-01/2024-12-15.parquet',
@@ -51,7 +54,12 @@ Widget _buildScreen({
       );
   final effectiveGenState = genState ?? const ChartGenerationState();
 
-  return ProviderScope(
+  return pumpLocalizedWidget(
+    tester,
+    ChartConfigScreen(
+      storageKey: storageKey,
+      productId: productId,
+    ),
     overrides: [
       chartConfigNotifierProvider.overrideWith(
         () => _MockChartConfigNotifier(effectiveConfig),
@@ -60,64 +68,53 @@ Widget _buildScreen({
         () => _MockGenerationNotifier(effectiveGenState),
       ),
     ],
-    child: MaterialApp(
-      theme: AppTheme.dark,
-      home: ChartConfigScreen(
-        storageKey: storageKey,
-        productId: productId,
-      ),
-    ),
   );
+}
+
+AppLocalizations _l10n(WidgetTester tester) {
+  final ctx = tester.element(find.byType(ChartConfigScreen));
+  return AppLocalizations.of(ctx)!;
 }
 
 void main() {
   group('ChartConfigScreen — renders all controls', () {
     testWidgets('test_chart_config_screen_renders_all_controls', (tester) async {
-      await tester.pumpWidget(_buildScreen());
+      await _pumpScreen(tester);
       await tester.pumpAndSettle();
 
-      // Chart type selector
       expect(find.byKey(const Key('chart_type_selector')), findsOneWidget);
-      // Size preset selector
       expect(find.byKey(const Key('size_preset_selector')), findsOneWidget);
-      // Category chips (6 background categories)
       expect(find.byKey(const Key('category_chip_housing')), findsOneWidget);
       expect(find.byKey(const Key('category_chip_inflation')), findsOneWidget);
       expect(find.byKey(const Key('category_chip_employment')), findsOneWidget);
       expect(find.byKey(const Key('category_chip_trade')), findsOneWidget);
       expect(find.byKey(const Key('category_chip_energy')), findsOneWidget);
       expect(find.byKey(const Key('category_chip_demographics')), findsOneWidget);
-      // Title field
       expect(find.byKey(const Key('title_field')), findsOneWidget);
-      // Generate button
       expect(find.byKey(const Key('generate_button')), findsOneWidget);
     });
   });
 
   group('ChartConfigScreen — chart type selection', () {
     testWidgets('test_chart_type_selection_updates_state', (tester) async {
-      await tester.pumpWidget(_buildScreen());
+      await _pumpScreen(tester);
       await tester.pumpAndSettle();
 
-      // Tap the dropdown to open it
       await tester.tap(find.byKey(const Key('chart_type_selector')));
       await tester.pumpAndSettle();
 
-      // Select "Bar Chart"
       await tester.tap(find.text('Bar Chart').last);
       await tester.pumpAndSettle();
 
-      // The dropdown should now show "Bar Chart" as selected
       expect(find.text('Bar Chart'), findsOneWidget);
     });
   });
 
   group('ChartConfigScreen — size preset selection', () {
     testWidgets('test_size_preset_selection', (tester) async {
-      await tester.pumpWidget(_buildScreen());
+      await _pumpScreen(tester);
       await tester.pumpAndSettle();
 
-      // Tap "Twitter / X" segment
       expect(find.text('Twitter / X (1.91:1)'), findsOneWidget);
       await tester.tap(find.text('Twitter / X (1.91:1)'));
       await tester.pumpAndSettle();
@@ -126,10 +123,9 @@ void main() {
 
   group('ChartConfigScreen — category selection', () {
     testWidgets('test_category_selection', (tester) async {
-      await tester.pumpWidget(_buildScreen());
+      await _pumpScreen(tester);
       await tester.pumpAndSettle();
 
-      // Tap "Inflation" chip
       await tester.tap(find.byKey(const Key('category_chip_inflation')));
       await tester.pumpAndSettle();
     });
@@ -138,29 +134,29 @@ void main() {
   group('ChartConfigScreen — generate button disabled when title empty', () {
     testWidgets('test_generate_button_disabled_when_title_empty',
         (tester) async {
-      await tester.pumpWidget(_buildScreen(
+      await _pumpScreen(
+        tester,
         config: const ChartConfig(
           dataKey: 'statcan/processed/13-10-0888-01/2024-12-15.parquet',
-          title: '', // empty title
+          title: '',
         ),
-      ));
+      );
       await tester.pumpAndSettle();
 
-      // Find the generate button
       final button = tester.widget<ElevatedButton>(
         find.byKey(const Key('generate_button')),
       );
-      // Button should be disabled (onPressed == null)
       expect(button.onPressed, isNull);
     });
 
     testWidgets('button is enabled when title is non-empty', (tester) async {
-      await tester.pumpWidget(_buildScreen(
+      await _pumpScreen(
+        tester,
         config: const ChartConfig(
           dataKey: 'statcan/processed/13-10-0888-01/2024-12-15.parquet',
           title: 'Housing Price Index',
         ),
-      ));
+      );
       await tester.pumpAndSettle();
 
       final button = tester.widget<ElevatedButton>(
@@ -172,30 +168,37 @@ void main() {
 
   group('ChartConfigScreen — submitting phase', () {
     testWidgets('test_generation_submitting_shows_spinner', (tester) async {
-      await tester.pumpWidget(_buildScreen(
+      await _pumpScreen(
+        tester,
         genState: const ChartGenerationState(
           phase: GenerationPhase.submitting,
         ),
-      ));
+      );
       await tester.pump();
 
+      final l10n = _l10n(tester);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      expect(find.textContaining('Submitting'), findsOneWidget);
+      expect(find.text(l10n.generationStatusSubmitting), findsOneWidget);
     });
   });
 
   group('ChartConfigScreen — polling phase', () {
     testWidgets('test_generation_polling_shows_progress', (tester) async {
-      await tester.pumpWidget(_buildScreen(
+      await _pumpScreen(
+        tester,
         genState: const ChartGenerationState(
           phase: GenerationPhase.polling,
           jobId: 'mock-gen-job-789',
           pollCount: 15,
         ),
-      ));
+      );
       await tester.pump();
 
-      expect(find.textContaining('poll 15/60'), findsOneWidget);
+      final l10n = _l10n(tester);
+      expect(
+        find.text(l10n.generationStatusPolling(15, ChartGenerationNotifier.maxPolls)),
+        findsOneWidget,
+      );
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
       expect(find.textContaining('Estimated time remaining'), findsOneWidget);
     });
@@ -203,7 +206,8 @@ void main() {
 
   group('ChartConfigScreen — success phase', () {
     testWidgets('test_generation_success_shows_image', (tester) async {
-      await tester.pumpWidget(_buildScreen(
+      await _pumpScreen(
+        tester,
         genState: const ChartGenerationState(
           phase: GenerationPhase.success,
           result: GenerationResult(
@@ -214,14 +218,12 @@ void main() {
             version: 1,
           ),
         ),
-      ));
+      );
       await tester.pump();
 
-      // Download and Generate Another buttons should be visible
       expect(find.byKey(const Key('download_button')), findsOneWidget);
       expect(find.byKey(const Key('generate_another_button')), findsOneWidget);
       expect(find.byKey(const Key('back_to_preview_button')), findsOneWidget);
-      // Publication metadata
       expect(find.textContaining('Publication #42'), findsOneWidget);
       expect(find.textContaining('v1'), findsOneWidget);
     });
@@ -229,27 +231,29 @@ void main() {
 
   group('ChartConfigScreen — timeout phase', () {
     testWidgets('test_generation_timeout_shows_retry', (tester) async {
-      await tester.pumpWidget(_buildScreen(
+      await _pumpScreen(
+        tester,
         genState: const ChartGenerationState(
           phase: GenerationPhase.timeout,
-          errorMessage: 'Generation timed out after 2 minutes.',
         ),
-      ));
+      );
       await tester.pump();
 
-      expect(find.textContaining('timed out'), findsOneWidget);
+      final l10n = _l10n(tester);
+      expect(find.text(l10n.generationStatusTimeout), findsOneWidget);
       expect(find.byKey(const Key('retry_button')), findsOneWidget);
     });
   });
 
   group('ChartConfigScreen — failed phase', () {
     testWidgets('test_generation_failed_shows_error', (tester) async {
-      await tester.pumpWidget(_buildScreen(
+      await _pumpScreen(
+        tester,
         genState: const ChartGenerationState(
           phase: GenerationPhase.failed,
           errorMessage: 'Backend returned 500',
         ),
-      ));
+      );
       await tester.pump();
 
       expect(find.textContaining('Backend returned 500'), findsOneWidget);
@@ -259,7 +263,8 @@ void main() {
 
   group('ChartConfigScreen — generate another resets state', () {
     testWidgets('test_generate_another_resets_state', (tester) async {
-      await tester.pumpWidget(_buildScreen(
+      await _pumpScreen(
+        tester,
         genState: const ChartGenerationState(
           phase: GenerationPhase.success,
           result: GenerationResult(
@@ -270,12 +275,10 @@ void main() {
             version: 1,
           ),
         ),
-      ));
+      );
       await tester.pump();
 
-      // "Generate Another" button is visible
       expect(find.byKey(const Key('generate_another_button')), findsOneWidget);
-      // Tapping it should call reset() on the notifier
       await tester.tap(find.byKey(const Key('generate_another_button')));
       await tester.pumpAndSettle();
     });
@@ -283,8 +286,6 @@ void main() {
 
   group('ChartConfigScreen — result cached across navigation', () {
     testWidgets('test_result_cached_across_navigation', (tester) async {
-      // Verify that the generation notifier's cache guard works:
-      // if phase is already success, generate() is a no-op.
       final container = ProviderContainer(
         overrides: [
           chartGenerationNotifierProvider.overrideWith(
@@ -310,7 +311,6 @@ void main() {
       expect(state.result, isNotNull);
       expect(state.result!.publicationId, 1);
 
-      // Simulate "navigating away" by reading state again — still cached
       final stateAfter = container.read(chartGenerationNotifierProvider);
       expect(stateAfter.phase, GenerationPhase.success);
     });
@@ -348,31 +348,25 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      // 1. Simulate generation for dataset A → success
       final genNotifier =
           container.read(chartGenerationNotifierProvider.notifier);
       final configNotifier =
           container.read(chartConfigNotifierProvider.notifier);
 
       configNotifier.setDataKey('datasetA/file.parquet', productId: 'A');
-      // Verify config is set for dataset A
       expect(container.read(chartConfigNotifierProvider).dataKey,
           'datasetA/file.parquet');
 
-      // 2. Navigate to dataset B (call reset with new storageKey)
       configNotifier.reset('datasetB/file.parquet', sourceProductId: 'B');
       genNotifier.reset();
 
-      // 3. Assert phase is idle, not success
       final genState = container.read(chartGenerationNotifierProvider);
       expect(genState.phase, GenerationPhase.idle);
       expect(genState.result, isNull);
 
-      // 4. Assert config.dataKey is dataset B, not A
       final configState = container.read(chartConfigNotifierProvider);
       expect(configState.dataKey, 'datasetB/file.parquet');
       expect(configState.sourceProductId, 'B');
-      // Defaults should be restored
       expect(configState.chartType, ChartType.line);
       expect(configState.title, '');
     });
@@ -382,14 +376,12 @@ void main() {
       addTearDown(container.dispose);
 
       final notifier = container.read(chartConfigNotifierProvider.notifier);
-      // Customize everything
       notifier.setDataKey('old/key.parquet');
       notifier.setChartType(ChartType.scatter);
       notifier.setSizePreset(SizePreset.reddit);
       notifier.setCategory(BackgroundCategory.trade);
       notifier.setTitle('Old Headline');
 
-      // Reset to a new dataset
       notifier.reset('new/key.parquet', sourceProductId: 'NEW');
 
       final state = container.read(chartConfigNotifierProvider);
@@ -402,36 +394,30 @@ void main() {
     });
 
     testWidgets('switching dataset clears title text field', (tester) async {
-      // Use a StatefulBuilder to allow rebuilding with a different storageKey
       String storageKey = 'key-A';
       late StateSetter outerSetState;
 
       const configA = ChartConfig(dataKey: 'key-A', title: '');
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            chartConfigNotifierProvider.overrideWith(
-              () => _MockChartConfigNotifier(configA),
-            ),
-            chartGenerationNotifierProvider.overrideWith(
-              () => _MockGenerationNotifier(const ChartGenerationState()),
-            ),
-          ],
-          child: MaterialApp(
-            theme: AppTheme.dark,
-            home: StatefulBuilder(
-              builder: (context, setState) {
-                outerSetState = setState;
-                return ChartConfigScreen(storageKey: storageKey);
-              },
-            ),
-          ),
+      await pumpLocalizedWidget(
+        tester,
+        StatefulBuilder(
+          builder: (context, setState) {
+            outerSetState = setState;
+            return ChartConfigScreen(storageKey: storageKey);
+          },
         ),
+        overrides: [
+          chartConfigNotifierProvider.overrideWith(
+            () => _MockChartConfigNotifier(configA),
+          ),
+          chartGenerationNotifierProvider.overrideWith(
+            () => _MockGenerationNotifier(const ChartGenerationState()),
+          ),
+        ],
       );
       await tester.pumpAndSettle();
 
-      // Type a title for dataset A
       await tester.enterText(
         find.byKey(const Key('title_field')),
         'Housing Starts',
@@ -439,11 +425,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Housing Starts'), findsOneWidget);
 
-      // Switch to dataset B
       outerSetState(() => storageKey = 'key-B');
       await tester.pumpAndSettle();
 
-      // Title field should be cleared — old text must not persist
       expect(find.text('Housing Starts'), findsNothing);
     });
   });

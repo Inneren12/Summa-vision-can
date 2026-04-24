@@ -615,8 +615,8 @@ The baseline decomposition is adjusted to reflect currently observed Flutter sur
 | 3.4 ✅ | Implementation: Queue + shared shell/chrome | 8 actual (6 new after reuse) | Medium | Merged with Slice 3.3 recon. See `docs/phase-3-slice-3-recon.md` for approved key map. |
 | 3.5 ✅ | Recon: Editor (+ related validation/status touchpoints) | 27 actual (14 localizable + 13 EN-kept chart types) | Medium | Recon doc: docs/phase-3-slice-5-recon.md. Merged with 3.6 in single PR per founder Decision 2. |
 | 3.6 ✅ | Implementation: Editor | 27 actual (14 localizable + 13 EN-kept chart types) | Medium-High | Merged with Slice 3.5 recon. See docs/phase-3-slice-5-recon.md for approved key map and chart type Category D policy. |
-| 3.7 | Recon: Preview + Graphics Config (polling lifecycle + errors) | 70-130 | Medium | Include backend-message exposure map |
-| 3.8 | Implementation: Preview + Graphics Config | 70-130 | Medium | Include async state copy + fallbacks |
+| 3.7 ✅ | Recon: Preview + Graphics Config (polling lifecycle + errors) | 70-130 | Medium | Recon doc: docs/phase-3-slice-7-recon.md. First Appendix D realization. Slices 3.7 and 3.8 intentionally separate per recon Decision 5. |
+| 3.8 ✅ | Implementation: Preview + Graphics Config | 62 actual literals migrated + 7 backend error codes + 5 unified generation status keys = 50 NEW + 4 REUSE ARB rows | Medium | See docs/phase-3-slice-7-recon.md for approved key map, mapper signature, and Category D policy. |
 | 3.9a | Recon: Jobs + KPI | 80-140 | Low-Med | String inventory + EN-kept classification |
 | 3.9b | Implementation: Jobs + KPI | 80-140 | Medium | May merge with 3.9a only if recon confirms low churn and limited literal count |
 | 3.10a | Recon: Cubes + Data Preview | 100-180 | Medium | Higher backend-label exposure; flag every ambiguous case |
@@ -849,6 +849,56 @@ translations in Flutter ARB. Do NOT re-translate these in Phase 3 slices.
 | — | Предпросмотр фона | `editorPreviewBackgroundButton` |
 | — | Сгенерировать графику | `editorGenerateGraphicButton` |
 | — | Не удалось выполнить действие в редакторе: {error} | `editorActionError` |
+| — | Генерация графики | `previewAppBarTitle` |
+| — | Отправка задачи на генерацию... | `generationStatusSubmitting` |
+| — | Генерация... ({current}/{total}) | `generationStatusPolling` |
+| — | Это может занять до 2 минут. | `previewEtaText` |
+| — | Время генерации истекло. | `generationStatusTimeout` |
+| — | Не удалось сгенерировать графику. | `generationStatusFailed` |
+| — | Генерация завершена. | `generationStatusSucceeded` |
+| — | Скачать | `previewDownloadButton` |
+| — | Сохранено: {path} | `previewDownloadSaved` |
+| — | Не удалось скачать: {error} | `previewDownloadFailed` |
+| — | Настройка графика | `chartConfigAppBarTitle` |
+| — | Куб StatCan | `chartConfigDataSourceStatcan` |
+| — | Загрузить данные | `chartConfigDataSourceUpload` |
+| — | Пользовательские данные | `chartConfigCustomDataSectionTitle` |
+| — | Набор данных | `chartConfigDatasetLabel` |
+| — | ID продукта: {productId} | `chartConfigProductIdLabel` |
+| — | Формат публикации | `chartConfigSizePresetLabel` |
+| — | Категория фона | `chartConfigBackgroundCategoryLabel` |
+| — | Заголовок графика | `chartConfigHeadlineLabel` |
+| — | Введите заголовок графика... | `chartConfigHeadlineHint` |
+| — | Требуется заголовок | `chartConfigHeadlineRequired` |
+| — | Не более 200 символов | `chartConfigHeadlineMaxChars` |
+| — | Оценочное оставшееся время: ~{seconds} c | `chartConfigEtaRemaining` |
+| — | Публикация №{id} | `chartConfigPublicationChip` |
+| — | v{version} | `chartConfigVersionChip` |
+| — | Скачать предпросмотр | `chartConfigDownloadPreviewButton` |
+| — | Сгенерировать ещё | `chartConfigGenerateAnotherButton` |
+| — | Назад к предпросмотру | `chartConfigBackToPreviewButton` |
+| — | Попробовать снова | `chartConfigTryAgainButton` |
+| — | Сначала загрузите файл JSON или CSV. | `chartConfigUploadMissingError` |
+| — | Загрузить JSON / CSV | `chartConfigUploadPickButton` |
+| — | Файл: {name} | `chartConfigUploadFileLabel` |
+| — | Не удалось разобрать файл: {error} | `chartConfigUploadParseError` |
+| — | {rows} строк × {columns} столбцов | `chartConfigUploadSummary` |
+| — | Показано {shown} из {total} строк | `chartConfigTableShowingRows` |
+| — | Изменить {column} [строка {row}] | `chartConfigTableEditCellTitle` |
+| — | Сохранить | `commonSaveVerb` |
+| — | Жильё | `backgroundCategoryHousing` |
+| — | Инфляция | `backgroundCategoryInflation` |
+| — | Занятость | `backgroundCategoryEmployment` |
+| — | Торговля | `backgroundCategoryTrade` |
+| — | Энергетика | `backgroundCategoryEnergy` |
+| — | Демография | `backgroundCategoryDemographics` |
+| — | Нет данных для построения графика. | `errorChartEmptyData` |
+| — | Недостаточно столбцов для построения графика. | `errorChartInsufficientColumns` |
+| — | Непредвиденная ошибка при обработке задания. | `errorJobUnhandled` |
+| — | Подождите перед повторной генерацией. | `errorJobCoolDown` |
+| — | Операция не поддерживается. | `errorJobNoHandler` |
+| — | Несовместимая версия данных. | `errorJobIncompatiblePayload` |
+| — | Неизвестный тип задания. | `errorJobUnknownType` |
 
 This table is seed; recon slices are expected to add to it when touching more shared
 terms. Update this appendix in the same PR as the addition.
