@@ -37,6 +37,11 @@ enum ChartType {
   };
 
   /// Display label shown in the dropdown.
+  // i18n-kept: category D (data-viz terminology) — all 13 chart type display names
+  // remain English per founder Decision 1 and §3k policy. See
+  // docs/phase-3-slice-5-recon.md §6 for the full classification log. This
+  // includes "Choropleth (Canada)" in its entirety including the geographic
+  // qualifier.
   String get displayName => switch (this) {
     ChartType.line        => 'Line',
     ChartType.bar         => 'Bar',

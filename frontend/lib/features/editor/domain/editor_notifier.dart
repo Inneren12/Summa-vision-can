@@ -53,5 +53,11 @@ class EditorNotifier extends Notifier<EditorState?> {
 }
 
 /// Provider for [EditorNotifier]. Scoped to the editor lifetime.
+///
+/// NOTE (i18n slice 3.5+3.6): the `editorActionError` ARB key is reserved for
+/// future save/publish/unpublish backend actions. This notifier currently
+/// manages local form state only and does not emit backend action failures yet.
+/// When backend action methods are added, surface failures via editor_screen
+/// using `AppLocalizations.of(context)!.editorActionError(error)`.
 final editorNotifierProvider =
     NotifierProvider<EditorNotifier, EditorState?>(() => EditorNotifier());

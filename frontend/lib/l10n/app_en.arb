@@ -73,5 +73,83 @@
   "queueApproveVerb": "Approve",
   "@queueApproveVerb": {
     "description": "Queue item action button — approve the brief (advances to PUBLISHED)"
+  },
+  "editorErrorAppBarTitle": "Editor",
+  "@editorErrorAppBarTitle": {
+    "description": "AppBar title shown on the Editor screen in error-state (failed to load brief). Distinct from editorEditBriefTitle because brief context is unavailable."
+  },
+  "editorNotFoundAppBarTitle": "Editor",
+  "@editorNotFoundAppBarTitle": {
+    "description": "AppBar title shown on the Editor screen when requested brief is not found. Distinct from editorEditBriefTitle because brief ID is invalid."
+  },
+  "editorLoadBriefError": "Failed to load brief: {error}",
+  "@editorLoadBriefError": {
+    "description": "Error message when GET /admin/publications/{id} fails. {error} placeholder receives the backend error detail verbatim (may remain in source language).",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "Connection timeout"
+      }
+    }
+  },
+  "editorBriefNotFound": "Brief not found",
+  "@editorBriefNotFound": {
+    "description": "Shown when the editor is asked to load a brief ID that does not exist on the backend (404)."
+  },
+  "editorEditBriefTitle": "Edit Brief #{id}",
+  "@editorEditBriefTitle": {
+    "description": "AppBar title on the Editor screen with brief loaded. {id} is brief.id (integer) injected via UI chrome — the brief ID itself is backend payload, the wrapper is localized chrome per §3j.",
+    "placeholders": {
+      "id": {
+        "type": "int",
+        "example": "42"
+      }
+    }
+  },
+  "editorResetVerb": "Reset",
+  "@editorResetVerb": {
+    "description": "Reset button label in the editor — reverts field edits to the last loaded brief state."
+  },
+  "editorViralityScoreLabel": "Virality Score",
+  "@editorViralityScoreLabel": {
+    "description": "Label for the read-only AI-generated virality score (0.0–10.0) shown in the editor."
+  },
+  "editorHeadlineLabel": "Headline",
+  "@editorHeadlineLabel": {
+    "description": "Label for the headline TextField in the editor."
+  },
+  "editorHeadlineHint": "Enter headline...",
+  "@editorHeadlineHint": {
+    "description": "Placeholder text shown inside the empty headline TextField."
+  },
+  "editorBackgroundPromptLabel": "Background Prompt",
+  "@editorBackgroundPromptLabel": {
+    "description": "Label for the AI background-image prompt TextField in the editor."
+  },
+  "editorBackgroundPromptHint": "Describe the AI background image...",
+  "@editorBackgroundPromptHint": {
+    "description": "Placeholder text shown inside the empty background prompt TextField."
+  },
+  "editorChartTypeLabel": "Chart Type",
+  "@editorChartTypeLabel": {
+    "description": "Label above the chart type dropdown in the editor. Note: dropdown values themselves (Line, Bar, etc.) are EN-kept per §3k Category D — see docs/phase-3-slice-5-recon.md §6."
+  },
+  "editorPreviewBackgroundButton": "Preview Background",
+  "@editorPreviewBackgroundButton": {
+    "description": "Secondary action button that triggers a background-image preview generation (without advancing to full graphic generation)."
+  },
+  "editorGenerateGraphicButton": "Generate Graphic",
+  "@editorGenerateGraphicButton": {
+    "description": "Primary CTA button that navigates to Preview/Graphics generation route with the current brief."
+  },
+  "editorActionError": "Editor action failed: {error}",
+  "@editorActionError": {
+    "description": "Generic wrapper for editor backend failure (save/publish/unpublish) when no structured error_code is available. Backend detail interpolated via {error} placeholder; per DEBT-030, this fallback will be replaced with code-based mapping once admin_publications emits structured error codes.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "Publish failed"
+      }
+    }
   }
 }

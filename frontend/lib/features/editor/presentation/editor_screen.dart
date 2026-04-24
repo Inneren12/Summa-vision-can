@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../queue/data/queue_repository.dart';
@@ -47,6 +48,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final id = int.tryParse(widget.briefId) ?? 0;
     final queueAsync = ref.watch(queueProvider);
 
@@ -55,10 +57,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         body: Center(child: CircularProgressIndicator()),
       ),
       error: (err, _) => Scaffold(
-        appBar: AppBar(title: const Text('Editor')),
+        appBar: AppBar(title: Text(l10n.editorErrorAppBarTitle)),
         body: Center(
           child: Text(
-            'Failed to load brief: $err',
+            l10n.editorLoadBriefError(err.toString()),
             style: TextStyle(color: _theme.destructive),
           ),
         ),
@@ -67,10 +69,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         final brief = briefs.where((b) => b.id == id).firstOrNull;
         if (brief == null) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Editor')),
+            appBar: AppBar(title: Text(l10n.editorNotFoundAppBarTitle)),
             body: Center(
               child: Text(
-                'Brief not found',
+                l10n.editorBriefNotFound,
                 style: TextStyle(color: _theme.textSecondary),
               ),
             ),
@@ -89,7 +91,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Text('Edit Brief #${brief.id}'),
+            title: Text(l10n.editorEditBriefTitle(brief.id)),
             actions: [
               if (editorState?.isDirty == true)
                 TextButton(
@@ -99,7 +101,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                     _bgPromptController.text = '';
                   },
                   child: Text(
-                    'Reset',
+                    l10n.editorResetVerb,
                     style: TextStyle(color: _theme.destructive),
                   ),
                 ),
@@ -113,7 +115,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Virality score display (read-only)
-                      _SectionLabel('Virality Score'),
+                      _SectionLabel(l10n.editorViralityScoreLabel),
                       const SizedBox(height: 8),
                       Text(
                         brief.viralityScore.toStringAsFixed(1),
@@ -128,14 +130,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                       const SizedBox(height: 24),
 
                       // Headline field
-                      _SectionLabel('Headline'),
+                      _SectionLabel(l10n.editorHeadlineLabel),
                       const SizedBox(height: 8),
                       TextFormField(
                         key: const Key('headline_field'),
                         controller: _headlineController,
                         style: TextStyle(color: _theme.textPrimary),
                         maxLength: 280,
-                        decoration: _inputDecoration('Enter headline...'),
+                        decoration: _inputDecoration(l10n.editorHeadlineHint),
                         onChanged: (v) => ref
                             .read(editorNotifierProvider.notifier)
                             .updateHeadline(v),
@@ -143,7 +145,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                       const SizedBox(height: 24),
 
                       // Background prompt field
-                      _SectionLabel('Background Prompt'),
+                      _SectionLabel(l10n.editorBackgroundPromptLabel),
                       const SizedBox(height: 8),
                       TextFormField(
                         key: const Key('bg_prompt_field'),
@@ -151,7 +153,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                         style: TextStyle(color: _theme.textPrimary),
                         maxLines: 3,
                         decoration: _inputDecoration(
-                          'Describe the AI background image...',
+                          l10n.editorBackgroundPromptHint,
                         ),
                         onChanged: (v) => ref
                             .read(editorNotifierProvider.notifier)
@@ -160,7 +162,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                       const SizedBox(height: 24),
 
                       // Chart type dropdown
-                      _SectionLabel('Chart Type'),
+                      _SectionLabel(l10n.editorChartTypeLabel),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<ChartType>(
                         key: const Key('chart_type_dropdown'),
@@ -191,7 +193,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                         key: const Key('preview_background_btn'),
                         onPressed: null,
                         icon: const Icon(Icons.image_outlined),
-                        label: const Text('Preview Background'),
+                        label: Text(l10n.editorPreviewBackgroundButton),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: _theme.textSecondary,
                           side: BorderSide(color: _theme.borderDefault),
@@ -208,7 +210,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                             context.go('/preview/${brief.id}');
                           },
                           icon: const Icon(Icons.auto_awesome),
-                          label: const Text('Generate Graphic'),
+                          label: Text(l10n.editorGenerateGraphicButton),
                         ),
                       ),
                     ],

@@ -613,8 +613,8 @@ The baseline decomposition is adjusted to reflect currently observed Flutter sur
 | 3.2b | Locale state + persistence + switcher: `localeProvider` (Riverpod), SharedPreferences persistence, bootstrap resolution (persisted → device → EN), visible switcher in shared chrome, locale-switch smoke tests | 10-25 shell keys | Medium | Depends on 3.2a merged |
 | 3.3 ✅ | Recon: Queue + shared shell/chrome (drawer/header/common controls) | 8 actual (6 new after reuse) | Low-Med | Recon doc: `docs/phase-3-slice-3-recon.md`. Merged with 3.4 in single PR due to actual literal count well below 80-140 estimate. See `docs/phase-3-slice-3-recon.md` §11 (Plan doc reconciliation) for recount source. |
 | 3.4 ✅ | Implementation: Queue + shared shell/chrome | 8 actual (6 new after reuse) | Medium | Merged with Slice 3.3 recon. See `docs/phase-3-slice-3-recon.md` for approved key map. |
-| 3.5 | Recon: Editor (+ related validation/status touchpoints) | 90-170 | Medium | Highest density risk surface |
-| 3.6 | Implementation: Editor | 90-170 | Medium-High | Includes plural/validation checks |
+| 3.5 ✅ | Recon: Editor (+ related validation/status touchpoints) | 27 actual (14 localizable + 13 EN-kept chart types) | Medium | Recon doc: docs/phase-3-slice-5-recon.md. Merged with 3.6 in single PR per founder Decision 2. |
+| 3.6 ✅ | Implementation: Editor | 27 actual (14 localizable + 13 EN-kept chart types) | Medium-High | Merged with Slice 3.5 recon. See docs/phase-3-slice-5-recon.md for approved key map and chart type Category D policy. |
 | 3.7 | Recon: Preview + Graphics Config (polling lifecycle + errors) | 70-130 | Medium | Include backend-message exposure map |
 | 3.8 | Implementation: Preview + Graphics Config | 70-130 | Medium | Include async state copy + fallbacks |
 | 3.9a | Recon: Jobs + KPI | 80-140 | Low-Med | String inventory + EN-kept classification |
@@ -834,6 +834,21 @@ translations in Flutter ARB. Do NOT re-translate these in Phase 3 slices.
 | — | Отклонить | `queueRejectVerb` |
 | — | Одобрить | `queueApproveVerb` |
 | — | Задания | `navJobs` |
+| — | Редактор | `editorErrorAppBarTitle` |
+| — | Редактор | `editorNotFoundAppBarTitle` |
+| — | Не удалось загрузить бриф: {error} | `editorLoadBriefError` |
+| — | Бриф не найден | `editorBriefNotFound` |
+| — | Редактирование брифа №{id} | `editorEditBriefTitle` |
+| — | Сбросить | `editorResetVerb` |
+| — | Оценка виральности | `editorViralityScoreLabel` |
+| — | Заголовок | `editorHeadlineLabel` |
+| — | Введите заголовок... | `editorHeadlineHint` |
+| — | Промпт фона | `editorBackgroundPromptLabel` |
+| — | Опишите желаемое фоновое изображение... | `editorBackgroundPromptHint` |
+| — | Тип графика | `editorChartTypeLabel` |
+| — | Предпросмотр фона | `editorPreviewBackgroundButton` |
+| — | Сгенерировать графику | `editorGenerateGraphicButton` |
+| — | Не удалось выполнить действие в редакторе: {error} | `editorActionError` |
 
 This table is seed; recon slices are expected to add to it when touching more shared
 terms. Update this appendix in the same PR as the addition.
@@ -874,4 +889,3 @@ code has a mapping entry. This test is updated alongside backend contract change
 **Where raw backend codes come from:** backend API documentation, OpenAPI schema, or
 explicit code audit. Capture the list in Slice 3.7 recon (Preview/Graphics Config has
 the highest surface for backend error visibility).
-

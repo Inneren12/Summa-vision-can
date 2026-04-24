@@ -87,10 +87,14 @@ Terms specific to the infographic editor: blocks, layouts, palettes, typography,
 | Term (EN) | Canonical RU | Allowed variants | Forbidden variants | Grammar / UI role | Notes |
 |---|---|---|---|---|---|
 | block | блок |  |  | noun | Базовый элемент конструктора. |
+| Editor | Редактор |  |  | noun | Screen/appbar title in Flutter editor route. |
 | chart | график |  |  | noun | Для chart как визуализации данных. |
 | table | таблица |  |  | noun | Табличный блок. |
 | text block | текстовый блок |  |  | noun | Специализированный тип блока. |
 | headline | заголовок |  |  | noun | Крупный заголовок секции/карточки. |
+| virality score | оценка виральности |  |  | noun | Read-only AI-generated score label in editor (amended from "индекс виральности" to "оценка виральности" per founder review — "score" semantically better matches 0.0–10.0 AI output than "index"). |
+| Background Prompt | промпт фона |  |  | noun | Field label for AI background guidance text. |
+| Describe the AI background image... | Опишите желаемое фоновое изображение... |  |  | phrase | Helper placeholder for background prompt input (amended from "Опишите фоновое изображение для AI..." — "для AI" reads unnaturally in RU, removed per founder review). |
 | subtitle | подзаголовок |  |  | noun | Вторичный заголовок. |
 | KPI | KPI |  |  | noun | Оставлять как KPI. |
 | bar chart | столбчатая диаграмма |  |  | noun | Стандартный термин в BI/аналитике. |
@@ -201,6 +205,8 @@ Verbs users invoke: publish, draft, save, export, validate, review, etc.
 | Next | Далее | *(none)* | *(none)* | nav | Key: nav.next — navigation control label, not a grammatical verb. Used in wizard/step navigation. |
 | Apply | Применить |  |  | verb | Применить настройки/фильтр. |
 | Reset | Сбросить |  |  | verb | Сбросить значения к исходным. |
+| Enter headline... | Введите заголовок... |  |  | phrase | Headline field placeholder (imperative). |
+| Generate Graphic | Сгенерировать графику |  |  | verb | Primary CTA button in editor for AI graphic generation. "Сгенерировать" explicit over "Создать" to signal AI agency. |
 | Search | Найти | *(none)* | *(none)* | verb | Key: search.verb — search button label (imperative). |
 | Search (noun) | Поиск | *(none)* | *(none)* | noun | Key: search.noun — search section heading or field label. |
 | Search placeholder | Поиск… | Найти… | *(none)* | noun | Key: search.placeholder — input placeholder text. Use ellipsis (…), not three dots (...). |
@@ -286,6 +292,7 @@ Validation messages, error types.
 | forbidden | доступ запрещен |  |  | phrase | Авторизация есть, но прав недостаточно. |
 | not found | не найдено |  |  | phrase | Ресурс отсутствует. |
 | Failed to load queue | Не удалось загрузить очередь |  |  | phrase | Префикс ошибки загрузки очереди; `{error}` отображает backend detail без перевода. |
+| Editor action failed: {error} | Не удалось выполнить действие в редакторе: {error} |  |  | phrase | Generic wrapper when endpoint-specific error code is unavailable (DEBT-030 tracked). |
 
 ## Section 7 — Technical terms (kept in English)
 

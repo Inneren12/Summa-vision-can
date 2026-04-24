@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:summa_vision_admin/core/theme/app_theme.dart';
 import 'package:summa_vision_admin/features/editor/domain/editor_notifier.dart';
 import 'package:summa_vision_admin/features/editor/domain/editor_state.dart';
 import 'package:summa_vision_admin/features/editor/presentation/editor_screen.dart';
 import 'package:summa_vision_admin/features/queue/data/queue_repository.dart';
 import 'package:summa_vision_admin/features/queue/domain/content_brief.dart';
+import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
+import '../../../helpers/localized_pump.dart';
 
 final _sampleBrief = ContentBrief(
   id: 1,
@@ -17,39 +18,40 @@ final _sampleBrief = ContentBrief(
   createdAt: '2026-01-01T00:00:00Z',
 );
 
-Widget _buildScreen({
+Future<void> _pumpEditor(
+  WidgetTester tester, {
   String briefId = '1',
   List<ContentBrief> briefs = const [],
-}) {
-  return ProviderScope(
+}) async {
+  await pumpLocalizedWidget(
+    tester,
+    EditorScreen(briefId: briefId),
     overrides: [
       queueProvider.overrideWith((ref) async => briefs),
     ],
-    child: MaterialApp(
-      theme: AppTheme.dark,
-      home: EditorScreen(briefId: briefId),
-    ),
   );
 }
 
 void main() {
   group('EditorScreen — renders correctly', () {
     testWidgets('shows brief id in app bar', (tester) async {
-      await tester.pumpWidget(_buildScreen(briefs: [_sampleBrief]));
+      await _pumpEditor(tester, briefs: [_sampleBrief]);
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Brief #1'), findsOneWidget);
+      final context = tester.element(find.byType(EditorScreen));
+      final l10n = AppLocalizations.of(context)!;
+      expect(find.text(l10n.editorEditBriefTitle(_sampleBrief.id)), findsOneWidget);
     });
 
     testWidgets('shows virality score', (tester) async {
-      await tester.pumpWidget(_buildScreen(briefs: [_sampleBrief]));
+      await _pumpEditor(tester, briefs: [_sampleBrief]);
       await tester.pumpAndSettle();
 
       expect(find.text('8.5'), findsOneWidget);
     });
 
     testWidgets('headline field is pre-filled from brief', (tester) async {
-      await tester.pumpWidget(_buildScreen(briefs: [_sampleBrief]));
+      await _pumpEditor(tester, briefs: [_sampleBrief]);
       await tester.pumpAndSettle();
 
       final editableText = tester.widget<EditableText>(
@@ -62,37 +64,33 @@ void main() {
     });
 
     testWidgets('shows all 13 chart types in dropdown', (tester) async {
-      await tester.pumpWidget(_buildScreen(briefs: [_sampleBrief]));
+      await _pumpEditor(tester, briefs: [_sampleBrief]);
       await tester.pumpAndSettle();
 
-      // Verify dropdown has all 13 items
-      // DropdownButtonFormField wraps items internally; verify via tap + visible items
-      // Instead of checking all rendered labels (viewport limited), verify item count
       await tester.tap(find.byKey(const Key('chart_type_dropdown')));
       await tester.pumpAndSettle();
 
-      // Verify a few representative chart types are visible
       expect(find.text('Bar'), findsWidgets);
       expect(find.text('Line'), findsWidgets);
       expect(find.text('Scatter'), findsWidgets);
 
-      // Close the dropdown
       await tester.tapAt(Offset.zero);
       await tester.pumpAndSettle();
 
-      // Verify all 13 enum values exist
       expect(ChartType.values.length, equals(13));
     });
 
     testWidgets('Generate button is visible', (tester) async {
-      await tester.pumpWidget(_buildScreen(briefs: [_sampleBrief]));
+      await _pumpEditor(tester, briefs: [_sampleBrief]);
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('generate_btn')), findsOneWidget);
     });
 
-    testWidgets('Preview Background button is present but disabled', (tester) async {
-      await tester.pumpWidget(_buildScreen(briefs: [_sampleBrief]));
+    testWidgets('Preview Background button is present but disabled', (
+      tester,
+    ) async {
+      await _pumpEditor(tester, briefs: [_sampleBrief]);
       await tester.pumpAndSettle();
 
       final btn = tester.widget<OutlinedButton>(
@@ -104,26 +102,12 @@ void main() {
 
   group('EditorScreen — form interactions', () {
     testWidgets('editing headline updates EditorNotifier state', (tester) async {
-      late ProviderContainer container;
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            queueProvider.overrideWith((ref) async => [_sampleBrief]),
-          ],
-          child: Builder(
-            builder: (context) {
-              container = ProviderScope.containerOf(context);
-              return MaterialApp(
-                theme: AppTheme.dark,
-                home: EditorScreen(briefId: '1'),
-              );
-            },
-          ),
-        ),
-      );
+      await _pumpEditor(tester, briefs: [_sampleBrief]);
       await tester.pumpAndSettle();
 
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(EditorScreen)),
+      );
       await tester.enterText(
         find.byKey(const Key('headline_field')),
         'Updated headline',
@@ -136,26 +120,12 @@ void main() {
     });
 
     testWidgets('editing bg_prompt updates EditorNotifier state', (tester) async {
-      late ProviderContainer container;
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            queueProvider.overrideWith((ref) async => [_sampleBrief]),
-          ],
-          child: Builder(
-            builder: (context) {
-              container = ProviderScope.containerOf(context);
-              return MaterialApp(
-                theme: AppTheme.dark,
-                home: EditorScreen(briefId: '1'),
-              );
-            },
-          ),
-        ),
-      );
+      await _pumpEditor(tester, briefs: [_sampleBrief]);
       await tester.pumpAndSettle();
 
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(EditorScreen)),
+      );
       await tester.enterText(
         find.byKey(const Key('bg_prompt_field')),
         'Canadian suburb at golden hour',
@@ -167,26 +137,12 @@ void main() {
     });
 
     testWidgets('selecting chart type updates EditorNotifier', (tester) async {
-      late ProviderContainer container;
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            queueProvider.overrideWith((ref) async => [_sampleBrief]),
-          ],
-          child: Builder(
-            builder: (context) {
-              container = ProviderScope.containerOf(context);
-              return MaterialApp(
-                theme: AppTheme.dark,
-                home: EditorScreen(briefId: '1'),
-              );
-            },
-          ),
-        ),
-      );
+      await _pumpEditor(tester, briefs: [_sampleBrief]);
       await tester.pumpAndSettle();
 
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(EditorScreen)),
+      );
       await tester.tap(find.byKey(const Key('chart_type_dropdown')));
       await tester.pumpAndSettle();
 
@@ -201,13 +157,16 @@ void main() {
 
   group('EditorScreen — not found state', () {
     testWidgets('shows not found message for unknown briefId', (tester) async {
-      await tester.pumpWidget(_buildScreen(
+      await _pumpEditor(
+        tester,
         briefId: '999',
         briefs: [_sampleBrief],
-      ));
+      );
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Brief not found'), findsOneWidget);
+      final context = tester.element(find.byType(EditorScreen));
+      final l10n = AppLocalizations.of(context)!;
+      expect(find.text(l10n.editorBriefNotFound), findsOneWidget);
     });
   });
 
