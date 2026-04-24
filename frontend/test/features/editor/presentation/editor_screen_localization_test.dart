@@ -118,8 +118,11 @@ void main() {
     await tester.tap(find.byKey(const Key('chart_type_dropdown')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Line'), findsWidgets);
-    expect(find.text('Bar'), findsWidgets);
-    expect(find.text('Choropleth (Canada)'), findsWidgets);
+    // skipOffstage: false — dropdown overlay renders 13 items which may clip
+    // outside the 800×600 test viewport. Contract is existence in widget tree,
+    // not visibility. Viewport clipping is a test-binding artifact.
+    expect(find.text('Line', skipOffstage: false), findsWidgets);
+    expect(find.text('Bar', skipOffstage: false), findsWidgets);
+    expect(find.text('Choropleth (Canada)', skipOffstage: false), findsWidgets);
   });
 }
