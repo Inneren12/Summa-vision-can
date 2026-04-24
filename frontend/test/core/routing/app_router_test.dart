@@ -12,6 +12,10 @@ import 'package:summa_vision_admin/features/queue/domain/content_brief.dart';
 import 'package:summa_vision_admin/features/queue/presentation/queue_screen.dart';
 import '../../helpers/localized_pump.dart';
 
+// These tests pump via pumpLocalizedRouter which defaults to locale: en.
+// Assertions use EN literals because these are routing tests, not i18n tests.
+// If helper default locale changes, update these assertions accordingly.
+
 /// Sample briefs so EditorScreen can render without a real backend.
 final _mockBriefs = [
   const ContentBrief(
