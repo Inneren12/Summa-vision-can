@@ -17,30 +17,36 @@ class LanguageSwitcher extends ConsumerWidget {
         ref.watch(appBootstrapProvider).valueOrNull?.locale ??
         const Locale('en');
     final currentCode = currentLocale.languageCode;
+    final activeLanguageLabel =
+        currentCode == 'en' ? loc.languageEnglish : loc.languageRussian;
 
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 4,
-      runSpacing: 4,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(right: 4),
-          child: Text(
-            loc.languageLabel,
-            style: Theme.of(context).textTheme.labelSmall,
+    return Semantics(
+      container: true,
+      label: '${loc.languageLabel}: $activeLanguageLabel',
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Text(
+              loc.languageLabel,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
           ),
-        ),
-        _LanguageButton(
-          label: loc.languageEnglish,
-          code: 'en',
-          active: currentCode == 'en',
-        ),
-        _LanguageButton(
-          label: loc.languageRussian,
-          code: 'ru',
-          active: currentCode == 'ru',
-        ),
-      ],
+          _LanguageButton(
+            label: loc.languageEnglish,
+            code: 'en',
+            active: currentCode == 'en',
+          ),
+          _LanguageButton(
+            label: loc.languageRussian,
+            code: 'ru',
+            active: currentCode == 'ru',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -59,22 +65,32 @@ class _LanguageButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    return TextButton(
-      onPressed: active
-          ? null
-          : () => ref.read(appBootstrapProvider.notifier).setLocale(
-                Locale(code),
-              ),
-      style: TextButton.styleFrom(
-        minimumSize: const Size(40, 32),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        backgroundColor:
-            active ? theme.colorScheme.secondaryContainer : Colors.transparent,
-        foregroundColor: active
-            ? theme.colorScheme.onSecondaryContainer
-            : theme.colorScheme.onSurfaceVariant,
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        selected: active,
+        label: label,
+        excludeSemantics: true,
+        child: TextButton(
+          onPressed: active
+              ? null
+              : () => ref.read(appBootstrapProvider.notifier).setLocale(
+                    Locale(code),
+                  ),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(40, 32),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            backgroundColor: active
+                ? theme.colorScheme.secondaryContainer
+                : Colors.transparent,
+            foregroundColor: active
+                ? theme.colorScheme.onSecondaryContainer
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+          child: Text(label),
+        ),
       ),
-      child: Text(label),
     );
   }
 }

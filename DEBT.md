@@ -50,6 +50,35 @@ Rules:
 
 > Updated 2026-04-24: errorCode plumbing in both notifier stacks completed in Slice 3.8 Fix Round 1 (GitHub review caught dead mapper). DEBT-031 remains open for the phase enum unification proper.
 
+> Updated 2026-04-24: Slice 3.11 pre-recon confirmed phase enum divergence persists but has limited practical impact — the 5 generationStatus* ARB keys are rendered directly from screen widgets via conditional branches, not via a centralized phase→key mapper (Part A2 §3.6). Enum unification remains opportunistic with no UX-blocking symptom.
+
+### DEBT-032: Locale-switch smoke test harness harmonization
+
+- **Source:** Phase 3 Slice 3.11 Consolidation recon
+- **Added:** 2026-04-24
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** accepted
+- **Description:** Four existing locale-switch smoke tests (queue, editor,
+  graphics, shell-level locale_switch_smoke_test) plus the new aggregator
+  smoke added in Slice 3.11 have inconsistent patterns (A3 §5.3):
+  - Mixed `MaterialApp.router` vs `MaterialApp(home:)` patterns
+  - Mixed drawer vs AppBar.actions switcher mounts
+  - No shared `pumpLocalizedRouter` helper — ~18-25 lines of scaffolding
+    duplicated per file
+  - All assertions use hardcoded literals instead of `l10n.<key>`-derived
+    values
+- **Impact:** Minor maintenance overhead; tests remain green; no runtime
+  issue. Cross-file regression risk is low because each smoke is
+  independently validated.
+- **Resolution:** Refactor all locale-switch smokes to share a common
+  `pumpLocalizedRouter` helper in `frontend/test/helpers/`. Replace
+  hardcoded literal assertions with `l10n.<key>`-derived values.
+  Preserve test semantics; this is a harness-only refactor.
+- **Target:** Opportunistic during future test infrastructure work or
+  when adding a fifth+ locale-switch smoke (trigger: any new locale
+  smoke proves harness duplication painful).
+
 ### DEBT-029: Locale-aware bootstrap-error fallback in Flutter admin app
 
 - **Source:** Phase 3 Slice 3.3+3.4 recon (`docs/phase-3-slice-3-recon.md` §6)
@@ -73,6 +102,8 @@ Rules:
 - **Impact:** RU operators receive partially localized failure messaging (localized wrapper + backend detail that may remain EN), reducing precision and consistency across error cases.
 - **Resolution:** Introduce endpoint-level structured `error_code` values and mapping docs for admin_publications flows; add Flutter mapper (`lib/l10n/backend_errors.dart`) from code → specific ARB messages; keep generic wrapper only as fallback for unknown codes.
 - **Target:** Slice 3.7/3.8 backend-error mapping alignment PR (or earlier backend contract PR if scheduled).
+
+> Updated 2026-04-24: Slice 3.8 `backend_errors.dart` mapper established for 7 job-level error_codes (CHART_EMPTY_DF, CHART_INSUFFICIENT_COLUMNS, UNHANDLED_ERROR, COOL_DOWN_ACTIVE, NO_HANDLER_REGISTERED, INCOMPATIBLE_PAYLOAD_VERSION, UNKNOWN_JOB_TYPE) covering graphics generation errors. Editor-action endpoints (PATCH /publications/{id}, publish, unpublish) still emit no structured error_code and fall back to `editorActionError` generic wrapper. Full resolution requires backend contract PR separate from frontend Phase 3.
 
 ### DEBT-027: Autosave retry-reset effect uses exhaustive-deps exception
 
