@@ -60,7 +60,7 @@ class ChartGenerationNotifier extends Notifier<ChartGenerationState> {
       state = ChartGenerationState(
         phase: GenerationPhase.failed,
         jobId: state.jobId,
-        result: state.result,
+        result: null,
         errorCode: null,
         errorMessage: e.toString(),
         pollCount: state.pollCount,
@@ -97,7 +97,7 @@ class ChartGenerationNotifier extends Notifier<ChartGenerationState> {
         state = ChartGenerationState(
           phase: GenerationPhase.failed,
           jobId: state.jobId,
-          result: state.result,
+          result: null,
           errorCode: jobStatus.errorCode,
           errorMessage:
               jobStatus.errorMessage ?? 'Generation failed on server',
@@ -112,7 +112,7 @@ class ChartGenerationNotifier extends Notifier<ChartGenerationState> {
     state = ChartGenerationState(
       phase: GenerationPhase.timeout,
       jobId: state.jobId,
-      result: state.result,
+      result: null,
       errorCode: null,
       errorMessage: 'Generation timed out after 2 minutes.',
       pollCount: state.pollCount,
@@ -144,7 +144,7 @@ class ChartGenerationNotifier extends Notifier<ChartGenerationState> {
       state = ChartGenerationState(
         phase: GenerationPhase.failed,
         jobId: state.jobId,
-        result: state.result,
+        result: null,
         errorCode: null,
         errorMessage: e.toString(),
         pollCount: state.pollCount,

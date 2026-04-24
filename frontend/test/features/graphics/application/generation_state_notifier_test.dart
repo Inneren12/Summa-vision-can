@@ -114,7 +114,6 @@ void main() {
       },
       timeout: const Timeout(Duration(seconds: 20)),
     );
-  });
 
     test(
       'clears stale errorCode when subsequent failure has no code',

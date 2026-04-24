@@ -41,7 +41,7 @@ class GenerationNotifier extends Notifier<GenerationState> {
       state = GenerationState(
         phase: GenerationPhase.failed,
         taskId: state.taskId,
-        resultUrl: state.resultUrl,
+        resultUrl: null,
         pollAttempts: state.pollAttempts,
         errorCode: null,
         errorMessage: e.toString(),
@@ -69,7 +69,7 @@ class GenerationNotifier extends Notifier<GenerationState> {
         state = GenerationState(
           phase: GenerationPhase.failed,
           taskId: state.taskId,
-          resultUrl: state.resultUrl,
+          resultUrl: null,
           pollAttempts: state.pollAttempts,
           errorCode: status.errorCode,
           errorMessage: status.detail ?? 'Generation failed on server',
@@ -83,7 +83,7 @@ class GenerationNotifier extends Notifier<GenerationState> {
     state = GenerationState(
       phase: GenerationPhase.timeout,
       taskId: state.taskId,
-      resultUrl: state.resultUrl,
+      resultUrl: null,
       pollAttempts: state.pollAttempts,
       errorCode: null,
       errorMessage: 'Generation timed out. Try again?',
