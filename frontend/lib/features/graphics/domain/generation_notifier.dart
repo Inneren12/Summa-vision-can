@@ -60,6 +60,7 @@ class GenerationNotifier extends Notifier<GenerationState> {
       if (status.isFailed) {
         state = state.copyWith(
           phase: GenerationPhase.failed,
+          errorCode: status.errorCode,
           errorMessage: status.detail ?? 'Generation failed on server',
         );
         return;

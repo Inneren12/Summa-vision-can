@@ -26,6 +26,8 @@ mixin _$JobStatus {
   String get status => throw _privateConstructorUsedError;
   @JsonKey(name: 'result_json')
   String? get resultJson => throw _privateConstructorUsedError;
+  @JsonKey(name: 'error_code')
+  String? get errorCode => throw _privateConstructorUsedError;
   @JsonKey(name: 'error_message')
   String? get errorMessage => throw _privateConstructorUsedError;
 
@@ -50,6 +52,7 @@ abstract class $JobStatusCopyWith<$Res> {
     @JsonKey(name: 'job_id') String jobId,
     String status,
     @JsonKey(name: 'result_json') String? resultJson,
+    @JsonKey(name: 'error_code') String? errorCode,
     @JsonKey(name: 'error_message') String? errorMessage,
   });
 }
@@ -72,6 +75,7 @@ class _$JobStatusCopyWithImpl<$Res, $Val extends JobStatus>
     Object? jobId = null,
     Object? status = null,
     Object? resultJson = freezed,
+    Object? errorCode = freezed,
     Object? errorMessage = freezed,
   }) {
     return _then(
@@ -87,6 +91,10 @@ class _$JobStatusCopyWithImpl<$Res, $Val extends JobStatus>
             resultJson: freezed == resultJson
                 ? _value.resultJson
                 : resultJson // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            errorCode: freezed == errorCode
+                ? _value.errorCode
+                : errorCode // ignore: cast_nullable_to_non_nullable
                       as String?,
             errorMessage: freezed == errorMessage
                 ? _value.errorMessage
@@ -111,6 +119,7 @@ abstract class _$$JobStatusImplCopyWith<$Res>
     @JsonKey(name: 'job_id') String jobId,
     String status,
     @JsonKey(name: 'result_json') String? resultJson,
+    @JsonKey(name: 'error_code') String? errorCode,
     @JsonKey(name: 'error_message') String? errorMessage,
   });
 }
@@ -132,6 +141,7 @@ class __$$JobStatusImplCopyWithImpl<$Res>
     Object? jobId = null,
     Object? status = null,
     Object? resultJson = freezed,
+    Object? errorCode = freezed,
     Object? errorMessage = freezed,
   }) {
     return _then(
@@ -147,6 +157,10 @@ class __$$JobStatusImplCopyWithImpl<$Res>
         resultJson: freezed == resultJson
             ? _value.resultJson
             : resultJson // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        errorCode: freezed == errorCode
+            ? _value.errorCode
+            : errorCode // ignore: cast_nullable_to_non_nullable
                   as String?,
         errorMessage: freezed == errorMessage
             ? _value.errorMessage
@@ -164,6 +178,7 @@ class _$JobStatusImpl implements _JobStatus {
     @JsonKey(name: 'job_id') required this.jobId,
     required this.status,
     @JsonKey(name: 'result_json') this.resultJson,
+    @JsonKey(name: 'error_code') this.errorCode,
     @JsonKey(name: 'error_message') this.errorMessage,
   });
 
@@ -179,12 +194,15 @@ class _$JobStatusImpl implements _JobStatus {
   @JsonKey(name: 'result_json')
   final String? resultJson;
   @override
+  @JsonKey(name: 'error_code')
+  final String? errorCode;
+  @override
   @JsonKey(name: 'error_message')
   final String? errorMessage;
 
   @override
   String toString() {
-    return 'JobStatus(jobId: $jobId, status: $status, resultJson: $resultJson, errorMessage: $errorMessage)';
+    return 'JobStatus(jobId: $jobId, status: $status, resultJson: $resultJson, errorCode: $errorCode, errorMessage: $errorMessage)';
   }
 
   @override
@@ -196,14 +214,22 @@ class _$JobStatusImpl implements _JobStatus {
             (identical(other.status, status) || other.status == status) &&
             (identical(other.resultJson, resultJson) ||
                 other.resultJson == resultJson) &&
+            (identical(other.errorCode, errorCode) ||
+                other.errorCode == errorCode) &&
             (identical(other.errorMessage, errorMessage) ||
                 other.errorMessage == errorMessage));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, jobId, status, resultJson, errorMessage);
+  int get hashCode => Object.hash(
+    runtimeType,
+    jobId,
+    status,
+    resultJson,
+    errorCode,
+    errorMessage,
+  );
 
   /// Create a copy of JobStatus
   /// with the given fields replaced by the non-null parameter values.
@@ -224,6 +250,7 @@ abstract class _JobStatus implements JobStatus {
     @JsonKey(name: 'job_id') required final String jobId,
     required final String status,
     @JsonKey(name: 'result_json') final String? resultJson,
+    @JsonKey(name: 'error_code') final String? errorCode,
     @JsonKey(name: 'error_message') final String? errorMessage,
   }) = _$JobStatusImpl;
 
@@ -238,6 +265,9 @@ abstract class _JobStatus implements JobStatus {
   @override
   @JsonKey(name: 'result_json')
   String? get resultJson;
+  @override
+  @JsonKey(name: 'error_code')
+  String? get errorCode;
   @override
   @JsonKey(name: 'error_message')
   String? get errorMessage;

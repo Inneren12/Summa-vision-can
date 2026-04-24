@@ -134,6 +134,25 @@ void main() {
       expect(find.text(l10n.chartConfigTryAgainButton), findsOneWidget);
     });
 
+    testWidgets(
+      'failed state with known error_code renders localized mapped text (EN)',
+      (tester) async {
+        await _pump(
+          tester,
+          genState: const ChartGenerationState(
+            phase: GenerationPhase.failed,
+            errorCode: 'CHART_EMPTY_DF',
+            errorMessage: 'raw backend text',
+          ),
+        );
+        await tester.pump();
+
+        final l10n = _l10n(tester);
+        expect(find.text(l10n.errorChartEmptyData), findsOneWidget);
+        expect(find.textContaining('raw backend text'), findsNothing);
+      },
+    );
+
     testWidgets('timeout state uses unified timeout + commonRetryVerb', (tester) async {
       await _pump(
         tester,
@@ -212,6 +231,25 @@ void main() {
       final l10n = _l10n(tester);
       expect(l10n.chartConfigHeadlineMaxChars, 'Не более 200 символов');
     });
+
+    testWidgets(
+      'failed state with known error_code renders localized mapped text (RU)',
+      (tester) async {
+        await _pump(
+          tester,
+          locale: const Locale('ru'),
+          genState: const ChartGenerationState(
+            phase: GenerationPhase.failed,
+            errorCode: 'CHART_EMPTY_DF',
+            errorMessage: 'raw backend text',
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Нет данных для построения графика.'), findsOneWidget);
+        expect(find.textContaining('raw backend text'), findsNothing);
+      },
+    );
 
     testWidgets('success state chips render with interpolated payload', (tester) async {
       await _pump(

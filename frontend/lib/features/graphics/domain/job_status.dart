@@ -9,6 +9,7 @@ class JobStatus with _$JobStatus {
     @JsonKey(name: 'job_id') required String jobId,
     required String status,
     @JsonKey(name: 'result_json') String? resultJson,
+    @JsonKey(name: 'error_code') String? errorCode,
     @JsonKey(name: 'error_message') String? errorMessage,
   }) = _JobStatus;
 

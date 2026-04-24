@@ -87,6 +87,7 @@ class ChartGenerationNotifier extends Notifier<ChartGenerationState> {
       if (jobStatus.status == 'failed') {
         state = state.copyWith(
           phase: GenerationPhase.failed,
+          errorCode: jobStatus.errorCode,
           errorMessage:
               jobStatus.errorMessage ?? 'Generation failed on server',
         );

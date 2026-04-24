@@ -11,6 +11,7 @@ _$JobStatusImpl _$$JobStatusImplFromJson(Map<String, dynamic> json) =>
       jobId: json['job_id'] as String,
       status: json['status'] as String,
       resultJson: json['result_json'] as String?,
+      errorCode: json['error_code'] as String?,
       errorMessage: json['error_message'] as String?,
     );
 
@@ -19,5 +20,6 @@ Map<String, dynamic> _$$JobStatusImplToJson(_$JobStatusImpl instance) =>
       'job_id': instance.jobId,
       'status': instance.status,
       'result_json': instance.resultJson,
+      'error_code': instance.errorCode,
       'error_message': instance.errorMessage,
     };

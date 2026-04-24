@@ -26,6 +26,8 @@ mixin _$TaskStatus {
   String get status => throw _privateConstructorUsedError;
   @JsonKey(name: 'result_url')
   String? get resultUrl => throw _privateConstructorUsedError;
+  @JsonKey(name: 'error_code')
+  String? get errorCode => throw _privateConstructorUsedError;
   String? get detail => throw _privateConstructorUsedError;
 
   /// Serializes this TaskStatus to a JSON map.
@@ -49,6 +51,7 @@ abstract class $TaskStatusCopyWith<$Res> {
     @JsonKey(name: 'task_id') String taskId,
     String status,
     @JsonKey(name: 'result_url') String? resultUrl,
+    @JsonKey(name: 'error_code') String? errorCode,
     String? detail,
   });
 }
@@ -71,6 +74,7 @@ class _$TaskStatusCopyWithImpl<$Res, $Val extends TaskStatus>
     Object? taskId = null,
     Object? status = null,
     Object? resultUrl = freezed,
+    Object? errorCode = freezed,
     Object? detail = freezed,
   }) {
     return _then(
@@ -86,6 +90,10 @@ class _$TaskStatusCopyWithImpl<$Res, $Val extends TaskStatus>
             resultUrl: freezed == resultUrl
                 ? _value.resultUrl
                 : resultUrl // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            errorCode: freezed == errorCode
+                ? _value.errorCode
+                : errorCode // ignore: cast_nullable_to_non_nullable
                       as String?,
             detail: freezed == detail
                 ? _value.detail
@@ -110,6 +118,7 @@ abstract class _$$TaskStatusImplCopyWith<$Res>
     @JsonKey(name: 'task_id') String taskId,
     String status,
     @JsonKey(name: 'result_url') String? resultUrl,
+    @JsonKey(name: 'error_code') String? errorCode,
     String? detail,
   });
 }
@@ -131,6 +140,7 @@ class __$$TaskStatusImplCopyWithImpl<$Res>
     Object? taskId = null,
     Object? status = null,
     Object? resultUrl = freezed,
+    Object? errorCode = freezed,
     Object? detail = freezed,
   }) {
     return _then(
@@ -146,6 +156,10 @@ class __$$TaskStatusImplCopyWithImpl<$Res>
         resultUrl: freezed == resultUrl
             ? _value.resultUrl
             : resultUrl // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        errorCode: freezed == errorCode
+            ? _value.errorCode
+            : errorCode // ignore: cast_nullable_to_non_nullable
                   as String?,
         detail: freezed == detail
             ? _value.detail
@@ -163,6 +177,7 @@ class _$TaskStatusImpl implements _TaskStatus {
     @JsonKey(name: 'task_id') required this.taskId,
     required this.status,
     @JsonKey(name: 'result_url') this.resultUrl,
+    @JsonKey(name: 'error_code') this.errorCode,
     this.detail,
   });
 
@@ -178,11 +193,14 @@ class _$TaskStatusImpl implements _TaskStatus {
   @JsonKey(name: 'result_url')
   final String? resultUrl;
   @override
+  @JsonKey(name: 'error_code')
+  final String? errorCode;
+  @override
   final String? detail;
 
   @override
   String toString() {
-    return 'TaskStatus(taskId: $taskId, status: $status, resultUrl: $resultUrl, detail: $detail)';
+    return 'TaskStatus(taskId: $taskId, status: $status, resultUrl: $resultUrl, errorCode: $errorCode, detail: $detail)';
   }
 
   @override
@@ -194,13 +212,21 @@ class _$TaskStatusImpl implements _TaskStatus {
             (identical(other.status, status) || other.status == status) &&
             (identical(other.resultUrl, resultUrl) ||
                 other.resultUrl == resultUrl) &&
+            (identical(other.errorCode, errorCode) ||
+                other.errorCode == errorCode) &&
             (identical(other.detail, detail) || other.detail == detail));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, taskId, status, resultUrl, detail);
+  int get hashCode => Object.hash(
+    runtimeType,
+    taskId,
+    status,
+    resultUrl,
+    errorCode,
+    detail,
+  );
 
   /// Create a copy of TaskStatus
   /// with the given fields replaced by the non-null parameter values.
@@ -221,6 +247,7 @@ abstract class _TaskStatus implements TaskStatus {
     @JsonKey(name: 'task_id') required final String taskId,
     required final String status,
     @JsonKey(name: 'result_url') final String? resultUrl,
+    @JsonKey(name: 'error_code') final String? errorCode,
     final String? detail,
   }) = _$TaskStatusImpl;
 
@@ -235,6 +262,9 @@ abstract class _TaskStatus implements TaskStatus {
   @override
   @JsonKey(name: 'result_url')
   String? get resultUrl;
+  @override
+  @JsonKey(name: 'error_code')
+  String? get errorCode;
   @override
   String? get detail;
 
