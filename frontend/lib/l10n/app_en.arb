@@ -151,5 +151,245 @@
         "example": "Publish failed"
       }
     }
+  },
+  "previewAppBarTitle": "Generating Graphic",
+  "@previewAppBarTitle": {
+    "description": "AppBar title on the Preview/Generation screen. Shown while generation is in flight."
+  },
+  "generationStatusSubmitting": "Submitting generation task...",
+  "@generationStatusSubmitting": {
+    "description": "Status label shown while the generation task is being submitted to the backend. Used by both preview_screen and chart_config_screen via local phase->key mappers."
+  },
+  "generationStatusPolling": "Generating... ({current}/{total})",
+  "@generationStatusPolling": {
+    "description": "Status label shown while polling for generation completion. {current} is current poll attempt, {total} is max polls. Used by both preview and chart config screens.",
+    "placeholders": {
+      "current": {"type": "int", "example": "3"},
+      "total": {"type": "int", "example": "60"}
+    }
+  },
+  "previewEtaText": "This may take up to 2 minutes.",
+  "@previewEtaText": {
+    "description": "Informational helper text shown below the polling status on the Preview screen."
+  },
+  "generationStatusTimeout": "Generation timed out.",
+  "@generationStatusTimeout": {
+    "description": "Status label when generation exceeds the max poll window. Used by both screens."
+  },
+  "generationStatusFailed": "Generation failed.",
+  "@generationStatusFailed": {
+    "description": "Status label when generation fails. Used as fallback when error_message is null. Used by both screens."
+  },
+  "generationStatusSucceeded": "Generation completed.",
+  "@generationStatusSucceeded": {
+    "description": "Status label when generation succeeds. Covers both 'completed' phase (preview_screen) and 'success' phase (chart_config_screen). Per DEBT-031, the underlying enum divergence is out of i18n scope."
+  },
+  "previewDownloadButton": "Download",
+  "@previewDownloadButton": {
+    "description": "Download button label on Preview screen after successful generation."
+  },
+  "previewDownloadSaved": "Saved: {path}",
+  "@previewDownloadSaved": {
+    "description": "Snackbar shown after successful download. {path} is the local file path — passed through as Category C payload.",
+    "placeholders": {
+      "path": {"type": "String", "example": "/storage/emulated/0/Download/chart.png"}
+    }
+  },
+  "previewDownloadFailed": "Download failed: {error}",
+  "@previewDownloadFailed": {
+    "description": "Snackbar shown when download fails. {error} is backend/exception detail interpolated verbatim.",
+    "placeholders": {
+      "error": {"type": "String", "example": "Permission denied"}
+    }
+  },
+  "chartConfigAppBarTitle": "Chart Configuration",
+  "@chartConfigAppBarTitle": {
+    "description": "AppBar title on the chart configuration screen."
+  },
+  "chartConfigDataSourceStatcan": "StatCan Cube",
+  "@chartConfigDataSourceStatcan": {
+    "description": "Segmented control label for StatCan Cube data source."
+  },
+  "chartConfigDataSourceUpload": "Upload Data",
+  "@chartConfigDataSourceUpload": {
+    "description": "Segmented control label for user-uploaded data source."
+  },
+  "chartConfigCustomDataSectionTitle": "Custom Data",
+  "@chartConfigCustomDataSectionTitle": {
+    "description": "Section heading for custom/uploaded data source configuration."
+  },
+  "chartConfigDatasetLabel": "Dataset",
+  "@chartConfigDatasetLabel": {
+    "description": "Dataset card heading in the chart config screen."
+  },
+  "chartConfigProductIdLabel": "Product ID: {productId}",
+  "@chartConfigProductIdLabel": {
+    "description": "Label displaying the StatCan product ID as UI chrome wrapping a backend-provided ID string.",
+    "placeholders": {
+      "productId": {"type": "String", "example": "18100004"}
+    }
+  },
+  "chartConfigSizePresetLabel": "Size Preset",
+  "@chartConfigSizePresetLabel": {
+    "description": "Label above size preset selector (Instagram/Twitter/Reddit aspect ratios). Note: preset VALUES themselves are EN-kept Category D per §3k."
+  },
+  "chartConfigBackgroundCategoryLabel": "Background Category",
+  "@chartConfigBackgroundCategoryLabel": {
+    "description": "Label above background category selector. Values are localized per founder Decision 1 via backgroundCategory* keys."
+  },
+  "chartConfigHeadlineLabel": "Chart Headline",
+  "@chartConfigHeadlineLabel": {
+    "description": "Label for chart headline TextField in config screen. Distinct from editor's Headline field — disambiguated with 'Chart' prefix."
+  },
+  "chartConfigHeadlineHint": "Enter chart headline...",
+  "@chartConfigHeadlineHint": {
+    "description": "Placeholder text inside the empty chart headline TextField."
+  },
+  "chartConfigHeadlineRequired": "Headline is required",
+  "@chartConfigHeadlineRequired": {
+    "description": "Form validation message when chart headline field is empty."
+  },
+  "chartConfigHeadlineMaxChars": "Maximum 200 characters",
+  "@chartConfigHeadlineMaxChars": {
+    "description": "Form validation message when chart headline exceeds 200 characters. Static count, no placeholder."
+  },
+  "chartConfigEtaRemaining": "Estimated time remaining: ~{seconds}s",
+  "@chartConfigEtaRemaining": {
+    "description": "ETA text shown during polling. {seconds} is integer seconds remaining.",
+    "placeholders": {
+      "seconds": {"type": "int", "example": "45"}
+    }
+  },
+  "chartConfigPublicationChip": "Publication #{id}",
+  "@chartConfigPublicationChip": {
+    "description": "Success-state metadata chip showing publication ID. {id} is backend result payload.",
+    "placeholders": {
+      "id": {"type": "int", "example": "42"}
+    }
+  },
+  "chartConfigVersionChip": "v{version}",
+  "@chartConfigVersionChip": {
+    "description": "Success-state metadata chip showing version. {version} is backend result payload; 'v' prefix kept as technical token in both locales.",
+    "placeholders": {
+      "version": {"type": "String", "example": "1.2.3"}
+    }
+  },
+  "chartConfigDownloadPreviewButton": "Download Preview",
+  "@chartConfigDownloadPreviewButton": {
+    "description": "Success-state action button: download the generated preview image."
+  },
+  "chartConfigGenerateAnotherButton": "Generate Another",
+  "@chartConfigGenerateAnotherButton": {
+    "description": "Success-state action button: start a new generation with current config."
+  },
+  "chartConfigBackToPreviewButton": "Back to Preview",
+  "@chartConfigBackToPreviewButton": {
+    "description": "Success-state navigation button back to the preview screen."
+  },
+  "chartConfigTryAgainButton": "Try Again",
+  "@chartConfigTryAgainButton": {
+    "description": "Failure-state retry button. Distinct from commonRetryVerb to allow divergent tuning per §3l; the timeout branch reuses commonRetryVerb."
+  },
+  "chartConfigUploadMissingError": "Upload a JSON or CSV file first.",
+  "@chartConfigUploadMissingError": {
+    "description": "Validation message when user attempts generation without uploading a data file."
+  },
+  "chartConfigUploadPickButton": "Upload JSON / CSV",
+  "@chartConfigUploadPickButton": {
+    "description": "File picker button label in data upload widget."
+  },
+  "chartConfigUploadFileLabel": "File: {name}",
+  "@chartConfigUploadFileLabel": {
+    "description": "Selected file display label after upload. {name} is user's local filename (Category C payload).",
+    "placeholders": {
+      "name": {"type": "String", "example": "data.csv"}
+    }
+  },
+  "chartConfigUploadParseError": "Failed to parse file: {error}",
+  "@chartConfigUploadParseError": {
+    "description": "Error when uploaded file cannot be parsed as JSON/CSV. {error} is parse exception detail.",
+    "placeholders": {
+      "error": {"type": "String", "example": "Invalid JSON at line 3"}
+    }
+  },
+  "chartConfigUploadSummary": "{rows} rows × {columns} columns",
+  "@chartConfigUploadSummary": {
+    "description": "Parsed-data summary. {rows} is row count, {columns} is column count. Both integers; no plural forms per founder decision (compact numeric display).",
+    "placeholders": {
+      "rows": {"type": "int", "example": "150"},
+      "columns": {"type": "int", "example": "8"}
+    }
+  },
+  "chartConfigTableShowingRows": "Showing {shown} of {total} rows",
+  "@chartConfigTableShowingRows": {
+    "description": "Table truncation info. {shown} = visible row count, {total} = full dataset row count.",
+    "placeholders": {
+      "shown": {"type": "int", "example": "100"},
+      "total": {"type": "int", "example": "5000"}
+    }
+  },
+  "chartConfigTableEditCellTitle": "Edit {column} [row {row}]",
+  "@chartConfigTableEditCellTitle": {
+    "description": "Edit dialog title. {column} = column name (user/backend content), {row} = row index (int).",
+    "placeholders": {
+      "column": {"type": "String", "example": "GDP"},
+      "row": {"type": "int", "example": "42"}
+    }
+  },
+  "commonSaveVerb": "Save",
+  "@commonSaveVerb": {
+    "description": "Generic Save action button label. Paired with commonCancelVerb in dialogs."
+  },
+  "backgroundCategoryHousing": "Housing",
+  "@backgroundCategoryHousing": {
+    "description": "Background category label for housing-related content. Localized per §3j as UI taxonomy (not industry-standard chart terminology)."
+  },
+  "backgroundCategoryInflation": "Inflation",
+  "@backgroundCategoryInflation": {
+    "description": "Background category label for inflation-related content."
+  },
+  "backgroundCategoryEmployment": "Employment",
+  "@backgroundCategoryEmployment": {
+    "description": "Background category label for employment-related content."
+  },
+  "backgroundCategoryTrade": "Trade",
+  "@backgroundCategoryTrade": {
+    "description": "Background category label for trade-related content."
+  },
+  "backgroundCategoryEnergy": "Energy",
+  "@backgroundCategoryEnergy": {
+    "description": "Background category label for energy-related content."
+  },
+  "backgroundCategoryDemographics": "Demographics",
+  "@backgroundCategoryDemographics": {
+    "description": "Background category label for demographics-related content."
+  },
+  "errorChartEmptyData": "No data to chart.",
+  "@errorChartEmptyData": {
+    "description": "Mapped from backend error_code CHART_EMPTY_DF. Shown when the dataset used for generation is empty."
+  },
+  "errorChartInsufficientColumns": "Not enough columns to build the chart.",
+  "@errorChartInsufficientColumns": {
+    "description": "Mapped from backend error_code CHART_INSUFFICIENT_COLUMNS. Shown when dataset lacks the columns needed for the requested chart type."
+  },
+  "errorJobUnhandled": "Unexpected error while processing the job.",
+  "@errorJobUnhandled": {
+    "description": "Mapped from backend error_code UNHANDLED_ERROR. Runner fallback when no more specific code applies."
+  },
+  "errorJobCoolDown": "Please wait before starting another generation.",
+  "@errorJobCoolDown": {
+    "description": "Mapped from backend error_code COOL_DOWN_ACTIVE. Rate limit between generation requests."
+  },
+  "errorJobNoHandler": "Unsupported operation.",
+  "@errorJobNoHandler": {
+    "description": "Mapped from backend error_code NO_HANDLER_REGISTERED. Dispatcher error — operator should rarely see this."
+  },
+  "errorJobIncompatiblePayload": "Version mismatch between client and server payload.",
+  "@errorJobIncompatiblePayload": {
+    "description": "Mapped from backend error_code INCOMPATIBLE_PAYLOAD_VERSION. Client/server schema drift."
+  },
+  "errorJobUnknownType": "Unknown job type.",
+  "@errorJobUnknownType": {
+    "description": "Mapped from backend error_code UNKNOWN_JOB_TYPE. Dispatcher error — operator should rarely see this."
   }
 }

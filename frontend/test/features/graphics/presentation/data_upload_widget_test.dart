@@ -3,27 +3,36 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:summa_vision_admin/features/graphics/domain/raw_data_upload.dart';
 import 'package:summa_vision_admin/features/graphics/presentation/data_upload_widget.dart';
 import 'package:summa_vision_admin/features/graphics/presentation/editable_data_table.dart';
+import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
 
-Widget _wrap(Widget child) {
-  return MaterialApp(home: Scaffold(body: child));
+import '../../../helpers/localized_pump.dart';
+
+AppLocalizations _l10n(WidgetTester tester, Type targetType) {
+  final ctx = tester.element(find.byType(targetType));
+  return AppLocalizations.of(ctx)!;
 }
 
 void main() {
   group('DataUploadWidget', () {
     testWidgets('renders the upload button', (tester) async {
-      await tester.pumpWidget(
-        _wrap(DataUploadWidget(onDataLoaded: (_, __) {})),
+      await pumpLocalizedWidget(
+        tester,
+        Scaffold(body: DataUploadWidget(onDataLoaded: (_, __) {})),
       );
+      await tester.pumpAndSettle();
 
+      final l10n = _l10n(tester, DataUploadWidget);
       expect(find.byKey(const Key('data_upload_pick_button')), findsOneWidget);
-      expect(find.text('Upload JSON / CSV'), findsOneWidget);
+      expect(find.text(l10n.chartConfigUploadPickButton), findsOneWidget);
     });
 
     testWidgets('does not render file/summary/error labels by default',
         (tester) async {
-      await tester.pumpWidget(
-        _wrap(DataUploadWidget(onDataLoaded: (_, __) {})),
+      await pumpLocalizedWidget(
+        tester,
+        Scaffold(body: DataUploadWidget(onDataLoaded: (_, __) {})),
       );
+      await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('data_upload_file_label')), findsNothing);
       expect(find.byKey(const Key('data_upload_summary')), findsNothing);
@@ -38,9 +47,10 @@ void main() {
         {'name': 'Bob', 'score': 87},
       ];
 
-      await tester.pumpWidget(
-        _wrap(
-          SizedBox(
+      await pumpLocalizedWidget(
+        tester,
+        Scaffold(
+          body: SizedBox(
             height: 400,
             child: EditableDataTable(
               data: data,
@@ -50,6 +60,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('editable_data_table')), findsOneWidget);
       expect(find.text('name'), findsOneWidget);
@@ -65,9 +76,10 @@ void main() {
         5,
         (i) => {'x': i},
       );
-      await tester.pumpWidget(
-        _wrap(
-          SizedBox(
+      await pumpLocalizedWidget(
+        tester,
+        Scaffold(
+          body: SizedBox(
             height: 400,
             child: EditableDataTable(
               data: data,
@@ -78,8 +90,10 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
-      expect(find.text('Showing 2 of 5 rows'), findsOneWidget);
+      final l10n = _l10n(tester, EditableDataTable);
+      expect(find.text(l10n.chartConfigTableShowingRows(2, 5)), findsOneWidget);
     });
 
     testWidgets('tapping a cell then saving emits onCellChanged',
@@ -91,9 +105,10 @@ void main() {
       int? changedRow;
       String? changedValue;
 
-      await tester.pumpWidget(
-        _wrap(
-          SizedBox(
+      await pumpLocalizedWidget(
+        tester,
+        Scaffold(
+          body: SizedBox(
             height: 400,
             child: EditableDataTable(
               data: data,
@@ -107,13 +122,16 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
+
+      final l10n = _l10n(tester, EditableDataTable);
 
       await tester.tap(find.text('Alice'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Edit name [row 0]'), findsOneWidget);
+      expect(find.text(l10n.chartConfigTableEditCellTitle('name', 0)), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Alicia');
-      await tester.tap(find.text('Save'));
+      await tester.tap(find.text(l10n.commonSaveVerb));
       await tester.pumpAndSettle();
 
       expect(changedRow, 0);

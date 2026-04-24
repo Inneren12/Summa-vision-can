@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../l10n/generated/app_localizations.dart';
+
 /// Simple inline-editable preview table for uploaded data.
 ///
 /// Shows at most 100 rows so that pathological uploads don't pathologically
@@ -21,6 +23,7 @@ class EditableDataTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final displayRows = data.take(maxRows).toList();
     final hasMore = data.length > maxRows;
 
@@ -43,7 +46,7 @@ class EditableDataTable extends StatelessWidget {
                   final value = row[col]?.toString() ?? '';
                   return DataCell(
                     Text(value),
-                    onTap: () => _editCell(context, rowIdx, col, value),
+                    onTap: () => _editCell(context, l10n, rowIdx, col, value),
                   );
                 }).toList(),
               );
@@ -54,7 +57,7 @@ class EditableDataTable extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
-              'Showing $maxRows of ${data.length} rows',
+              l10n.chartConfigTableShowingRows(maxRows, data.length),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
@@ -64,6 +67,7 @@ class EditableDataTable extends StatelessWidget {
 
   Future<void> _editCell(
     BuildContext context,
+    AppLocalizations l10n,
     int row,
     String column,
     String currentValue,
@@ -72,7 +76,7 @@ class EditableDataTable extends StatelessWidget {
     final newValue = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Edit $column [row $row]'),
+        title: Text(l10n.chartConfigTableEditCellTitle(column, row)),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -81,11 +85,11 @@ class EditableDataTable extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
+            child: Text(l10n.commonCancelVerb),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text),
-            child: const Text('Save'),
+            child: Text(l10n.commonSaveVerb),
           ),
         ],
       ),

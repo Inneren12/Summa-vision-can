@@ -33,6 +33,21 @@ Rules:
 
 
 
+### DEBT-031: Unify generation phase enums across preview and chart config stacks
+
+- **Source:** Phase 3 Slice 3.7 recon (`docs/phase-3-slice-7-recon.md` §4 Decision 4)
+- **Added:** 2026-04-24
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** accepted
+- **Description:** Two parallel generation notifier stacks exist:
+  - `frontend/lib/features/graphics/domain/generation_notifier.dart` + `generation_state.dart` use `GenerationPhase { idle, submitting, polling, completed, timeout, failed }`
+  - `frontend/lib/features/graphics/application/generation_state_notifier.dart` uses `GenerationPhase { idle, submitting, polling, success, failed, timeout }`
+  The semantic difference `completed` vs `success` causes both screens to maintain local phase→ARB-key switches in Slice 3.8 impl, duplicating mapping logic.
+- **Impact:** Minor code duplication in 3.8 impl (2 switch statements, 5-7 lines each). No runtime issue, no user-facing bug.
+- **Resolution:** Refactor to a single shared `GenerationPhase` enum used by both notifier stacks. Update all consumers. Delete the duplicate.
+- **Target:** Opportunistic — during a future graphics refactor or when the chart config flow is re-architected for backend Phase 2 integration.
+
 ### DEBT-029: Locale-aware bootstrap-error fallback in Flutter admin app
 
 - **Source:** Phase 3 Slice 3.3+3.4 recon (`docs/phase-3-slice-3-recon.md` §6)
