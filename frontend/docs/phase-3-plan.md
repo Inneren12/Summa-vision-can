@@ -611,8 +611,8 @@ The baseline decomposition is adjusted to reflect currently observed Flutter sur
 | 3.1 ✅ | Detailed planning doc (`docs/phase-3-plan.md`) | — | Planning | This document |
 | 3.2a | Infra foundation: add `flutter_localizations` + `intl` deps, create `l10n.yaml`, add empty `app_en.arb` + `app_ru.arb`, generate `AppLocalizations`, wire `MaterialApp.router` delegates + supportedLocales + fixed locale. App compiles and renders with hardcoded locale. | 10-15 infra keys | Low-Med | No user-visible locale switching yet |
 | 3.2b | Locale state + persistence + switcher: `localeProvider` (Riverpod), SharedPreferences persistence, bootstrap resolution (persisted → device → EN), visible switcher in shared chrome, locale-switch smoke tests | 10-25 shell keys | Medium | Depends on 3.2a merged |
-| 3.3 | Recon: Queue + shared shell/chrome (drawer/header/common controls) | 80-140 | Low-Med | String inventory + key map only |
-| 3.4 | Implementation: Queue + shared shell/chrome | 80-140 | Medium | Includes tests for queue/shell locale behavior |
+| 3.3 ✅ | Recon: Queue + shared shell/chrome (drawer/header/common controls) | 8 actual (6 new after reuse) | Low-Med | Recon doc: `docs/phase-3-slice-3-recon.md`. Merged with 3.4 in single PR due to actual literal count well below 80-140 estimate. See `docs/phase-3-slice-3-recon.md` §11 (Plan doc reconciliation) for recount source. |
+| 3.4 ✅ | Implementation: Queue + shared shell/chrome | 8 actual (6 new after reuse) | Medium | Merged with Slice 3.3 recon. See `docs/phase-3-slice-3-recon.md` for approved key map. |
 | 3.5 | Recon: Editor (+ related validation/status touchpoints) | 90-170 | Medium | Highest density risk surface |
 | 3.6 | Implementation: Editor | 90-170 | Medium-High | Includes plural/validation checks |
 | 3.7 | Recon: Preview + Graphics Config (polling lifecycle + errors) | 70-130 | Medium | Include backend-message exposure map |
@@ -827,6 +827,13 @@ translations in Flutter ARB. Do NOT re-translate these in Phase 3 slices.
 | `workflow.exported.status` | Экспортировано | `statusExported` |
 | `workflow.in_review.status` | На проверке | `statusInReview` |
 | `workflow.approved.status` | Одобрено | `statusApproved` |
+| — | Очередь брифов | `queueTitle` |
+| — | Обновить очередь | `queueRefreshTooltip` |
+| — | Не удалось загрузить очередь | `queueLoadError` |
+| — | В очереди нет брифов.\nНажмите «Обновить», чтобы загрузить новые. | `queueEmptyState` |
+| — | Отклонить | `queueRejectVerb` |
+| — | Одобрить | `queueApproveVerb` |
+| — | Задания | `navJobs` |
 
 This table is seed; recon slices are expected to add to it when touching more shared
 terms. Update this appendix in the same PR as the addition.

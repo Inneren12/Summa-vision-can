@@ -10,7 +10,11 @@ import 'package:summa_vision_admin/features/graphics/presentation/preview_screen
 import 'package:summa_vision_admin/features/queue/data/queue_repository.dart';
 import 'package:summa_vision_admin/features/queue/domain/content_brief.dart';
 import 'package:summa_vision_admin/features/queue/presentation/queue_screen.dart';
-import 'package:summa_vision_admin/core/theme/app_theme.dart';
+import '../../helpers/localized_pump.dart';
+
+// These tests pump via pumpLocalizedRouter which defaults to locale: en.
+// Assertions use EN literals because these are routing tests, not i18n tests.
+// If helper default locale changes, update these assertions accordingly.
 
 /// Sample briefs so EditorScreen can render without a real backend.
 final _mockBriefs = [
@@ -49,18 +53,18 @@ class _NoOpGenerationNotifier extends GenerationNotifier {
   Future<void> generate(int briefId) async {}
 }
 
-/// Builds a testable app with an overridable router.
-Widget _buildApp(GoRouter router) {
-  return ProviderScope(
+/// Helper path/signature used by queue + router fixes:
+/// `test/helpers/localized_pump.dart` ->
+/// `pumpLocalizedRouter(tester, router, {locale, overrides, theme})`.
+Future<void> _pumpApp(WidgetTester tester, GoRouter router) {
+  return pumpLocalizedRouter(
+    tester,
+    router,
     overrides: [
       routerProvider.overrideWithValue(router),
       generationNotifierProvider.overrideWith(() => _NoOpGenerationNotifier()),
       queueProvider.overrideWith((ref) async => _mockBriefs),
     ],
-    child: MaterialApp.router(
-      theme: AppTheme.dark,
-      routerConfig: router,
-    ),
   );
 }
 
@@ -94,7 +98,7 @@ void main() {
 
     testWidgets('initial location is /queue', (tester) async {
       final router = _makeRouter();
-      await tester.pumpWidget(_buildApp(router));
+      await _pumpApp(tester, router);
       await tester.pumpAndSettle();
       expect(
         router.routerDelegate.currentConfiguration.fullPath,
@@ -106,7 +110,7 @@ void main() {
   group('Navigation — QueueScreen', () {
     testWidgets('initial route shows QueueScreen', (tester) async {
       final router = _makeRouter();
-      await tester.pumpWidget(_buildApp(router));
+      await _pumpApp(tester, router);
       await tester.pumpAndSettle();
 
       expect(find.byType(QueueScreen), findsOneWidget);
@@ -117,7 +121,7 @@ void main() {
   group('Navigation — EditorScreen', () {
     testWidgets('navigating to /editor/42 shows EditorScreen with briefId', (tester) async {
       final router = _makeRouter();
-      await tester.pumpWidget(_buildApp(router));
+      await _pumpApp(tester, router);
       await tester.pumpAndSettle();
 
       router.go('/editor/42');
@@ -129,7 +133,7 @@ void main() {
 
     testWidgets('editor extracts briefId from path parameter', (tester) async {
       final router = _makeRouter();
-      await tester.pumpWidget(_buildApp(router));
+      await _pumpApp(tester, router);
       await tester.pumpAndSettle();
 
       router.go('/editor/99');
@@ -142,7 +146,7 @@ void main() {
   group('Navigation — PreviewScreen', () {
     testWidgets('navigating to /preview/task-abc shows PreviewScreen with taskId', (tester) async {
       final router = _makeRouter();
-      await tester.pumpWidget(_buildApp(router));
+      await _pumpApp(tester, router);
       await tester.pumpAndSettle();
 
       router.go('/preview/task-abc');
@@ -184,7 +188,7 @@ void main() {
         ],
       );
 
-      await tester.pumpWidget(_buildApp(router));
+      await _pumpApp(tester, router);
       await tester.pumpAndSettle();
 
       expect(find.byType(QueueScreen), findsOneWidget);
@@ -194,7 +198,7 @@ void main() {
   group('Named navigation', () {
     testWidgets('goNamed editor navigates correctly', (tester) async {
       final router = _makeRouter();
-      await tester.pumpWidget(_buildApp(router));
+      await _pumpApp(tester, router);
       await tester.pumpAndSettle();
 
       router.goNamed('editor', pathParameters: {'briefId': '7'});
@@ -206,7 +210,7 @@ void main() {
 
     testWidgets('goNamed preview navigates correctly', (tester) async {
       final router = _makeRouter();
-      await tester.pumpWidget(_buildApp(router));
+      await _pumpApp(tester, router);
       await tester.pumpAndSettle();
 
       router.goNamed('preview', pathParameters: {'taskId': 'uuid-xyz'});

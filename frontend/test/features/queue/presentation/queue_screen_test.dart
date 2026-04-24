@@ -4,14 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:summa_vision_admin/core/theme/app_theme.dart';
 import 'package:summa_vision_admin/features/queue/data/queue_repository.dart';
 import 'package:summa_vision_admin/features/queue/domain/content_brief.dart';
 import 'package:summa_vision_admin/features/queue/presentation/queue_screen.dart';
+import '../../../helpers/localized_pump.dart';
 
-/// Builds QueueScreen with mocked queue data.
-Widget _buildScreen(AsyncValue<List<ContentBrief>> state) {
-  return ProviderScope(
+/// Helper path/signature used by queue + router fixes:
+/// `test/helpers/localized_pump.dart` ->
+/// `pumpLocalizedWidget(tester, child, {locale, overrides})`.
+Future<void> _pumpScreen(
+  WidgetTester tester,
+  AsyncValue<List<ContentBrief>> state,
+) {
+  return pumpLocalizedWidget(
+    tester,
+    const QueueScreen(),
     overrides: [
       queueProvider.overrideWith((ref) async {
         return switch (state) {
@@ -21,10 +28,6 @@ Widget _buildScreen(AsyncValue<List<ContentBrief>> state) {
         };
       }),
     ],
-    child: MaterialApp(
-      theme: AppTheme.dark,
-      home: const QueueScreen(),
-    ),
   );
 }
 
@@ -52,15 +55,14 @@ void main() {
     testWidgets('shows CircularProgressIndicator while loading', (tester) async {
       final completer = Completer<List<ContentBrief>>();
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            queueProvider.overrideWith(
-              (ref) => completer.future,
-            ),
-          ],
-          child: MaterialApp(theme: AppTheme.dark, home: const QueueScreen()),
-        ),
+      await pumpLocalizedWidget(
+        tester,
+        const QueueScreen(),
+        overrides: [
+          queueProvider.overrideWith(
+            (ref) => completer.future,
+          ),
+        ],
       );
       await tester.pump();
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -69,7 +71,7 @@ void main() {
 
   group('QueueScreen — data state', () {
     testWidgets('renders brief cards for each item', (tester) async {
-      await tester.pumpWidget(_buildScreen(AsyncData(_sampleBriefs)));
+      await _pumpScreen(tester, AsyncData(_sampleBriefs));
       await tester.pumpAndSettle();
 
       expect(find.text('Canadian housing prices surge 12%'), findsOneWidget);
@@ -77,7 +79,7 @@ void main() {
     });
 
     testWidgets('shows virality score for each brief', (tester) async {
-      await tester.pumpWidget(_buildScreen(AsyncData(_sampleBriefs)));
+      await _pumpScreen(tester, AsyncData(_sampleBriefs));
       await tester.pumpAndSettle();
 
       expect(find.text('9.1'), findsOneWidget);
@@ -85,7 +87,7 @@ void main() {
     });
 
     testWidgets('shows chart type for each brief', (tester) async {
-      await tester.pumpWidget(_buildScreen(AsyncData(_sampleBriefs)));
+      await _pumpScreen(tester, AsyncData(_sampleBriefs));
       await tester.pumpAndSettle();
 
       expect(find.text('BAR'), findsOneWidget);
@@ -93,7 +95,7 @@ void main() {
     });
 
     testWidgets('shows Approve and Reject buttons for each card', (tester) async {
-      await tester.pumpWidget(_buildScreen(AsyncData([_sampleBriefs.first])));
+      await _pumpScreen(tester, AsyncData([_sampleBriefs.first]));
       await tester.pumpAndSettle();
 
       expect(find.text('Approve'), findsOneWidget);
@@ -101,7 +103,7 @@ void main() {
     });
 
     testWidgets('score >8 renders with data-positive colour', (tester) async {
-      await tester.pumpWidget(_buildScreen(AsyncData([_sampleBriefs.first])));
+      await _pumpScreen(tester, AsyncData([_sampleBriefs.first]));
       await tester.pumpAndSettle();
 
       // Score 9.1 > 8 should use dataPositive (design system token)
@@ -112,7 +114,7 @@ void main() {
 
   group('QueueScreen — empty state', () {
     testWidgets('shows empty message when list is empty', (tester) async {
-      await tester.pumpWidget(_buildScreen(const AsyncData([])));
+      await _pumpScreen(tester, const AsyncData([]));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('No briefs in queue'), findsOneWidget);
@@ -121,15 +123,14 @@ void main() {
 
   group('QueueScreen — error state', () {
     testWidgets('shows error UI when fetch fails', (tester) async {
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            queueProvider.overrideWith(
-              (ref) => Future<List<ContentBrief>>.error('Network error'),
-            ),
-          ],
-          child: MaterialApp(theme: AppTheme.dark, home: const QueueScreen()),
-        ),
+      await pumpLocalizedWidget(
+        tester,
+        const QueueScreen(),
+        overrides: [
+          queueProvider.overrideWith(
+            (ref) => Future<List<ContentBrief>>.error('Network error'),
+          ),
+        ],
       );
       await tester.pumpAndSettle();
 
@@ -140,7 +141,7 @@ void main() {
 
   group('QueueScreen — refresh button', () {
     testWidgets('refresh icon button is present in AppBar', (tester) async {
-      await tester.pumpWidget(_buildScreen(AsyncData(_sampleBriefs)));
+      await _pumpScreen(tester, AsyncData(_sampleBriefs));
       await tester.pumpAndSettle();
 
       expect(find.byIcon(Icons.refresh), findsOneWidget);
@@ -149,16 +150,15 @@ void main() {
     testWidgets('tapping refresh invalidates queueProvider', (tester) async {
       var fetchCount = 0;
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            queueProvider.overrideWith((ref) async {
-              fetchCount++;
-              return _sampleBriefs;
-            }),
-          ],
-          child: MaterialApp(theme: AppTheme.dark, home: const QueueScreen()),
-        ),
+      await pumpLocalizedWidget(
+        tester,
+        const QueueScreen(),
+        overrides: [
+          queueProvider.overrideWith((ref) async {
+            fetchCount++;
+            return _sampleBriefs;
+          }),
+        ],
       );
       await tester.pumpAndSettle();
 
@@ -196,8 +196,9 @@ void main() {
         ],
       );
 
-      await tester.pumpWidget(
-        MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
+      await pumpLocalizedRouter(
+        tester,
+        router,
       );
       await tester.pumpAndSettle();
 
