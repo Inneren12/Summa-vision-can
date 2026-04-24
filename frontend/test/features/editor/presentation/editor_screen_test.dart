@@ -6,7 +6,8 @@ import 'package:summa_vision_admin/features/editor/domain/editor_state.dart';
 import 'package:summa_vision_admin/features/editor/presentation/editor_screen.dart';
 import 'package:summa_vision_admin/features/queue/data/queue_repository.dart';
 import 'package:summa_vision_admin/features/queue/domain/content_brief.dart';
-import '../../../../helpers/localized_pump.dart';
+import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
+import '../../../helpers/localized_pump.dart';
 
 final _sampleBrief = ContentBrief(
   id: 1,
@@ -37,7 +38,9 @@ void main() {
       await _pumpEditor(tester, briefs: [_sampleBrief]);
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Brief #1'), findsOneWidget);
+      final context = tester.element(find.byType(EditorScreen));
+      final l10n = AppLocalizations.of(context)!;
+      expect(find.text(l10n.editorEditBriefTitle(_sampleBrief.id)), findsOneWidget);
     });
 
     testWidgets('shows virality score', (tester) async {
@@ -161,7 +164,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Brief not found'), findsOneWidget);
+      final context = tester.element(find.byType(EditorScreen));
+      final l10n = AppLocalizations.of(context)!;
+      expect(find.text(l10n.editorBriefNotFound), findsOneWidget);
     });
   });
 

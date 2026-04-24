@@ -68,7 +68,13 @@ void main() {
     expect(find.text('Chart Type'), findsOneWidget);
     expect(find.text('Generate Graphic'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Russian'));
+    final russianButton = find.widgetWithText(
+      TextButton,
+      'Russian',
+      skipOffstage: false,
+    );
+    expect(russianButton, findsOneWidget);
+    await tester.tap(russianButton);
     await tester.pumpAndSettle();
 
     expect(find.text('Заголовок'), findsAtLeastNWidgets(1));

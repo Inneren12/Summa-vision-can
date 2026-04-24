@@ -4,7 +4,7 @@ import 'package:summa_vision_admin/features/editor/presentation/editor_screen.da
 import 'package:summa_vision_admin/features/queue/data/queue_repository.dart';
 import 'package:summa_vision_admin/features/queue/domain/content_brief.dart';
 import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
-import '../../../../helpers/localized_pump.dart';
+import '../../../helpers/localized_pump.dart';
 
 const _brief = ContentBrief(
   id: 42,
