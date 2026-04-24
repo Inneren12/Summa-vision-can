@@ -53,5 +53,9 @@ class EditorNotifier extends Notifier<EditorState?> {
 }
 
 /// Provider for [EditorNotifier]. Scoped to the editor lifetime.
+
+/// NOTE(i18n slice 3.5+3.6): editorActionError localization key is reserved
+/// for future save/publish/unpublish backend actions. This notifier currently
+/// manages local form state only and does not emit backend action failures yet.
 final editorNotifierProvider =
     NotifierProvider<EditorNotifier, EditorState?>(() => EditorNotifier());

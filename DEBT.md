@@ -45,6 +45,18 @@ Rules:
 - **Resolution:** Add locale-aware pre-localization fallback using `PlatformDispatcher.instance.locale` with a tiny EN/RU const map, defaulting to EN for unsupported locales.
 - **Target:** Opportunistic fix during future Flutter bootstrap refactor.
 
+### DEBT-030: Editor endpoints lack structured error codes for localized operator messaging
+
+- **Source:** Phase 3 Slice 3.5+3.6 recon (`docs/phase-3-slice-5-recon.md` §5/§9)
+- **Added:** 2026-04-24
+- **Severity:** medium
+- **Category:** architecture
+- **Status:** accepted
+- **Description:** Editor-facing backend flows (`PATCH /api/v1/admin/publications/{id}`, `POST /api/v1/admin/publications/{id}/publish`, `POST /api/v1/admin/publications/{id}/unpublish`) do not currently expose a stable, documented `error_code` contract for client-side localization; UI must rely on a generic localized wrapper (`editorActionError`) with raw backend detail passthrough.
+- **Impact:** RU operators receive partially localized failure messaging (localized wrapper + backend detail that may remain EN), reducing precision and consistency across error cases.
+- **Resolution:** Introduce endpoint-level structured `error_code` values and mapping docs for admin_publications flows; add Flutter mapper (`lib/l10n/backend_errors.dart`) from code → specific ARB messages; keep generic wrapper only as fallback for unknown codes.
+- **Target:** Slice 3.7/3.8 backend-error mapping alignment PR (or earlier backend contract PR if scheduled).
+
 ### DEBT-027: Autosave retry-reset effect uses exhaustive-deps exception
 
 - **Source:** Stage 4 Task 2 implementation (`claude/stage4-task2-autosave`)

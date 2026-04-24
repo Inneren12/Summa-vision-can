@@ -16,5 +16,20 @@
   "queueLoadError": "Не удалось загрузить очередь\\n{error}",
   "queueEmptyState": "В очереди нет брифов.\\nНажмите «Обновить», чтобы загрузить новые.",
   "queueRejectVerb": "Отклонить",
-  "queueApproveVerb": "Одобрить"
+  "queueApproveVerb": "Одобрить",
+  "editorErrorAppBarTitle": "Редактор",
+  "editorNotFoundAppBarTitle": "Редактор",
+  "editorLoadBriefError": "Не удалось загрузить бриф: {error}",
+  "editorBriefNotFound": "Бриф не найден",
+  "editorEditBriefTitle": "Редактирование брифа №{id}",
+  "editorResetVerb": "Сбросить",
+  "editorViralityScoreLabel": "Оценка виральности",
+  "editorHeadlineLabel": "Заголовок",
+  "editorHeadlineHint": "Введите заголовок...",
+  "editorBackgroundPromptLabel": "Промпт фона",
+  "editorBackgroundPromptHint": "Опишите желаемое фоновое изображение...",
+  "editorChartTypeLabel": "Тип графика",
+  "editorPreviewBackgroundButton": "Предпросмотр фона",
+  "editorGenerateGraphicButton": "Сгенерировать графику",
+  "editorActionError": "Не удалось выполнить действие в редакторе: {error}"
 }
