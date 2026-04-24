@@ -35,8 +35,15 @@ class GenerationNotifier extends Notifier<GenerationState> {
       // Phase 2: Poll
       await _poll(taskId, repo);
     } catch (e) {
-      state = state.copyWith(
+      // Fresh construction — never reuse copyWith for terminal error states,
+      // because copyWith(errorCode: null) is a no-op under `value ?? this.value`
+      // semantics and would leak a stale code from a prior failed run.
+      state = GenerationState(
         phase: GenerationPhase.failed,
+        taskId: state.taskId,
+        resultUrl: state.resultUrl,
+        pollAttempts: state.pollAttempts,
+        errorCode: null,
         errorMessage: e.toString(),
       );
     }
@@ -58,8 +65,12 @@ class GenerationNotifier extends Notifier<GenerationState> {
       }
 
       if (status.isFailed) {
-        state = state.copyWith(
+        // Fresh construction — see note in generate() catch branch.
+        state = GenerationState(
           phase: GenerationPhase.failed,
+          taskId: state.taskId,
+          resultUrl: state.resultUrl,
+          pollAttempts: state.pollAttempts,
           errorCode: status.errorCode,
           errorMessage: status.detail ?? 'Generation failed on server',
         );
@@ -67,9 +78,14 @@ class GenerationNotifier extends Notifier<GenerationState> {
       }
     }
 
-    // 60 attempts exhausted
-    state = state.copyWith(
+    // 60 attempts exhausted — fresh construction so a stale errorCode from
+    // a prior failed run cannot leak into the timeout presentation.
+    state = GenerationState(
       phase: GenerationPhase.timeout,
+      taskId: state.taskId,
+      resultUrl: state.resultUrl,
+      pollAttempts: state.pollAttempts,
+      errorCode: null,
       errorMessage: 'Generation timed out. Try again?',
     );
   }

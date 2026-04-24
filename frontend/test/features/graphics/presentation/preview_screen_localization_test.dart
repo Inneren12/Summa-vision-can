@@ -20,6 +20,9 @@ class _MockGenerationNotifier extends GenerationNotifier {
   Future<void> generate(int briefId) async {
     // no-op in tests
   }
+
+  /// Test hook for emitting subsequent states to simulate retry sequences.
+  void emit(GenerationState next) => state = next;
 }
 
 Future<void> _pump(
@@ -95,6 +98,44 @@ void main() {
       expect(find.text(l10n.generationStatusFailed), findsOneWidget);
       expect(find.text(l10n.commonRetryVerb), findsOneWidget);
     });
+
+    testWidgets(
+      'clears stale localized message when subsequent failure has no code',
+      (tester) async {
+        await _pump(
+          tester,
+          const GenerationState(
+            phase: GenerationPhase.failed,
+            errorCode: 'CHART_EMPTY_DF',
+            errorMessage: 'data empty',
+          ),
+          locale: const Locale('ru'),
+        );
+        await tester.pump();
+        expect(find.text('Нет данных для построения графика.'), findsOneWidget);
+
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(PreviewScreen)),
+        );
+        final notifier = container
+            .read(generationNotifierProvider.notifier)
+            as _MockGenerationNotifier;
+        notifier.emit(
+          const GenerationState(
+            phase: GenerationPhase.failed,
+            errorMessage: 'Different failure',
+          ),
+        );
+        await tester.pump();
+
+        expect(
+          find.text('Нет данных для построения графика.'),
+          findsNothing,
+          reason: 'stale localized text must be cleared',
+        );
+        expect(find.textContaining('Different failure'), findsOneWidget);
+      },
+    );
 
     testWidgets('timeout phase renders unified timeout status + retry', (tester) async {
       await _pump(

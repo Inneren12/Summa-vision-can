@@ -116,6 +116,60 @@ void main() {
     );
   });
 
+    test(
+      'clears stale errorCode when subsequent failure has no code',
+      () async {
+        // Sequence: first failure carries CHART_EMPTY_DF, second failure
+        // carries no code. Fresh-state construction in the failed branch
+        // must clear the stale code.
+        final fakeRepo = _FakeGraphicGenerationRepository(
+          submittedJobId: 'job-1',
+          statusSequence: const [
+            JobStatus(
+              jobId: 'job-1',
+              status: 'failed',
+              errorCode: 'CHART_EMPTY_DF',
+              errorMessage: 'data empty',
+            ),
+            JobStatus(
+              jobId: 'job-1',
+              status: 'failed',
+              errorMessage: 'Some other failure',
+            ),
+          ],
+        );
+
+        final container = ProviderContainer(
+          overrides: [
+            graphicGenerationRepositoryProvider.overrideWithValue(fakeRepo),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final notifier =
+            container.read(chartGenerationNotifierProvider.notifier);
+
+        await notifier.generate(_sampleRequest);
+        expect(
+          container.read(chartGenerationNotifierProvider).errorCode,
+          'CHART_EMPTY_DF',
+          reason: 'first run propagates backend code',
+        );
+
+        await notifier.generate(_sampleRequest);
+        final state2 = container.read(chartGenerationNotifierProvider);
+        expect(
+          state2.errorCode,
+          isNull,
+          reason: 'stale code must NOT leak into uncoded failure',
+        );
+        expect(state2.errorMessage, 'Some other failure');
+        expect(state2.phase, GenerationPhase.failed);
+      },
+      timeout: const Timeout(Duration(seconds: 30)),
+    );
+  });
+
   group('JobStatus.fromJson — error_code field', () {
     test('deserializes error_code from backend JSON', () {
       final status = JobStatus.fromJson({

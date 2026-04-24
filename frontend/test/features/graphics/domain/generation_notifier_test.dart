@@ -103,6 +103,61 @@ void main() {
     );
   });
 
+    test(
+      'clears stale errorCode when subsequent failure has no code',
+      () async {
+        // Sequence: first failure carries CHART_EMPTY_DF, second failure
+        // carries no code — only a raw detail. Without fresh-state
+        // construction, freezed copyWith(errorCode: null) is a no-op under
+        // `value ?? this.value` semantics and the stale code leaks forward.
+        final fakeRepo = _FakeGraphicRepository(
+          submittedTaskId: 'task-1',
+          statusSequence: const [
+            TaskStatus(
+              taskId: 'task-1',
+              status: 'FAILED',
+              errorCode: 'CHART_EMPTY_DF',
+              detail: 'data empty',
+            ),
+            TaskStatus(
+              taskId: 'task-1',
+              status: 'FAILED',
+              detail: 'Some other failure',
+            ),
+          ],
+        );
+
+        final container = ProviderContainer(
+          overrides: [
+            graphicRepositoryProvider.overrideWithValue(fakeRepo),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final notifier =
+            container.read(generationNotifierProvider.notifier);
+
+        await notifier.generate(42);
+        expect(
+          container.read(generationNotifierProvider).errorCode,
+          'CHART_EMPTY_DF',
+          reason: 'first run propagates backend code',
+        );
+
+        await notifier.generate(42);
+        final state2 = container.read(generationNotifierProvider);
+        expect(
+          state2.errorCode,
+          isNull,
+          reason: 'stale code must NOT leak into uncoded failure',
+        );
+        expect(state2.errorMessage, 'Some other failure');
+        expect(state2.phase, GenerationPhase.failed);
+      },
+      timeout: const Timeout(Duration(seconds: 30)),
+    );
+  });
+
   group('TaskStatus.fromJson — error_code field', () {
     test('deserializes error_code from backend JSON', () {
       final status = TaskStatus.fromJson({
