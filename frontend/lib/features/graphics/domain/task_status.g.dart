@@ -11,6 +11,7 @@ _$TaskStatusImpl _$$TaskStatusImplFromJson(Map<String, dynamic> json) =>
       taskId: json['task_id'] as String,
       status: json['status'] as String,
       resultUrl: json['result_url'] as String?,
+      errorCode: json['error_code'] as String?,
       detail: json['detail'] as String?,
     );
 
@@ -19,5 +20,6 @@ Map<String, dynamic> _$$TaskStatusImplToJson(_$TaskStatusImpl instance) =>
       'task_id': instance.taskId,
       'status': instance.status,
       'result_url': instance.resultUrl,
+      'error_code': instance.errorCode,
       'detail': instance.detail,
     };

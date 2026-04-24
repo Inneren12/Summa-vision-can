@@ -28,6 +28,10 @@ class _MockGenerationNotifier extends ChartGenerationNotifier {
   Future<void> generate(request) async {
     // no-op
   }
+
+  /// Test hook for emitting subsequent states to simulate retry sequences
+  /// without exercising the real notifier poll loop.
+  void emit(ChartGenerationState next) => state = next;
 }
 
 Future<void> _pump(
@@ -134,6 +138,67 @@ void main() {
       expect(find.text(l10n.chartConfigTryAgainButton), findsOneWidget);
     });
 
+    testWidgets(
+      'failed state with known error_code renders localized mapped text (EN)',
+      (tester) async {
+        await _pump(
+          tester,
+          genState: const ChartGenerationState(
+            phase: GenerationPhase.failed,
+            errorCode: 'CHART_EMPTY_DF',
+            errorMessage: 'raw backend text',
+          ),
+        );
+        await tester.pump();
+
+        final l10n = _l10n(tester);
+        expect(find.text(l10n.errorChartEmptyData), findsOneWidget);
+        expect(find.textContaining('raw backend text'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'clears stale localized message when subsequent failure has no code',
+      (tester) async {
+        // Step 1: coded failure → localized mapped text rendered.
+        await _pump(
+          tester,
+          locale: const Locale('ru'),
+          genState: const ChartGenerationState(
+            phase: GenerationPhase.failed,
+            errorCode: 'CHART_EMPTY_DF',
+            errorMessage: 'data empty',
+          ),
+        );
+        await tester.pump();
+        expect(find.text('Нет данных для построения графика.'), findsOneWidget);
+
+        // Step 2: retry emits a new failed state with NO code, only a raw
+        // detail. The widget must swap to the raw passthrough and the
+        // previous localized message must disappear.
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(ChartConfigScreen)),
+        );
+        final notifier = container
+            .read(chartGenerationNotifierProvider.notifier)
+            as _MockGenerationNotifier;
+        notifier.emit(
+          const ChartGenerationState(
+            phase: GenerationPhase.failed,
+            errorMessage: 'Different failure',
+          ),
+        );
+        await tester.pump();
+
+        expect(
+          find.text('Нет данных для построения графика.'),
+          findsNothing,
+          reason: 'stale localized text must be cleared',
+        );
+        expect(find.textContaining('Different failure'), findsOneWidget);
+      },
+    );
+
     testWidgets('timeout state uses unified timeout + commonRetryVerb', (tester) async {
       await _pump(
         tester,
@@ -212,6 +277,25 @@ void main() {
       final l10n = _l10n(tester);
       expect(l10n.chartConfigHeadlineMaxChars, 'Не более 200 символов');
     });
+
+    testWidgets(
+      'failed state with known error_code renders localized mapped text (RU)',
+      (tester) async {
+        await _pump(
+          tester,
+          locale: const Locale('ru'),
+          genState: const ChartGenerationState(
+            phase: GenerationPhase.failed,
+            errorCode: 'CHART_EMPTY_DF',
+            errorMessage: 'raw backend text',
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Нет данных для построения графика.'), findsOneWidget);
+        expect(find.textContaining('raw backend text'), findsNothing);
+      },
+    );
 
     testWidgets('success state chips render with interpolated payload', (tester) async {
       await _pump(

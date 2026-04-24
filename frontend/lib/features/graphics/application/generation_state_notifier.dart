@@ -56,9 +56,14 @@ class ChartGenerationNotifier extends Notifier<ChartGenerationState> {
       // Phase 2: Poll
       await _poll(jobId, repo);
     } catch (e) {
-      state = state.copyWith(
+      // Fresh construction — see note in _poll() failed branch.
+      state = ChartGenerationState(
         phase: GenerationPhase.failed,
+        jobId: state.jobId,
+        result: null,
+        errorCode: null,
         errorMessage: e.toString(),
+        pollCount: state.pollCount,
       );
     }
   }
@@ -85,19 +90,32 @@ class ChartGenerationNotifier extends Notifier<ChartGenerationState> {
       }
 
       if (jobStatus.status == 'failed') {
-        state = state.copyWith(
+        // Fresh construction — never reuse copyWith for terminal error
+        // states, because copyWith(errorCode: null) is a no-op under
+        // `value ?? this.value` semantics and would leak a stale code from
+        // a prior failed run.
+        state = ChartGenerationState(
           phase: GenerationPhase.failed,
+          jobId: state.jobId,
+          result: null,
+          errorCode: jobStatus.errorCode,
           errorMessage:
               jobStatus.errorMessage ?? 'Generation failed on server',
+          pollCount: state.pollCount,
         );
         return;
       }
     }
 
-    // 60 polls exhausted
-    state = state.copyWith(
+    // 60 polls exhausted — fresh construction so a stale errorCode from a
+    // prior failed run cannot leak into the timeout presentation.
+    state = ChartGenerationState(
       phase: GenerationPhase.timeout,
+      jobId: state.jobId,
+      result: null,
+      errorCode: null,
       errorMessage: 'Generation timed out after 2 minutes.',
+      pollCount: state.pollCount,
     );
   }
 
@@ -122,9 +140,14 @@ class ChartGenerationNotifier extends Notifier<ChartGenerationState> {
       );
       await _poll(jobId, repo);
     } catch (e) {
-      state = state.copyWith(
+      // Fresh construction — see note in _poll() failed branch.
+      state = ChartGenerationState(
         phase: GenerationPhase.failed,
+        jobId: state.jobId,
+        result: null,
+        errorCode: null,
         errorMessage: e.toString(),
+        pollCount: state.pollCount,
       );
     }
   }

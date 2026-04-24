@@ -11,6 +11,7 @@ class TaskStatus with _$TaskStatus {
     @JsonKey(name: 'task_id') required String taskId,
     required String status,
     @JsonKey(name: 'result_url') String? resultUrl,
+    @JsonKey(name: 'error_code') String? errorCode,
     String? detail,
   }) = _TaskStatus;
 

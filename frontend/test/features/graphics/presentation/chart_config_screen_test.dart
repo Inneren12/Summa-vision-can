@@ -200,7 +200,12 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
-      expect(find.textContaining('Estimated time remaining'), findsOneWidget);
+      expect(
+        find.text(l10n.chartConfigEtaRemaining(
+          (ChartGenerationNotifier.maxPolls - 15) * 2,
+        )),
+        findsOneWidget,
+      );
     });
   });
 
@@ -224,8 +229,9 @@ void main() {
       expect(find.byKey(const Key('download_button')), findsOneWidget);
       expect(find.byKey(const Key('generate_another_button')), findsOneWidget);
       expect(find.byKey(const Key('back_to_preview_button')), findsOneWidget);
-      expect(find.textContaining('Publication #42'), findsOneWidget);
-      expect(find.textContaining('v1'), findsOneWidget);
+      final l10n = _l10n(tester);
+      expect(find.text(l10n.chartConfigPublicationChip(42)), findsOneWidget);
+      expect(find.text(l10n.chartConfigVersionChip('1')), findsOneWidget);
     });
   });
 
