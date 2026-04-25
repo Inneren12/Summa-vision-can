@@ -105,7 +105,7 @@ class _NullStorage(StorageInterface):  # pragma: no cover - stub
         return []
 
     async def list_objects_with_metadata(
-        self, prefix: str
+        self, prefix: str, max_keys: int | None = None
     ) -> list[StorageObjectMetadata]:
         return []
 

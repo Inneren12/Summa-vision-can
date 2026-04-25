@@ -100,6 +100,20 @@ class Settings(BaseSettings):
         ge=5,
         description="How often the temp uploads cleanup task runs.",
     )
+    temp_cleanup_max_keys_per_cycle: int = Field(
+        default=1000,
+        ge=1,
+        le=10000,
+        description="Maximum expired objects scanned/deleted per prefix per cleanup cycle.",
+    )
+    temp_cleanup_prefixes: list[str] = Field(
+        default_factory=lambda: ["temp/uploads/"],
+        description=(
+            "S3 prefixes scanned by the maintenance cleanup job. Currently scoped "
+            "to temp/uploads/ — broader temp/* sweep is deferred pending "
+            "audit of all job-type temp artifacts."
+        ),
+    )
 
     # --- Audit (R18) ---
     audit_retention_days: int = 90

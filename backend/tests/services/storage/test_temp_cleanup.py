@@ -4,33 +4,29 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.core.config import Settings
 from src.core.storage import StorageInterface, StorageObjectMetadata
-from src.services.storage.temp_cleanup import CleanupResult, TempUploadCleaner
+from src.services.storage.temp_cleanup import CleanupResult, TempUploadCleaner, cleanup_temp_uploads
 
 
 class FakeStorage(StorageInterface):
-    """Storage fake for exercising temp upload cleanup logic."""
-
     def __init__(
         self,
         objects: list[StorageObjectMetadata] | None = None,
-        delete_failures: set[str] | None = None,
+        delete_missing: set[str] | None = None,
     ) -> None:
         self.objects = list(objects or [])
-        self.delete_failures = set(delete_failures or set())
+        self.delete_missing = set(delete_missing or set())
+        self._delete_errors: dict[str, BaseException] = {}
         self.deleted_keys: list[str] = []
 
     async def upload_dataframe_as_csv(self, df: Any, path: str) -> None:
         return None
 
-    async def upload_raw(
-        self, data: str | bytes, path: str, content_type: str = "text/html"
-    ) -> None:
+    async def upload_raw(self, data: str | bytes, path: str, content_type: str = "text/html") -> None:
         return None
 
     async def upload_bytes(self, data: bytes, key: str) -> None:
@@ -42,173 +38,157 @@ class FakeStorage(StorageInterface):
     async def download_csv(self, path: str) -> Any:
         return None
 
+    def set_delete_to_raise(self, key: str, exc: BaseException) -> None:
+        self._delete_errors[key] = exc
+
     async def delete_object(self, key: str) -> None:
-        if key in self.delete_failures:
-            raise RuntimeError(f"delete failed for {key}")
+        if key in self.delete_missing:
+            raise FileNotFoundError(key)
+        if key in self._delete_errors:
+            raise self._delete_errors[key]
         self.deleted_keys.append(key)
 
     async def list_objects(self, prefix: str) -> list[str]:
         return [obj.key for obj in self.objects if obj.key.startswith(prefix)]
 
-    async def list_objects_with_metadata(
-        self, prefix: str
-    ) -> list[StorageObjectMetadata]:
+    async def list_objects_with_metadata(self, prefix: str, max_keys: int | None = None) -> list[StorageObjectMetadata]:
         return [obj for obj in self.objects if obj.key.startswith(prefix)]
 
     async def generate_presigned_url(self, path: str, ttl: int = 3600) -> str:
-        return f"mock://{path}?ttl={ttl}"
+        return ""
 
 
-@pytest.fixture
-def fixed_now() -> datetime:
-    """Deterministic UTC timestamp for cleanup tests."""
-    return datetime(2026, 4, 21, 12, 0, 0, tzinfo=timezone.utc)
-
-
-def _make_settings(**overrides: object) -> Settings:
-    defaults = {
-        "admin_api_key": "test-key",
-        "temp_upload_ttl_hours": 24,
-        "temp_upload_cleanup_interval_minutes": 60,
-    }
-    defaults.update(overrides)
-    return Settings(**defaults)  # type: ignore[arg-type]
-
-
-def _make_object(
-    *,
-    key: str,
-    size_bytes: int,
-    last_modified: datetime,
-) -> StorageObjectMetadata:
+def _obj(key: str, age_hours: int, *, now: datetime, size: int = 10) -> StorageObjectMetadata:
     return StorageObjectMetadata(
         key=key,
-        size_bytes=size_bytes,
-        last_modified=last_modified,
+        size_bytes=size,
+        last_modified=now - timedelta(hours=age_hours),
     )
 
 
-@pytest.mark.asyncio
-async def test_expired_object_deleted(fixed_now: datetime) -> None:
+@pytest.mark.anyio
+async def test_cleanup_deletes_only_expired_unreferenced_keys() -> None:
+    now = datetime(2026, 4, 25, 10, 0, tzinfo=timezone.utc)
     storage = FakeStorage(
         [
-            _make_object(
-                key="temp/uploads/expired.parquet",
-                size_bytes=128,
-                last_modified=fixed_now - timedelta(hours=25),
-            )
+            _obj("temp/uploads/a.parquet", 30, now=now),
+            _obj("temp/uploads/fresh.parquet", 2, now=now),
         ]
     )
-    cleaner = TempUploadCleaner(storage, _make_settings(), clock=lambda: fixed_now)
+    session = AsyncMock()
+    execute_result = MagicMock()
+    execute_result.scalars.return_value.all.return_value = []
+    session.execute.return_value = execute_result
 
-    result = await cleaner.run_once()
+    result = await cleanup_temp_uploads(
+        session,
+        storage,
+        prefixes=["temp/uploads/"],
+        ttl_hours=24,
+        max_keys=1000,
+        now=now,
+    )
+
+    assert result == CleanupResult(scanned=1, referenced_skipped=0, deleted=1, bytes_freed=10, errors=[])
+    assert storage.deleted_keys == ["temp/uploads/a.parquet"]
+
+
+@pytest.mark.anyio
+async def test_cleanup_treats_404_delete_as_success() -> None:
+    now = datetime(2026, 4, 25, 10, 0, tzinfo=timezone.utc)
+    key = "temp/uploads/missing.parquet"
+    storage = FakeStorage([_obj(key, 30, now=now)], delete_missing={key})
+    session = AsyncMock()
+    execute_result = MagicMock()
+    execute_result.scalars.return_value.all.return_value = []
+    session.execute.return_value = execute_result
+
+    result = await cleanup_temp_uploads(
+        session,
+        storage,
+        prefixes=["temp/uploads/"],
+        ttl_hours=24,
+        max_keys=1000,
+        now=now,
+    )
 
     assert result.deleted == 1
-    assert result.scanned == 1
-    assert result.bytes_freed == 128
-    assert storage.deleted_keys == ["temp/uploads/expired.parquet"]
+    assert result.errors == []
 
 
-@pytest.mark.asyncio
-async def test_fresh_object_kept(fixed_now: datetime) -> None:
-    storage = FakeStorage(
-        [
-            _make_object(
-                key="temp/uploads/fresh.parquet",
-                size_bytes=64,
-                last_modified=fixed_now - timedelta(hours=1),
-            )
-        ]
-    )
-    cleaner = TempUploadCleaner(storage, _make_settings(), clock=lambda: fixed_now)
-
-    result = await cleaner.run_once()
-
-    assert result == CleanupResult(scanned=1, deleted=0, bytes_freed=0, errors=[])
-    assert storage.deleted_keys == []
-
-
-@pytest.mark.asyncio
-async def test_boundary_object_deleted_at_exact_ttl(fixed_now: datetime) -> None:
-    storage = FakeStorage(
-        [
-            _make_object(
-                key="temp/uploads/boundary.parquet",
-                size_bytes=32,
-                last_modified=fixed_now - timedelta(hours=24),
-            )
-        ]
-    )
-    cleaner = TempUploadCleaner(storage, _make_settings(), clock=lambda: fixed_now)
-
-    result = await cleaner.run_once()
-
-    assert result.deleted == 1
-    assert storage.deleted_keys == ["temp/uploads/boundary.parquet"]
-
-
-@pytest.mark.asyncio
-async def test_empty_prefix_returns_empty_result(fixed_now: datetime) -> None:
+@pytest.mark.anyio
+async def test_cleaner_uses_short_lived_session_factory() -> None:
+    now = datetime(2026, 4, 25, 10, 0, tzinfo=timezone.utc)
     storage = FakeStorage()
-    cleaner = TempUploadCleaner(storage, _make_settings(), clock=lambda: fixed_now)
+
+    class SessionCtx:
+        def __init__(self) -> None:
+            self.session = AsyncMock()
+            execute_result = MagicMock()
+            execute_result.scalars.return_value.all.return_value = []
+            self.session.execute = AsyncMock(return_value=execute_result)
+            self.entered = False
+            self.exited = False
+
+        async def __aenter__(self):
+            self.entered = True
+            return self.session
+
+        async def __aexit__(self, exc_type, exc, tb):
+            self.exited = True
+            return False
+
+    ctx = SessionCtx()
+    def session_factory():
+        return ctx
+
+    settings = type(
+        "SettingsObj",
+        (),
+        {
+            "temp_cleanup_prefixes": ["temp/uploads/"],
+            "temp_upload_ttl_hours": 24,
+            "temp_cleanup_max_keys_per_cycle": 1000,
+        },
+    )()
+
+    cleaner = TempUploadCleaner(storage, settings, session_factory=session_factory, clock=lambda: now)
 
     result = await cleaner.run_once()
 
-    assert result == CleanupResult(scanned=0, deleted=0, bytes_freed=0, errors=[])
+    assert result == CleanupResult(scanned=0, referenced_skipped=0, deleted=0, bytes_freed=0, errors=[])
+    assert ctx.entered is True
+    assert ctx.exited is True
 
 
-@pytest.mark.asyncio
-async def test_delete_error_is_non_fatal(fixed_now: datetime) -> None:
+@pytest.mark.anyio
+async def test_delete_error_is_non_fatal_and_continues() -> None:
+    """One delete failure must not abort the rest of the cycle."""
+    now = datetime(2026, 4, 25, 10, 0, tzinfo=timezone.utc)
     storage = FakeStorage(
         [
-            _make_object(
-                key="temp/uploads/fail.parquet",
-                size_bytes=12,
-                last_modified=fixed_now - timedelta(hours=30),
-            ),
-            _make_object(
-                key="temp/uploads/ok.parquet",
-                size_bytes=20,
-                last_modified=fixed_now - timedelta(hours=26),
-            ),
-        ],
-        delete_failures={"temp/uploads/fail.parquet"},
-    )
-    cleaner = TempUploadCleaner(storage, _make_settings(), clock=lambda: fixed_now)
-
-    result = await cleaner.run_once()
-
-    assert result.deleted == 1
-    assert result.scanned == 2
-    assert result.bytes_freed == 20
-    assert len(result.errors) == 1
-    assert "temp/uploads/fail.parquet" in result.errors[0]
-    assert storage.deleted_keys == ["temp/uploads/ok.parquet"]
-
-
-@pytest.mark.asyncio
-async def test_clock_is_injected_and_logger_emits_single_summary(
-    fixed_now: datetime,
-) -> None:
-    storage = FakeStorage(
-        [
-            _make_object(
-                key="temp/uploads/expired.parquet",
-                size_bytes=99,
-                last_modified=fixed_now - timedelta(hours=48),
-            )
+            _obj("temp/uploads/a.parquet", 30, now=now),
+            _obj("temp/uploads/b.parquet", 30, now=now),
         ]
     )
-    cleaner = TempUploadCleaner(storage, _make_settings(), clock=lambda: fixed_now)
+    storage.set_delete_to_raise("temp/uploads/a.parquet", RuntimeError("network blip"))
 
-    with patch("src.services.storage.temp_cleanup.logger.info") as mock_info:
-        result = await cleaner.run_once()
+    session = AsyncMock()
+    execute_result = MagicMock()
+    execute_result.scalars.return_value.all.return_value = []
+    session.execute.return_value = execute_result
+
+    result = await cleanup_temp_uploads(
+        session,
+        storage,
+        prefixes=["temp/uploads/"],
+        ttl_hours=24,
+        max_keys=100,
+        now=now,
+    )
 
     assert result.deleted == 1
-    mock_info.assert_called_once_with(
-        "temp_uploads.cleanup.done",
-        scanned=1,
-        deleted=1,
-        bytes_freed=99,
-        errors=0,
-    )
+    assert len(result.errors) == 1
+    assert "temp/uploads/a.parquet" in result.errors[0]
+    assert "network blip" in result.errors[0]
+    assert storage.deleted_keys == ["temp/uploads/b.parquet"]

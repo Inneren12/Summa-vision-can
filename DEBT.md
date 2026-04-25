@@ -136,7 +136,7 @@ Rules:
 - **Added:** 2026-04-14
 - **Severity:** low
 - **Category:** ops
-- **Status:** accepted
+- **Status:** resolved
 - **Description:** `POST /api/v1/admin/graphics/generate-from-data` writes a
   temporary Parquet to S3 under `temp/uploads/{uuid}.parquet` before
   enqueuing the existing `graphics_generate` job. The `GraphicPipeline`
@@ -149,6 +149,39 @@ Rules:
   `temp/uploads/` with a `LastModified` older than
   `settings.temp_upload_ttl_hours` (default 24 h).
 - **Target:** Follow-up PR (not blocking for the upload feature).
+
+- **Updated:** 2026-04-25 (UTC)
+- **Updated 2026-04-25:** RESOLVED. Combined with post-Phase-3 ``temp_cleanup.py``
+  safety fix in a single PR. Cleanup now scans ``temp/uploads/`` and
+  ``temp/`` prefixes and excludes keys still referenced by ``Job`` rows in
+  pending status before deletion (`queued`/`running`, plus `retrying` when that status exists in the enum). New settings:
+  ``temp_upload_ttl_hours`` (24h default),
+  ``temp_cleanup_max_keys_per_cycle`` (1000), and
+  ``temp_cleanup_prefixes``. Added unit + integration coverage including an
+  end-to-end pipeline test (upload -> pending job -> cleanup preserves ->
+  job completion -> cleanup deletes).
+
+
+### DEBT-033: Broaden temp_cleanup beyond temp/uploads/ after job-type audit
+
+- **Source:** DEBT-021 + temp_cleanup safety fix (`claude/debt-021-temp-cleanup-safe`)
+- **Added:** 2026-04-25
+- **Severity:** low
+- **Category:** ops
+- **Status:** accepted
+- **Description:** `temp_cleanup_prefixes` is currently scoped to `["temp/uploads/"]`.
+  Other temp namespaces (in-flight transient artifacts, scheduler-internal
+  staging, future job types) may also accumulate untracked. Broader sweep is
+  deferred to avoid deleting in-flight artifacts whose payload structures
+  have not been inventoried.
+- **Impact:** Slow accumulation of unrelated `temp/*` objects increases
+  storage cost over time. Not user-facing.
+- **Resolution:** Inventory all job types that write to `temp/*`. Confirm
+  payload extractors exist for each (extending `temp_payload_inspector.py` if
+  needed). Add their prefixes to `temp_cleanup_prefixes` default. Verify
+  `max_keys` cap is sufficient or add per-prefix caps.
+- **Target:** Opportunistic — bundle with next job-pipeline refactor or
+  Phase 2 AI Brain integration if it introduces new temp namespaces.
 
 ---
 

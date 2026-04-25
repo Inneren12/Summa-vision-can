@@ -5,6 +5,7 @@ import 'package:summa_vision_admin/core/app_bootstrap/app_bootstrap_provider.dar
 import 'package:summa_vision_admin/core/bootstrap/bootstrap_error_messages.dart';
 import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
 
+import 'core/bootstrap/bootstrap_error_messages.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 
@@ -71,6 +72,8 @@ class _BootstrapError extends StatelessWidget {
               // i18n-kept: category B (dev/diagnostic). AppLocalizations is
               // not available in this bootstrap-error subtree because it is
               // rendered via a fallback MaterialApp outside MaterialApp.router.
+              // See docs/phase-3-slice-3-recon.md Section 6. Debt tracked in
+              // DEBT-029 for locale-aware pre-localization fallback.
               // Uses pre-localization locale fallback helper.
               bootstrapErrorMessage(error),
               textAlign: TextAlign.center,
