@@ -78,66 +78,80 @@ async def cleanup_temp_uploads(
     current_time = now or datetime.now(timezone.utc)
     cutoff = current_time - timedelta(hours=ttl_hours)
 
-    candidates_by_key: dict[str, tuple[str, int]] = {}
+    oldest_expired: list[tuple[float, str, int, str]] = []
+    listed_total = 0
+    expired_seen_total = 0
+    global_list_cap_hit = False
+    list_cap_hit_prefixes: list[str] = []
 
     for prefix in prefixes:
-        listed_count = 0
-        list_cap_hit = False
-        oldest_expired: list[tuple[float, str, int]] = []
+        if global_list_cap_hit:
+            break
 
+        prefix_list_cap_hit = False
         try:
             async for page in storage.iter_objects_with_metadata(prefix):
                 for obj in page:
-                    listed_count += 1
-                    if listed_count > max_list_keys:
-                        list_cap_hit = True
+                    if listed_total >= max_list_keys:
+                        global_list_cap_hit = True
+                        prefix_list_cap_hit = True
                         break
+                    listed_total += 1
 
                     if obj.last_modified > cutoff:
                         continue
 
+                    expired_seen_total += 1
+                    if max_delete_keys <= 0:
+                        continue
+
                     ts = obj.last_modified.timestamp()
-                    entry = (-ts, obj.key, obj.size_bytes)
+                    entry = (-ts, obj.key, obj.size_bytes, prefix)
                     if len(oldest_expired) < max_delete_keys:
                         heapq.heappush(oldest_expired, entry)
                     else:
-                        newest_in_selected = -oldest_expired[0][0]
-                        if ts < newest_in_selected:
+                        newest_selected_neg_ts = oldest_expired[0][0]
+                        if -ts < newest_selected_neg_ts:
                             heapq.heapreplace(oldest_expired, entry)
 
-                if list_cap_hit:
+                if prefix_list_cap_hit:
                     break
         except Exception as exc:  # noqa: BLE001
             result.errors.append(f"list({prefix}): {exc}")
             continue
 
-        if list_cap_hit:
-            logger.warning(
-                "temp_uploads.cleanup.list_cap_reached",
-                prefix=prefix,
-                max_list_keys=max_list_keys,
-                message=(
-                    "list cap reached; expired candidates beyond scanned window "
-                    "may remain for a subsequent cycle"
-                ),
-            )
+        if prefix_list_cap_hit:
+            list_cap_hit_prefixes.append(prefix)
 
-        if len(oldest_expired) == max_delete_keys and oldest_expired:
-            logger.warning(
-                "temp_uploads.cleanup.delete_cap_reached",
-                prefix=prefix,
-                max_delete_keys=max_delete_keys,
-                message=(
-                    "delete cap reached; processing oldest expired candidates "
-                    "this cycle"
-                ),
-            )
-
-        selected = sorted(
-            [(-neg_ts, key, size_bytes) for neg_ts, key, size_bytes in oldest_expired],
+    if global_list_cap_hit:
+        logger.warning(
+            "temp_uploads.cleanup.global_list_cap_reached",
+            max_list_keys=max_list_keys,
+            prefixes=list_cap_hit_prefixes,
+            message=(
+                "global list cap reached; listing stopped before scanning all "
+                "prefixes this cycle"
+            ),
         )
-        for _, key, size_bytes in selected:
-            candidates_by_key.setdefault(key, (prefix, size_bytes))
+
+    if max_delete_keys > 0 and expired_seen_total > max_delete_keys:
+        logger.warning(
+            "temp_uploads.cleanup.global_delete_cap_reached",
+            expired_seen_total=expired_seen_total,
+            max_delete_keys=max_delete_keys,
+            message=(
+                "expired candidates seen exceed delete cap; processing oldest "
+                "across all prefixes and deferring the remainder"
+            ),
+        )
+
+    selected = sorted(
+        [(-neg_ts, key, size_bytes, prefix) for neg_ts, key, size_bytes, prefix in oldest_expired],
+    )
+    candidates_by_key = {
+        key: (prefix, size_bytes)
+        for _ts, key, size_bytes, prefix in selected
+    }
 
     if not candidates_by_key:
         logger.info(

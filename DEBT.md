@@ -164,6 +164,7 @@ Rules:
   job completion -> cleanup deletes).
 - **Updated 2026-04-25:** FR2 addressed max_keys semantic bug surfaced in review. Storage listings are key-ordered (lexicographic), so capping raw listings could hide expired keys behind fresh ones. Cleanup now lists full prefix, filters by TTL, then caps the EXPIRED set (oldest-first). Warning logged when cap is hit so operators know to increase cycle frequency or cap size. New integration test `test_expired_beyond_fresh_listing_still_reached` covers the regression directly.
 - **Updated 2026-04-25:** FR3 restored hard cap on listing side. Switched from list-all to paginated scan via new iter_objects_with_metadata on StorageInterface. Introduced two caps: max_list_keys_per_cycle (bounds memory/storage cost) and max_delete_keys_per_cycle (bounds DELETE work). Oldest expired candidates prioritized across pages via min-heap. Separate warnings emitted for each cap-hit scenario so operators can tune cycle frequency or cap sizes. Regression tests cover both cap paths and oldest-first ordering.
+- **Updated 2026-04-25:** FR5 completed global per-cycle cap contract. Heap and both listing/delete counters hoisted outside prefix loop (review found FR4 did not fully apply this). Added two regression tests: test_max_delete_keys_is_global_across_prefixes and test_max_list_keys_is_global_across_prefixes. LocalStorageManager docstring clarified as dev/test-only.
 
 
 

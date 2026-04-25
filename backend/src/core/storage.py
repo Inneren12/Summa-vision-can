@@ -463,7 +463,12 @@ class LocalStorageManager(StorageInterface):
     async def iter_objects_with_metadata(
         self, prefix: str
     ) -> AsyncIterator[list[StorageObjectMetadata]]:
-        """Yield one metadata page for local files under *prefix*."""
+        """Yield pages of object metadata under `prefix`.
+
+        NOTE: Local backend accumulates all matching files before yielding the
+        first page. Intended for dev/test use only — production deployments
+        use the S3 backend whose implementation is truly streaming.
+        """
         search_root = self._base / prefix
         if not search_root.exists():
             return

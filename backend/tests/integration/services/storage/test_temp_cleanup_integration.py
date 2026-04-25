@@ -454,6 +454,83 @@ async def test_multiple_prefixes_processed_in_order(pg_session) -> None:
 
 
 @pytest.mark.anyio
+async def test_max_delete_keys_is_global_across_prefixes(pg_session) -> None:
+    """Delete cap is per cleanup cycle globally — does NOT multiply by prefix count."""
+    now = datetime(2026, 4, 25, 12, 0, tzinfo=timezone.utc)
+    objects = [
+        _meta("temp/a/expired_0.parquet", now=now, age_hours=30),
+        _meta("temp/a/expired_1.parquet", now=now, age_hours=30),
+        _meta("temp/b/expired_0.parquet", now=now, age_hours=30),
+        _meta("temp/b/expired_1.parquet", now=now, age_hours=30),
+    ]
+    storage = FakeStorage(objects=objects)
+
+    result = await cleanup_temp_uploads(
+        pg_session,
+        storage,
+        prefixes=["temp/a/", "temp/b/"],
+        ttl_hours=24,
+        max_delete_keys=2,
+        max_list_keys=10_000,
+        now=now,
+    )
+
+    assert result.scanned == 2, f"Global cap=2 must limit candidates to 2, got {result.scanned}"
+    assert result.deleted == 2, f"Exactly 2 deletions allowed per cycle, got {result.deleted}"
+
+    remaining = [obj.key for obj in storage.all_objects() if "expired_" in obj.key]
+    assert len(remaining) == 2, (
+        f"Exactly 2 expired candidates must remain for next cycle, got {len(remaining)}"
+    )
+
+
+@pytest.mark.anyio
+async def test_max_list_keys_is_global_across_prefixes(
+    pg_session,
+    monkeypatch,
+) -> None:
+    """List cap is per cleanup cycle globally — does NOT multiply by prefix count."""
+    now = datetime(2026, 4, 25, 12, 0, tzinfo=timezone.utc)
+    objects = [
+        _meta("temp/a/fresh_0.parquet", now=now, age_hours=1),
+        _meta("temp/a/fresh_1.parquet", now=now, age_hours=1),
+        _meta("temp/b/fresh_0.parquet", now=now, age_hours=1),
+        _meta("temp/b/fresh_1.parquet", now=now, age_hours=1),
+        _meta("temp/b/expired.parquet", now=now, age_hours=30),
+    ]
+    storage = FakeStorage(objects=objects)
+
+    warnings_captured: list[str] = []
+
+    def _capture_warning(event: str, **kwargs: Any) -> None:
+        warnings_captured.append(f"{event} {kwargs.get('message', '')}")
+
+    monkeypatch.setattr(
+        "src.services.storage.temp_cleanup.logger.warning",
+        _capture_warning,
+    )
+
+    result = await cleanup_temp_uploads(
+        pg_session,
+        storage,
+        prefixes=["temp/a/", "temp/b/"],
+        ttl_hours=24,
+        max_delete_keys=1000,
+        max_list_keys=3,
+        now=now,
+    )
+
+    assert result.deleted == 0, (
+        "List cap must halt listing before expired object reached, "
+        f"deleted={result.deleted}"
+    )
+    assert storage.has_key("temp/b/expired.parquet")
+    assert any("global list cap" in w for w in warnings_captured), (
+        f"Expected global list cap warning, got: {warnings_captured}"
+    )
+
+
+@pytest.mark.anyio
 async def test_end_to_end_upload_then_cleanup_with_pending_job_preserves_input(pg_session) -> None:
     now = datetime(2026, 4, 25, 12, 0, tzinfo=timezone.utc)
     key = "temp/uploads/pipeline.parquet"
