@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:summa_vision_admin/core/app_bootstrap/app_bootstrap_provider.dart';
+import 'package:summa_vision_admin/core/bootstrap/bootstrap_error_messages.dart';
 import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
 
 import 'core/bootstrap/bootstrap_error_messages.dart';
@@ -73,6 +74,7 @@ class _BootstrapError extends StatelessWidget {
               // rendered via a fallback MaterialApp outside MaterialApp.router.
               // See docs/phase-3-slice-3-recon.md Section 6. Debt tracked in
               // DEBT-029 for locale-aware pre-localization fallback.
+              // Uses pre-localization locale fallback helper.
               bootstrapErrorMessage(error),
               textAlign: TextAlign.center,
             ),

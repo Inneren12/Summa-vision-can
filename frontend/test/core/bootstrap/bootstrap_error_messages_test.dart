@@ -1,5 +1,4 @@
 import 'dart:ui';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:summa_vision_admin/core/bootstrap/bootstrap_error_messages.dart';
 
