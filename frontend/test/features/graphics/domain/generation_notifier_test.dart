@@ -75,11 +75,7 @@ void main() {
         late Future<void> run;
         fakeAsync((async) {
           run = notifier.generate(88);
-          drainPollCycles(
-            async,
-            pollInterval: const Duration(seconds: 2),
-            pollCycles: 2,
-          );
+          pumpUntilIdle(async);
         });
         await run;
 
@@ -122,11 +118,7 @@ void main() {
         late Future<void> run;
         fakeAsync((async) {
           run = notifier.generate(89);
-          drainPollCycles(
-            async,
-            pollInterval: const Duration(seconds: 2),
-            pollCycles: GenerationState.maxPollAttempts + 1,
-          );
+          pumpUntilIdle(async);
         });
         await run;
 

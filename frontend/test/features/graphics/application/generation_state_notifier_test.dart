@@ -95,11 +95,7 @@ void main() {
         late Future<void> firstRun;
         fakeAsync((async) {
           firstRun = notifier.generate(_sampleRequest);
-          drainPollCycles(
-            async,
-            pollInterval: const Duration(seconds: 2),
-            pollCycles: 2,
-          );
+          pumpUntilIdle(async);
         });
         await firstRun;
         expect(container.read(chartGenerationNotifierProvider).phase, GenerationPhase.success);
@@ -108,11 +104,7 @@ void main() {
         late Future<void> secondRun;
         fakeAsync((async) {
           secondRun = notifier.generate(_sampleRequest);
-          drainPollCycles(
-            async,
-            pollInterval: const Duration(seconds: 2),
-            pollCycles: 2,
-          );
+          pumpUntilIdle(async);
         });
         await secondRun;
 
@@ -155,11 +147,7 @@ void main() {
         late Future<void> firstRun;
         fakeAsync((async) {
           firstRun = notifier.generate(_sampleRequest);
-          drainPollCycles(
-            async,
-            pollInterval: const Duration(seconds: 2),
-            pollCycles: 2,
-          );
+          pumpUntilIdle(async);
         });
         await firstRun;
         expect(container.read(chartGenerationNotifierProvider).phase, GenerationPhase.success);
@@ -168,11 +156,7 @@ void main() {
         late Future<void> secondRun;
         fakeAsync((async) {
           secondRun = notifier.generate(_sampleRequest);
-          drainPollCycles(
-            async,
-            pollInterval: const Duration(seconds: 2),
-            pollCycles: ChartGenerationNotifier.maxPolls + 1,
-          );
+          pumpUntilIdle(async);
         });
         await secondRun;
 
