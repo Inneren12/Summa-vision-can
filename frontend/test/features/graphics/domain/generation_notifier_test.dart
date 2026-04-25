@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +5,8 @@ import 'package:summa_vision_admin/features/graphics/data/graphic_repository.dar
 import 'package:summa_vision_admin/features/graphics/domain/generation_notifier.dart';
 import 'package:summa_vision_admin/features/graphics/domain/generation_state.dart';
 import 'package:summa_vision_admin/features/graphics/domain/task_status.dart';
+
+import '../_helpers/fake_async_polling.dart';
 
 /// Fake repository that scripts submit + status responses.
 ///
@@ -72,7 +72,16 @@ void main() {
           resultUrl: 'https://cdn.example.com/old.png',
         );
 
-        await notifier.generate(88);
+        late Future<void> run;
+        fakeAsync((async) {
+          run = notifier.generate(88);
+          drainPollCycles(
+            async,
+            pollInterval: const Duration(seconds: 2),
+            pollCycles: 2,
+          );
+        });
+        await run;
 
         final state = container.read(generationNotifierProvider);
         expect(state.phase, GenerationPhase.failed);
@@ -113,8 +122,11 @@ void main() {
         late Future<void> run;
         fakeAsync((async) {
           run = notifier.generate(89);
-          async.elapse(const Duration(seconds: 121));
-          async.flushMicrotasks();
+          drainPollCycles(
+            async,
+            pollInterval: const Duration(seconds: 2),
+            pollCycles: GenerationState.maxPollAttempts + 1,
+          );
         });
         await run;
 

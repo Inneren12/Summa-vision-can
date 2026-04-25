@@ -7,11 +7,9 @@ factory.  S3 tests are included using mocked ``aiobotocore`` sessions.
 
 from __future__ import annotations
 
-import io
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
@@ -219,23 +217,23 @@ class TestLocalStorageManagerListObjects:
         assert result == ["only.csv"]
 
 
-class TestLocalStorageManagerListObjectsWithMetadata:
-    """Tests for ``LocalStorageManager.list_objects_with_metadata``."""
+class TestLocalStorageManagerIterObjectsWithMetadata:
+    """Tests for ``LocalStorageManager.iter_objects_with_metadata``."""
 
     @pytest.fixture()
     def storage(self, tmp_path: Path) -> LocalStorageManager:
         return LocalStorageManager(base_dir=str(tmp_path))
 
     @pytest.mark.asyncio
-    async def test_list_objects_with_metadata_empty_prefix(
+    async def test_iter_objects_with_metadata_empty_prefix(
         self, storage: LocalStorageManager
     ) -> None:
         """Listing a missing prefix should return an empty metadata list."""
-        result = await storage.list_objects_with_metadata("missing/")
-        assert result == []
+        pages = [page async for page in storage.iter_objects_with_metadata("missing/")]
+        assert pages == []
 
     @pytest.mark.asyncio
-    async def test_list_objects_with_metadata_returns_key_size_and_timestamp(
+    async def test_iter_objects_with_metadata_returns_key_size_and_timestamp(
         self, storage: LocalStorageManager, tmp_path: Path
     ) -> None:
         """Metadata listing includes key, size, and UTC mtime."""
@@ -252,7 +250,8 @@ class TestLocalStorageManagerListObjectsWithMetadata:
         os.utime(first_path, (first_ts, first_ts))
         os.utime(second_path, (second_ts, second_ts))
 
-        result = await storage.list_objects_with_metadata("temp/uploads")
+        pages = [page async for page in storage.iter_objects_with_metadata("temp/uploads")]
+        result = pages[0]
 
         assert result == [
             StorageObjectMetadata(
@@ -471,22 +470,21 @@ class TestS3StorageManagerBytes:
         assert call_kwargs["Body"] == b"binary data"
 
 
-class TestS3StorageManagerListObjectsWithMetadata:
-    """Tests for ``S3StorageManager.list_objects_with_metadata``."""
+class TestS3StorageManagerIterObjectsWithMetadata:
+    """Tests for ``S3StorageManager.iter_objects_with_metadata``."""
 
     @pytest.mark.asyncio
-    async def test_list_objects_with_metadata_empty_bucket(self) -> None:
+    async def test_iter_objects_with_metadata_empty_bucket(self) -> None:
         """An empty prefix should return an empty metadata list."""
         mock_client = MagicMock()
         mock_client.get_paginator.return_value = _FakeAsyncPaginator([{}])
 
         mgr = _make_s3_manager(mock_client)
-        result = await mgr.list_objects_with_metadata("empty/")
-
-        assert result == []
+        pages = [page async for page in mgr.iter_objects_with_metadata("empty/")]
+        assert pages == [[]]
 
     @pytest.mark.asyncio
-    async def test_list_objects_with_metadata_returns_key_size_and_timestamp(
+    async def test_iter_objects_with_metadata_returns_key_size_and_timestamp(
         self,
     ) -> None:
         """Metadata listing should preserve key, size, and LastModified."""
@@ -517,7 +515,8 @@ class TestS3StorageManagerListObjectsWithMetadata:
         )
 
         mgr = _make_s3_manager(mock_client)
-        result = await mgr.list_objects_with_metadata("temp/uploads/")
+        pages = [page async for page in mgr.iter_objects_with_metadata("temp/uploads/")]
+        result = [item for page in pages for item in page]
 
         assert result == [
             StorageObjectMetadata(

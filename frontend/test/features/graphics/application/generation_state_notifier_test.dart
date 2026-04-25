@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +8,8 @@ import 'package:summa_vision_admin/features/graphics/data/graphic_generation_rep
 import 'package:summa_vision_admin/features/graphics/domain/graphics_generate_request.dart';
 import 'package:summa_vision_admin/features/graphics/domain/job_status.dart';
 import 'package:summa_vision_admin/features/graphics/domain/raw_data_upload.dart';
+
+import '../_helpers/fake_async_polling.dart';
 
 /// Fake repository implementing the public surface of
 /// [GraphicGenerationRepository]. `_dio` is library-private so it is not part
@@ -91,11 +92,29 @@ void main() {
 
         final notifier = container.read(chartGenerationNotifierProvider.notifier);
 
-        await notifier.generate(_sampleRequest);
+        late Future<void> firstRun;
+        fakeAsync((async) {
+          firstRun = notifier.generate(_sampleRequest);
+          drainPollCycles(
+            async,
+            pollInterval: const Duration(seconds: 2),
+            pollCycles: 2,
+          );
+        });
+        await firstRun;
         expect(container.read(chartGenerationNotifierProvider).phase, GenerationPhase.success);
         expect(container.read(chartGenerationNotifierProvider).result, isNotNull);
 
-        await notifier.generate(_sampleRequest);
+        late Future<void> secondRun;
+        fakeAsync((async) {
+          secondRun = notifier.generate(_sampleRequest);
+          drainPollCycles(
+            async,
+            pollInterval: const Duration(seconds: 2),
+            pollCycles: 2,
+          );
+        });
+        await secondRun;
 
         final state = container.read(chartGenerationNotifierProvider);
         expect(state.phase, GenerationPhase.failed);
@@ -133,15 +152,27 @@ void main() {
 
         final notifier = container.read(chartGenerationNotifierProvider.notifier);
 
-        await notifier.generate(_sampleRequest);
+        late Future<void> firstRun;
+        fakeAsync((async) {
+          firstRun = notifier.generate(_sampleRequest);
+          drainPollCycles(
+            async,
+            pollInterval: const Duration(seconds: 2),
+            pollCycles: 2,
+          );
+        });
+        await firstRun;
         expect(container.read(chartGenerationNotifierProvider).phase, GenerationPhase.success);
         expect(container.read(chartGenerationNotifierProvider).result, isNotNull);
 
         late Future<void> secondRun;
         fakeAsync((async) {
           secondRun = notifier.generate(_sampleRequest);
-          async.elapse(const Duration(seconds: 121));
-          async.flushMicrotasks();
+          drainPollCycles(
+            async,
+            pollInterval: const Duration(seconds: 2),
+            pollCycles: ChartGenerationNotifier.maxPolls + 1,
+          );
         });
         await secondRun;
 

@@ -39,7 +39,7 @@ Rules:
 - **Added:** 2026-04-24
 - **Severity:** low
 - **Category:** code-quality
-- **Status:** resolved
+- **Status:** accepted
 - **Description:** Two parallel generation notifier stacks exist:
   - `frontend/lib/features/graphics/domain/generation_notifier.dart` + `generation_state.dart` use `GenerationPhase { idle, submitting, polling, completed, timeout, failed }`
   - `frontend/lib/features/graphics/application/generation_state_notifier.dart` uses `GenerationPhase { idle, submitting, polling, success, failed, timeout }`
@@ -52,7 +52,7 @@ Rules:
 
 > Updated 2026-04-24: Slice 3.11 pre-recon confirmed phase enum divergence persists but has limited practical impact — the 5 generationStatus* ARB keys are rendered directly from screen widgets via conditional branches, not via a centralized phase→key mapper (Part A2 §3.6). Enum unification remains opportunistic with no UX-blocking symptom.
 
-> Updated 2026-04-25: FR2 resolved two regressions surfaced by review — terminal failure/timeout transitions in both ChartGenerationNotifier and GenerationNotifier now clear stale success artifacts (result / resultUrl) in addition to errorCode. Fresh-constructor pattern extended to all success-artifact fields with inline ADR comments to prevent regression. RU hardcoded localized literals in chart_config_screen_localization_test.dart replaced with l10n.<key>-derived assertions. Phase enum unification (the DEBT-031 proper) remains open.
+> Updated 2026-04-25: FR2 resolved stale success artifact regressions in both notifier stacks (ChartGenerationNotifier and GenerationNotifier clear result/resultUrl on terminal failure/timeout). RU hardcoded localized literals in chart_config_screen_localization_test.dart replaced with l10n.<key>-derived assertions. These are improvements ADJACENT to DEBT-031 — the phase enum unification proper remains open.
 
 ### DEBT-032: Locale-switch smoke test harness harmonization
 
@@ -163,6 +163,7 @@ Rules:
   end-to-end pipeline test (upload -> pending job -> cleanup preserves ->
   job completion -> cleanup deletes).
 - **Updated 2026-04-25:** FR2 addressed max_keys semantic bug surfaced in review. Storage listings are key-ordered (lexicographic), so capping raw listings could hide expired keys behind fresh ones. Cleanup now lists full prefix, filters by TTL, then caps the EXPIRED set (oldest-first). Warning logged when cap is hit so operators know to increase cycle frequency or cap size. New integration test `test_expired_beyond_fresh_listing_still_reached` covers the regression directly.
+- **Updated 2026-04-25:** FR3 restored hard cap on listing side. Switched from list-all to paginated scan via new iter_objects_with_metadata on StorageInterface. Introduced two caps: max_list_keys_per_cycle (bounds memory/storage cost) and max_delete_keys_per_cycle (bounds DELETE work). Oldest expired candidates prioritized across pages via min-heap. Separate warnings emitted for each cap-hit scenario so operators can tune cycle frequency or cap sizes. Regression tests cover both cap paths and oldest-first ordering.
 
 
 

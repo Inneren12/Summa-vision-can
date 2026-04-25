@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+import heapq
 
 import structlog
 from sqlalchemy import select
@@ -62,15 +63,16 @@ async def cleanup_temp_uploads(
     *,
     prefixes: Sequence[str],
     ttl_hours: int,
-    max_keys: int,
+    max_delete_keys: int,
+    max_list_keys: int,
     now: datetime | None = None,
 ) -> CleanupResult:
     """Delete expired objects not referenced by pending jobs.
 
-    ``max_keys`` applies to the expired candidate set (oldest first), not
-    the raw storage listing. Storage listings are key-ordered, so capping
-    raw listing size can hide expired keys behind fresh keys that sort
-    earlier lexicographically.
+    Cleanup enforces two caps:
+    - ``max_list_keys`` bounds listed-object scan work per cycle.
+    - ``max_delete_keys`` bounds delete work, prioritizing oldest expired
+      candidates first across paginated listing pages.
     """
     result = CleanupResult()
     current_time = now or datetime.now(timezone.utc)
@@ -79,30 +81,63 @@ async def cleanup_temp_uploads(
     candidates_by_key: dict[str, tuple[str, int]] = {}
 
     for prefix in prefixes:
+        listed_count = 0
+        list_cap_hit = False
+        oldest_expired: list[tuple[float, str, int]] = []
+
         try:
-            objects = await storage.list_objects_with_metadata(prefix)
+            async for page in storage.iter_objects_with_metadata(prefix):
+                for obj in page:
+                    listed_count += 1
+                    if listed_count > max_list_keys:
+                        list_cap_hit = True
+                        break
+
+                    if obj.last_modified > cutoff:
+                        continue
+
+                    ts = obj.last_modified.timestamp()
+                    entry = (-ts, obj.key, obj.size_bytes)
+                    if len(oldest_expired) < max_delete_keys:
+                        heapq.heappush(oldest_expired, entry)
+                    else:
+                        newest_in_selected = -oldest_expired[0][0]
+                        if ts < newest_in_selected:
+                            heapq.heapreplace(oldest_expired, entry)
+
+                if list_cap_hit:
+                    break
         except Exception as exc:  # noqa: BLE001
             result.errors.append(f"list({prefix}): {exc}")
             continue
 
-        expired = [obj for obj in objects if obj.last_modified <= cutoff]
-        expired.sort(key=lambda item: item.last_modified)
-
-        if len(expired) > max_keys:
+        if list_cap_hit:
             logger.warning(
-                "temp_uploads.cleanup.expired_candidates_exceed_max_keys_cap",
+                "temp_uploads.cleanup.list_cap_reached",
                 prefix=prefix,
-                expired_candidates=len(expired),
-                max_keys=max_keys,
+                max_list_keys=max_list_keys,
                 message=(
-                    "expired candidates exceed max_keys cap; processing oldest "
-                    "subset this cycle"
+                    "list cap reached; expired candidates beyond scanned window "
+                    "may remain for a subsequent cycle"
                 ),
             )
-            expired = expired[:max_keys]
 
-        for obj in expired:
-            candidates_by_key.setdefault(obj.key, (prefix, obj.size_bytes))
+        if len(oldest_expired) == max_delete_keys and oldest_expired:
+            logger.warning(
+                "temp_uploads.cleanup.delete_cap_reached",
+                prefix=prefix,
+                max_delete_keys=max_delete_keys,
+                message=(
+                    "delete cap reached; processing oldest expired candidates "
+                    "this cycle"
+                ),
+            )
+
+        selected = sorted(
+            [(-neg_ts, key, size_bytes) for neg_ts, key, size_bytes in oldest_expired],
+        )
+        for _, key, size_bytes in selected:
+            candidates_by_key.setdefault(key, (prefix, size_bytes))
 
     if not candidates_by_key:
         logger.info(
@@ -174,6 +209,7 @@ class TempUploadCleaner:
                 self._storage,
                 prefixes=self._settings.temp_cleanup_prefixes,
                 ttl_hours=self._settings.temp_upload_ttl_hours,
-                max_keys=self._settings.temp_cleanup_max_keys_per_cycle,
+                max_delete_keys=self._settings.temp_cleanup_max_delete_keys_per_cycle,
+                max_list_keys=self._settings.temp_cleanup_max_list_keys_per_cycle,
                 now=self._clock(),
             )

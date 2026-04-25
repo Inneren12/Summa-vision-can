@@ -550,10 +550,8 @@ class _ContractTestStorage(StorageInterface):
     async def list_objects(self, prefix: str) -> list[str]:
         return []
 
-    async def list_objects_with_metadata(
-        self, prefix: str, max_keys: int | None = None
-    ) -> list[StorageObjectMetadata]:
-        return []
+    async def iter_objects_with_metadata(self, prefix: str):
+        yield []
 
     async def generate_presigned_url(self, path: str, ttl: int = 3600) -> str:
         return f"https://cdn.example.test/{path}?ttl={ttl}"
