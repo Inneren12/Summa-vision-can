@@ -39,7 +39,7 @@ Rules:
 - **Added:** 2026-04-24
 - **Severity:** low
 - **Category:** code-quality
-- **Status:** accepted
+- **Status:** resolved
 - **Description:** Two parallel generation notifier stacks exist:
   - `frontend/lib/features/graphics/domain/generation_notifier.dart` + `generation_state.dart` use `GenerationPhase { idle, submitting, polling, completed, timeout, failed }`
   - `frontend/lib/features/graphics/application/generation_state_notifier.dart` uses `GenerationPhase { idle, submitting, polling, success, failed, timeout }`
@@ -58,7 +58,7 @@ Rules:
 - **Added:** 2026-04-24
 - **Severity:** low
 - **Category:** code-quality
-- **Status:** accepted
+- **Status:** resolved
 - **Description:** Four existing locale-switch smoke tests (queue, editor,
   graphics, shell-level locale_switch_smoke_test) plus the new aggregator
   smoke added in Slice 3.11 have inconsistent patterns (A3 §5.3):
@@ -85,11 +85,13 @@ Rules:
 - **Added:** 2026-04-23
 - **Severity:** low
 - **Category:** code-quality
-- **Status:** accepted
+- **Status:** resolved
 - **Description:** `_BootstrapError` in `frontend/lib/main.dart` renders hardcoded EN text (`App bootstrap failed: $error`) as an EN-kept Category B diagnostic path.
 - **Impact:** In rare bootstrap-failure sessions, RU operators see an untranslated diagnostic message.
 - **Resolution:** Add locale-aware pre-localization fallback using `PlatformDispatcher.instance.locale` with a tiny EN/RU const map, defaulting to EN for unsupported locales.
 - **Target:** Opportunistic fix during future Flutter bootstrap refactor.
+
+> Updated 2026-04-24: RESOLVED. Implemented `bootstrapErrorMessage()` in `frontend/lib/core/bootstrap/bootstrap_error_messages.dart` with EN/RU map keyed on `PlatformDispatcher.instance.locale.languageCode`. Defaults to EN for unsupported locales. Wired into `_BootstrapError` in `main.dart`. 5 unit tests cover RU/EN/unsupported/country-variant/error-string-append cases.
 
 ### DEBT-030: Editor endpoints lack structured error codes for localized operator messaging
 
