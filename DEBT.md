@@ -39,7 +39,7 @@ Rules:
 - **Added:** 2026-04-24
 - **Severity:** low
 - **Category:** code-quality
-- **Status:** accepted
+- **Status:** resolved
 - **Description:** Two parallel generation notifier stacks exist:
   - `frontend/lib/features/graphics/domain/generation_notifier.dart` + `generation_state.dart` use `GenerationPhase { idle, submitting, polling, completed, timeout, failed }`
   - `frontend/lib/features/graphics/application/generation_state_notifier.dart` uses `GenerationPhase { idle, submitting, polling, success, failed, timeout }`
@@ -134,7 +134,7 @@ Rules:
 - **Added:** 2026-04-14
 - **Severity:** low
 - **Category:** ops
-- **Status:** accepted
+- **Status:** resolved
 - **Description:** `POST /api/v1/admin/graphics/generate-from-data` writes a
   temporary Parquet to S3 under `temp/uploads/{uuid}.parquet` before
   enqueuing the existing `graphics_generate` job. The `GraphicPipeline`
@@ -147,6 +147,34 @@ Rules:
   `temp/uploads/` with a `LastModified` older than
   `settings.temp_upload_ttl_hours` (default 24 h).
 - **Target:** Follow-up PR (not blocking for the upload feature).
+
+- **Updated:** 2026-04-25 (UTC)
+- **Updated 2026-04-25:** RESOLVED. Combined with post-Phase-3 ``temp_cleanup.py``
+  safety fix in a single PR. Cleanup now scans ``temp/uploads/`` and
+  ``temp/`` prefixes and excludes keys still referenced by ``Job`` rows in
+  ``queued``/``running`` status before deletion. New settings:
+  ``temp_upload_ttl_hours`` (24h default),
+  ``temp_cleanup_max_keys_per_cycle`` (1000), and
+  ``temp_cleanup_prefixes``. Added unit + integration coverage including an
+  end-to-end pipeline test (upload -> pending job -> cleanup preserves ->
+  job completion -> cleanup deletes).
+
+
+### DEBT-030: Temp cleanup deleted in-use temp keys
+
+- **Source:** Post-Phase-3 handoff carryover (2026-04-24 audit gap)
+- **Added:** 2026-04-25
+- **Severity:** medium
+- **Category:** ops
+- **Status:** resolved
+- **Description:** Prior temp cleanup logic deleted old ``temp/*`` objects
+  without checking whether queued/running ``graphics_generate`` jobs still
+  referenced those keys, causing delayed jobs to fail with
+  ``STORAGE_NOT_FOUND``.
+- **Resolution:** Cleanup now collects candidate keys, queries pending jobs
+  once, extracts referenced ``data_key`` values via pure payload inspector,
+  skips referenced keys, and only deletes safe keys.
+- **Resolved:** 2026-04-25
 
 ---
 

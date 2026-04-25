@@ -274,7 +274,7 @@ async def test_list_filters_by_status_draft(session_factory) -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Create two; publish one
-        r1 = await client.post(
+        _ = await client.post(
             "/api/v1/admin/publications",
             json={**_VALID_BODY, "headline": "Draft one"},
             headers=_auth_headers(),
@@ -551,7 +551,7 @@ class _ContractTestStorage(StorageInterface):
         return []
 
     async def list_objects_with_metadata(
-        self, prefix: str
+        self, prefix: str, max_keys: int | None = None
     ) -> list[StorageObjectMetadata]:
         return []
 

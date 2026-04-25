@@ -19,7 +19,6 @@ from src.core.config import Settings
 from src.core.scheduler import (
     _create_scheduler,
     get_scheduler,
-    scheduled_audit_cleanup,
     scheduled_fetch_todays_releases,
     scheduled_temp_uploads_cleanup,
     shutdown_scheduler,
@@ -207,6 +206,7 @@ class TestScheduledTempUploadsCleanup:
 
         with (
             patch("src.core.scheduler._app_ref", mock_app),
+            patch("src.core.scheduler.get_session_factory", return_value=MagicMock()) as mock_session_factory,
             patch(
                 "src.services.storage.temp_cleanup.TempUploadCleaner",
                 return_value=mock_cleaner,
@@ -215,6 +215,7 @@ class TestScheduledTempUploadsCleanup:
             await scheduled_temp_uploads_cleanup()
 
         cleaner_cls.assert_called_once()
+        assert cleaner_cls.call_args.kwargs["session_factory"] == mock_session_factory.return_value
         mock_cleaner.run_once.assert_awaited_once()
 
     @pytest.mark.asyncio

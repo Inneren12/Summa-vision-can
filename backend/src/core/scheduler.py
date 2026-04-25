@@ -28,6 +28,7 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from src.core.config import Settings, get_settings
+from src.core.database import get_session_factory
 from src.core.logging import get_logger
 
 logger: structlog.stdlib.BoundLogger = get_logger(module="scheduler")
@@ -181,6 +182,7 @@ async def scheduled_temp_uploads_cleanup() -> None:
         cleaner = TempUploadCleaner(
             storage=storage,
             settings=settings,
+            session_factory=get_session_factory(),
             clock=lambda: datetime.now(timezone.utc),
         )
         await cleaner.run_once()
