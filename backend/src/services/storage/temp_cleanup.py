@@ -38,7 +38,10 @@ async def collect_keys_referenced_by_pending_jobs(
     if not candidates:
         return set()
 
-    pending_statuses = [JobStatus.QUEUED, JobStatus.RUNNING]
+    pending_statuses: list[JobStatus] = [JobStatus.QUEUED, JobStatus.RUNNING]
+    retrying = getattr(JobStatus, "RETRYING", None)
+    if retrying is not None:
+        pending_statuses.append(retrying)
     stmt = select(Job.payload_json).where(
         Job.job_type == "graphics_generate",
         Job.status.in_(pending_statuses),

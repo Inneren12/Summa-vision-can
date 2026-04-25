@@ -20,6 +20,7 @@ class FakeStorage(StorageInterface):
     ) -> None:
         self.objects = list(objects or [])
         self.delete_missing = set(delete_missing or set())
+        self._delete_errors: dict[str, BaseException] = {}
         self.deleted_keys: list[str] = []
 
     async def upload_dataframe_as_csv(self, df: Any, path: str) -> None:
@@ -37,9 +38,14 @@ class FakeStorage(StorageInterface):
     async def download_csv(self, path: str) -> Any:
         return None
 
+    def set_delete_to_raise(self, key: str, exc: BaseException) -> None:
+        self._delete_errors[key] = exc
+
     async def delete_object(self, key: str) -> None:
         if key in self.delete_missing:
             raise FileNotFoundError(key)
+        if key in self._delete_errors:
+            raise self._delete_errors[key]
         self.deleted_keys.append(key)
 
     async def list_objects(self, prefix: str) -> list[str]:
@@ -118,9 +124,9 @@ async def test_cleaner_uses_short_lived_session_factory() -> None:
     class SessionCtx:
         def __init__(self) -> None:
             self.session = AsyncMock()
-            execute_result = AsyncMock()
+            execute_result = MagicMock()
             execute_result.scalars.return_value.all.return_value = []
-            self.session.execute.return_value = execute_result
+            self.session.execute = AsyncMock(return_value=execute_result)
             self.entered = False
             self.exited = False
 
@@ -153,3 +159,36 @@ async def test_cleaner_uses_short_lived_session_factory() -> None:
     assert result == CleanupResult(scanned=0, referenced_skipped=0, deleted=0, bytes_freed=0, errors=[])
     assert ctx.entered is True
     assert ctx.exited is True
+
+
+@pytest.mark.anyio
+async def test_delete_error_is_non_fatal_and_continues() -> None:
+    """One delete failure must not abort the rest of the cycle."""
+    now = datetime(2026, 4, 25, 10, 0, tzinfo=timezone.utc)
+    storage = FakeStorage(
+        [
+            _obj("temp/uploads/a.parquet", 30, now=now),
+            _obj("temp/uploads/b.parquet", 30, now=now),
+        ]
+    )
+    storage.set_delete_to_raise("temp/uploads/a.parquet", RuntimeError("network blip"))
+
+    session = AsyncMock()
+    execute_result = MagicMock()
+    execute_result.scalars.return_value.all.return_value = []
+    session.execute.return_value = execute_result
+
+    result = await cleanup_temp_uploads(
+        session,
+        storage,
+        prefixes=["temp/uploads/"],
+        ttl_hours=24,
+        max_keys=100,
+        now=now,
+    )
+
+    assert result.deleted == 1
+    assert len(result.errors) == 1
+    assert "temp/uploads/a.parquet" in result.errors[0]
+    assert "network blip" in result.errors[0]
+    assert storage.deleted_keys == ["temp/uploads/b.parquet"]

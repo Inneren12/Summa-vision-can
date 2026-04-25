@@ -25,7 +25,7 @@ class FakeStorage(StorageInterface):
     ) -> None:
         self._objects: dict[str, StorageObjectMetadata] = {obj.key: obj for obj in objects}
         self.deleted: list[str] = []
-        self.list_calls: list[str] = []
+        self.list_calls: list[tuple[str, int | None]] = []
         self.missing_on_delete = set(missing_on_delete or set())
 
     async def upload_dataframe_as_csv(self, df: Any, path: str) -> None:
@@ -53,11 +53,14 @@ class FakeStorage(StorageInterface):
         return sorted(k for k in self._objects if k.startswith(prefix))
 
     async def list_objects_with_metadata(self, prefix: str, max_keys: int | None = None) -> list[StorageObjectMetadata]:
-        self.list_calls.append(prefix)
-        return sorted(
+        self.list_calls.append((prefix, max_keys))
+        items = sorted(
             (obj for obj in self._objects.values() if obj.key.startswith(prefix)),
             key=lambda obj: obj.key,
         )
+        if max_keys is not None:
+            return items[:max_keys]
+        return items
 
     async def generate_presigned_url(self, path: str, ttl: int = 3600) -> str:
         return ""
@@ -208,12 +211,32 @@ async def test_handles_empty_prefix_gracefully(pg_session) -> None:
 @pytest.mark.anyio
 async def test_multiple_prefixes_processed_in_order(pg_session) -> None:
     now = datetime(2026, 4, 25, 12, 0, tzinfo=timezone.utc)
-    storage = FakeStorage(objects=[_meta("temp/uploads/a.parquet", now=now, age_hours=30), _meta("temp/other/b.parquet", now=now, age_hours=30)])
+    storage = FakeStorage(objects=[_meta("temp/uploads/a.parquet", now=now, age_hours=30), _meta("temp/staging/b.parquet", now=now, age_hours=30)])
 
-    result = await cleanup_temp_uploads(pg_session, storage, prefixes=["temp/uploads/", "temp/other/"], ttl_hours=24, max_keys=1000, now=now)
+    result = await cleanup_temp_uploads(pg_session, storage, prefixes=["temp/uploads/", "temp/staging/"], ttl_hours=24, max_keys=1000, now=now)
 
     assert result.deleted == 2
-    assert storage.list_calls == ["temp/uploads/", "temp/other/"]
+    assert storage.list_calls == [("temp/uploads/", 1001), ("temp/staging/", 1001)]
+
+
+@pytest.mark.anyio
+async def test_storage_list_respects_max_keys_parameter(pg_session) -> None:
+    """Verify cleanup invokes storage listing with max_keys cap."""
+    now = datetime(2026, 4, 25, 12, 0, tzinfo=timezone.utc)
+    storage = FakeStorage(objects=[_meta(f"temp/uploads/{i}.parquet", now=now, age_hours=30) for i in range(1500)])
+
+    result = await cleanup_temp_uploads(
+        session=pg_session,
+        storage=storage,
+        prefixes=["temp/uploads/"],
+        ttl_hours=24,
+        max_keys=1000,
+        now=now,
+    )
+
+    assert any(max_keys == 1001 for _, max_keys in storage.list_calls)
+    assert result.deleted == 1000
+    assert result.scanned == 1000
 
 
 @pytest.mark.anyio
