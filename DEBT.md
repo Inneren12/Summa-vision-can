@@ -162,6 +162,8 @@ Rules:
   ``temp_cleanup_prefixes``. Added unit + integration coverage including an
   end-to-end pipeline test (upload -> pending job -> cleanup preserves ->
   job completion -> cleanup deletes).
+- **Updated 2026-04-25:** FR2 addressed max_keys semantic bug surfaced in review. Storage listings are key-ordered (lexicographic), so capping raw listings could hide expired keys behind fresh ones. Cleanup now lists full prefix, filters by TTL, then caps the EXPIRED set (oldest-first). Warning logged when cap is hit so operators know to increase cycle frequency or cap size. New integration test `test_expired_beyond_fresh_listing_still_reached` covers the regression directly.
+
 
 
 ### DEBT-033: Broaden temp_cleanup beyond temp/uploads/ after job-type audit

@@ -137,7 +137,7 @@ class StorageInterface(abc.ABC):
 
     @abc.abstractmethod
     async def list_objects_with_metadata(
-        self, prefix: str, max_keys: int | None = None
+        self, prefix: str
     ) -> list[StorageObjectMetadata]:
         """List objects under *prefix* with size and timestamp metadata."""
 
@@ -304,7 +304,7 @@ class S3StorageManager(StorageInterface):
         return keys
 
     async def list_objects_with_metadata(
-        self, prefix: str, max_keys: int | None = None
+        self, prefix: str
     ) -> list[StorageObjectMetadata]:
         """List S3 objects matching *prefix* with metadata."""
         objects: list[StorageObjectMetadata] = []
@@ -326,8 +326,6 @@ class S3StorageManager(StorageInterface):
                             ),
                         )
                     )
-                    if max_keys is not None and len(objects) >= max_keys:
-                        return objects
         return objects
 
     async def delete_object(self, key: str) -> None:
@@ -463,7 +461,7 @@ class LocalStorageManager(StorageInterface):
         return sorted(results)
 
     async def list_objects_with_metadata(
-        self, prefix: str, max_keys: int | None = None
+        self, prefix: str
     ) -> list[StorageObjectMetadata]:
         """List files under *prefix* with size and timestamp metadata."""
         search_root = self._base / prefix
@@ -488,8 +486,6 @@ class LocalStorageManager(StorageInterface):
                     ),
                 )
             )
-            if max_keys is not None and len(results) >= max_keys:
-                return results
         return results
 
     async def delete_object(self, key: str) -> None:

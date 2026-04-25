@@ -65,7 +65,13 @@ async def cleanup_temp_uploads(
     max_keys: int,
     now: datetime | None = None,
 ) -> CleanupResult:
-    """Delete expired objects not referenced by pending jobs."""
+    """Delete expired objects not referenced by pending jobs.
+
+    ``max_keys`` applies to the expired candidate set (oldest first), not
+    the raw storage listing. Storage listings are key-ordered, so capping
+    raw listing size can hide expired keys behind fresh keys that sort
+    earlier lexicographically.
+    """
     result = CleanupResult()
     current_time = now or datetime.now(timezone.utc)
     cutoff = current_time - timedelta(hours=ttl_hours)
@@ -74,10 +80,7 @@ async def cleanup_temp_uploads(
 
     for prefix in prefixes:
         try:
-            objects = await storage.list_objects_with_metadata(
-                prefix,
-                max_keys=max_keys + 1,
-            )
+            objects = await storage.list_objects_with_metadata(prefix)
         except Exception as exc:  # noqa: BLE001
             result.errors.append(f"list({prefix}): {exc}")
             continue
@@ -87,13 +90,18 @@ async def cleanup_temp_uploads(
 
         if len(expired) > max_keys:
             logger.warning(
-                "temp_uploads.cleanup.max_keys_reached",
+                "temp_uploads.cleanup.expired_candidates_exceed_max_keys_cap",
                 prefix=prefix,
+                expired_candidates=len(expired),
                 max_keys=max_keys,
-                listed=len(expired),
+                message=(
+                    "expired candidates exceed max_keys cap; processing oldest "
+                    "subset this cycle"
+                ),
             )
+            expired = expired[:max_keys]
 
-        for obj in expired[:max_keys]:
+        for obj in expired:
             candidates_by_key.setdefault(obj.key, (prefix, obj.size_bytes))
 
     if not candidates_by_key:

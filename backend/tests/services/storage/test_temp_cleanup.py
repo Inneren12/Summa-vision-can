@@ -51,7 +51,7 @@ class FakeStorage(StorageInterface):
     async def list_objects(self, prefix: str) -> list[str]:
         return [obj.key for obj in self.objects if obj.key.startswith(prefix)]
 
-    async def list_objects_with_metadata(self, prefix: str, max_keys: int | None = None) -> list[StorageObjectMetadata]:
+    async def list_objects_with_metadata(self, prefix: str) -> list[StorageObjectMetadata]:
         return [obj for obj in self.objects if obj.key.startswith(prefix)]
 
     async def generate_presigned_url(self, path: str, ttl: int = 3600) -> str:
