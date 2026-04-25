@@ -126,6 +126,49 @@ void main() {
       expect(find.text(l10n.chartConfigBackToPreviewButton), findsOneWidget);
     });
 
+
+    testWidgets(
+      'UI does not show stale download after new failure',
+      (tester) async {
+        await _pump(
+          tester,
+          genState: const ChartGenerationState(
+            phase: GenerationPhase.success,
+            result: GenerationResult(
+              publicationId: 7,
+              cdnUrlLowres: 'https://placehold.co/1080x1080.png',
+              s3KeyHighres: 'publications/7/v1/hi.png',
+              version: 2,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('download_button')), findsOneWidget);
+
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(ChartConfigScreen)),
+        );
+        final notifier =
+            container.read(chartGenerationNotifierProvider.notifier)
+                as _MockGenerationNotifier;
+        notifier.emit(
+          const ChartGenerationState(
+            phase: GenerationPhase.failed,
+            errorCode: 'CHART_EMPTY_DF',
+            errorMessage: 'backend says empty',
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final l10n = _l10n(tester);
+        expect(find.text(l10n.errorChartEmptyData), findsOneWidget);
+        expect(find.byKey(const Key('download_button')), findsNothing);
+        expect(find.byKey(const Key('generate_another_button')), findsNothing);
+        expect(find.byKey(const Key('back_to_preview_button')), findsNothing);
+      },
+    );
+
     testWidgets('failed state falls back to localized status', (tester) async {
       await _pump(
         tester,
@@ -171,7 +214,8 @@ void main() {
           ),
         );
         await tester.pump();
-        expect(find.text('Нет данных для построения графика.'), findsOneWidget);
+        final l10n = _l10n(tester);
+        expect(find.text(l10n.errorChartEmptyData), findsOneWidget);
 
         // Step 2: retry emits a new failed state with NO code, only a raw
         // detail. The widget must swap to the raw passthrough and the
@@ -191,7 +235,7 @@ void main() {
         await tester.pump();
 
         expect(
-          find.text('Нет данных для построения графика.'),
+          find.text(l10n.errorChartEmptyData),
           findsNothing,
           reason: 'stale localized text must be cleared',
         );
@@ -227,12 +271,31 @@ void main() {
       await _pump(tester, locale: const Locale('ru'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Жильё', skipOffstage: false), findsAtLeastNWidgets(1));
-      expect(find.text('Инфляция', skipOffstage: false), findsAtLeastNWidgets(1));
-      expect(find.text('Занятость', skipOffstage: false), findsAtLeastNWidgets(1));
-      expect(find.text('Торговля', skipOffstage: false), findsAtLeastNWidgets(1));
-      expect(find.text('Энергетика', skipOffstage: false), findsAtLeastNWidgets(1));
-      expect(find.text('Демография', skipOffstage: false), findsAtLeastNWidgets(1));
+      final l10n = _l10n(tester);
+      expect(
+        find.text(l10n.backgroundCategoryHousing, skipOffstage: false),
+        findsAtLeastNWidgets(1),
+      );
+      expect(
+        find.text(l10n.backgroundCategoryInflation, skipOffstage: false),
+        findsAtLeastNWidgets(1),
+      );
+      expect(
+        find.text(l10n.backgroundCategoryEmployment, skipOffstage: false),
+        findsAtLeastNWidgets(1),
+      );
+      expect(
+        find.text(l10n.backgroundCategoryTrade, skipOffstage: false),
+        findsAtLeastNWidgets(1),
+      );
+      expect(
+        find.text(l10n.backgroundCategoryEnergy, skipOffstage: false),
+        findsAtLeastNWidgets(1),
+      );
+      expect(
+        find.text(l10n.backgroundCategoryDemographics, skipOffstage: false),
+        findsAtLeastNWidgets(1),
+      );
     });
 
     testWidgets('ChartType dropdown values remain EN (Category D)', (tester) async {
@@ -267,7 +330,8 @@ void main() {
       await _pump(tester, locale: const Locale('ru'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Формат публикации'), findsOneWidget);
+      final l10n = _l10n(tester);
+      expect(find.text(l10n.chartConfigSizePresetLabel), findsOneWidget);
     });
 
     testWidgets('headline max-char message uses amended RU form (Amendment 2)', (tester) async {
@@ -292,7 +356,8 @@ void main() {
         );
         await tester.pump();
 
-        expect(find.text('Нет данных для построения графика.'), findsOneWidget);
+        final l10n = _l10n(tester);
+        expect(find.text(l10n.errorChartEmptyData), findsOneWidget);
         expect(find.textContaining('raw backend text'), findsNothing);
       },
     );

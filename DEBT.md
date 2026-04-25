@@ -52,6 +52,8 @@ Rules:
 
 > Updated 2026-04-24: Slice 3.11 pre-recon confirmed phase enum divergence persists but has limited practical impact — the 5 generationStatus* ARB keys are rendered directly from screen widgets via conditional branches, not via a centralized phase→key mapper (Part A2 §3.6). Enum unification remains opportunistic with no UX-blocking symptom.
 
+> Updated 2026-04-25: FR2 resolved two regressions surfaced by review — terminal failure/timeout transitions in both ChartGenerationNotifier and GenerationNotifier now clear stale success artifacts (result / resultUrl) in addition to errorCode. Fresh-constructor pattern extended to all success-artifact fields with inline ADR comments to prevent regression. RU hardcoded localized literals in chart_config_screen_localization_test.dart replaced with l10n.<key>-derived assertions. Phase enum unification (the DEBT-031 proper) remains open.
+
 ### DEBT-032: Locale-switch smoke test harness harmonization
 
 - **Source:** Phase 3 Slice 3.11 Consolidation recon

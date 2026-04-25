@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:summa_vision_admin/features/graphics/application/generation_state_notifier.dart';
 import 'package:summa_vision_admin/features/graphics/data/graphic_generation_repository.dart';
@@ -38,6 +42,15 @@ class _FakeGraphicGenerationRepository
   }
 }
 
+
+
+final _successResultJson = jsonEncode({
+  'publication_id': 42,
+  'cdn_url_lowres': 'https://cdn.example.com/chart.png',
+  's3_key_highres': 'publications/42/v1/chart_hi.png',
+  'version': 3,
+});
+
 const _sampleRequest = GraphicsGenerateRequest(
   dataKey: 'statcan/processed/13-10-0888-01/data.parquet',
   chartType: 'line',
@@ -47,6 +60,104 @@ const _sampleRequest = GraphicsGenerateRequest(
 );
 
 void main() {
+
+  group('ChartGenerationNotifier — stale result clearing', () {
+    test(
+      'failed transition from prior success clears stale result',
+      () async {
+        final fakeRepo = _FakeGraphicGenerationRepository(
+          submittedJobId: 'job-88',
+          statusSequence: [
+            JobStatus(
+              jobId: 'job-88',
+              status: 'success',
+              resultJson: _successResultJson,
+            ),
+            const JobStatus(
+              jobId: 'job-88',
+              status: 'failed',
+              errorCode: 'CHART_EMPTY_DF',
+              errorMessage: 'raw backend text',
+            ),
+          ],
+        );
+
+        final container = ProviderContainer(
+          overrides: [
+            graphicGenerationRepositoryProvider.overrideWithValue(fakeRepo),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final notifier = container.read(chartGenerationNotifierProvider.notifier);
+
+        await notifier.generate(_sampleRequest);
+        expect(container.read(chartGenerationNotifierProvider).phase, GenerationPhase.success);
+        expect(container.read(chartGenerationNotifierProvider).result, isNotNull);
+
+        await notifier.generate(_sampleRequest);
+
+        final state = container.read(chartGenerationNotifierProvider);
+        expect(state.phase, GenerationPhase.failed);
+        expect(state.errorCode, 'CHART_EMPTY_DF');
+        expect(
+          state.result,
+          isNull,
+          reason: 'terminal failure must not retain previous successful result',
+        );
+      },
+      timeout: const Timeout(Duration(seconds: 30)),
+    );
+
+    test(
+      'timeout transition from prior success clears stale result',
+      () async {
+        final fakeRepo = _FakeGraphicGenerationRepository(
+          submittedJobId: 'job-89',
+          statusSequence: [
+            JobStatus(
+              jobId: 'job-89',
+              status: 'success',
+              resultJson: _successResultJson,
+            ),
+            const JobStatus(jobId: 'job-89', status: 'running'),
+          ],
+        );
+
+        final container = ProviderContainer(
+          overrides: [
+            graphicGenerationRepositoryProvider.overrideWithValue(fakeRepo),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final notifier = container.read(chartGenerationNotifierProvider.notifier);
+
+        await notifier.generate(_sampleRequest);
+        expect(container.read(chartGenerationNotifierProvider).phase, GenerationPhase.success);
+        expect(container.read(chartGenerationNotifierProvider).result, isNotNull);
+
+        late Future<void> secondRun;
+        fakeAsync((async) {
+          secondRun = notifier.generate(_sampleRequest);
+          async.elapse(const Duration(seconds: 121));
+          async.flushMicrotasks();
+        });
+        await secondRun;
+
+        final state = container.read(chartGenerationNotifierProvider);
+        expect(state.phase, GenerationPhase.timeout);
+        expect(state.errorCode, isNull);
+        expect(
+          state.result,
+          isNull,
+          reason: 'terminal timeout must not retain previous successful result',
+        );
+      },
+      timeout: const Timeout(Duration(seconds: 30)),
+    );
+  });
+
   group('ChartGenerationNotifier — error_code plumbing', () {
     test(
       'propagates backend error_code to state.errorCode on failed job',

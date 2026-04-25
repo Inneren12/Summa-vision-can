@@ -35,9 +35,8 @@ class GenerationNotifier extends Notifier<GenerationState> {
       // Phase 2: Poll
       await _poll(taskId, repo);
     } catch (e) {
-      // Fresh construction — never reuse copyWith for terminal error states,
-      // because copyWith(errorCode: null) is a no-op under `value ?? this.value`
-      // semantics and would leak a stale code from a prior failed run.
+      // Terminal failure: clear stale success artifacts (result, resultUrl) — a
+      // previous successful run must not leak into the new failed state's UI.
       state = GenerationState(
         phase: GenerationPhase.failed,
         taskId: state.taskId,
@@ -65,7 +64,8 @@ class GenerationNotifier extends Notifier<GenerationState> {
       }
 
       if (status.isFailed) {
-        // Fresh construction — see note in generate() catch branch.
+        // Terminal failure: clear stale success artifacts (result, resultUrl) — a
+        // previous successful run must not leak into the new failed state's UI.
         state = GenerationState(
           phase: GenerationPhase.failed,
           taskId: state.taskId,
@@ -78,8 +78,8 @@ class GenerationNotifier extends Notifier<GenerationState> {
       }
     }
 
-    // 60 attempts exhausted — fresh construction so a stale errorCode from
-    // a prior failed run cannot leak into the timeout presentation.
+    // Terminal timeout: clear stale success artifacts (result, resultUrl) — a
+    // previous successful run must not leak into the new timeout state's UI.
     state = GenerationState(
       phase: GenerationPhase.timeout,
       taskId: state.taskId,
