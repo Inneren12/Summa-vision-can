@@ -102,7 +102,7 @@ Per `OPERATOR_AUTOMATION_ROADMAP.md` §2.2 decision: blockers cleared before lau
 | 4.3 🔴 | DEBT-016 — `docs/architecture/ARCHITECTURE.md` LLM Gate references removed or clearly marked `[REMOVED]` | ✅ pre-existing — DEBT-016 resolved 2026-04-12; `docs/architecture/ARCHITECTURE.md` removed and `docs/ARCHITECTURE.md` contains no LLM Gate references |
 | 4.4 🔴 | DEBT-019 — ARCHITECTURE.md flow diagram no longer shows LLM Gate in critical path | ✅ pre-existing — DEBT-019 resolved 2026-04-12; `docs/ARCHITECTURE.md` flow is Data Sources → ETL Pipeline → Cube Catalog → Data Workbench → Visual Engine → Publication |
 | 4.5 🟡 | DEBT-007 — `services/ai/*` + `models/llm_request.py` marked `# BACKLOG:` or deleted | ✅ pre-existing — DEBT-007 resolved 2026-04-12; `backend/src/services/ai/` and `backend/src/models/llm_request.py` are deleted |
-| 4.6 🟡 | Tech debt tempcleanup bug (noted in userMemories recent_updates) — temp_cleanup.py excludes keys referenced by pending jobs | ☐ |
+| 4.6 🟡 | Tech debt tempcleanup bug (noted in userMemories recent_updates) — temp_cleanup.py excludes keys referenced by pending jobs | ✅ pre-existing — DEBT-021 final FR8 close 2026-04-26; pending-job exclusion in `backend/src/services/storage/temp_cleanup.py` (`JobStatus.{QUEUED,RUNNING}`); cross-file test coverage: `backend/tests/services/storage/test_temp_cleanup.py`, `backend/tests/integration/services/storage/test_temp_cleanup_integration.py`, including `test_referenced_pending_keys_do_not_consume_delete_cap` (FR8 regression). |
 
 Other active DEBT entries (not blockers, handled post-launch or during idle time):
 - DEBT-010, DEBT-015, DEBT-022, and any new entries from Stage 4
@@ -246,4 +246,5 @@ DNS cutover executed: __________________
 | Date | Change | Reason |
 |---|---|---|
 | 2026-04-23 | Initial version | Derived from Stage 4 production polish work + operator automation roadmap |
+| 2026-04-26 | §4.6 ✅ | Cross-file recount of temp_cleanup tests; verified pending-job exclusion test by name (`test_referenced_pending_keys_do_not_consume_delete_cap`) plus impl in `backend/src/services/storage/temp_cleanup.py`. Prior audit's "≥5 tests" was an artifact of the prompt, not the underlying requirement. Counted across 2 files: 22 relevant tests. |
 | 2026-04-26 | §4.1-4.6 + §2.1+2.12 audit-and-sync | Section §4 audited against current code + DEBT Resolved table: DEBT-008/007/016/019/020 verified and checklist statuses synced to ✅ with evidence; §4.6 remains ☐ because pending-job exclusion exists but current test file has 4 tests (<5 required by this checklist text). §2.1 + §2.12 verified via Settings `@model_validator` + tests. Items §2.2-§2.11 intentionally left ☐ for founder-only runtime/env launch verification. No code changes in this PR. |
