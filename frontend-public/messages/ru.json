@@ -236,7 +236,11 @@
     "actions": {
       "clone": "Дублировать",
       "cloneInFlight": "Дублирование…",
-      "cloneCannotBeCloned": "Дублировать можно только опубликованные материалы"
+      "cloneCannotBeCloned": "Дублировать можно только опубликованные материалы",
+      "cropZone": "Зона обрезки",
+      "cropZoneShort": "ОБР",
+      "cropZoneTooltip": "Показать зону обрезки для этого шаблона",
+      "cropZoneUnavailable": "Нет зоны обрезки для этого шаблона"
     }
   },
   "undo": {

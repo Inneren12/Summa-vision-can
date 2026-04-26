@@ -34,6 +34,9 @@ interface TopBarProps {
   debugAvailable?: boolean;
   debugEnabled?: boolean;
   onToggleDebug?: () => void;
+  cropZoneEnabled?: boolean;
+  cropZoneAvailable?: boolean;
+  onToggleCropZone?: () => void;
   canClone?: boolean;
   cloneInFlight?: boolean;
   onClone?: () => void;
@@ -62,6 +65,9 @@ export function TopBar({
   debugAvailable,
   debugEnabled,
   onToggleDebug,
+  cropZoneEnabled,
+  cropZoneAvailable,
+  onToggleCropZone,
   canClone = false,
   cloneInFlight = false,
   onClone,
@@ -89,6 +95,7 @@ export function TopBar({
     : !fontsReady
       ? tExport('disabled.loading_fonts')
       : tExport('png.verb');
+  const cropZoneActive = Boolean(cropZoneEnabled && cropZoneAvailable);
 
   return (
     <div style={{ padding: "6px 12px", borderBottom: `1px solid ${TK.c.brd}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
@@ -127,6 +134,31 @@ export function TopBar({
               fontWeight: debugEnabled ? 700 : 400,
             }}
           >DBG</button>
+        )}
+        {onToggleCropZone && (
+          <button
+            type="button"
+            onClick={onToggleCropZone}
+            disabled={!cropZoneAvailable}
+            aria-label={tEditor('actions.cropZone')}
+            title={
+              cropZoneAvailable
+                ? tEditor('actions.cropZoneTooltip')
+                : tEditor('actions.cropZoneUnavailable')
+            }
+            style={{
+              padding: "3px 6px",
+              fontSize: "8px",
+              fontFamily: TK.font.data,
+              background: cropZoneActive ? TK.c.acc : TK.c.bgSurf,
+              color: cropZoneActive ? TK.c.bgApp : TK.c.txtS,
+              border: `1px solid ${cropZoneActive ? TK.c.acc : TK.c.brd}`,
+              borderRadius: "2px",
+              cursor: cropZoneAvailable ? "pointer" : "not-allowed",
+              fontWeight: cropZoneActive ? 700 : 400,
+              opacity: cropZoneAvailable ? 1 : .5,
+            }}
+          >{tEditor('actions.cropZoneShort')}</button>
         )}
         <input ref={fileRef} type="file" accept=".json" onChange={importJSON} style={{ display: "none" }} tabIndex={-1} aria-hidden="true" />
         <button type="button" onClick={() => fileRef.current?.click()} aria-label={tImport('document_json')} title={tImport('document_json')} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.txtS, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", cursor: "pointer" }}>{tImport('label_short')}</button>
