@@ -53,15 +53,36 @@ void main() {
       // Hive — same reason, must be runAsync. Use the binding rather than
       // tester.runAsync because tester may be disposed by the time
       // addTearDown fires; the binding outlives the tester.
-      await TestWidgetsFlutterBinding.instance.runAsync(() async {
-        _bc('99-teardown-runAsync-entered');
-        await box.deleteFromDisk();
-        _bc('99-teardown-deletefromdisk-done');
-        await Hive.close();
-        _bc('99-teardown-hive-close-done');
-        await tempDir.delete(recursive: true);
-        _bc('99-teardown-tempdir-delete-done');
-      });
+      // Each step is wrapped with try/catch + 5s timeout so a hang in one
+      // step doesn't block the others — test outcome is determined by
+      // assertions, not teardown.
+      try {
+        await TestWidgetsFlutterBinding.instance.runAsync(() async {
+          _bc('99-teardown-runAsync-entered');
+          try {
+            await box.deleteFromDisk().timeout(const Duration(seconds: 5));
+            _bc('99-teardown-deletefromdisk-done');
+          } catch (e) {
+            _bc('99-teardown-deletefromdisk-skipped: $e');
+          }
+          try {
+            await Hive.close().timeout(const Duration(seconds: 5));
+            _bc('99-teardown-hive-close-done');
+          } catch (e) {
+            _bc('99-teardown-hive-close-skipped: $e');
+          }
+          try {
+            await tempDir
+                .delete(recursive: true)
+                .timeout(const Duration(seconds: 5));
+            _bc('99-teardown-tempdir-delete-done');
+          } catch (e) {
+            _bc('99-teardown-tempdir-delete-skipped: $e');
+          }
+        });
+      } catch (e) {
+        _bc('99-teardown-outer-error: $e');
+      }
     });
 
     const storageKey = 'statcan/processed/13-10-0888-01/2024-12-15.parquet';
@@ -134,6 +155,19 @@ void main() {
     );
     _bc('08-pumpWidget-returned');
 
+    // Drive cubeDiffProvider to completion in real zone — its body does
+    // service.saveSnapshot → Hive box.put which only completes in real
+    // I/O zone. Without this, pumpAndSettle returns with the widget tree
+    // settled into the loading state and find.text on the banner finds 0.
+    await tester.runAsync(() async {
+      _bc('08a-priming-providers-start');
+      await container.read(dataPreviewProvider.future);
+      _bc('08b-dataPreview-future-resolved');
+      await container.read(cubeDiffProvider.future);
+      _bc('08c-cubeDiff-future-resolved');
+    });
+    _bc('08d-priming-runAsync-exited');
+
     _bc('09-pumpAndSettle-1-start');
     await tester.pumpAndSettle(const Duration(seconds: 2));
     _bc('10-pumpAndSettle-1-returned');
@@ -157,6 +191,16 @@ void main() {
     _bc('16-invalidating-cubeDiffProvider');
     container.invalidate(cubeDiffProvider);
     _bc('17-invalidated-cubeDiffProvider');
+
+    // Same priming pattern as first cycle — Hive write must complete in real zone.
+    await tester.runAsync(() async {
+      _bc('17a-priming-2-start');
+      await container.read(dataPreviewProvider.future);
+      _bc('17b-dataPreview-2-resolved');
+      await container.read(cubeDiffProvider.future);
+      _bc('17c-cubeDiff-2-resolved');
+    });
+    _bc('17d-priming-2-exited');
 
     _bc('18-pumpAndSettle-2-start');
     await tester.pumpAndSettle(const Duration(seconds: 2));
