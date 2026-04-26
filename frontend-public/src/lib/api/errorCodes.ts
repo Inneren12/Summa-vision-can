@@ -112,3 +112,29 @@ export function getBackendErrorI18nKey(code: string | null): string | null {
   }
   return null;
 }
+
+/**
+ * Localize a backend error code to a UI string.
+ *
+ * Centralizes the `as never` cast required by next-intl's strict-typed
+ * `t()` when the key is dynamic (computed at runtime, not a literal).
+ * The cast is unsafe in principle but bounded in practice: the key
+ * comes from {@link BACKEND_ERROR_I18N_KEYS}, which is statically
+ * checked against {@link KNOWN_BACKEND_ERROR_CODES}.
+ *
+ * @param t - next-intl translation function (root-level, not scoped).
+ *            Accept any function with `(key: string) => string` shape;
+ *            keeps this helper testable without a NextIntlProvider.
+ * @param code - backend error code (or null/unknown).
+ * @returns localized string for known codes, null otherwise.
+ *          Caller should fall back to the backend `message` field
+ *          when this returns null (and may want to console.warn for
+ *          a non-null but unknown code).
+ */
+export function translateBackendError(
+  t: (key: string) => string,
+  code: string | null,
+): string | null {
+  const key = getBackendErrorI18nKey(code);
+  return key ? t(key as never) : null;
+}

@@ -50,6 +50,20 @@ export class BackendApiError extends Error {
   }
 }
 
+/**
+ * Intentionally not migrated to errorCodes.ts in DEBT-030.
+ *
+ * `fetchAdminPublication` is a load-time call (used by the editor on
+ * mount + admin list views), not a user-action mutation. Load failures
+ * fall back to the `publication.load_failed` key in messages/*.json,
+ * which gives operators a uniformly localized recovery message
+ * regardless of the underlying error code.
+ *
+ * Migration to error_code-aware handling would only be valuable if
+ * load-error UX needs distinction by code (e.g., "archived" vs "not
+ * found" on initial load). Tracked under DEBT-034 follow-up if/when
+ * that need surfaces.
+ */
 export async function fetchAdminPublication(
   id: string,
   opts: { signal?: AbortSignal } = {},
@@ -124,7 +138,17 @@ export async function updateAdminPublication(
     const body = await res.json().catch(() => ({}));
     const payload = extractBackendErrorPayload(body);
 
-    if (payload.code === 'PUBLICATION_NOT_FOUND' || res.status === 404) {
+    // Code-first detection: backend has a structured contract.
+    if (payload.code === 'PUBLICATION_NOT_FOUND') {
+      throw new AdminPublicationNotFoundError(id);
+    }
+
+    // Shape-less 404 backstop: only fires when there is NO structured
+    // payload (e.g., gateway/CDN intercept returning HTML or empty
+    // body). When a payload exists, trust the code — future codes like
+    // PUBLICATION_ARCHIVED on a 404 status must NOT be misclassified
+    // as not-found.
+    if (!payload.code && res.status === 404) {
       throw new AdminPublicationNotFoundError(id);
     }
 

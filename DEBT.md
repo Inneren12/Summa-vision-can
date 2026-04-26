@@ -104,7 +104,7 @@ Rules:
 - **Severity:** medium
 - **Category:** architecture
 - **Status:** resolved
-- **Description:** Editor-facing backend flows (`PATCH /api/v1/admin/publications/{id}`, `POST /api/v1/admin/publications/{id}/publish`, `POST /api/v1/admin/publications/{id}/unpublish`) do not currently expose a stable, documented `error_code` contract for client-side localization; UI must rely on a generic localized wrapper (`editorActionError`) with raw backend detail passthrough.
+- **Description:** Frontend admin PATCH publication error handling was status/message based, not aligned to backend error_code envelopes. Resolved 2026-04-26: dictionary + extractor + autosave wiring cover PATCH /admin/publications/{id} (errorCodes.ts + BackendApiError + autosave consumer). Backend contract for publish/unpublish endpoints emits structured codes (PR1), but no frontend caller exists today; if/when added, errorCodes.ts dictionary already covers PUBLICATION_NOT_FOUND for those endpoints — only consumer-side wiring will be needed.
 - **Impact:** RU operators receive partially localized failure messaging (localized wrapper + backend detail that may remain EN), reducing precision and consistency across error cases.
 - **Resolution:** Introduce endpoint-level structured `error_code` values and mapping docs for admin_publications flows; add Flutter mapper (`lib/l10n/backend_errors.dart`) from code → specific ARB messages; keep generic wrapper only as fallback for unknown codes.
 - **Target:** PR #TBD 2026-04-26
