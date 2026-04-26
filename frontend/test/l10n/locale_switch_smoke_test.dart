@@ -59,6 +59,13 @@ void main() {
     });
   });
 
+  // NOTE: Tests in this group MUST assert against fixed EN/RU literals,
+  // not against l10n(tester).<key>. Using the live l10n helper here would
+  // be tautological — it derives expected text from whatever locale the
+  // app actually booted, so the assertion would always pass regardless of
+  // whether bootstrap resolved the intended locale. Hardcoded literals are
+  // intentional in this group and should NOT be "fixed" by future
+  // refactors. See DEBT-032 FR2 for context.
   group('Bootstrap locale resolution', () {
     testWidgets('boots with persisted ru', (tester) async {
       SharedPreferences.setMockInitialValues({'selected_locale': 'ru'});
@@ -66,7 +73,15 @@ void main() {
       await _pumpShell(tester);
 
       await _openDrawer(tester);
-      expect(find.text(l10n(tester).languageLabel, skipOffstage: false), findsOneWidget);
+      // Bootstrap with persisted 'ru' must render RU label, not EN.
+      // Hardcoded RU literal is intentional — using l10n(tester) here would
+      // be tautological (it would derive expected text from actual locale,
+      // always passing regardless of correctness).
+      expect(
+        find.text('Язык', skipOffstage: false),
+        findsOneWidget,
+        reason: 'Persisted ru should boot in RU; saw non-RU label',
+      );
     });
 
     testWidgets('boots with persisted en', (tester) async {
@@ -75,7 +90,11 @@ void main() {
       await _pumpShell(tester);
 
       await _openDrawer(tester);
-      expect(find.text(l10n(tester).languageLabel, skipOffstage: false), findsOneWidget);
+      expect(
+        find.text('Language', skipOffstage: false),
+        findsOneWidget,
+        reason: 'Persisted en should boot in EN and render EN language label',
+      );
     });
 
     testWidgets('unsupported persisted locale falls back to EN', (tester) async {
@@ -84,7 +103,11 @@ void main() {
       await _pumpShell(tester);
 
       await _openDrawer(tester);
-      expect(find.text(l10n(tester).languageLabel, skipOffstage: false), findsOneWidget);
+      expect(
+        find.text('Language', skipOffstage: false),
+        findsOneWidget,
+        reason: 'Unsupported persisted locale must fall back to EN at bootstrap',
+      );
     });
 
     testWidgets('empty prefs + default device locale boots EN in test env', (
@@ -95,7 +118,11 @@ void main() {
       await _pumpShell(tester);
 
       await _openDrawer(tester);
-      expect(find.text(l10n(tester).languageLabel, skipOffstage: false), findsOneWidget);
+      expect(
+        find.text('Language', skipOffstage: false),
+        findsOneWidget,
+        reason: 'Empty prefs in test env should bootstrap with EN locale',
+      );
     });
   });
 }
