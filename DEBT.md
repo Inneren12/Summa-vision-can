@@ -103,13 +103,27 @@ Rules:
 - **Added:** 2026-04-24
 - **Severity:** medium
 - **Category:** architecture
-- **Status:** accepted
+- **Status:** resolved
 - **Description:** Editor-facing backend flows (`PATCH /api/v1/admin/publications/{id}`, `POST /api/v1/admin/publications/{id}/publish`, `POST /api/v1/admin/publications/{id}/unpublish`) do not currently expose a stable, documented `error_code` contract for client-side localization; UI must rely on a generic localized wrapper (`editorActionError`) with raw backend detail passthrough.
 - **Impact:** RU operators receive partially localized failure messaging (localized wrapper + backend detail that may remain EN), reducing precision and consistency across error cases.
 - **Resolution:** Introduce endpoint-level structured `error_code` values and mapping docs for admin_publications flows; add Flutter mapper (`lib/l10n/backend_errors.dart`) from code → specific ARB messages; keep generic wrapper only as fallback for unknown codes.
-- **Target:** Slice 3.7/3.8 backend-error mapping alignment PR (or earlier backend contract PR if scheduled).
+- **Target:** PR #TBD 2026-04-26
 
 > Updated 2026-04-24: Slice 3.8 `backend_errors.dart` mapper established for 7 job-level error_codes (CHART_EMPTY_DF, CHART_INSUFFICIENT_COLUMNS, UNHANDLED_ERROR, COOL_DOWN_ACTIVE, NO_HANDLER_REGISTERED, INCOMPATIBLE_PAYLOAD_VERSION, UNKNOWN_JOB_TYPE) covering graphics generation errors. Editor-action endpoints (PATCH /publications/{id}, publish, unpublish) still emit no structured error_code and fall back to `editorActionError` generic wrapper. Full resolution requires backend contract PR separate from frontend Phase 3.
+
+> Updated 2026-04-26: RESOLVED. Frontend-public admin editor now parses both nested (`detail.error_code`) and flat (`error_code`) backend envelopes through a shared extractor (`extractBackendErrorPayload`) and maps known codes to localized next-intl keys for EN/RU. Autosave pipeline tests cover 404/422/401/429 + legacy raw-error fallback.
+
+### DEBT-034: Admin/publication backend envelopes are not yet unified
+
+- **Source:** DEBT-030 PR2 follow-up
+- **Added:** 2026-04-26
+- **Severity:** low
+- **Category:** architecture
+- **Status:** active
+- **Description:** AuthMiddleware uses flat error envelope while publication endpoints use nested envelope; frontend extractor handles both. Once auth migrates to nested, the flat-envelope branch in `extractBackendErrorPayload` becomes obsolete.
+- **Impact:** Minor client-side complexity (dual-envelope parsing and diagnostics). No current user-facing bug because both are handled.
+- **Resolution:** Migrate auth handlers to the nested envelope contract, then remove flat branch from frontend extractor and narrow `BackendErrorPayload.envelope`.
+- **Target:** Backend follow-up: migrate auth handlers to nested envelope. Then remove flat branch + update `BackendErrorPayload.envelope` enum.
 
 ### DEBT-027: Autosave retry-reset effect uses exhaustive-deps exception
 

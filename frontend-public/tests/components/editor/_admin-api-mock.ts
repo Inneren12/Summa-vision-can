@@ -9,24 +9,28 @@
 // error-channels) exercised the reducer directly and did not need this.
 
 import type { AdminPublicationResponse } from '@/lib/types/publication';
+import { AdminPublicationNotFoundError as RealAdminPublicationNotFoundError } from '@/lib/api/admin';
 
 export const mockUpdateAdminPublication = jest.fn<
   Promise<AdminPublicationResponse>,
   [string, unknown]
 >();
 
-export class MockAdminPublicationNotFoundError extends Error {
-  constructor(public readonly id: string) {
-    super(`Publication ${id} not found`);
-    this.name = 'AdminPublicationNotFoundError';
-  }
-}
+export class MockAdminPublicationNotFoundError extends RealAdminPublicationNotFoundError {}
 
-jest.mock('@/lib/api/admin', () => ({
-  __esModule: true,
-  updateAdminPublication: mockUpdateAdminPublication,
-  AdminPublicationNotFoundError: MockAdminPublicationNotFoundError,
-}));
+jest.mock('@/lib/api/admin', () => {
+  // Spread the real module so new exports (error classes, etc.)
+  // are available automatically without having to update this mock
+  // every time something is added to admin.ts. We override ONLY the
+  // HTTP function, because that's the only thing tests actually need
+  // to control.
+  const actual = jest.requireActual('@/lib/api/admin');
+  return {
+    __esModule: true,
+    ...actual,
+    updateAdminPublication: (...args: [string, unknown]) => mockUpdateAdminPublication(...args),
+  };
+});
 
 export function resetAdminApiMock(): void {
   mockUpdateAdminPublication.mockReset();

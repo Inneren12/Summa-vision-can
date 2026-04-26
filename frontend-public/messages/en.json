@@ -18,6 +18,12 @@
     },
     "not_found": {
       "reload": "Publication not found — reload the page"
+    },
+    "payload_invalid": {
+      "message": "Changes were rejected. Review the publication fields and try again."
+    },
+    "serialization_error": {
+      "message": "Publication could not be saved due to a server data format issue."
     }
   },
   "import": {
@@ -605,6 +611,13 @@
       "three_metrics_side_by_side": "Three metrics side by side",
       "table_with_conditional_format": "Table with conditional format",
       "same_chart_repeated": "Same chart repeated"
+    }
+  },
+  "errors": {
+    "backend": {
+      "auth_api_key_missing": "Admin authentication failed. Contact an administrator.",
+      "auth_api_key_invalid": "Admin authentication failed. Verify API access settings.",
+      "auth_admin_rate_limited": "Too many admin requests. Wait a moment and try again."
     }
   }
 }
