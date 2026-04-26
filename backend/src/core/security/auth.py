@@ -125,13 +125,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
             if api_key == "":
                 return JSONResponse(
-                    {"error": "Missing X-API-KEY header"},
+                    {"error": "Missing X-API-KEY header", "error_code": "AUTH_API_KEY_MISSING"},
                     status_code=401,
                 )
 
             if api_key != self._admin_api_key:
                 return JSONResponse(
-                    {"error": "Invalid API key"},
+                    {"error": "Invalid API key", "error_code": "AUTH_API_KEY_INVALID"},
                     status_code=401,
                 )
 
@@ -139,7 +139,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             client_key: str = api_key[:8]
             if not self._rate_limiter.is_allowed(client_key):
                 return JSONResponse(
-                    {"error": "Rate limit exceeded. Max 10 requests/min for admin endpoints."},
+                    {"error": "Rate limit exceeded. Max 10 requests/min for admin endpoints.", "error_code": "AUTH_ADMIN_RATE_LIMITED"},
                     status_code=429,
                 )
 

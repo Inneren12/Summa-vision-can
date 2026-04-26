@@ -39,6 +39,7 @@ from src.schemas.publication import (
     VisualConfig,
 )
 from src.services.audit import AuditWriter
+from src.services.publications.exceptions import PublicationNotFoundError
 
 
 def _classify_workflow_event(
@@ -322,10 +323,7 @@ async def get_publication(
     """Return a single publication by primary key."""
     publication = await repo.get_by_id(publication_id)
     if publication is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Publication not found",
-        )
+        raise PublicationNotFoundError()
     return _serialize(publication)
 
 
@@ -373,10 +371,7 @@ async def update_publication(
     # after ``update_fields`` mutates the row.
     previous = await repo.get_by_id(publication_id)
     if previous is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Publication not found",
-        )
+        raise PublicationNotFoundError()
     previous_workflow: str | None = None
     if previous.review:
         try:
@@ -390,10 +385,7 @@ async def update_publication(
     payload = body.model_dump(exclude_unset=True)
     publication = await repo.update_fields(publication_id, payload)
     if publication is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Publication not found",
-        )
+        raise PublicationNotFoundError()
 
     new_workflow: str | None = None
     if body.review is not None:
@@ -491,10 +483,7 @@ async def publish_publication(
     """
     publication = await repo.publish(publication_id)
     if publication is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Publication not found",
-        )
+        raise PublicationNotFoundError()
 
     # Mirror into review.workflow when a review payload exists. We
     # cannot know the ``fromWorkflow`` safely from the backend (no
@@ -545,10 +534,7 @@ async def unpublish_publication(
     """
     publication = await repo.unpublish(publication_id)
     if publication is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Publication not found",
-        )
+        raise PublicationNotFoundError()
 
     publication = await _sync_workflow_from_status(
         repo, publication, target_workflow="draft",

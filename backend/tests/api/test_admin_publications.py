@@ -676,3 +676,81 @@ async def test_public_gallery_includes_editorial_excludes_visual_config(
     assert "visual_config" not in pub
     assert "s3_key_lowres" not in pub
     assert "s3_key_highres" not in pub
+
+
+@pytest.mark.asyncio
+async def test_patch_publication_not_found_returns_structured_error_code(session_factory) -> None:
+    """PATCH on non-existent publication returns structured PUBLICATION_NOT_FOUND."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.patch(
+            "/api/v1/admin/publications/999999",
+            json={"headline": "test"},
+            headers=_auth_headers(),
+        )
+
+    assert response.status_code == 404
+    body = response.json()
+    assert body["detail"]["error_code"] == "PUBLICATION_NOT_FOUND"
+    assert body["detail"]["message"] == "Publication not found."
+
+
+@pytest.mark.asyncio
+async def test_publish_publication_not_found_returns_structured_error_code(session_factory) -> None:
+    """Publish on non-existent publication returns structured PUBLICATION_NOT_FOUND."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/admin/publications/999999/publish",
+            headers=_auth_headers(),
+        )
+
+    assert response.status_code == 404
+    body = response.json()
+    assert body["detail"]["error_code"] == "PUBLICATION_NOT_FOUND"
+    assert body["detail"]["message"] == "Publication not found."
+
+
+@pytest.mark.asyncio
+async def test_unpublish_publication_not_found_returns_structured_error_code(session_factory) -> None:
+    """Unpublish on non-existent publication returns structured PUBLICATION_NOT_FOUND."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/admin/publications/999999/unpublish",
+            headers=_auth_headers(),
+        )
+
+    assert response.status_code == 404
+    body = response.json()
+    assert body["detail"]["error_code"] == "PUBLICATION_NOT_FOUND"
+    assert body["detail"]["message"] == "Publication not found."
+
+
+@pytest.mark.asyncio
+async def test_patch_publication_invalid_payload_returns_structured_error_code(
+    session_factory,
+) -> None:
+    """PATCH with invalid body returns PUBLICATION_UPDATE_PAYLOAD_INVALID."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = resp.json()["id"]
+        response = await client.patch(
+            f"/api/v1/admin/publications/{pub_id}",
+            json={"headline": 12345},
+            headers=_auth_headers(),
+        )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["detail"]["error_code"] == "PUBLICATION_UPDATE_PAYLOAD_INVALID"
+    assert "validation_errors" in body["detail"]["details"]
