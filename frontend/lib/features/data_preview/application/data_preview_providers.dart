@@ -40,19 +40,24 @@ final previewSortAscendingProvider = StateProvider<bool>((ref) => true);
 ///
 /// Filtering max 100 rows in-memory is negligible, so no debounce needed.
 final filteredPreviewRowsProvider =
-    Provider<List<Map<String, dynamic>>>((ref) {
+    Provider<List<({int originalIndex, Map<String, dynamic> data})>>((ref) {
   final preview = ref.watch(dataPreviewProvider).valueOrNull;
   final filter = ref.watch(previewFilterProvider);
-  if (preview == null) return [];
+  if (preview == null) return const [];
 
-  var rows = preview.data.where((row) {
-    // GEO filter
+  final indexedRows = [
+    for (var i = 0; i < preview.data.length; i++)
+      (originalIndex: i, data: preview.data[i]),
+  ];
+
+  var rows = indexedRows.where((entry) {
+    final row = entry.data;
+
     if (filter.geoFilter != null && filter.geoFilter!.isNotEmpty) {
       final geo = row['GEO']?.toString() ?? '';
       if (geo != filter.geoFilter) return false;
     }
 
-    // Date range filters (string comparison works for ISO/YYYY-MM format)
     if (filter.dateFromFilter != null && filter.dateFromFilter!.isNotEmpty) {
       final refDate = row['REF_DATE']?.toString() ?? '';
       if (refDate.compareTo(filter.dateFromFilter!) < 0) return false;
@@ -62,7 +67,6 @@ final filteredPreviewRowsProvider =
       if (refDate.compareTo(filter.dateToFilter!) > 0) return false;
     }
 
-    // Free-text search across all columns
     if (filter.searchText != null && filter.searchText!.isNotEmpty) {
       final needle = filter.searchText!.toLowerCase();
       final match = row.values.any((v) {
@@ -75,13 +79,12 @@ final filteredPreviewRowsProvider =
     return true;
   }).toList();
 
-  // Client-side sorting
   final sortCol = ref.watch(previewSortColumnProvider);
   final sortAsc = ref.watch(previewSortAscendingProvider);
   if (sortCol != null) {
     rows.sort((a, b) {
-      final aVal = a[sortCol];
-      final bVal = b[sortCol];
+      final aVal = a.data[sortCol];
+      final bVal = b.data[sortCol];
       if (aVal == null && bVal == null) return 0;
       if (aVal == null) return sortAsc ? 1 : -1;
       if (bVal == null) return sortAsc ? -1 : 1;

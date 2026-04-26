@@ -94,4 +94,53 @@ void main() {
 
     expect(find.textContaining('no diff tracking', skipOffstage: false), findsAtLeastNWidgets(1));
   });
+
+  testWidgets(
+    'highlight stays on correct business row after sort (regression for index mismatch)',
+    (tester) async {
+      const sortablePreview = DataPreviewResponse(
+        storageKey: 'k',
+        rows: 3,
+        columns: 1,
+        columnNames: ['VALUE'],
+        data: [
+          {'VALUE': 100},
+          {'VALUE': 999},
+          {'VALUE': 300},
+        ],
+        productId: 'X',
+      );
+
+      await tester.pumpWidget(
+        _screen(
+          preview: sortablePreview,
+          diff: const CubeDiff.computed(changedCells: {DiffCellKey(1, 'VALUE')}),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('VALUE'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('VALUE'));
+      await tester.pumpAndSettle();
+
+      final accent = AppTheme.dark.extension<SummaTheme>()!.accentMuted;
+      final highlight999 = find.ancestor(
+        of: find.text('999'),
+        matching: find.byWidgetPredicate((w) => w is Container && w.color == accent),
+      );
+      final highlight300 = find.ancestor(
+        of: find.text('300'),
+        matching: find.byWidgetPredicate((w) => w is Container && w.color == accent),
+      );
+      final highlight100 = find.ancestor(
+        of: find.text('100'),
+        matching: find.byWidgetPredicate((w) => w is Container && w.color == accent),
+      );
+
+      expect(highlight999, findsAtLeastNWidgets(1));
+      expect(highlight300, findsNothing);
+      expect(highlight100, findsNothing);
+    },
+  );
 }

@@ -104,7 +104,7 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
     final sortCol = ref.watch(previewSortColumnProvider);
     final sortAsc = ref.watch(previewSortAscendingProvider);
     final diffAsync = ref.watch(cubeDiffProvider);
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -153,22 +153,28 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Text(
                     preview.productId == null
-                        ? l10n.dataPreviewDiffNoProductId
-                        : l10n.dataPreviewDiffNoBaseline,
+                        ? (l10n?.dataPreviewDiffNoProductId ??
+                            'This data has no diff tracking')
+                        : (l10n?.dataPreviewDiffNoBaseline ??
+                            'First view — no comparison available'),
                     style: TextStyle(color: _theme.textSecondary, fontSize: 12),
                   ),
                 ),
               SchemaChangedCubeDiff() => Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Text(
-                    l10n.dataPreviewDiffSchemaChanged,
+                    l10n?.dataPreviewDiffSchemaChanged ??
+                        'Schema changed since last view — diff unavailable',
                     style: TextStyle(color: _theme.textSecondary, fontSize: 12),
                   ),
                 ),
               ComputedCubeDiff(:final changedCells) => Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Text(
-                    l10n.dataPreviewDiffStatusLabel(changedCells.length),
+                    l10n?.dataPreviewDiffStatusLabel(changedCells.length) ??
+                        (changedCells.length == 1
+                            ? '1 cell changed since last view'
+                            : '${changedCells.length} cells changed since last view'),
                     style: TextStyle(color: _theme.textSecondary, fontSize: 12),
                   ),
                 ),
@@ -481,7 +487,7 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
 
   Widget _buildDataTable(
     List<String> columnNames,
-    List<Map<String, dynamic>> rows,
+    List<({int originalIndex, Map<String, dynamic> data})> rows,
     String? sortCol,
     bool sortAsc,
     DataPreviewResponse preview,
@@ -521,7 +527,9 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
             );
           }).toList(),
           rows: List.generate(rows.length, (index) {
-            final row = rows[index];
+            final entry = rows[index];
+            final row = entry.data;
+            final originalIndex = entry.originalIndex;
             final isEven = index % 2 == 0;
             return DataRow(
               color: WidgetStateProperty.all(
@@ -533,7 +541,7 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
                 final value = row[name];
                 final isNumeric = firstRow[name] is num;
                 final highlighted = diff is ComputedCubeDiff &&
-                    diff.changedCells.contains(DiffCellKey(index, name));
+                    diff.changedCells.contains(DiffCellKey(originalIndex, name));
                 return DataCell(
                   _buildCell(value, isNumeric, highlighted: highlighted),
                 );

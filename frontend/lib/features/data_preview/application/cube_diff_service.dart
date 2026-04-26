@@ -64,13 +64,26 @@ class CubeDiffService {
     return keysToRemove.length;
   }
 
+  /// Compute diff between baseline and current.
+  ///
+  /// Out of scope (v1):
+  /// - Added rows (current.data.length > baseline.data.length): not counted
+  /// - Removed rows (baseline.data.length > current.data.length): not counted
+  /// Only cell-level changes within the common row range are reported.
+  /// Banner count reflects changedCells, not total rows that differ.
   CubeDiff computeDiff(
     CubeDiffSnapshot? baseline,
     DataPreviewResponse current,
   ) {
     if (baseline == null) return const NoBaselineCubeDiff();
 
-    if (Set.of(baseline.columnNames) != Set.of(current.columnNames)) {
+    // Dart Set does not have structural equality for ==.
+    final baselineColumns = baseline.columnNames.toSet();
+    final currentColumns = current.columnNames.toSet();
+    final schemaUnchanged =
+        baselineColumns.length == currentColumns.length &&
+        baselineColumns.containsAll(currentColumns);
+    if (!schemaUnchanged) {
       return const SchemaChangedCubeDiff();
     }
 

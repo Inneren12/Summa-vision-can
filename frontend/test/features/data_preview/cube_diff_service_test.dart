@@ -47,6 +47,45 @@ void main() {
       expect(svc.computeDiff(null, _resp()), isA<NoBaselineCubeDiff>());
     });
 
+    test('same column set returns ComputedCubeDiff (regression for Set != bug)', () {
+      final baseline = CubeDiffSnapshot(
+        columnNames: ['a', 'b'],
+        data: const [
+          {'a': 1, 'b': 2}
+        ],
+        savedAtMillis: 0,
+      );
+      final current = _resp(cols: ['a', 'b'], rows: const [
+        {'a': 1, 'b': 99}
+      ]);
+      final diff = CubeDiffService(box).computeDiff(baseline, current);
+      expect(
+        diff,
+        isA<ComputedCubeDiff>(),
+        reason: 'Same column set should NOT trigger schema-changed bail-out',
+      );
+      expect((diff as ComputedCubeDiff).changedCells.length, 1);
+    });
+
+    test('column reorder still treated as same schema', () {
+      final baseline = CubeDiffSnapshot(
+        columnNames: ['a', 'b'],
+        data: const [
+          {'a': 1, 'b': 2}
+        ],
+        savedAtMillis: 0,
+      );
+      final current = _resp(cols: ['b', 'a'], rows: const [
+        {'a': 1, 'b': 2}
+      ]);
+      final diff = CubeDiffService(box).computeDiff(baseline, current);
+      expect(
+        diff,
+        isNot(isA<SchemaChangedCubeDiff>()),
+        reason: 'Column reorder is not a schema change',
+      );
+    });
+
     test('schema change returns SchemaChangedCubeDiff', () {
       final baseline = CubeDiffSnapshot(
         columnNames: ['a'],

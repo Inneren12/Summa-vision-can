@@ -66,6 +66,7 @@ Widget _buildPreviewScreen({
     overrides: [
       previewOverride,
       previewStorageKeyProvider.overrideWith((ref) => storageKey),
+      cubeDiffProvider.overrideWith((ref) async => const CubeDiff.noBaseline()),
       ...extraOverrides,
     ],
     child: MaterialApp(
