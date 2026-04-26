@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:summa_vision_admin/core/theme/app_theme.dart';
+import 'package:summa_vision_admin/features/data_preview/application/cube_diff_service.dart';
 import 'package:summa_vision_admin/features/data_preview/application/data_preview_providers.dart';
 import 'package:summa_vision_admin/features/data_preview/data/data_preview_repository.dart';
 import 'package:summa_vision_admin/features/data_preview/domain/data_preview_response.dart';
@@ -40,25 +41,25 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    final storageKey = 'statcan/processed/13-10-0888-01/2024-12-15.parquet';
+    const storageKey = 'statcan/processed/13-10-0888-01/2024-12-15.parquet';
     final repo = _SequencedRepo([
-      DataPreviewResponse(
+      const DataPreviewResponse(
         storageKey: storageKey,
         rows: 2,
         columns: 2,
-        columnNames: const ['A', 'B'],
-        data: const [
+        columnNames: ['A', 'B'],
+        data: [
           {'A': 1, 'B': 'x'},
           {'A': 2, 'B': 'y'},
         ],
         productId: '13-10-0888-01',
       ),
-      DataPreviewResponse(
+      const DataPreviewResponse(
         storageKey: storageKey,
         rows: 2,
         columns: 2,
-        columnNames: const ['A', 'B'],
-        data: const [
+        columnNames: ['A', 'B'],
+        data: [
           {'A': 1, 'B': 'x'},
           {'A': 2, 'B': 'z'},
         ],
@@ -66,28 +67,58 @@ void main() {
       ),
     ]);
 
-    late ProviderContainer container;
+    // Use an explicit ProviderContainer so we can drive provider rebuilds
+    // deterministically with `await container.read(provider.future)` instead
+    // of relying on widget-tree subscription timing during `pumpAndSettle`.
+    final container = ProviderContainer(
+      overrides: [
+        dataPreviewRepositoryProvider.overrideWithValue(repo),
+        cubeDiffSnapshotsBoxProvider.overrideWithValue(box),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    // Set the storage key up front so dataPreviewProvider can fire immediately,
+    // bypassing the Future.microtask race in DataPreviewScreen.initState.
+    container.read(previewStorageKeyProvider.notifier).state = storageKey;
+
+    // Pre-warm permanent listeners on both providers so autoDispose never
+    // collects them between invalidate() and the next frame. Without these,
+    // a brief gap with zero listeners disposes the provider state and the
+    // subsequent rebuild may never get scheduled, causing pumpAndSettle to
+    // hang until its 10-minute timeout.
+    final previewSub = container.listen<AsyncValue<DataPreviewResponse?>>(
+      dataPreviewProvider,
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(previewSub.close);
+    final diffSub = container.listen<AsyncValue<CubeDiff>>(
+      cubeDiffProvider,
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(diffSub.close);
+
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          dataPreviewRepositoryProvider.overrideWithValue(repo),
-          cubeDiffSnapshotsBoxProvider.overrideWithValue(box),
-        ],
-        child: Consumer(builder: (context, ref, _) {
-          container = ProviderScope.containerOf(context);
-          return MaterialApp(
-            theme: AppTheme.dark,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: MediaQuery(
-              data: const MediaQueryData(size: Size(1200, 800)),
-              child: DataPreviewScreen(storageKey: storageKey),
-            ),
-          );
-        }),
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MediaQuery(
+            data: const MediaQueryData(size: Size(1200, 800)),
+            child: DataPreviewScreen(storageKey: storageKey),
+          ),
+        ),
       ),
     );
-    await tester.pumpAndSettle();
+
+    // Drive the first fetch deterministically.
+    await container.read(dataPreviewProvider.future);
+    await container.read(cubeDiffProvider.future);
+    await tester.pumpAndSettle(const Duration(seconds: 2));
 
     final element1 = tester.element(find.byType(DataPreviewScreen));
     final l10n1 = AppLocalizations.of(element1)!;
@@ -96,9 +127,14 @@ void main() {
       findsAtLeastNWidgets(1),
     );
 
+    // Force re-fetch with explicit await chain. Awaiting the new future after
+    // each invalidate eliminates dependence on widget-tree timing and
+    // guarantees _SequencedRepo._idx advances before assertions run.
     container.invalidate(dataPreviewProvider);
+    await container.read(dataPreviewProvider.future);
     container.invalidate(cubeDiffProvider);
-    await tester.pumpAndSettle();
+    await container.read(cubeDiffProvider.future);
+    await tester.pumpAndSettle(const Duration(seconds: 2));
 
     final element2 = tester.element(find.byType(DataPreviewScreen));
     final l10n2 = AppLocalizations.of(element2)!;
