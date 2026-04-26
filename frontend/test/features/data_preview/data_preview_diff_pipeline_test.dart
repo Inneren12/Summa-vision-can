@@ -33,11 +33,22 @@ void main() {
   testWidgets('first view no baseline, refresh shows 1 change and highlight',
       (tester) async {
     final tempDir = await Directory.systemTemp.createTemp('cube_diff_pipeline_');
+
+    // Defensive: if a prior test in the same isolate left Hive open at a
+    // different path, close it before re-initializing. Hive.close() is a
+    // no-op when nothing is open. Without this guard, Hive.openBox below
+    // can deadlock on internal locks held by the leaked state, hanging
+    // pumpAndSettle for its full timeout.
+    await Hive.close();
+
     Hive.init(tempDir.path);
     final box = await Hive.openBox(
         'cube_diff_pipeline_${DateTime.now().microsecondsSinceEpoch}');
     addTearDown(() async {
       await box.deleteFromDisk();
+      // Symmetric with setUp: close Hive so subsequent tests in the same
+      // isolate get a clean global state.
+      await Hive.close();
       await tempDir.delete(recursive: true);
     });
 

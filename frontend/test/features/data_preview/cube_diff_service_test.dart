@@ -38,6 +38,11 @@ void main() {
 
   tearDown(() async {
     await box.deleteFromDisk();
+    // Close Hive so its global state (paths, locks, open-box registry) does
+    // not leak into other test files in the same isolate. Without this,
+    // alphabetically-later Hive-using tests (e.g. data_preview_diff_pipeline)
+    // can hang in Hive.openBox awaiting a never-released internal lock.
+    await Hive.close();
     await tempDir.delete(recursive: true);
   });
 
