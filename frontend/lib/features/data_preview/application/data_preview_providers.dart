@@ -1,4 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
+import 'cube_diff_service.dart';
 
 import '../data/data_preview_repository.dart';
 import '../domain/data_preview_response.dart';
@@ -90,4 +93,35 @@ final filteredPreviewRowsProvider =
   }
 
   return rows;
+});
+
+
+/// Hive box holding cube diff snapshots, keyed by product_id.
+/// Initialized in main bootstrap; tests override with in-memory box.
+final cubeDiffSnapshotsBoxProvider = Provider<Box>((ref) {
+  throw UnimplementedError(
+    'cubeDiffSnapshotsBoxProvider must be overridden via '
+    'ProviderScope.overrides in main bootstrap',
+  );
+});
+
+final cubeDiffServiceProvider = Provider<CubeDiffService>((ref) {
+  final box = ref.watch(cubeDiffSnapshotsBoxProvider);
+  return CubeDiffService(box);
+});
+
+/// Computes the diff for the current preview.
+final cubeDiffProvider = FutureProvider.autoDispose<CubeDiff>((ref) async {
+  final preview = await ref.watch(dataPreviewProvider.future);
+  if (preview == null) return const CubeDiff.noBaseline();
+
+  final productId = preview.productId;
+  if (productId == null) return const CubeDiff.noBaseline();
+
+  final service = ref.read(cubeDiffServiceProvider);
+  final baseline = service.loadSnapshot(productId);
+  final diff = service.computeDiff(baseline, preview);
+
+  await service.saveSnapshot(productId, preview);
+  return diff;
 });

@@ -164,8 +164,14 @@
   "@generationStatusPolling": {
     "description": "Status label shown while polling for generation completion. {current} is current poll attempt, {total} is max polls. Used by both preview and chart config screens.",
     "placeholders": {
-      "current": {"type": "int", "example": "3"},
-      "total": {"type": "int", "example": "60"}
+      "current": {
+        "type": "int",
+        "example": "3"
+      },
+      "total": {
+        "type": "int",
+        "example": "60"
+      }
     }
   },
   "previewEtaText": "This may take up to 2 minutes.",
@@ -192,14 +198,20 @@
   "@previewDownloadSaved": {
     "description": "Snackbar shown after successful download. {path} is the local file path — passed through as Category C payload.",
     "placeholders": {
-      "path": {"type": "String", "example": "/storage/emulated/0/Download/chart.png"}
+      "path": {
+        "type": "String",
+        "example": "/storage/emulated/0/Download/chart.png"
+      }
     }
   },
   "previewDownloadFailed": "Download failed: {error}",
   "@previewDownloadFailed": {
     "description": "Snackbar shown when download fails. {error} is backend/exception detail interpolated verbatim.",
     "placeholders": {
-      "error": {"type": "String", "example": "Permission denied"}
+      "error": {
+        "type": "String",
+        "example": "Permission denied"
+      }
     }
   },
   "chartConfigAppBarTitle": "Chart Configuration",
@@ -226,7 +238,10 @@
   "@chartConfigProductIdLabel": {
     "description": "Label displaying the StatCan product ID as UI chrome wrapping a backend-provided ID string.",
     "placeholders": {
-      "productId": {"type": "String", "example": "18100004"}
+      "productId": {
+        "type": "String",
+        "example": "18100004"
+      }
     }
   },
   "chartConfigSizePresetLabel": "Size Preset",
@@ -257,21 +272,30 @@
   "@chartConfigEtaRemaining": {
     "description": "ETA text shown during polling. {seconds} is integer seconds remaining.",
     "placeholders": {
-      "seconds": {"type": "int", "example": "45"}
+      "seconds": {
+        "type": "int",
+        "example": "45"
+      }
     }
   },
   "chartConfigPublicationChip": "Publication #{id}",
   "@chartConfigPublicationChip": {
     "description": "Success-state metadata chip showing publication ID. {id} is backend result payload.",
     "placeholders": {
-      "id": {"type": "int", "example": "42"}
+      "id": {
+        "type": "int",
+        "example": "42"
+      }
     }
   },
   "chartConfigVersionChip": "v{version}",
   "@chartConfigVersionChip": {
     "description": "Success-state metadata chip showing version. {version} is backend result payload; 'v' prefix kept as technical token in both locales.",
     "placeholders": {
-      "version": {"type": "String", "example": "1.2.3"}
+      "version": {
+        "type": "String",
+        "example": "1.2.3"
+      }
     }
   },
   "chartConfigDownloadPreviewButton": "Download Preview",
@@ -302,38 +326,62 @@
   "@chartConfigUploadFileLabel": {
     "description": "Selected file display label after upload. {name} is user's local filename (Category C payload).",
     "placeholders": {
-      "name": {"type": "String", "example": "data.csv"}
+      "name": {
+        "type": "String",
+        "example": "data.csv"
+      }
     }
   },
   "chartConfigUploadParseError": "Failed to parse file: {error}",
   "@chartConfigUploadParseError": {
     "description": "Error when uploaded file cannot be parsed as JSON/CSV. {error} is parse exception detail.",
     "placeholders": {
-      "error": {"type": "String", "example": "Invalid JSON at line 3"}
+      "error": {
+        "type": "String",
+        "example": "Invalid JSON at line 3"
+      }
     }
   },
   "chartConfigUploadSummary": "{rows} rows × {columns} columns",
   "@chartConfigUploadSummary": {
     "description": "Parsed-data summary. {rows} is row count, {columns} is column count. Both integers; no plural forms per founder decision (compact numeric display).",
     "placeholders": {
-      "rows": {"type": "int", "example": "150"},
-      "columns": {"type": "int", "example": "8"}
+      "rows": {
+        "type": "int",
+        "example": "150"
+      },
+      "columns": {
+        "type": "int",
+        "example": "8"
+      }
     }
   },
   "chartConfigTableShowingRows": "Showing {shown} of {total} rows",
   "@chartConfigTableShowingRows": {
     "description": "Table truncation info. {shown} = visible row count, {total} = full dataset row count.",
     "placeholders": {
-      "shown": {"type": "int", "example": "100"},
-      "total": {"type": "int", "example": "5000"}
+      "shown": {
+        "type": "int",
+        "example": "100"
+      },
+      "total": {
+        "type": "int",
+        "example": "5000"
+      }
     }
   },
   "chartConfigTableEditCellTitle": "Edit {column} [row {row}]",
   "@chartConfigTableEditCellTitle": {
     "description": "Edit dialog title. {column} = column name (user/backend content), {row} = row index (int).",
     "placeholders": {
-      "column": {"type": "String", "example": "GDP"},
-      "row": {"type": "int", "example": "42"}
+      "column": {
+        "type": "String",
+        "example": "GDP"
+      },
+      "row": {
+        "type": "int",
+        "example": "42"
+      }
     }
   },
   "commonSaveVerb": "Save",
@@ -391,5 +439,26 @@
   "errorJobUnknownType": "Unknown job type.",
   "@errorJobUnknownType": {
     "description": "Mapped from backend error_code UNKNOWN_JOB_TYPE. Dispatcher error — operator should rarely see this."
+  },
+  "dataPreviewDiffStatusLabel": "{count, plural, =0 {No cells changed since last view} =1 {1 cell changed since last view} other {# cells changed since last view}}",
+  "@dataPreviewDiffStatusLabel": {
+    "description": "Banner above data table showing how many cells changed since last view",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dataPreviewDiffNoBaseline": "First view — no comparison available",
+  "@dataPreviewDiffNoBaseline": {
+    "description": "Banner when this is the first time viewing this cube"
+  },
+  "dataPreviewDiffSchemaChanged": "Schema changed since last view — diff unavailable",
+  "@dataPreviewDiffSchemaChanged": {
+    "description": "Banner when columns differ from previous snapshot"
+  },
+  "dataPreviewDiffNoProductId": "This data has no diff tracking",
+  "@dataPreviewDiffNoProductId": {
+    "description": "Banner when storage_key has no parseable product_id (non-StatCan path)"
   }
 }
