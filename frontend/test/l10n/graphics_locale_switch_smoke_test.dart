@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:summa_vision_admin/core/app_bootstrap/app_bootstrap_provider.dart';
 import 'package:summa_vision_admin/core/shell/language_switcher.dart';
-import 'package:summa_vision_admin/core/theme/app_theme.dart';
 import 'package:summa_vision_admin/features/graphics/application/chart_config_notifier.dart';
 import 'package:summa_vision_admin/features/graphics/application/generation_state_notifier.dart';
 import 'package:summa_vision_admin/features/graphics/presentation/chart_config_screen.dart';
-import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
+
+import '../helpers/pump_localized_router.dart';
 
 class _MockChartConfigNotifier extends ChartConfigNotifier {
   _MockChartConfigNotifier(this._initial);
@@ -41,56 +39,43 @@ void main() {
       title: 'Smoke Title',
     );
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          chartConfigNotifierProvider.overrideWith(
-            () => _MockChartConfigNotifier(config),
-          ),
-          chartGenerationNotifierProvider.overrideWith(
-            () => _MockGenerationNotifier(const ChartGenerationState()),
-          ),
-        ],
-        child: Consumer(
-          builder: (context, ref, _) {
-            final bootstrap = ref.watch(appBootstrapProvider);
-            return MaterialApp(
-              theme: AppTheme.dark,
-              locale: bootstrap.when(
-                data: (state) => state.locale,
-                loading: () => const Locale('en'),
-                error: (_, __) => const Locale('en'),
-              ),
-              supportedLocales: AppLocalizations.supportedLocales,
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              home: Scaffold(
-                appBar: AppBar(actions: const [LanguageSwitcher()]),
-                body: const ChartConfigScreen(
-                  storageKey: 'statcan/processed/13-10-0888-01/data.parquet',
-                ),
-              ),
-            );
-          },
+    await pumpLocalizedRouter(
+      tester,
+      home: Scaffold(
+        appBar: AppBar(actions: const [LanguageSwitcher()]),
+        body: const ChartConfigScreen(
+          storageKey: 'statcan/processed/13-10-0888-01/data.parquet',
         ),
       ),
+      overrides: [
+        chartConfigNotifierProvider.overrideWith(
+          () => _MockChartConfigNotifier(config),
+        ),
+        chartGenerationNotifierProvider.overrideWith(
+          () => _MockGenerationNotifier(const ChartGenerationState()),
+        ),
+      ],
     );
-    await tester.pumpAndSettle();
 
-    expect(find.text('Chart Configuration'), findsOneWidget);
-    expect(find.text('Dataset'), findsOneWidget);
-    expect(find.text('Background Category'), findsOneWidget);
+    final enTitle = l10n(tester).chartConfigAppBarTitle;
+    final enDataset = l10n(tester).chartConfigDatasetLabel;
+    final enBackground = l10n(tester).chartConfigBackgroundCategoryLabel;
 
-    final russianButton = find.widgetWithText(
-      TextButton,
-      'Russian',
-      skipOffstage: false,
+    expect(find.text(enTitle), findsOneWidget);
+    expect(find.text(enDataset), findsOneWidget);
+    expect(find.text(enBackground), findsOneWidget);
+
+    await switchLocaleVia(tester, 'ru');
+
+    expect(find.text(l10n(tester).chartConfigAppBarTitle), findsAtLeastNWidgets(1));
+    expect(find.text(l10n(tester).chartConfigDatasetLabel), findsAtLeastNWidgets(1));
+    expect(
+      find.text(l10n(tester).chartConfigBackgroundCategoryLabel),
+      findsAtLeastNWidgets(1),
     );
-    expect(russianButton, findsOneWidget);
-    await tester.tap(russianButton);
-    await tester.pumpAndSettle();
 
-    expect(find.text('Настройка графика'), findsAtLeastNWidgets(1));
-    expect(find.text('Набор данных'), findsAtLeastNWidgets(1));
-    expect(find.text('Категория фона'), findsAtLeastNWidgets(1));
+    expect(find.text(enTitle), findsNothing);
+    expect(find.text(enDataset), findsNothing);
+    expect(find.text(enBackground), findsNothing);
   });
 }
