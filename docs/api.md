@@ -318,3 +318,4 @@ Returns a single published infographic by its ID.
 ## Maintenance
 
 This file MUST be updated in the same PR that changes the described API.
+| POST | `/api/v1/admin/publications/{id}/clone` | Clone a published publication into a new draft. Returns 201 + new publication. |

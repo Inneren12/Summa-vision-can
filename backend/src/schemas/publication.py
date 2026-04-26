@@ -241,6 +241,7 @@ class PublicationResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
     published_at: Optional[datetime] = None
+    cloned_from_publication_id: Optional[int] = None
 
     @field_validator("review", mode="before")
     @classmethod

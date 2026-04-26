@@ -271,3 +271,16 @@ Rules:
 - **Target:** Stage 4 Task 0 full close (`claude/close-infographic-blockers-wkjVX`)
 - **Resolved:** 2026-04-19
 - **Resolution PR:** `claude/close-infographic-blockers-wkjVX` (fix commit `d46edf6`)
+
+
+### DEBT-035: Parallel config_hash computation in pipeline + lineage helper
+
+- **Source:** Phase 1.1 Clone impl recon
+- **Added:** 2026-04-26
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** active
+- **Description:** `_compute_hashes` in `backend/src/services/graphics/pipeline.py:182` inlines its own SHA-256 hashing logic, parallel to the centralized `compute_config_hash` in `backend/src/services/publications/lineage.py`. Both produce the same hash for the same inputs today, but divergence risk exists if either path is updated independently.
+- **Impact:** None today. Risk of silent hash drift if either path changes.
+- **Resolution:** Refactor `_compute_hashes` to call `compute_config_hash` directly. Single helper for `config_hash`; only `content_hash` (which is bytes-based, different inputs) stays inline.
+- **Target:** Opportunistic — bundle with next graphics pipeline refactor.

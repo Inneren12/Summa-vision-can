@@ -39,7 +39,11 @@ from src.schemas.publication import (
     VisualConfig,
 )
 from src.services.audit import AuditWriter
-from src.services.publications.exceptions import PublicationNotFoundError
+from src.services.publications.clone import clone_publication
+from src.services.publications.exceptions import (
+    PublicationCloneNotAllowedError,
+    PublicationNotFoundError,
+)
 
 
 def _classify_workflow_event(
@@ -231,6 +235,7 @@ def _serialize(publication: Publication) -> PublicationResponse:
         created_at=publication.created_at,
         updated_at=publication.updated_at,
         published_at=publication.published_at,
+        cloned_from_publication_id=publication.cloned_from_publication_id,
     )
 
 
@@ -554,6 +559,28 @@ async def unpublish_publication(
     )
     logger.info("publication_unpublished", publication_id=publication.id)
     return _serialize(publication)
+
+
+@router.post(
+    "/{publication_id}/clone",
+    response_model=PublicationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Clone a published publication into a new draft",
+    responses={
+        404: {"description": "Publication not found."},
+        409: {"description": "Publication is not published and cannot be cloned."},
+    },
+)
+async def clone_publication_endpoint(
+    publication_id: int,
+    session: AsyncSession = Depends(get_db),
+) -> PublicationResponse:
+    """Clone a published publication into a new draft."""
+    try:
+        clone = await clone_publication(session=session, source_id=publication_id)
+    except (PublicationNotFoundError, PublicationCloneNotAllowedError) as exc:
+        raise exc
+    return _serialize(clone)
 
 
 __all__ = ["router"]
