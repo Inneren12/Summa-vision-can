@@ -236,7 +236,10 @@
     "actions": {
       "clone": "Clone",
       "cloneInFlight": "Cloning…",
-      "cloneCannotBeCloned": "Only published items can be cloned"
+      "cloneCannotBeCloned": "Only published items can be cloned",
+      "cropZone": "Crop zone",
+      "cropZoneTooltip": "Show platform crop zone for this preset",
+      "cropZoneUnavailable": "No crop zone for this preset"
     }
   },
   "undo": {

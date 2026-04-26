@@ -7,6 +7,7 @@ export type LeftTab = 'templates' | 'blocks' | 'theme';
 export type Direction = 'positive' | 'negative' | 'neutral';
 export type BrandPosition = 'bottom-left' | 'bottom-right';
 export type TextAlign = 'left' | 'center' | 'right';
+export type PlatformId = 'reddit' | 'twitter' | 'linkedin';
 export type WorkflowState = 'draft' | 'in_review' | 'approved' | 'exported' | 'published';
 export type BlockStatus = 'required_locked' | 'required_editable' | 'optional_default' | 'optional_available';
 export type BlockCategory = 'text' | 'data' | 'chart' | 'struct';

@@ -9,6 +9,7 @@ import { TK } from './config/tokens';
 import { PALETTES } from './config/palettes';
 import { BGS } from './config/backgrounds';
 import { SIZES } from './config/sizes';
+import { getCropZoneForPreset } from './config/cropZones';
 import { BREG } from './registry/blocks';
 import { validateImportStrict, hydrateImportedDoc } from './registry/guards';
 import { reducer, initState } from './store/reducer';
@@ -155,6 +156,7 @@ export default function InfographicEditor({
     process.env.NODE_ENV !== 'production',
   );
   const [debugEnabled, setDebugEnabled] = useState<boolean>(false);
+  const [cropZoneEnabled, setCropZoneEnabled] = useState<boolean>(false);
 
   // Synchronously validate initialDoc at mount time so the reducer never
   // sees an invalid doc. Validation failure falls back to the default
@@ -254,6 +256,14 @@ export default function InfographicEditor({
   const setMode = useCallback((m: EditorMode) => dispatch({ type: "SET_MODE", mode: m }), [dispatch]);
   const pal = PALETTES[doc.page.palette] || PALETTES.housing;
   const sz = SIZES[doc.page.size] || SIZES.instagram_1080;
+  const cropZoneAvailable = useMemo(
+    () => getCropZoneForPreset(doc.page.size) !== null,
+    [doc.page.size],
+  );
+  const currentCropZone = useMemo(
+    () => (cropZoneEnabled ? getCropZoneForPreset(doc.page.size) : null),
+    [cropZoneEnabled, doc.page.size],
+  );
   const selB = selId ? doc.blocks[selId] : null;
   const selR = selB ? BREG[selB.type] : null;
   const basePerms = PERMS[mode] || PERMS.design;
@@ -454,8 +464,9 @@ export default function InfographicEditor({
       selectedBlockId: selId,
       hoveredBlockId,
       dpr,
+      cropZone: currentCropZone,
     });
-  }, [selId, hoveredBlockId, sz, doc, pal]);
+  }, [selId, hoveredBlockId, sz, doc, pal, currentCropZone]);
 
   // Stage 4 Task 4: prod-only `?debug=1` availability check. Runs once on
   // mount. Never auto-enables the overlay — it only makes the toggle
@@ -1005,6 +1016,9 @@ export default function InfographicEditor({
         debugAvailable={debugAvailable}
         debugEnabled={debugEnabled}
         onToggleDebug={() => setDebugEnabled((v) => !v)}
+        cropZoneEnabled={cropZoneEnabled}
+        cropZoneAvailable={cropZoneAvailable}
+        onToggleCropZone={() => setCropZoneEnabled((v) => !v)}
         canClone={Boolean(publicationId) && doc.review.workflow === "published"}
         cloneInFlight={cloneInFlight}
         onClone={handleClone}

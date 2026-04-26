@@ -284,3 +284,15 @@ Rules:
 - **Impact:** None today. Risk of silent hash drift if either path changes.
 - **Resolution:** Refactor `_compute_hashes` to call `compute_config_hash` directly. Single helper for `config_hash`; only `content_hash` (which is bytes-based, different inputs) stays inline.
 - **Target:** Opportunistic — bundle with next graphics pipeline refactor.
+
+### DEBT-036: Verify crop zone dimensions against current platform layouts
+
+- **Source:** Phase 1.4 Crop Zone overlays impl
+- **Added:** 2026-04-26
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** active
+- **Description:** `frontend-public/src/components/editor/config/cropZones.ts` currently ships with working-default crop dimensions for Reddit/Twitter/LinkedIn cross-post guides. Those dimensions are estimates and may drift as platform layouts evolve.
+- **Impact:** None functionally; if platform crops differ from defaults, operator-visible guidance may be slightly off.
+- **Resolution:** Capture screenshots from each platform preview flow, measure crop region, then update `CROP_ZONES` to stable ratios (not absolute pixels).
+- **Target:** Opportunistic — bundle with first operator feedback round during Stage C onboarding.
