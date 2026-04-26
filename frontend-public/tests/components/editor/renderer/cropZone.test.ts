@@ -29,8 +29,16 @@ function makeMockCtx() {
 
 describe('crop-zone overlay helpers', () => {
   test('scales coordinates correctly at 0.5 scale', () => {
-    const zone: CropZone = { x: 100, y: 200, w: 400, h: 300, platform: 'twitter' };
-    expect(getScaledCropRect(zone, 540)).toEqual({ x: 50, y: 100, w: 200, h: 150 });
+    const zone: CropZone = {
+      x: 100,
+      y: 200,
+      w: 400,
+      h: 300,
+      baseW: 1080,
+      baseH: 1080,
+      platform: 'twitter',
+    };
+    expect(getScaledCropRect(zone, 540, 540)).toEqual({ x: 50, y: 100, w: 200, h: 150 });
   });
 
   test('detects full-canvas crop rect', () => {
@@ -40,16 +48,82 @@ describe('crop-zone overlay helpers', () => {
 
   test('strokes rect when zone is partial', () => {
     const ctx = makeMockCtx();
-    const zone: CropZone = { x: 0, y: 135, w: 1080, h: 810, platform: 'reddit' };
+    const zone: CropZone = {
+      x: 0,
+      y: 135,
+      w: 1080,
+      h: 810,
+      baseW: 1080,
+      baseH: 1080,
+      platform: 'reddit',
+    };
     drawCropZone(ctx, zone, 1080, 1080);
     expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
   });
 
   test('skips stroke when zone equals full canvas and still draws label', () => {
     const ctx = makeMockCtx();
-    const zone: CropZone = { x: 0, y: 0, w: 1080, h: 810, platform: 'reddit' };
+    const zone: CropZone = {
+      x: 0,
+      y: 0,
+      w: 1080,
+      h: 810,
+      baseW: 1080,
+      baseH: 810,
+      platform: 'reddit',
+    };
     drawCropZone(ctx, zone, 1080, 810);
     expect(ctx.strokeRect).not.toHaveBeenCalled();
     expect(ctx.fillText).toHaveBeenCalledWith('Reddit', expect.any(Number), expect.any(Number));
+  });
+
+  test('native reddit preset renders as full-canvas (no overflow, no border)', () => {
+    const zone: CropZone = {
+      x: 0,
+      y: 0,
+      w: 1200,
+      h: 900,
+      baseW: 1200,
+      baseH: 900,
+      platform: 'reddit',
+    };
+    const scaled = getScaledCropRect(zone, 1200, 900);
+    expect(scaled).toEqual({ x: 0, y: 0, w: 1200, h: 900 });
+    expect(isFullCanvasCropZone(scaled, 1200, 900)).toBe(true);
+
+    const ctx = makeMockCtx();
+    drawCropZone(ctx, zone, 1200, 900);
+    expect(ctx.strokeRect).not.toHaveBeenCalled();
+    expect(ctx.fillText).toHaveBeenCalled();
+  });
+
+  test('twitter preset renders as full-canvas on twitter canvas (1200×675)', () => {
+    const zone: CropZone = {
+      x: 0,
+      y: 0,
+      w: 1200,
+      h: 675,
+      baseW: 1200,
+      baseH: 675,
+      platform: 'twitter',
+    };
+    const scaled = getScaledCropRect(zone, 1200, 675);
+    expect(scaled).toEqual({ x: 0, y: 0, w: 1200, h: 675 });
+    expect(isFullCanvasCropZone(scaled, 1200, 675)).toBe(true);
+  });
+
+  test('cross-post: instagram_1080 → reddit zone on 1080 canvas (no overflow)', () => {
+    const zone: CropZone = {
+      x: 0,
+      y: 135,
+      w: 1080,
+      h: 810,
+      baseW: 1080,
+      baseH: 1080,
+      platform: 'reddit',
+    };
+    const scaled = getScaledCropRect(zone, 1080, 1080);
+    expect(scaled).toEqual({ x: 0, y: 135, w: 1080, h: 810 });
+    expect(isFullCanvasCropZone(scaled, 1080, 1080)).toBe(false);
   });
 });

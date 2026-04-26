@@ -30,4 +30,9 @@ describe('getCropZoneForPreset', () => {
   test('returns null for unknown preset', () => {
     expect(getCropZoneForPreset('unknown_preset_id')).toBeNull();
   });
+
+  test('multi-platform priority loop prefers reddit first', () => {
+    const zone = getCropZoneForPreset('instagram_1080');
+    expect(zone?.platform).toBe('reddit');
+  });
 });

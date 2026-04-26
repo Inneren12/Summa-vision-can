@@ -92,4 +92,16 @@ describe('TopBar — Crop zone toggle', () => {
     const activeStyle = screen.getByRole('button', { name: 'editor.actions.cropZone' }).getAttribute('style');
     expect(activeStyle).not.toEqual(inactiveStyle);
   });
+
+  test('Crop button is not visually active when enabled but unavailable', () => {
+    renderTopBar({
+      onToggleCropZone: () => undefined,
+      cropZoneAvailable: false,
+      cropZoneEnabled: true,
+    });
+    const style = screen
+      .getByRole('button', { name: 'editor.actions.cropZone' })
+      .getAttribute('style') || '';
+    expect(style).toContain('font-weight: 400');
+  });
 });

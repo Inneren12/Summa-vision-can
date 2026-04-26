@@ -293,6 +293,6 @@ Rules:
 - **Category:** code-quality
 - **Status:** active
 - **Description:** `frontend-public/src/components/editor/config/cropZones.ts` currently ships with working-default crop dimensions for Reddit/Twitter/LinkedIn cross-post guides. Those dimensions are estimates and may drift as platform layouts evolve.
-- **Impact:** None functionally; if platform crops differ from defaults, operator-visible guidance may be slightly off.
+- **Impact:** Operator-visible crop guidance reflects the values currently encoded in `cropZones.ts`. These values are estimates pending live platform verification; they have not been audited against current Reddit/Twitter/LinkedIn cross-post layouts.
 - **Resolution:** Capture screenshots from each platform preview flow, measure crop region, then update `CROP_ZONES` to stable ratios (not absolute pixels).
 - **Target:** Opportunistic — bundle with first operator feedback round during Stage C onboarding.

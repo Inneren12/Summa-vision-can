@@ -104,13 +104,15 @@ export function renderOverlay({
 export function getScaledCropRect(
   zone: CropZone,
   logicalW: number,
+  logicalH: number,
 ): { x: number; y: number; w: number; h: number } {
-  const scale = logicalW / 1080;
+  const scaleX = logicalW / zone.baseW;
+  const scaleY = logicalH / zone.baseH;
   return {
-    x: zone.x * scale,
-    y: zone.y * scale,
-    w: zone.w * scale,
-    h: zone.h * scale,
+    x: zone.x * scaleX,
+    y: zone.y * scaleY,
+    w: zone.w * scaleX,
+    h: zone.h * scaleY,
   };
 }
 
@@ -136,7 +138,7 @@ export function drawCropZone(
   logicalW: number,
   logicalH: number,
 ): void {
-  const scaledRect = getScaledCropRect(zone, logicalW);
+  const scaledRect = getScaledCropRect(zone, logicalW, logicalH);
   const { x, y, w, h } = scaledRect;
   const isFullCanvas = isFullCanvasCropZone(scaledRect, logicalW, logicalH);
   const labelText = PLATFORM_LABELS[zone.platform];

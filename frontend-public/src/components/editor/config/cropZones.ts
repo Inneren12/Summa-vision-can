@@ -2,15 +2,19 @@ import type { PlatformId } from '../types';
 import { SIZES } from './sizes';
 
 export interface CropZone {
-  // Coordinates in base 1080-width units; renderer scales by canvas.w / 1080.
+  // Coordinates relative to (baseW, baseH). Renderer scales by
+  // logicalW / baseW and logicalH / baseH.
   x: number;
   y: number;
   w: number;
   h: number;
+  baseW: number;
+  baseH: number;
   platform: PlatformId;
 }
 
 export type PresetId = keyof typeof SIZES;
+const PLATFORM_PRIORITY: PlatformId[] = ['reddit', 'twitter', 'linkedin'];
 
 // Sparse map: only (preset, platform) pairs that make sense have entries.
 // v1 collapses to single-overlay-per-preset; platform sub-map is retained to
@@ -23,22 +27,22 @@ export const CROP_ZONES: Partial<
 > = {
   // Native preset cases — full canvas (label-only render in helper).
   reddit: {
-    reddit: { x: 0, y: 0, w: 1200, h: 900, platform: 'reddit' },
+    reddit: { x: 0, y: 0, w: 1200, h: 900, baseW: 1200, baseH: 900, platform: 'reddit' },
   },
   twitter: {
-    twitter: { x: 0, y: 0, w: 1200, h: 675, platform: 'twitter' },
+    twitter: { x: 0, y: 0, w: 1200, h: 675, baseW: 1200, baseH: 675, platform: 'twitter' },
   },
   linkedin: {
-    linkedin: { x: 0, y: 0, w: 1200, h: 627, platform: 'linkedin' },
+    linkedin: { x: 0, y: 0, w: 1200, h: 627, baseW: 1200, baseH: 627, platform: 'linkedin' },
   },
 
   // Cross-post collapse: instagram presets default to Reddit crop overlay.
   instagram_1080: {
-    reddit: { x: 0, y: 135, w: 1080, h: 810, platform: 'reddit' },
+    reddit: { x: 0, y: 135, w: 1080, h: 810, baseW: 1080, baseH: 1080, platform: 'reddit' },
   },
   // 1080x1350 center-crop for 810px-tall Reddit aspect window.
   instagram_port: {
-    reddit: { x: 0, y: 270, w: 1080, h: 810, platform: 'reddit' },
+    reddit: { x: 0, y: 270, w: 1080, h: 810, baseW: 1080, baseH: 1350, platform: 'reddit' },
   },
 
   // story preset omitted (no overlay).
@@ -51,9 +55,9 @@ export const CROP_ZONES: Partial<
 export function getCropZoneForPreset(presetId: string): CropZone | null {
   const platformsForPreset = CROP_ZONES[presetId as PresetId];
   if (!platformsForPreset) return null;
-
-  const entries = Object.values(platformsForPreset).filter(
-    (zone): zone is CropZone => zone !== undefined,
-  );
-  return entries[0] ?? null;
+  for (const platform of PLATFORM_PRIORITY) {
+    const zone = platformsForPreset[platform];
+    if (zone) return zone;
+  }
+  return null;
 }
