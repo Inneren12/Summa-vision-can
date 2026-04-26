@@ -23,27 +23,45 @@ void main() {
       (tester) async {
     _bc('00-test-entry');
 
-    final tempDir = await Directory.systemTemp.createTemp('cube_diff_pipeline_');
-    _bc('01-tempdir-created');
+    // dart:io and Hive must run in the real-async zone, not testWidgets'
+    // fake zone. Without runAsync, Directory.systemTemp.createTemp hangs
+    // because the fake zone's microtask handling blocks real I/O futures.
+    // Round 4 breadcrumbs proved the hang was on createTemp: only
+    // 00-test-entry printed before the 10-min timeout.
+    late final Directory tempDir;
+    late final Box box;
+    await tester.runAsync(() async {
+      _bc('00a-runAsync-entered');
+      tempDir = await Directory.systemTemp.createTemp('cube_diff_pipeline_');
+      _bc('01-tempdir-created');
 
-    await Hive.close();
-    _bc('02-hive-defensive-close-done');
+      await Hive.close();
+      _bc('02-hive-defensive-close-done');
 
-    Hive.init(tempDir.path);
-    _bc('03-hive-init-done');
+      Hive.init(tempDir.path);
+      _bc('03-hive-init-done');
 
-    final box = await Hive.openBox(
-        'cube_diff_pipeline_${DateTime.now().microsecondsSinceEpoch}');
-    _bc('04-hive-openbox-done');
+      box = await Hive.openBox(
+          'cube_diff_pipeline_${DateTime.now().microsecondsSinceEpoch}');
+      _bc('04-hive-openbox-done');
+    });
+    _bc('04a-runAsync-exited');
 
     addTearDown(() async {
       _bc('99-teardown-start');
-      await box.deleteFromDisk();
-      _bc('99-teardown-deletefromdisk-done');
-      await Hive.close();
-      _bc('99-teardown-hive-close-done');
-      await tempDir.delete(recursive: true);
-      _bc('99-teardown-tempdir-delete-done');
+      // Teardown also touches dart:io (deleteFromDisk, tempDir.delete) and
+      // Hive — same reason, must be runAsync. Use the binding rather than
+      // tester.runAsync because tester may be disposed by the time
+      // addTearDown fires; the binding outlives the tester.
+      await TestWidgetsFlutterBinding.instance.runAsync(() async {
+        _bc('99-teardown-runAsync-entered');
+        await box.deleteFromDisk();
+        _bc('99-teardown-deletefromdisk-done');
+        await Hive.close();
+        _bc('99-teardown-hive-close-done');
+        await tempDir.delete(recursive: true);
+        _bc('99-teardown-tempdir-delete-done');
+      });
     });
 
     const storageKey = 'statcan/processed/13-10-0888-01/2024-12-15.parquet';
