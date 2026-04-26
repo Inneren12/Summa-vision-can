@@ -33,7 +33,7 @@ jest.mock('next-intl', () => {
   function useTranslations(namespace?: string) {
     const { messages } = React.useContext(Ctx);
     return (key: string) => {
-      const explode = (value: string) => value['split']('.');
+      const explode = (value: string) => value.split('.');
       const path = namespace ? [...explode(namespace), ...explode(key)] : explode(key);
       const val = get(messages, path);
       return typeof val === 'string' ? val : (namespace ? `${namespace}.${key}` : key);

@@ -132,7 +132,7 @@ export function getBackendErrorI18nKey(code: string | null): string | null {
  *          a non-null but unknown code).
  */
 export function translateBackendError(
-  t: (key: string) => string,
+  t: (key: never) => string,
   code: string | null,
 ): string | null {
   const key = getBackendErrorI18nKey(code);
