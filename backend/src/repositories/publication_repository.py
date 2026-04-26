@@ -187,7 +187,12 @@ class PublicationRepository:
             source_text=source.source_text,
             footnote=source.footnote,
             visual_config=source.visual_config,
-            document_state=source.document_state,
+            # document_state intentionally NOT copied — see Phase 1.1 Fix Round 1.
+            # Frontend hydrates from document_state first (DEBT-026), and the
+            # source's embedded review.workflow="published" would cause autosave
+            # to re-publish the clone. Setting None forces frontend hydration
+            # fallback to backend columns (status=DRAFT, fresh review).
+            document_state=None,
             review=fresh_review_json,
             source_product_id=source.source_product_id,
             config_hash=new_config_hash,

@@ -289,3 +289,12 @@ as `DEBT-021` (24 h TTL via ``temp_upload_ttl_hours``).
 
 
 - Clones inherit `source_product_id` from the source but receive a fresh `config_hash` (recomputed from cloned headline) and start at `version=1` within the new lineage group. The `cloned_from_publication_id` FK provides the audit trail.
+
+
+### Clone semantics (added 2026-04-26, Phase 1.1 fix round 1)
+
+When cloning a published Publication:
+
+- `document_state` is RESET to `None`. The frontend hydrates from `document_state` first (DEBT-026); copying the source's published workflow JSON would cause autosave to re-publish the clone. Frontend hydration falls back to backend columns when `document_state` is null.
+- Public response (`PublicationPublicResponse`) does NOT expose `cloned_from_publication_id` — internal admin lineage only.
+- Version resolution wraps in retry loop to handle concurrent clone race on `(source_product_id, config_hash, version)` unique constraint.

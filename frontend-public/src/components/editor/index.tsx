@@ -1005,7 +1005,7 @@ export default function InfographicEditor({
         debugAvailable={debugAvailable}
         debugEnabled={debugEnabled}
         onToggleDebug={() => setDebugEnabled((v) => !v)}
-        canClone={doc.review.workflow === "published"}
+        canClone={Boolean(publicationId) && doc.review.workflow === "published"}
         cloneInFlight={cloneInFlight}
         onClone={handleClone}
         cloneTooltip={tEditorActions('cloneCannotBeCloned')}

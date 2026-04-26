@@ -80,6 +80,17 @@ describe('Clone button component states', () => {
     expect(screen.getByRole('button', { name: /^clone$/i })).toBeEnabled();
   });
 
+  it('Clone button is disabled when publicationId is undefined even if published', () => {
+    const doc = mkDoc('single_stat_hero', TPLS.single_stat_hero);
+    doc.review.workflow = 'published';
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages as Record<string, unknown>}>
+        <InfographicEditor initialDoc={doc} publicationId={undefined} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByRole('button', { name: /^clone$/i })).toBeDisabled();
+  });
+
   it('renders disabled when workflow is draft', () => {
     renderEditor('draft');
     expect(screen.getByRole('button', { name: /^clone$/i })).toBeDisabled();

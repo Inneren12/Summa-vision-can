@@ -9,26 +9,41 @@ from src.services.publications.clone import clone_publication
 from src.services.publications.exceptions import PublicationCloneNotAllowedError, PublicationNotFoundError
 
 
-async def _make_source(db_session, **overrides) -> Publication:
+async def _make_source(
+    db_session,
+    *,
+    headline: str = 'Headline',
+    status: PublicationStatus = PublicationStatus.PUBLISHED,
+    config_hash: str = 'aaaaaaaaaaaaaaaa',
+    source_product_id: str | None = 'P1',
+    chart_type: str = 'bar',
+    eyebrow: str = 'Eyebrow',
+    description: str = 'Desc',
+    source_text: str = 'Source',
+    footnote: str = 'Foot',
+    visual_config: str | None = None,
+    document_state: str | None = '{"doc":1}',
+    review: str | None = None,
+    version: int = 1,
+) -> Publication:
     src = Publication(
-        headline='Headline',
-        chart_type='bar',
-        eyebrow='Eyebrow',
-        description='Desc',
-        source_text='Source',
-        footnote='Foot',
-        visual_config=json.dumps({'size': 'instagram'}),
-        document_state='{"doc":1}',
-        review=json.dumps({'workflow': 'published', 'history': [], 'comments': []}),
-        source_product_id='P1',
-        config_hash='aaaaaaaaaaaaaaaa',
-        version=1,
+        headline=headline,
+        chart_type=chart_type,
+        eyebrow=eyebrow,
+        description=description,
+        source_text=source_text,
+        footnote=footnote,
+        visual_config=visual_config or json.dumps({'size': 'instagram'}),
+        document_state=document_state,
+        review=review or json.dumps({'workflow': 'published', 'history': [], 'comments': []}),
+        source_product_id=source_product_id,
+        config_hash=config_hash,
+        version=version,
         content_hash='bbbbbbbbbbbbbbbb',
         s3_key_lowres='low',
         s3_key_highres='high',
         virality_score=0.8,
-        status=PublicationStatus.PUBLISHED,
-        **overrides,
+        status=status,
     )
     db_session.add(src)
     await db_session.flush()
@@ -43,6 +58,28 @@ async def test_clone_published_creates_draft_with_copy_prefix(db_session) -> Non
     assert clone.headline == 'Copy of X'
     assert clone.status == PublicationStatus.DRAFT
     assert clone.cloned_from_publication_id == src.id
+
+
+@pytest.mark.asyncio
+async def test_clone_resets_document_state_to_none(db_session) -> None:
+    """document_state MUST be None on clone to avoid re-publish via hydration."""
+    src_doc_state = json.dumps({
+        "schemaVersion": 2,
+        "templateId": "default",
+        "page": {"size": "instagram_1080"},
+        "sections": [],
+        "blocks": [],
+        "review": {"workflow": "published", "history": [], "comments": []},
+        "meta": {"history": []},
+    })
+    src = await _make_source(
+        db_session,
+        headline='X',
+        document_state=src_doc_state,
+        status=PublicationStatus.PUBLISHED,
+    )
+    clone = await clone_publication(session=db_session, source_id=src.id)
+    assert clone.document_state is None
 
 
 @pytest.mark.asyncio
@@ -72,7 +109,6 @@ async def test_clone_copies_content_fields(db_session) -> None:
     assert clone.source_text == src.source_text
     assert clone.footnote == src.footnote
     assert clone.visual_config == src.visual_config
-    assert clone.document_state == src.document_state
 
 
 @pytest.mark.asyncio
@@ -116,3 +152,41 @@ async def test_clone_of_draft_raises_not_allowed(db_session) -> None:
 async def test_clone_missing_source_raises_not_found(db_session) -> None:
     with pytest.raises(PublicationNotFoundError):
         await clone_publication(session=db_session, source_id=999999)
+
+
+@pytest.mark.asyncio
+async def test_clone_retries_on_version_collision(db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+    src = await _make_source(db_session, source_product_id='P-race')
+
+    class FakeRepo:
+        def __init__(self, session):
+            self.calls = 0
+            self._session = session
+
+        async def get_by_id(self, publication_id: int):
+            return src
+
+        async def get_latest_version(self, source_product_id: str, config_hash: str):
+            return 1 if self.calls == 0 else 2
+
+        async def create_clone(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                from sqlalchemy.exc import IntegrityError
+                raise IntegrityError('insert', {}, Exception('collision'))
+            clone = Publication(
+                headline='Copy of X',
+                chart_type=src.chart_type,
+                status=PublicationStatus.DRAFT,
+                review=kwargs['fresh_review_json'],
+                config_hash=kwargs['new_config_hash'],
+                version=kwargs['new_version'],
+                cloned_from_publication_id=src.id,
+            )
+            return clone
+
+    from src.services.publications import clone as clone_module
+
+    monkeypatch.setattr(clone_module, 'PublicationRepository', FakeRepo)
+    clone = await clone_module.clone_publication(session=db_session, source_id=src.id)
+    assert clone.version == 3

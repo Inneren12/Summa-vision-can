@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from src.api.routers.admin_publications import _get_audit, _get_repo, router
-from src.core.database import Base
+from src.core.database import Base, get_db
 from src.core.error_handler import register_exception_handlers
 from src.core.security.auth import AuthMiddleware
 from src.models.publication import Publication, PublicationStatus
@@ -39,6 +39,15 @@ def _make_app(session_factory) -> FastAPI:
     register_exception_handlers(app)
     app.include_router(router)
 
+    async def _override_db() -> AsyncGenerator[AsyncSession, None]:
+        async with session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
     async def _override_repo() -> AsyncGenerator[PublicationRepository, None]:
         async with session_factory() as session:
             try:
@@ -57,6 +66,7 @@ def _make_app(session_factory) -> FastAPI:
                 await session.rollback()
                 raise
 
+    app.dependency_overrides[get_db] = _override_db
     app.dependency_overrides[_get_repo] = _override_repo
     app.dependency_overrides[_get_audit] = _override_audit
     app.add_middleware(AuthMiddleware, admin_api_key='test-admin-key')

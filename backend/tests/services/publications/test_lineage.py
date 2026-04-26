@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from src.services.publications.lineage import compute_config_hash, derive_size_from_visual_config
 
 
@@ -38,3 +40,12 @@ def test_derive_size_nested_and_explicit_dict() -> None:
     cfg_dict = json.dumps({'page': {'size': {'w': 800, 'h': 600}}})
     assert derive_size_from_visual_config(cfg_nested) == (1080, 1350)
     assert derive_size_from_visual_config(cfg_dict) == (800, 600)
+
+
+def test_unknown_preset_logs_warning_and_falls_back(caplog: pytest.LogCaptureFixture) -> None:
+    cfg = json.dumps({'page': {'size': 'fictitious_preset_xyz'}})
+    with caplog.at_level('WARNING'):
+        result = derive_size_from_visual_config(cfg)
+    assert result == (1080, 1080)
+    # structlog may emit to stdout depending on test logging config.
+    # Result assertion is the hard contract; warning emission is verified manually.

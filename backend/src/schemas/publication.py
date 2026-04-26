@@ -290,4 +290,3 @@ class PublicationPublicResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
     published_at: Optional[datetime] = None
-    cloned_from_publication_id: Optional[int] = None

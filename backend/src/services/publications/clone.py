@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.publication import Publication, PublicationStatus
@@ -18,6 +19,7 @@ from src.services.publications.lineage import (
 
 _COPY_PREFIX = "Copy of "
 _HASH_SLICE = 16
+_MAX_CLONE_VERSION_RETRIES = 3
 
 
 async def clone_publication(*, session: AsyncSession, source_id: int) -> Publication:
@@ -44,18 +46,29 @@ async def clone_publication(*, session: AsyncSession, source_id: int) -> Publica
         title=new_headline,
     )[:_HASH_SLICE]
 
-    if source.source_product_id is None:
-        new_version = 1
-    else:
-        latest = await repo.get_latest_version(source.source_product_id, new_config_hash)
-        new_version = (latest or 0) + 1
+    last_exc: IntegrityError | None = None
+    for attempt in range(_MAX_CLONE_VERSION_RETRIES):
+        if source.source_product_id is None:
+            new_version = 1
+        else:
+            latest = await repo.get_latest_version(source.source_product_id, new_config_hash)
+            new_version = (latest or 0) + 1
+        try:
+            clone = await repo.create_clone(
+                source=source,
+                new_headline=new_headline,
+                new_config_hash=new_config_hash,
+                new_version=new_version,
+                fresh_review_json=fresh_review_json,
+            )
+            await session.commit()
+            return clone
+        except IntegrityError as exc:
+            await session.rollback()
+            last_exc = exc
+            if attempt == _MAX_CLONE_VERSION_RETRIES - 1:
+                raise
+            continue
 
-    fresh_review_json = json.dumps({"workflow": "draft", "history": [], "comments": []})
-
-    return await repo.create_clone(
-        source=source,
-        new_headline=new_headline,
-        new_config_hash=new_config_hash,
-        new_version=new_version,
-        fresh_review_json=fresh_review_json,
-    )
+    assert last_exc is not None
+    raise last_exc
