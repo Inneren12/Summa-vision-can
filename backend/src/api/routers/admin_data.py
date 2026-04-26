@@ -41,6 +41,9 @@ from src.services.data.workbench import (
     merge_cubes,
 )
 from src.services.jobs.dedupe import cube_fetch_key
+from src.services.statcan.key_parser import (
+    extract_product_id_from_storage_key,
+)
 
 logger = structlog.get_logger()
 
@@ -271,6 +274,7 @@ async def preview_data(
         columns=preview_df.width,
         column_names=preview_df.columns,
         data=data,
+        product_id=extract_product_id_from_storage_key(storage_key),
     )
 
 

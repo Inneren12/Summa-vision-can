@@ -244,6 +244,51 @@ async def test_preview_respects_limit(client: AsyncClient) -> None:
     assert resp.json()["rows"] <= 3
 
 
+
+
+@pytest.mark.asyncio
+async def test_preview_includes_product_id_for_statcan_key(
+    client: AsyncClient,
+) -> None:
+    """GET /data/preview returns product_id when storage_key matches StatCan pattern."""
+    parquet = _sample_parquet_bytes()
+    mock_storage = AsyncMock()
+    mock_storage.download_bytes = AsyncMock(return_value=parquet)
+
+    with patch.object(
+        client._transport.app.state, "storage", mock_storage, create=True  # type: ignore
+    ):
+        resp = await client.get(
+            "/api/v1/admin/data/preview/statcan/processed/18-10-0004-01/2026-04-26.parquet",
+            headers=API_KEY,
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["product_id"] == "18-10-0004-01"
+
+
+@pytest.mark.asyncio
+async def test_preview_product_id_none_for_non_statcan_key(
+    client: AsyncClient,
+) -> None:
+    """GET /data/preview returns product_id=None when storage_key is non-StatCan."""
+    parquet = _sample_parquet_bytes()
+    mock_storage = AsyncMock()
+    mock_storage.download_bytes = AsyncMock(return_value=parquet)
+
+    with patch.object(
+        client._transport.app.state, "storage", mock_storage, create=True  # type: ignore
+    ):
+        resp = await client.get(
+            "/api/v1/admin/data/preview/temp/uploads/abc-123.parquet",
+            headers=API_KEY,
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["product_id"] is None
+
 @pytest.mark.asyncio
 async def test_preview_not_found(client: AsyncClient) -> None:
     """Preview of nonexistent key → 404."""

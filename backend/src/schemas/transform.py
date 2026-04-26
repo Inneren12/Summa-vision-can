@@ -68,3 +68,4 @@ class PreviewResponse(BaseModel):
     columns: int
     column_names: list[str]
     data: list[dict[str, Any]]
+    product_id: str | None = None  # Phase 1.5: StatCan product ID parsed from storage_key (None for non-StatCan paths)
