@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:summa_vision_admin/core/theme/app_theme.dart';
+import 'package:summa_vision_admin/features/data_preview/application/cube_diff_service.dart';
 import 'package:summa_vision_admin/features/data_preview/application/data_preview_providers.dart';
 import 'package:summa_vision_admin/features/data_preview/data/data_preview_repository.dart';
 import 'package:summa_vision_admin/features/data_preview/domain/data_preview_response.dart';
@@ -80,13 +81,38 @@ void main() {
         }),
       ),
     );
-    await tester.pumpAndSettle();
+
+    // Pre-warm a permanent listener so autoDispose never collects either provider
+    // during the invalidate→re-fetch transition. Without this, a brief gap with
+    // zero subscribers (between invalidate and the screen's rebuild) would dispose
+    // the provider, and the second fetch would never fire — leaving pumpAndSettle
+    // waiting on a future that never resolves.
+    final previewSub = container.listen<AsyncValue<DataPreviewResponse?>>(
+      dataPreviewProvider,
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(previewSub.close);
+    final diffSub = container.listen<AsyncValue<CubeDiff>>(
+      cubeDiffProvider,
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(diffSub.close);
+
+    await tester.pumpAndSettle(const Duration(seconds: 2));
 
     expect(find.textContaining('First view', skipOffstage: false), findsAtLeastNWidgets(1));
 
+    // Force re-fetch with a deterministic await chain. Awaiting `read(...future)`
+    // explicitly drives the new fetch through `_SequencedRepo.getPreview` (advancing
+    // _idx) and the cubeDiffProvider body (Hive load+diff+save), independent of any
+    // widget-tree subscription timing. pumpAndSettle then only has UI rebuild work.
     container.invalidate(dataPreviewProvider);
+    await container.read(dataPreviewProvider.future);
     container.invalidate(cubeDiffProvider);
-    await tester.pumpAndSettle();
+    await container.read(cubeDiffProvider.future);
+    await tester.pumpAndSettle(const Duration(seconds: 2));
 
     expect(find.textContaining('1 cell changed', skipOffstage: false), findsAtLeastNWidgets(1));
     final accent = AppTheme.dark.extension<SummaTheme>()!.accentMuted;
