@@ -51,7 +51,7 @@ Explicit list of gates that must be green before DNS cutover and public launch. 
 
 | # | Check | Status |
 |---|---|---|
-| 2.1 🔴 | DEBT-008 resolved — `Settings` has `@model_validator(mode="after")` rejecting startup on missing required secrets | ☐ |
+| 2.1 🔴 | DEBT-008 resolved — `Settings` has `@model_validator(mode="after")` rejecting startup on missing required secrets | ✅ pre-existing — `backend/src/core/config.py` `@model_validator(mode="after")` validates DATABASE_URL/ADMIN_API_KEY/S3_BUCKET (+ prod secrets) and raises `ValueError` on missing values |
 | 2.2 🔴 | Production `.env` file contains all required secrets; no placeholder values (`CHANGEME`, `REPLACE_ME`, empty strings) | ☐ |
 | 2.3 🔴 | `DATABASE_URL` points to production PostgreSQL, not localhost/dev | ☐ |
 | 2.4 🔴 | `ADMIN_API_KEY` is strong (≥32 char, randomly generated), stored in secrets manager | ☐ |
@@ -62,7 +62,7 @@ Explicit list of gates that must be green before DNS cutover and public launch. 
 | 2.9 🔴 | Slack webhook URL configured, test B2B lead posts successfully | ☐ |
 | 2.10 🟡 | Observability keys present (Sentry/PostHog) or deliberate decision to defer recorded | ☐ |
 | 2.11 🔴 | Cold-start: `docker compose up` on clean state reaches healthy `/health` in <30s | ☐ |
-| 2.12 🔴 | Missing-secret failure mode: removing any required env var causes startup refusal with clear error (not 500 on first request) | ☐ |
+| 2.12 🔴 | Missing-secret failure mode: removing any required env var causes startup refusal with clear error (not 500 on first request) | ✅ pre-existing — startup fail-fast in `backend/src/core/config.py` covered by `backend/tests/core/test_config.py` (missing-secret + production-secret cases) |
 
 **Evidence section:**
 - Test magic link received (timestamp): _____
@@ -97,11 +97,11 @@ Per `OPERATOR_AUTOMATION_ROADMAP.md` §2.2 decision: blockers cleared before lau
 
 | # | Check | Status |
 |---|---|---|
-| 4.1 🔴 | DEBT-008 — startup secrets validation (see §2.1 above) | ☐ |
-| 4.2 🔴 | DEBT-020 — CMHC and Tasks routers unmounted (they back dead code, confuse operators) | ☐ |
-| 4.3 🔴 | DEBT-016 — `docs/architecture/ARCHITECTURE.md` LLM Gate references removed or clearly marked `[REMOVED]` | ☐ |
-| 4.4 🔴 | DEBT-019 — ARCHITECTURE.md flow diagram no longer shows LLM Gate in critical path | ☐ |
-| 4.5 🟡 | DEBT-007 — `services/ai/*` + `models/llm_request.py` marked `# BACKLOG:` or deleted | ☐ |
+| 4.1 🔴 | DEBT-008 — startup secrets validation (see §2.1 above) | ✅ pre-existing — DEBT-008 resolved 2026-04-12 (Pre-deploy Hardening); validator in `backend/src/core/config.py` + tests in `backend/tests/core/test_config.py` |
+| 4.2 🔴 | DEBT-020 — CMHC and Tasks routers unmounted (they back dead code, confuse operators) | ✅ pre-existing — `backend/src/main.py` includes active routers only; `backend/src/api/routers/cmhc.py` and `backend/src/api/routers/tasks.py` absent |
+| 4.3 🔴 | DEBT-016 — `docs/architecture/ARCHITECTURE.md` LLM Gate references removed or clearly marked `[REMOVED]` | ✅ pre-existing — DEBT-016 resolved 2026-04-12; `docs/architecture/ARCHITECTURE.md` removed and `docs/ARCHITECTURE.md` contains no LLM Gate references |
+| 4.4 🔴 | DEBT-019 — ARCHITECTURE.md flow diagram no longer shows LLM Gate in critical path | ✅ pre-existing — DEBT-019 resolved 2026-04-12; `docs/ARCHITECTURE.md` flow is Data Sources → ETL Pipeline → Cube Catalog → Data Workbench → Visual Engine → Publication |
+| 4.5 🟡 | DEBT-007 — `services/ai/*` + `models/llm_request.py` marked `# BACKLOG:` or deleted | ✅ pre-existing — DEBT-007 resolved 2026-04-12; `backend/src/services/ai/` and `backend/src/models/llm_request.py` are deleted |
 | 4.6 🟡 | Tech debt tempcleanup bug (noted in userMemories recent_updates) — temp_cleanup.py excludes keys referenced by pending jobs | ☐ |
 
 Other active DEBT entries (not blockers, handled post-launch or during idle time):
@@ -246,3 +246,4 @@ DNS cutover executed: __________________
 | Date | Change | Reason |
 |---|---|---|
 | 2026-04-23 | Initial version | Derived from Stage 4 production polish work + operator automation roadmap |
+| 2026-04-26 | §4.1-4.6 + §2.1+2.12 audit-and-sync | Section §4 audited against current code + DEBT Resolved table: DEBT-008/007/016/019/020 verified and checklist statuses synced to ✅ with evidence; §4.6 remains ☐ because pending-job exclusion exists but current test file has 4 tests (<5 required by this checklist text). §2.1 + §2.12 verified via Settings `@model_validator` + tests. Items §2.2-§2.11 intentionally left ☐ for founder-only runtime/env launch verification. No code changes in this PR. |
