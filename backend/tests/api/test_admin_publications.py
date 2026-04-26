@@ -44,6 +44,7 @@ from src.api.routers.public_graphics import (
     router as public_graphics_router,
 )
 from src.core.database import Base
+from src.core.error_handler import register_exception_handlers
 from src.core.security.auth import AuthMiddleware
 from src.core.security.ip_rate_limiter import InMemoryRateLimiter
 from src.core.storage import StorageInterface, StorageObjectMetadata
@@ -84,6 +85,7 @@ def _make_app(session_factory) -> FastAPI:
     gets a fresh session backed by the per-test engine.
     """
     app = FastAPI()
+    register_exception_handlers(app)
     app.include_router(router)
 
     async def _override_repo() -> AsyncGenerator[PublicationRepository, None]:

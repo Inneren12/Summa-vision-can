@@ -90,7 +90,7 @@ async def _publication_validation_exception_handler(
     """Wrap PATCH admin/publications validation errors with structured code."""
     if request.url.path.startswith("/api/v1/admin/publications/") and request.method == "PATCH":
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={
                 "detail": {
                     "error_code": "PUBLICATION_UPDATE_PAYLOAD_INVALID",
@@ -101,7 +101,7 @@ async def _publication_validation_exception_handler(
         )
 
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={"detail": exc.errors()},
     )
 

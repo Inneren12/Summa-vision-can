@@ -44,7 +44,7 @@ class PublicationNotFoundError(PublicationApiError):
 class PublicationUpdatePayloadInvalidError(PublicationApiError):
     """PATCH body failed Pydantic validation. `details.validation_errors` carries field info."""
 
-    status_code_value = status.HTTP_422_UNPROCESSABLE_ENTITY
+    status_code_value = status.HTTP_422_UNPROCESSABLE_CONTENT
     error_code = "PUBLICATION_UPDATE_PAYLOAD_INVALID"
     message = "The submitted changes are invalid."
 
