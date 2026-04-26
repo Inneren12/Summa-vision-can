@@ -30,7 +30,7 @@ import {
   AdminPublicationNotFoundError,
   BackendApiError,
 } from '@/lib/api/admin';
-import { getBackendErrorI18nKey } from '@/lib/api/errorCodes';
+import { translateBackendError } from '@/lib/api/errorCodes';
 import { TopBar } from './components/TopBar';
 import { LeftPanel } from './components/LeftPanel';
 import { Canvas } from './components/Canvas';
@@ -587,11 +587,10 @@ export default function InfographicEditor({
         }
 
         // Transient / unknown failure — retry with backoff.
-        const mapped = err instanceof BackendApiError
-          ? getBackendErrorI18nKey(err.code)
+        const localized = err instanceof BackendApiError
+          ? translateBackendError(t, err.code)
           : null;
-        const localized = mapped ? t(mapped as never) : null;
-        if (!mapped && err instanceof BackendApiError && err.code) {
+        if (!localized && err instanceof BackendApiError && err.code) {
           console.warn('[backend] unmapped error_code:', err.code);
         }
         const msg = localized
