@@ -81,5 +81,17 @@
   "errorJobCoolDown": "Подождите перед повторной генерацией.",
   "errorJobNoHandler": "Операция не поддерживается.",
   "errorJobIncompatiblePayload": "Несовместимая версия данных.",
-  "errorJobUnknownType": "Неизвестный тип задания."
+  "errorJobUnknownType": "Неизвестный тип задания.",
+  "dataPreviewDiffStatusLabel": "{count, plural, =0 {Ничего не изменилось с прошлого раза} =1 {1 ячейка изменилась с прошлого раза} few {# ячейки изменились с прошлого раза} many {# ячеек изменилось с прошлого раза} other {# ячеек изменилось с прошлого раза}}",
+  "@dataPreviewDiffStatusLabel": {
+    "description": "Banner above data table showing how many cells changed since last view",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dataPreviewDiffNoBaseline": "Первый просмотр — сравнение недоступно",
+  "dataPreviewDiffSchemaChanged": "Структура данных изменилась — сравнение недоступно",
+  "dataPreviewDiffNoProductId": "Для этих данных отслеживание изменений недоступно"
 }

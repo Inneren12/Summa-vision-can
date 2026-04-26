@@ -19,6 +19,7 @@ _$DataPreviewResponseImpl _$$DataPreviewResponseImplFromJson(
       data: (json['data'] as List<dynamic>)
           .map((e) => e as Map<String, dynamic>)
           .toList(),
+      productId: json['product_id'] as String?,
     );
 
 Map<String, dynamic> _$$DataPreviewResponseImplToJson(
@@ -30,4 +31,5 @@ Map<String, dynamic> _$$DataPreviewResponseImplToJson(
       'columns': instance.columns,
       'column_names': instance.columnNames,
       'data': instance.data,
+      'product_id': instance.productId,
     };

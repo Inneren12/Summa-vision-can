@@ -280,4 +280,26 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get errorJobUnknownType => 'Неизвестный тип задания.';
+
+  @override
+  String dataPreviewDiffStatusLabel(int count) {
+    if (count == 0) return 'Ничего не изменилось с прошлого раза';
+    if (count == 1) return '1 ячейка изменилась с прошлого раза';
+    final mod10 = count % 10;
+    final mod100 = count % 100;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+      return '$count ячейки изменились с прошлого раза';
+    }
+    return '$count ячеек изменилось с прошлого раза';
+  }
+
+  @override
+  String get dataPreviewDiffNoBaseline => 'Первый просмотр — сравнение недоступно';
+
+  @override
+  String get dataPreviewDiffSchemaChanged => 'Структура данных изменилась — сравнение недоступно';
+
+  @override
+  String get dataPreviewDiffNoProductId => 'Для этих данных отслеживание изменений недоступно';
+
 }

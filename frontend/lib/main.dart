@@ -1,18 +1,40 @@
+import 'dart:async' show unawaited;
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:summa_vision_admin/core/app_bootstrap/app_bootstrap_provider.dart';
 import 'package:summa_vision_admin/core/bootstrap/bootstrap_error_messages.dart';
+import 'package:summa_vision_admin/features/data_preview/application/cube_diff_service.dart';
+import 'package:summa_vision_admin/features/data_preview/application/data_preview_providers.dart';
 import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
 
-import 'core/bootstrap/bootstrap_error_messages.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
   await dotenv.load(fileName: '.env', isOptional: true);
-  runApp(const ProviderScope(child: SummaVisionApp()));
+  final cubeDiffBox = await Hive.openBox('cube_diff_snapshots');
+
+  unawaited(
+    CubeDiffService(cubeDiffBox).purgeExpired().catchError((e, st) {
+      developer.log('Hive TTL purge failed', error: e, stackTrace: st);
+      return 0;
+    }),
+  );
+
+  runApp(
+    ProviderScope(
+      overrides: [
+        cubeDiffSnapshotsBoxProvider.overrideWithValue(cubeDiffBox),
+      ],
+      child: const SummaVisionApp(),
+    ),
+  );
 }
 
 class SummaVisionApp extends ConsumerWidget {

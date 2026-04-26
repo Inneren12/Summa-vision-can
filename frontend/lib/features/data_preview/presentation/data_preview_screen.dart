@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../l10n/generated/app_localizations.dart';
+import '../application/cube_diff_service.dart';
 import '../application/data_preview_providers.dart';
 import '../domain/data_preview_response.dart';
 import '../domain/preview_filter.dart';
@@ -101,6 +103,8 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
     final filteredRows = ref.watch(filteredPreviewRowsProvider);
     final sortCol = ref.watch(previewSortColumnProvider);
     final sortAsc = ref.watch(previewSortAscendingProvider);
+    final diffAsync = ref.watch(cubeDiffProvider);
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
@@ -142,6 +146,43 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
             );
           }
 
+          final diff = diffAsync.valueOrNull ?? const CubeDiff.noBaseline();
+          final diffBanner = diffAsync.when(
+            data: (value) => switch (value) {
+              NoBaselineCubeDiff() => Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
+                  child: Text(
+                    preview.productId == null
+                        ? l10n.dataPreviewDiffNoProductId
+                        : l10n.dataPreviewDiffNoBaseline,
+                    style:
+                        TextStyle(color: _theme.textSecondary, fontSize: 12),
+                  ),
+                ),
+              SchemaChangedCubeDiff() => Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
+                  child: Text(
+                    l10n.dataPreviewDiffSchemaChanged,
+                    style:
+                        TextStyle(color: _theme.textSecondary, fontSize: 12),
+                  ),
+                ),
+              ComputedCubeDiff(:final changedCells) => Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
+                  child: Text(
+                    l10n.dataPreviewDiffStatusLabel(changedCells.length),
+                    style:
+                        TextStyle(color: _theme.textSecondary, fontSize: 12),
+                  ),
+                ),
+            },
+            loading: SizedBox.shrink,
+            error: (_, __) => const SizedBox.shrink(),
+          );
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -154,6 +195,8 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
               // C) Filter Controls
               _buildFilterToolbar(preview),
 
+              diffBanner,
+
               // D) Data Table
               Expanded(
                 child: _buildDataTable(
@@ -162,6 +205,7 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
                   sortCol,
                   sortAsc,
                   preview,
+                  diff,
                 ),
               ),
 
@@ -443,10 +487,11 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
 
   Widget _buildDataTable(
     List<String> columnNames,
-    List<Map<String, dynamic>> rows,
+    List<({int originalIndex, Map<String, dynamic> data})> rows,
     String? sortCol,
     bool sortAsc,
     DataPreviewResponse preview,
+    CubeDiff diff,
   ) {
     // Infer dtypes from first row for numeric detection
     final firstRow =
@@ -482,7 +527,9 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
             );
           }).toList(),
           rows: List.generate(rows.length, (index) {
-            final row = rows[index];
+            final entry = rows[index];
+            final row = entry.data;
+            final originalIndex = entry.originalIndex;
             final isEven = index % 2 == 0;
             return DataRow(
               color: WidgetStateProperty.all(
@@ -493,7 +540,12 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
               cells: columnNames.map((name) {
                 final value = row[name];
                 final isNumeric = firstRow[name] is num;
-                return DataCell(_buildCell(value, isNumeric));
+                final highlighted = diff is ComputedCubeDiff &&
+                    diff.changedCells
+                        .contains(DiffCellKey(originalIndex, name));
+                return DataCell(
+                  _buildCell(value, isNumeric, highlighted: highlighted),
+                );
               }).toList(),
             );
           }),
@@ -502,26 +554,33 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
     );
   }
 
-  Widget _buildCell(dynamic value, bool isNumeric) {
+  Widget _buildCell(dynamic value, bool isNumeric, {bool highlighted = false}) {
+    final Widget cellContent;
     if (value == null) {
-      return Text(
-        '\u2014', // em dash
+      cellContent = Text(
+        '\u2014',
         style: TextStyle(color: _theme.textSecondary),
+      );
+    } else {
+      final text = isNumeric ? _formatNumber(value) : value.toString();
+      cellContent = Tooltip(
+        message: value.toString(),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 200),
+          child: Text(
+            text,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: _theme.textPrimary, fontSize: 13),
+          ),
+        ),
       );
     }
 
-    final text = isNumeric ? _formatNumber(value) : value.toString();
-
-    return Tooltip(
-      message: value.toString(),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 200),
-        child: Text(
-          text,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: _theme.textPrimary, fontSize: 13),
-        ),
-      ),
+    if (!highlighted) return cellContent;
+    return Container(
+      color: _theme.accentMuted,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: cellContent,
     );
   }
 

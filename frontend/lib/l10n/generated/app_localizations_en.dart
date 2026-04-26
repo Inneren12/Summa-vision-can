@@ -280,4 +280,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get errorJobUnknownType => 'Unknown job type.';
+
+  @override
+  String dataPreviewDiffStatusLabel(int count) {
+    if (count == 0) return 'No cells changed since last view';
+    if (count == 1) return '1 cell changed since last view';
+    return '$count cells changed since last view';
+  }
+
+  @override
+  String get dataPreviewDiffNoBaseline => 'First view — no comparison available';
+
+  @override
+  String get dataPreviewDiffSchemaChanged => 'Schema changed since last view — diff unavailable';
+
+  @override
+  String get dataPreviewDiffNoProductId => 'This data has no diff tracking';
+
 }
