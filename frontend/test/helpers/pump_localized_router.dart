@@ -63,9 +63,36 @@ Future<void> pumpLocalizedRouter(
   await tester.pumpAndSettle();
 }
 
+/// Returns AppLocalizations from a pumped widget tree.
+///
+/// Anchors on the first `Scaffold` in the tree because Scaffold sits BELOW
+/// MaterialApp's internal Localizations widget and is present in every
+/// locale-switch smoke. Anchoring on MaterialApp itself would return a
+/// context above Localizations → AppLocalizations.of(context) returns null →
+/// `!` crashes.
+///
+/// Diagnostic: if Scaffold is not found OR AppLocalizations is null,
+/// surfaces a clear test failure rather than a NullCheckOperator crash.
 AppLocalizations l10n(WidgetTester tester) {
-  final context = tester.element(find.byType(MaterialApp).first);
-  return AppLocalizations.of(context)!;
+  final scaffoldFinder = find.byType(Scaffold, skipOffstage: false);
+  expect(
+    scaffoldFinder,
+    findsAtLeastNWidgets(1),
+    reason: 'l10n(tester) requires a pumped localized widget tree '
+        'containing at least one Scaffold. Did you forget '
+        'pumpLocalizedRouter() before calling l10n()?',
+  );
+
+  final context = tester.element(scaffoldFinder.first);
+  final localizations = AppLocalizations.of(context);
+  expect(
+    localizations,
+    isNotNull,
+    reason: 'AppLocalizations.of(context) returned null. The pumped tree '
+        'is missing AppLocalizations.delegate or the helper anchored '
+        'on a context above Localizations.',
+  );
+  return localizations!;
 }
 
 Future<void> switchLocaleVia(WidgetTester tester, String target) async {

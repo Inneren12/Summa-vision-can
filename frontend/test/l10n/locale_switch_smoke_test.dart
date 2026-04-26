@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:summa_vision_admin/core/app_bootstrap/app_bootstrap_provider.dart';
 import 'package:summa_vision_admin/core/routing/app_drawer.dart';
@@ -99,13 +100,22 @@ void main() {
   });
 }
 
-Future<void> _pumpShell(WidgetTester tester) {
-  return pumpLocalizedRouter(
+Future<void> _pumpShell(WidgetTester tester) async {
+  final router = GoRouter(
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) => const Scaffold(
+          drawer: AppDrawer(),
+          body: _DrawerLauncher(),
+        ),
+      ),
+    ],
+  );
+
+  await pumpLocalizedRouter(
     tester,
-    home: const Scaffold(
-      drawer: AppDrawer(),
-      body: _DrawerLauncher(),
-    ),
+    routerConfig: router,
   );
 }
 
