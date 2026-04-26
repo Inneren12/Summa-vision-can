@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,108 +7,72 @@ import 'package:hive/hive.dart';
 import 'package:summa_vision_admin/core/theme/app_theme.dart';
 import 'package:summa_vision_admin/features/data_preview/application/cube_diff_service.dart';
 import 'package:summa_vision_admin/features/data_preview/application/data_preview_providers.dart';
-import 'package:summa_vision_admin/features/data_preview/data/data_preview_repository.dart';
 import 'package:summa_vision_admin/features/data_preview/domain/data_preview_response.dart';
 import 'package:summa_vision_admin/features/data_preview/presentation/data_preview_screen.dart';
 import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
-
-class _SequencedRepo extends DataPreviewRepository {
-  _SequencedRepo(this._responses) : super(Dio());
-
-  final List<DataPreviewResponse> _responses;
-  int _idx = 0;
-
-  @override
-  Future<DataPreviewResponse> getPreview(String storageKey,
-      {int limit = 100}) async {
-    final value =
-        _responses[_idx < _responses.length ? _idx : _responses.length - 1];
-    _idx++;
-    return value;
-  }
-}
 
 void main() {
   testWidgets('first view no baseline, refresh shows 1 change and highlight',
       (tester) async {
     final tempDir = await Directory.systemTemp.createTemp('cube_diff_pipeline_');
 
-    // Defensive: if a prior test in the same isolate left Hive open at a
-    // different path, close it before re-initializing. Hive.close() is a
-    // no-op when nothing is open. Without this guard, Hive.openBox below
-    // can deadlock on internal locks held by the leaked state, hanging
-    // pumpAndSettle for its full timeout.
+    // Defensive: absorb any leaked Hive state from prior tests in same isolate.
     await Hive.close();
-
     Hive.init(tempDir.path);
+
     final box = await Hive.openBox(
         'cube_diff_pipeline_${DateTime.now().microsecondsSinceEpoch}');
     addTearDown(() async {
       await box.deleteFromDisk();
-      // Symmetric with setUp: close Hive so subsequent tests in the same
-      // isolate get a clean global state.
       await Hive.close();
       await tempDir.delete(recursive: true);
     });
 
     const storageKey = 'statcan/processed/13-10-0888-01/2024-12-15.parquet';
-    final repo = _SequencedRepo([
-      const DataPreviewResponse(
-        storageKey: storageKey,
-        rows: 2,
-        columns: 2,
-        columnNames: ['A', 'B'],
-        data: [
-          {'A': 1, 'B': 'x'},
-          {'A': 2, 'B': 'y'},
-        ],
-        productId: '13-10-0888-01',
-      ),
-      const DataPreviewResponse(
-        storageKey: storageKey,
-        rows: 2,
-        columns: 2,
-        columnNames: ['A', 'B'],
-        data: [
-          {'A': 1, 'B': 'x'},
-          {'A': 2, 'B': 'z'},
-        ],
-        productId: '13-10-0888-01',
-      ),
-    ]);
+    const firstResponse = DataPreviewResponse(
+      storageKey: storageKey,
+      rows: 2,
+      columns: 2,
+      columnNames: ['A', 'B'],
+      data: [
+        {'A': 1, 'B': 'x'},
+        {'A': 2, 'B': 'y'},
+      ],
+      productId: '13-10-0888-01',
+    );
+    const secondResponse = DataPreviewResponse(
+      storageKey: storageKey,
+      rows: 2,
+      columns: 2,
+      columnNames: ['A', 'B'],
+      data: [
+        {'A': 1, 'B': 'x'},
+        {'A': 2, 'B': 'z'},
+      ],
+      productId: '13-10-0888-01',
+    );
 
-    // Use an explicit ProviderContainer so we can drive provider rebuilds
-    // deterministically with `await container.read(provider.future)` instead
-    // of relying on widget-tree subscription timing during `pumpAndSettle`.
+    // Stateful counter that the override reads on each rebuild.
+    var fetchCount = 0;
+    DataPreviewResponse currentResponse() =>
+        fetchCount++ == 0 ? firstResponse : secondResponse;
+
     final container = ProviderContainer(
       overrides: [
-        dataPreviewRepositoryProvider.overrideWithValue(repo),
         cubeDiffSnapshotsBoxProvider.overrideWithValue(box),
+        previewStorageKeyProvider.overrideWith((ref) => storageKey),
+        // Override at the FutureProvider level — bypasses the repository
+        // and Dio entirely. This is the same override pattern that the
+        // sister widget tests (data_preview_diff_widget_test.dart) use.
+        dataPreviewProvider.overrideWith((ref) async {
+          // ref.watch the storage key so re-fetch can be triggered by
+          // invalidating dataPreviewProvider (which re-runs this body).
+          ref.watch(previewStorageKeyProvider);
+          return currentResponse();
+        }),
       ],
     );
     addTearDown(container.dispose);
-
-    // Set the storage key up front so dataPreviewProvider can fire immediately,
-    // bypassing the Future.microtask race in DataPreviewScreen.initState.
-    container.read(previewStorageKeyProvider.notifier).state = storageKey;
-
-    // Pre-warm permanent listeners on both providers so autoDispose never
-    // collects them between invalidate() and the next frame. Without these,
-    // a brief gap with zero listeners disposes the provider state and the
-    // subsequent rebuild may never get scheduled, causing pumpAndSettle to
-    // hang until its 10-minute timeout.
-    final previewSub = container.listen<AsyncValue<DataPreviewResponse?>>(
-      dataPreviewProvider,
-      (_, __) {},
-      fireImmediately: true,
-    );
-    addTearDown(previewSub.close);
-    final diffSub = container.listen<AsyncValue<CubeDiff>>(
-      cubeDiffProvider,
-      (_, __) {},
-      fireImmediately: true,
-    );
-    addTearDown(diffSub.close);
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -125,27 +88,23 @@ void main() {
         ),
       ),
     );
-
-    // Drive the first fetch deterministically.
-    await container.read(dataPreviewProvider.future);
-    await container.read(cubeDiffProvider.future);
     await tester.pumpAndSettle(const Duration(seconds: 2));
 
+    // First view — no baseline (fetchCount == 1 after first read)
     final element1 = tester.element(find.byType(DataPreviewScreen));
     final l10n1 = AppLocalizations.of(element1)!;
     expect(
       find.text(l10n1.dataPreviewDiffNoBaseline, skipOffstage: false),
       findsAtLeastNWidgets(1),
     );
+    expect(fetchCount, 1, reason: 'First fetch must have run exactly once');
 
-    // Force re-fetch with explicit await chain. Awaiting the new future after
-    // each invalidate eliminates dependence on widget-tree timing and
-    // guarantees _SequencedRepo._idx advances before assertions run.
+    // Force refetch to get second response.
     container.invalidate(dataPreviewProvider);
-    await container.read(dataPreviewProvider.future);
     container.invalidate(cubeDiffProvider);
-    await container.read(cubeDiffProvider.future);
     await tester.pumpAndSettle(const Duration(seconds: 2));
+
+    expect(fetchCount, 2, reason: 'Second fetch must have run after invalidate');
 
     final element2 = tester.element(find.byType(DataPreviewScreen));
     final l10n2 = AppLocalizations.of(element2)!;
@@ -153,6 +112,7 @@ void main() {
       find.text(l10n2.dataPreviewDiffStatusLabel(1), skipOffstage: false),
       findsAtLeastNWidgets(1),
     );
+
     final accent = AppTheme.dark.extension<SummaTheme>()!.accentMuted;
     final highlighted =
         find.byWidgetPredicate((w) => w is Container && w.color == accent);
