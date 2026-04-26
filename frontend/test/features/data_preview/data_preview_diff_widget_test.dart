@@ -123,6 +123,77 @@ void main() {
   });
 
   testWidgets(
+    'shows no-baseline banner (not no-product-id) when storageKey fallback resolves id',
+    (tester) async {
+      // Regression guard: round 3 fix.
+      // Scenario: productId is null (backend returned null for non-StatCan
+      // path), but storageKey contains a parseable second-from-end segment
+      // ('abc-123'). resolveDiffProductId returns 'abc-123', so diff
+      // tracking IS available — banner must say "first view", not
+      // "no diff tracking".
+      const preview = DataPreviewResponse(
+        storageKey: 'temp/uploads/abc-123/file.parquet',
+        rows: 1,
+        columns: 1,
+        columnNames: ['A'],
+        data: [
+          {'A': 1}
+        ],
+        productId: null,
+      );
+
+      await tester.pumpWidget(
+        _screen(preview: preview, diff: const CubeDiff.noBaseline()),
+      );
+      await tester.pumpAndSettle();
+
+      final element = tester.element(find.byType(DataPreviewScreen));
+      final l10n = AppLocalizations.of(element)!;
+
+      expect(
+        find.text(l10n.dataPreviewDiffNoBaseline),
+        findsOneWidget,
+        reason:
+            'storageKey fallback resolves id → diff tracking IS available',
+      );
+      expect(
+        find.text(l10n.dataPreviewDiffNoProductId),
+        findsNothing,
+        reason: 'Should NOT show no-product-id when fallback succeeds',
+      );
+    },
+  );
+
+  testWidgets(
+    'shows no-product-id banner when storageKey has insufficient segments',
+    (tester) async {
+      // Companion test: when fallback ALSO can't resolve, banner SHOULD
+      // say "no diff tracking".
+      const preview = DataPreviewResponse(
+        storageKey: 'singleword',
+        rows: 1,
+        columns: 1,
+        columnNames: ['A'],
+        data: [
+          {'A': 1}
+        ],
+        productId: null,
+      );
+
+      await tester.pumpWidget(
+        _screen(preview: preview, diff: const CubeDiff.noBaseline()),
+      );
+      await tester.pumpAndSettle();
+
+      final element = tester.element(find.byType(DataPreviewScreen));
+      final l10n = AppLocalizations.of(element)!;
+
+      expect(find.text(l10n.dataPreviewDiffNoProductId), findsOneWidget);
+      expect(find.text(l10n.dataPreviewDiffNoBaseline), findsNothing);
+    },
+  );
+
+  testWidgets(
     'highlight stays on correct business row after sort (regression for index mismatch)',
     (tester) async {
       const sortablePreview = DataPreviewResponse(

@@ -147,13 +147,20 @@ class _DataPreviewScreenState extends ConsumerState<DataPreviewScreen> {
           }
 
           final diff = diffAsync.valueOrNull ?? const CubeDiff.noBaseline();
+          // Use the SAME resolution rule the diff service uses, so banner
+          // text agrees with whether tracking is actually possible.
+          // - resolved == null  → no diff tracking (storage path has no
+          //   meaningful identifier)
+          // - resolved != null  → first view (baseline will be saved now,
+          //   diff appears next time)
+          final resolvedDiffProductId = resolveDiffProductId(preview);
           final diffBanner = diffAsync.when(
             data: (value) => switch (value) {
               NoBaselineCubeDiff() => Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 8),
                   child: Text(
-                    preview.productId == null
+                    resolvedDiffProductId == null
                         ? l10n.dataPreviewDiffNoProductId
                         : l10n.dataPreviewDiffNoBaseline,
                     style:
