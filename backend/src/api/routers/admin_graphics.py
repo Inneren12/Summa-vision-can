@@ -21,7 +21,6 @@ Architecture:
 
 from __future__ import annotations
 
-import hashlib
 import io
 import json
 import uuid
@@ -45,6 +44,7 @@ from src.models.publication import PublicationStatus
 from src.repositories.job_repository import JobRepository
 from src.repositories.publication_repository import PublicationRepository
 from src.schemas.job_payloads import GraphicsGeneratePayload
+from src.services.publications.lineage import compute_config_hash
 
 logger: structlog.stdlib.BoundLogger = get_logger(module="admin_graphics")
 
@@ -73,21 +73,6 @@ def _get_job_repo(session: AsyncSession = Depends(get_db)) -> JobRepository:
 def _get_storage() -> StorageInterface:
     """Provide a StorageInterface via dependency injection."""
     return get_storage_manager()
-
-
-def _compute_config_hash(chart_type: str, size: tuple[int, int], title: str) -> str:
-    """Compute a deterministic SHA-256 hex digest of the chart config.
-
-    Callers typically slice the first 16 chars for dedupe keys.
-    """
-    config_dict = {
-        "chart_type": chart_type,
-        "size": list(size),
-        "title": title,
-    }
-    return hashlib.sha256(
-        json.dumps(config_dict, sort_keys=True).encode("utf-8")
-    ).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +149,7 @@ async def generate_graphic(
     )
 
     # 2. Compute dedupe key
-    config_hash = _compute_config_hash(body.chart_type, body.size, body.title)[:16]
+    config_hash = compute_config_hash(body.chart_type, body.size, body.title)[:16]
     dedupe_key = (
         f"graphics:{body.source_product_id or 'manual'}"
         f":{body.data_key}:{config_hash}"
@@ -278,7 +263,7 @@ async def generate_from_data(
         category=body.category,
         source_product_id=None,  # not a StatCan source
     )
-    config_hash = _compute_config_hash(body.chart_type, body.size, body.title)
+    config_hash = compute_config_hash(body.chart_type, body.size, body.title)
     dedupe_key = f"graphics:custom:{temp_key}:{config_hash[:16]}"
 
     result = await job_repo.enqueue(

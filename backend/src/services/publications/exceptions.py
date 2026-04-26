@@ -55,3 +55,17 @@ class PublicationInternalSerializationError(PublicationApiError):
     status_code_value = status.HTTP_500_INTERNAL_SERVER_ERROR
     error_code = "PUBLICATION_INTERNAL_SERIALIZATION_ERROR"
     message = "Could not save this publication due to a server data format issue."
+
+
+class PublicationCloneNotAllowedError(PublicationApiError):
+    """Clone attempted for a publication that is not in PUBLISHED status."""
+
+    status_code_value = status.HTTP_409_CONFLICT
+    error_code = "PUBLICATION_CLONE_NOT_ALLOWED"
+    message = "Only published publications can be cloned."
+
+    def __init__(self, *, publication_id: int, current_status: str) -> None:
+        super().__init__(details={
+            "publication_id": publication_id,
+            "current_status": current_status,
+        })

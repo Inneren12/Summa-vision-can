@@ -168,6 +168,38 @@ class PublicationRepository:
         await self._session.refresh(publication)
         return publication
 
+
+    async def create_clone(
+        self,
+        *,
+        source: Publication,
+        new_headline: str,
+        new_config_hash: str,
+        new_version: int,
+        fresh_review_json: str,
+    ) -> Publication:
+        """Create a draft clone of a published publication."""
+        clone = Publication(
+            headline=new_headline,
+            chart_type=source.chart_type,
+            eyebrow=source.eyebrow,
+            description=source.description,
+            source_text=source.source_text,
+            footnote=source.footnote,
+            visual_config=source.visual_config,
+            document_state=source.document_state,
+            review=fresh_review_json,
+            source_product_id=source.source_product_id,
+            config_hash=new_config_hash,
+            version=new_version,
+            status=PublicationStatus.DRAFT,
+            cloned_from_publication_id=source.id,
+        )
+        self._session.add(clone)
+        await self._session.flush()
+        await self._session.refresh(clone)
+        return clone
+
     async def get_published(
         self,
         limit: int,

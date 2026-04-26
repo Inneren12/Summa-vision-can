@@ -232,6 +232,11 @@
       "switch_to": "Switch to {mode} mode",
       "template": "template",
       "design": "design"
+    },
+    "actions": {
+      "clone": "Clone",
+      "cloneInFlight": "Cloning…",
+      "cloneCannotBeCloned": "Only published items can be cloned"
     }
   },
   "undo": {
@@ -617,7 +622,8 @@
     "backend": {
       "auth_api_key_missing": "Admin authentication failed. Contact an administrator.",
       "auth_api_key_invalid": "Admin authentication failed. Verify API access settings.",
-      "auth_admin_rate_limited": "Too many admin requests. Wait a moment and try again."
+      "auth_admin_rate_limited": "Too many admin requests. Wait a moment and try again.",
+      "publicationCloneNotAllowed": "This publication cannot be cloned because it is not yet published."
     }
   }
 }

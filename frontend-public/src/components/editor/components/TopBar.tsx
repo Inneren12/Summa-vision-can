@@ -34,6 +34,10 @@ interface TopBarProps {
   debugAvailable?: boolean;
   debugEnabled?: boolean;
   onToggleDebug?: () => void;
+  canClone?: boolean;
+  cloneInFlight?: boolean;
+  onClone?: () => void;
+  cloneTooltip?: string;
 }
 
 export function TopBar({
@@ -58,6 +62,10 @@ export function TopBar({
   debugAvailable,
   debugEnabled,
   onToggleDebug,
+  canClone = false,
+  cloneInFlight = false,
+  onClone,
+  cloneTooltip,
 }: TopBarProps) {
   const tQa = useTranslations('qa');
   const tDebug = useTranslations('debug');
@@ -69,6 +77,7 @@ export function TopBar({
   const tRedo = useTranslations('redo');
   const tSave = useTranslations('save');
   const tDraft = useTranslations('draft');
+  const tActions = useTranslations('editor.actions');
 
   // Stage 4 Task 3: EXPORT button composes two gates. Validation errors
   // take priority in the tooltip — the user has to fix those anyway
@@ -123,6 +132,7 @@ export function TopBar({
         <button type="button" onClick={() => fileRef.current?.click()} aria-label={tImport('document_json')} title={tImport('document_json')} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.txtS, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", cursor: "pointer" }}>{tImport('label_short')}</button>
         <button type="button" onClick={exportJSON} aria-label={tExport('document_json')} title={tExport('document_json')} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.txtS, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", cursor: "pointer" }}>{tExport('json_label_short')}</button>
         <button type="button" onClick={markSaved} disabled={!dirty} aria-label={dirty ? tDraft('save.unsaved') : tDraft('save.unchanged')} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: dirty ? TK.c.pos : TK.c.bgSurf, color: dirty ? TK.c.bgApp : TK.c.txtM, border: `1px solid ${dirty ? TK.c.pos : TK.c.brd}`, borderRadius: "2px", cursor: dirty ? "pointer" : "default", fontWeight: dirty ? 700 : 400, opacity: dirty ? 1 : .5 }} title={tSave('shortcut')}>{tSave('label_short')}</button>
+        <button type="button" onClick={onClone} disabled={!canClone || cloneInFlight} aria-label={cloneInFlight ? tActions('cloneInFlight') : tActions('clone')} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: !canClone || cloneInFlight ? TK.c.bgSurf : TK.c.acc, color: !canClone || cloneInFlight ? TK.c.txtM : TK.c.bgApp, border: `1px solid ${!canClone || cloneInFlight ? TK.c.brd : TK.c.acc}`, borderRadius: "2px", cursor: !canClone || cloneInFlight ? "default" : "pointer", fontWeight: 700, opacity: !canClone || cloneInFlight ? .6 : 1 }} title={!canClone && !cloneInFlight ? cloneTooltip : tActions('clone')}>{cloneInFlight ? tActions('cloneInFlight') : tActions('clone')}</button>
         <button
           type="button"
           onClick={exportPNG}

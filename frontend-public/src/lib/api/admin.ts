@@ -164,3 +164,41 @@ export async function updateAdminPublication(
   }
   return res.json();
 }
+
+
+export async function cloneAdminPublication(
+  id: string,
+  opts: { signal?: AbortSignal } = {},
+): Promise<AdminPublicationResponse> {
+  const res = await fetch(`${PROXY_BASE}/${encodeURIComponent(id)}/clone`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+    signal: opts.signal,
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const payload = extractBackendErrorPayload(body);
+
+    if (payload.code === 'PUBLICATION_NOT_FOUND') {
+      throw new AdminPublicationNotFoundError(id);
+    }
+    if (!payload.code && res.status === 404) {
+      throw new AdminPublicationNotFoundError(id);
+    }
+
+    throw new BackendApiError({
+      status: res.status,
+      code: payload.code,
+      message:
+        payload.message ??
+        (typeof body?.detail === 'string' ? body.detail : null) ??
+        `Admin publication clone failed: ${res.status}`,
+      details: payload.details,
+    });
+  }
+
+  return res.json();
+}

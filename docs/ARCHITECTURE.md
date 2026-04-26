@@ -286,3 +286,6 @@ as `DEBT-021` (24 h TTL via ``temp_upload_ttl_hours``).
        │   └── card_data.py       ← Signal card dataset generator (4 cards)
        └── security/ (D-0b: TurnstileValidator)
 ```
+
+
+- Clones inherit `source_product_id` from the source but receive a fresh `config_hash` (recomputed from cloned headline) and start at `version=1` within the new lineage group. The `cloned_from_publication_id` FK provides the audit trail.

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'react';
 import { useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { EditorMode, QAMode, LeftTab, BlockRegistryEntry, CanonicalDocument, SaveStatus, EditorAction } from './types';
 import { TK } from './config/tokens';
@@ -27,6 +28,7 @@ import { shouldSkipGlobalShortcut } from './utils/shortcuts';
 import { clientToLogical, hitTest, clampRectToSection, type HitAreaEntry } from './utils/hit-test';
 import {
   updateAdminPublication,
+  cloneAdminPublication,
   AdminPublicationNotFoundError,
   BackendApiError,
 } from '@/lib/api/admin';
@@ -120,6 +122,8 @@ export default function InfographicEditor({
   publicationId,
 }: InfographicEditorProps = {}) {
   const t = useTranslations();
+  const tEditorActions = useTranslations('editor.actions');
+  const router = useRouter();
   const tPublication = useTranslations('publication');
   const tImport = useTranslations('import');
   const cvs = useRef<HTMLCanvasElement>(null);
@@ -214,6 +218,7 @@ export default function InfographicEditor({
   const retryCountdownIntervalRef = useRef<number | null>(null);
   const [retryCountdownMs, setRetryCountdownMs] = useState<number | null>(null);
   const [saveFailureGen, setSaveFailureGen] = useState<number>(0);
+  const [cloneInFlight, setCloneInFlight] = useState<boolean>(false);
   const [ltab, setLtab] = useState<LeftTab>("templates");
   const [qaOpen, setQaOpen] = useState(true);
   const [qaMode, setQaMode] = useState<QAMode>("publish");
@@ -772,6 +777,35 @@ export default function InfographicEditor({
   // Manual "Retry now" from the NotificationBanner. Cancels any scheduled
   // retry + countdown, resets the attempt budget, and fires the save
   // immediately. On failure, the retry effect will re-enter at delay 0.
+
+
+  const handleClone = useCallback(async () => {
+    if (!publicationId || cloneInFlight) return;
+    setCloneInFlight(true);
+    try {
+      const clone = await cloneAdminPublication(publicationId);
+      router.push(`/admin/editor/${clone.id}`);
+    } catch (err: unknown) {
+      if (err instanceof AdminPublicationNotFoundError) {
+        setImportError(tPublication('not_found.reload'));
+      } else {
+        const localized = err instanceof BackendApiError
+          ? translateBackendError(t, err.code)
+          : null;
+        setImportError(
+          localized
+            ?? (err instanceof BackendApiError
+              ? err.message
+              : err instanceof Error
+                ? err.message
+                : String(err)),
+        );
+      }
+    } finally {
+      setCloneInFlight(false);
+    }
+  }, [publicationId, cloneInFlight, router, t, tPublication]);
+
   const handleManualRetry = useCallback(() => {
     // User override: explicit "Retry now" resets both the attempt counter
     // and the terminal-error flag. If the next attempt fails terminally
@@ -971,6 +1005,10 @@ export default function InfographicEditor({
         debugAvailable={debugAvailable}
         debugEnabled={debugEnabled}
         onToggleDebug={() => setDebugEnabled((v) => !v)}
+        canClone={doc.review.workflow === "published"}
+        cloneInFlight={cloneInFlight}
+        onClone={handleClone}
+        cloneTooltip={tEditorActions('cloneCannotBeCloned')}
       />
       <NotificationBanner
         state={state}

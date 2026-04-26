@@ -11,7 +11,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, Float, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
@@ -63,6 +63,8 @@ class Publication(Base):
             automatically by SQLAlchemy on update.
         published_at: UTC timestamp recorded when the publication
             transitions to ``PUBLISHED``. ``None`` while DRAFT.
+        cloned_from_publication_id: Optional FK to the source publication
+            row when this record was created via clone.
     """
 
     __tablename__ = "publications"
@@ -85,6 +87,11 @@ class Publication(Base):
     version: Mapped[int] = mapped_column(nullable=False, default=1, server_default="1")
     config_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cloned_from_publication_id: Mapped[int | None] = mapped_column(
+        ForeignKey("publications.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     status: Mapped[PublicationStatus] = mapped_column(
         Enum(PublicationStatus, name="publication_status"),
         nullable=False,

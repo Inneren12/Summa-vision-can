@@ -17,6 +17,7 @@
 export const KNOWN_BACKEND_ERROR_CODES = [
   'PUBLICATION_NOT_FOUND',
   'PUBLICATION_UPDATE_PAYLOAD_INVALID',
+  'PUBLICATION_CLONE_NOT_ALLOWED',
   'PUBLICATION_INTERNAL_SERIALIZATION_ERROR',
   'AUTH_API_KEY_MISSING',
   'AUTH_API_KEY_INVALID',
@@ -46,6 +47,7 @@ export type BackendErrorPayload = {
 export const BACKEND_ERROR_I18N_KEYS: Record<BackendErrorCode, string> = {
   PUBLICATION_NOT_FOUND: 'publication.not_found.reload',
   PUBLICATION_UPDATE_PAYLOAD_INVALID: 'publication.payload_invalid.message',
+  PUBLICATION_CLONE_NOT_ALLOWED: 'errors.backend.publicationCloneNotAllowed',
   PUBLICATION_INTERNAL_SERIALIZATION_ERROR: 'publication.serialization_error.message',
   AUTH_API_KEY_MISSING: 'errors.backend.auth_api_key_missing',
   AUTH_API_KEY_INVALID: 'errors.backend.auth_api_key_invalid',
