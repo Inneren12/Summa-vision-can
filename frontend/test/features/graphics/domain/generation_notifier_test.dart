@@ -45,7 +45,7 @@ void main() {
   group('GenerationNotifier — stale resultUrl clearing', () {
     test(
       'failed transition from prior success artifact clears stale resultUrl',
-      () async {
+      () {
         final fakeRepo = _FakeGraphicRepository(
           submittedTaskId: 'task-88',
           statusSequence: const [
@@ -72,28 +72,27 @@ void main() {
           resultUrl: 'https://cdn.example.com/old.png',
         );
 
-        late Future<void> run;
         fakeAsync((async) {
-          run = notifier.generate(88);
+          notifier.generate(88);
           pumpUntilIdle(async);
-        });
-        await run;
 
-        final state = container.read(generationNotifierProvider);
-        expect(state.phase, GenerationPhase.failed);
-        expect(state.errorCode, 'CHART_EMPTY_DF');
-        expect(
-          state.resultUrl,
-          isNull,
-          reason: 'terminal failure must not retain previous successful resultUrl',
-        );
+          final state = container.read(generationNotifierProvider);
+          expect(state.phase, GenerationPhase.failed);
+          expect(state.errorCode, 'CHART_EMPTY_DF');
+          expect(
+            state.resultUrl,
+            isNull,
+            reason:
+                'terminal failure must not retain previous successful resultUrl',
+          );
+        });
       },
-      timeout: const Timeout(Duration(seconds: 20)),
+      timeout: const Timeout(Duration(seconds: 15)),
     );
 
     test(
       'timeout transition from prior success artifact clears stale resultUrl',
-      () async {
+      () {
         final fakeRepo = _FakeGraphicRepository(
           submittedTaskId: 'task-89',
           statusSequence: const [
@@ -115,23 +114,22 @@ void main() {
           resultUrl: 'https://cdn.example.com/old.png',
         );
 
-        late Future<void> run;
         fakeAsync((async) {
-          run = notifier.generate(89);
-          pumpUntilIdle(async);
-        });
-        await run;
+          notifier.generate(89);
+          pumpUntilIdle(async, maxTicks: 500);
 
-        final state = container.read(generationNotifierProvider);
-        expect(state.phase, GenerationPhase.timeout);
-        expect(state.errorCode, isNull);
-        expect(
-          state.resultUrl,
-          isNull,
-          reason: 'terminal timeout must not retain previous successful resultUrl',
-        );
+          final state = container.read(generationNotifierProvider);
+          expect(state.phase, GenerationPhase.timeout);
+          expect(state.errorCode, isNull);
+          expect(
+            state.resultUrl,
+            isNull,
+            reason:
+                'terminal timeout must not retain previous successful resultUrl',
+          );
+        });
       },
-      timeout: const Timeout(Duration(seconds: 30)),
+      timeout: const Timeout(Duration(seconds: 15)),
     );
   });
 

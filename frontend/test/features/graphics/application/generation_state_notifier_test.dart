@@ -65,7 +65,7 @@ void main() {
   group('ChartGenerationNotifier — stale result clearing', () {
     test(
       'failed transition from prior success clears stale result',
-      () async {
+      () {
         final fakeRepo = _FakeGraphicGenerationRepository(
           submittedJobId: 'job-88',
           statusSequence: [
@@ -90,39 +90,37 @@ void main() {
         );
         addTearDown(container.dispose);
 
-        final notifier = container.read(chartGenerationNotifierProvider.notifier);
+        final notifier =
+            container.read(chartGenerationNotifierProvider.notifier);
 
-        late Future<void> firstRun;
         fakeAsync((async) {
-          firstRun = notifier.generate(_sampleRequest);
+          notifier.generate(_sampleRequest);
           pumpUntilIdle(async);
-        });
-        await firstRun;
-        expect(container.read(chartGenerationNotifierProvider).phase, GenerationPhase.success);
-        expect(container.read(chartGenerationNotifierProvider).result, isNotNull);
 
-        late Future<void> secondRun;
-        fakeAsync((async) {
-          secondRun = notifier.generate(_sampleRequest);
+          final priorState = container.read(chartGenerationNotifierProvider);
+          expect(priorState.phase, GenerationPhase.success);
+          expect(priorState.result, isNotNull);
+
+          notifier.generate(_sampleRequest);
           pumpUntilIdle(async);
-        });
-        await secondRun;
 
-        final state = container.read(chartGenerationNotifierProvider);
-        expect(state.phase, GenerationPhase.failed);
-        expect(state.errorCode, 'CHART_EMPTY_DF');
-        expect(
-          state.result,
-          isNull,
-          reason: 'terminal failure must not retain previous successful result',
-        );
+          final state = container.read(chartGenerationNotifierProvider);
+          expect(state.phase, GenerationPhase.failed);
+          expect(state.errorCode, 'CHART_EMPTY_DF');
+          expect(
+            state.result,
+            isNull,
+            reason:
+                'terminal failure must not retain previous successful result',
+          );
+        });
       },
-      timeout: const Timeout(Duration(seconds: 30)),
+      timeout: const Timeout(Duration(seconds: 15)),
     );
 
     test(
       'timeout transition from prior success clears stale result',
-      () async {
+      () {
         final fakeRepo = _FakeGraphicGenerationRepository(
           submittedJobId: 'job-89',
           statusSequence: [
@@ -142,34 +140,32 @@ void main() {
         );
         addTearDown(container.dispose);
 
-        final notifier = container.read(chartGenerationNotifierProvider.notifier);
+        final notifier =
+            container.read(chartGenerationNotifierProvider.notifier);
 
-        late Future<void> firstRun;
         fakeAsync((async) {
-          firstRun = notifier.generate(_sampleRequest);
+          notifier.generate(_sampleRequest);
           pumpUntilIdle(async);
-        });
-        await firstRun;
-        expect(container.read(chartGenerationNotifierProvider).phase, GenerationPhase.success);
-        expect(container.read(chartGenerationNotifierProvider).result, isNotNull);
 
-        late Future<void> secondRun;
-        fakeAsync((async) {
-          secondRun = notifier.generate(_sampleRequest);
-          pumpUntilIdle(async);
-        });
-        await secondRun;
+          final priorState = container.read(chartGenerationNotifierProvider);
+          expect(priorState.phase, GenerationPhase.success);
+          expect(priorState.result, isNotNull);
 
-        final state = container.read(chartGenerationNotifierProvider);
-        expect(state.phase, GenerationPhase.timeout);
-        expect(state.errorCode, isNull);
-        expect(
-          state.result,
-          isNull,
-          reason: 'terminal timeout must not retain previous successful result',
-        );
+          notifier.generate(_sampleRequest);
+          pumpUntilIdle(async, maxTicks: 500);
+
+          final state = container.read(chartGenerationNotifierProvider);
+          expect(state.phase, GenerationPhase.timeout);
+          expect(state.errorCode, isNull);
+          expect(
+            state.result,
+            isNull,
+            reason:
+                'terminal timeout must not retain previous successful result',
+          );
+        });
       },
-      timeout: const Timeout(Duration(seconds: 30)),
+      timeout: const Timeout(Duration(seconds: 15)),
     );
   });
 
