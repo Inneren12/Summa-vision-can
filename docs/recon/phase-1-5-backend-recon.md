@@ -1,10 +1,12 @@
-# Phase 1.5 Backend Recon — `product_id` in `PreviewResponse`
+# Stage B Phase 1.5 — Backend Recon: `product_id` in `PreviewResponse`
 
 Date: 2026-04-26  
 Branch target: `claude/phase-1-5-backend-recon` (cut from `work`)  
-Mode: plan-only, no implementation changes in this PR.
+Mode: plan-only recon (no implementation changes in this PR)
 
-## §A. Decisions reference
+---
+
+## §A. Decisions reference (Founder lock, 2026-04-26)
 
 ### D1. Schema change — add nullable product_id
 
@@ -14,16 +16,13 @@ Mode: plan-only, no implementation changes in this PR.
 product_id: str | None = None
 ```
 
-Nullable for graceful behavior on non-StatCan storage paths and for
-backward compatibility during deploy gap (frontend ships before
-backend would still parse responses, just without diff baseline key).
+Nullable for graceful behavior on non-StatCan storage paths and for backward compatibility during deploy gap (frontend ships before backend would still parse responses, just without diff baseline key).
 
 Default `None` so existing test fixtures don't break.
 
 ### D2. Population logic — parse from storage_key
 
-In `preview_data` endpoint, after computing `preview_df`, derive
-`product_id` from the storage_key string. Implementation:
+In `preview_data` endpoint, after computing `preview_df`, derive `product_id` from the storage_key string. Implementation:
 
 ```python
 import re
@@ -43,28 +42,20 @@ def _extract_product_id_from_storage_key(storage_key: str) -> str | None:
     return match.group(1) if match else None
 ```
 
-Place in a small helper module (e.g., `backend/src/services/statcan/key_parser.py`)
-to keep the regex testable in isolation, OR inline in the endpoint
-file with module-level docstring (recon picks based on existing
-project patterns).
+Place in a small helper module (e.g., `backend/src/services/statcan/key_parser.py`) to keep the regex testable in isolation, OR inline in the endpoint file with module-level docstring (recon picks based on existing project patterns).
 
 ### D3. No DB lookup for product_id
 
-Even though cube_catalog could provide a more authoritative mapping,
-v1 uses parsing only. Rationale:
+Even though cube_catalog could provide a more authoritative mapping, v1 uses parsing only. Rationale:
 - Zero DB query overhead per preview request
 - Pure function, easy to unit-test
 - StatCan path structure is the single source of truth for product_id
 
-Future hardening (DEBT-track): if storage path structure changes,
-parser silently returns None and feature degrades gracefully. No
-breakage.
+Future hardening (DEBT-track): if storage path structure changes, parser silently returns None and feature degrades gracefully. No breakage.
 
 ### D4. No frontend changes in this PR
 
-This recon's scope is backend-only. Frontend integration ships in
-**PR 2 (Phase 1.5 Frontend)** which depends on this PR being merged
-first. PR 2 recon will reference this PR's merged state.
+This recon's scope is backend-only. Frontend integration ships in **PR 2 (Phase 1.5 Frontend)** which depends on this PR being merged first. PR 2 recon will reference this PR's merged state.
 
 ### D5. Tests required
 
@@ -75,117 +66,69 @@ first. PR 2 recon will reference this PR's merged state.
   - Empty string → returns None
 - Endpoint test: response includes `product_id` for StatCan key
 - Endpoint test: response has `product_id=None` for non-StatCan key
-- Backward-compat: existing test response shapes still valid after
-  field addition (None default)
+- Backward-compat: existing test response shapes still valid after field addition (None default)
+
+---
 
 ## §V. Verification log
 
 ### §V.1 storage_key pattern
 
-Command output (verbatim):
+Verification commands:
 
 ```bash
-$ sed -n '40,60p' backend/src/services/statcan/data_fetch.py
-
-# Dynamic periods by frequency (R13)
-PERIODS_MAP: dict[str, int] = {
-    "Daily": 1000,
-    "Monthly": 120,
-    "Quarterly": 40,
-    "Annual": 20,
-}
-
-# S3 key pattern for processed data (R3)
-PROCESSED_KEY_TEMPLATE = "statcan/processed/{product_id}/{date}.parquet"
-RAW_KEY_TEMPLATE = "statcan/raw/{product_id}/{date}.csv"
-
-# Scalar factor multipliers (StatCan SCALAR_ID values)
-SCALAR_FACTOR_MAP: dict[int, float] = {
-    0: 1.0,           # units
-    1: 10.0,
-    2: 100.0,
-    3: 1_000.0,       # thousands
-    4: 10_000.0,
-    5: 100_000.0,
-
-$ sed -n '170,200p' backend/src/services/statcan/data_fetch.py
-                total_rows=quality.total_rows,
-            )
-
-        # --- Stage 5: Validate schema contract ---
-        self._validate_schema(df, product_id)
-        self._validate_duplicates(df, product_id)
-
-        # --- Stage 6: Save as Parquet (R3) ---
-        processed_key = PROCESSED_KEY_TEMPLATE.format(
-            product_id=product_id, date=today
-        )
-        await self._save_parquet(processed_key, df)
-
-        log.info(
-            "fetch_completed",
-            rows=df.height,
-            columns=df.width,
-            storage_key=processed_key,
-            null_pct=round(quality.null_percentage, 1),
-        )
-
-        return FetchResult(
-            product_id=product_id,
-            rows=df.height,
-            columns=df.width,
-            storage_key=processed_key,
-            quality=quality,
-        )
-
-    # ------------------------------------------------------------------
-    # Internal methods
-
-$ rg -n "PROCESSED_KEY_TEMPLATE|processed_key" backend/src/services/statcan/
-backend/src/services/statcan/data_fetch.py:50:PROCESSED_KEY_TEMPLATE = "statcan/processed/{product_id}/{date}.parquet"
-backend/src/services/statcan/data_fetch.py:178:        processed_key = PROCESSED_KEY_TEMPLATE.format(
-backend/src/services/statcan/data_fetch.py:181:        await self._save_parquet(processed_key, df)
-backend/src/services/statcan/data_fetch.py:187:            storage_key=processed_key,
-backend/src/services/statcan/data_fetch.py:195:            storage_key=processed_key,
+sed -n '40,60p' backend/src/services/statcan/data_fetch.py
+sed -n '170,200p' backend/src/services/statcan/data_fetch.py
+rg -n "PROCESSED_KEY_TEMPLATE|processed_key" backend/src/services/statcan/
 ```
 
-Conclusion: prior halt finding is confirmed exactly (Case 2-like key shape with `{date}` segment).
+Observed source excerpts:
 
-### §V.2 preview_data endpoint signature
+```python
+# S3 key pattern for processed data (R3)
+PROCESSED_KEY_TEMPLATE = "statcan/processed/{product_id}/{date}.parquet"
+...
+processed_key = PROCESSED_KEY_TEMPLATE.format(
+    product_id=product_id, date=today
+)
+```
 
-Command output (verbatim slices):
+Confirmed pattern matches prior halt finding exactly:
+
+```python
+PROCESSED_KEY_TEMPLATE = "statcan/processed/{product_id}/{date}.parquet"
+processed_key = PROCESSED_KEY_TEMPLATE.format(product_id=product_id, date=today)
+```
+
+### §V.2 `preview_data` endpoint signature + response construction
+
+Verification commands:
 
 ```bash
-$ sed -n '1,50p' backend/src/api/routers/admin_data.py
-"""Admin endpoints for data fetch, transform, and preview.
+sed -n '1,50p' backend/src/api/routers/admin_data.py
+sed -n '220,280p' backend/src/api/routers/admin_data.py
+```
 
-Protected by AuthMiddleware — requires ``X-API-KEY`` header.
+Observed endpoint slice:
 
-Endpoints:
-    POST /api/v1/admin/cubes/{product_id}/fetch — Trigger data download
-    POST /api/v1/admin/data/transform             — Apply transforms
-    GET  /api/v1/admin/data/preview/{storage_key}  — Preview stored data
-"""
-...
-
-$ sed -n '220,280p' backend/src/api/routers/admin_data.py
-# -----------------------------------------------------------------------
-# GET /api/v1/admin/data/preview/{storage_key:path}
-# -----------------------------------------------------------------------
-
+```python
 @router.get(
     "/data/preview/{storage_key:path}",
     response_model=PreviewResponse,
     summary="Preview stored data",
-...
+    description=(
+        "Returns the first N rows of a stored Parquet file as JSON. "
+        "Capped at MAX_PREVIEW_ROWS (default 100, R15). "
+        "Values are typed: null→None, datetime→ISO string, "
+        "numeric→Python scalar."
+    ),
 )
 async def preview_data(
     storage_key: str,
     request: Request,
     limit: int = Query(default=100, ge=1, le=500),
 ) -> PreviewResponse:
-    """Preview stored Parquet data."""
-...
+    ...
     return PreviewResponse(
         storage_key=storage_key,
         rows=preview_df.height,
@@ -196,19 +139,22 @@ async def preview_data(
 ```
 
 Findings:
-- Endpoint path param is `storage_key:path` (allows slash-containing keys).
-- `preview_data` currently returns `PreviewResponse` without `product_id`.
+- Path parameter shape is `{storage_key:path}`, so slashes are accepted in key.
+- `storage_key` is consumed as raw string and passed to storage loader.
+- `PreviewResponse` currently populates only: `storage_key`, `rows`, `columns`, `column_names`, `data`.
 
-### §V.3 PreviewResponse schema
+### §V.3 `PreviewResponse` schema
 
-Command output (verbatim):
+Verification commands:
 
 ```bash
-$ rg -n "class PreviewResponse" backend/src/schemas/
-backend/src/schemas/transform.py:63:class PreviewResponse(BaseModel):
+rg -n "class PreviewResponse" backend/src/schemas/
+sed -n '1,80p' backend/src/schemas/transform.py
+```
 
-$ sed -n '1,80p' backend/src/schemas/transform.py
-...
+Observed schema definition:
+
+```python
 class PreviewResponse(BaseModel):
     """Response for GET /data/preview/{storage_key}."""
 
@@ -219,158 +165,74 @@ class PreviewResponse(BaseModel):
     data: list[dict[str, Any]]
 ```
 
-Finding: add `product_id: str | None = None` at end to preserve existing field order.
+Field order is currently exactly as above; `product_id` should be appended last for non-disruptive ordering.
 
 ### §V.4 Other storage paths assessment
 
-Command output (verbatim):
+Verification command:
 
 ```bash
-$ rg -n "\.parquet|S3_KEY|storage_key" backend/src/services/ | head -30
-backend/src/services/statcan/data_fetch.py:50:PROCESSED_KEY_TEMPLATE = "statcan/processed/{product_id}/{date}.parquet"
-backend/src/services/statcan/data_fetch.py:92:    storage_key: str
-backend/src/services/statcan/data_fetch.py:187:            storage_key=processed_key,
-backend/src/services/statcan/data_fetch.py:195:            storage_key=processed_key,
-backend/src/services/jobs/handlers.py:172:        "storage_key": result.storage_key,
-
-$ rg -n "temp/uploads|processed/|output_key|\.parquet" backend/src/api backend/src/services | head -80
-backend/src/api/schemas/admin_graphics.py:107:    under ``temp/uploads/{uuid}.parquet`` and then enqueues the existing
-backend/src/services/statcan/data_fetch.py:50:PROCESSED_KEY_TEMPLATE = "statcan/processed/{product_id}/{date}.parquet"
-backend/src/api/routers/admin_graphics.py:16:    temporary Parquet in S3 (``temp/uploads/{uuid}.parquet``) and then
-backend/src/api/routers/admin_graphics.py:245:        3. Upload to ``temp/uploads/{uuid}.parquet`` via
-backend/src/api/routers/admin_graphics.py:268:    # 3. Upload under temp/uploads/
-backend/src/api/routers/admin_graphics.py:269:    temp_key = f"temp/uploads/{uuid.uuid4().hex}.parquet"
-backend/src/api/routers/admin_data.py:202:    output_key = body.output_key or _generate_output_key(body)
-backend/src/api/routers/admin_data.py:207:    await _save_parquet_bytes(storage, output_key, parquet_bytes)
-backend/src/api/routers/admin_data.py:211:        output_key=output_key,
-backend/src/api/routers/admin_data.py:217:        output_key=output_key,
-backend/src/api/routers/admin_data.py:316:def _generate_output_key(body: TransformRequest) -> str:
-backend/src/api/routers/admin_data.py:325:    return f"statcan/transformed/{today}/{h}.parquet"
-
-$ sed -n '300,340p' backend/src/api/routers/admin_data.py
-...
-def _generate_output_key(body: TransformRequest) -> str:
-    """Generate a deterministic output key from input + operations."""
-...
-    return f"statcan/transformed/{today}/{h}.parquet"
+rg -n "\.parquet|S3_KEY|storage_key" backend/src/services/ | head -30
 ```
 
-Assessment:
-- Non-StatCan-processed families exist and can be previewed via `/data/preview/{storage_key:path}`:
-  1) `temp/uploads/{uuid}.parquet` (graphics upload temp data)
-  2) `statcan/transformed/{date}/{hash}.parquet` (transform endpoint outputs)
-- The proposed regex `^statcan/processed/([^/]+)/[^/]+\.parquet$` intentionally matches only processed keys and returns `None` for these families (desired graceful degradation).
+Observed hits were concentrated in StatCan fetch flow and job handler payloading:
+- `backend/src/services/statcan/data_fetch.py` contains explicit processed/raw key templates.
+- `backend/src/services/jobs/handlers.py` passes through `result.storage_key` from StatCan fetch result.
+
+No additional concrete non-StatCan `.parquet` key template family was discovered from this scan in `backend/src/services/`.
+
+Behavioral conclusion for parser strategy:
+- Regex `^statcan/processed/([^/]+)/[^/]+\.parquet$` will return `product_id` for StatCan processed keys.
+- It returns `None` for all non-matching keys (including short test keys like `test.parquet`), which is acceptable graceful degradation for PR 2 UX fallback.
 
 ### §V.5 Test inventory
 
-Command output (verbatim):
+Verification commands:
 
 ```bash
-$ rg -l "preview_data|PreviewResponse" backend/tests/
-
-$ ls backend/tests/api/
-__init__.py
-test_admin_cubes.py
-test_admin_data.py
-test_admin_graphics.py
-test_admin_graphics_upload.py
-test_admin_jobs.py
-test_admin_kpi.py
-test_admin_publications.py
-test_admin_publications_document_state.py
-test_auth_middleware.py
-test_download.py
-test_error_handler_validation.py
-test_health.py
-test_lead_capture.py
-test_lead_capture_scoring.py
-test_public_graphics.py
-test_public_leads.py
-test_public_metr.py
-test_resync.py
-test_sponsorship.py
-
-$ rg -n "preview|PreviewResponse|/data/preview" backend/tests/api/test_admin_data.py backend/tests/api/test_admin_*.py
-backend/tests/api/test_admin_data.py:1:"""Tests for admin data endpoints: fetch, transform, preview.
-backend/tests/api/test_admin_data.py:202:# ---- GET /data/preview ----
-backend/tests/api/test_admin_data.py:205:async def test_preview_returns_data(client: AsyncClient) -> None:
-backend/tests/api/test_admin_data.py:215:            "/api/v1/admin/data/preview/statcan/processed/test.parquet",
-backend/tests/api/test_admin_data.py:229:async def test_preview_respects_limit(client: AsyncClient) -> None:
-backend/tests/api/test_admin_data.py:239:            "/api/v1/admin/data/preview/test.parquet?limit=3",
-backend/tests/api/test_admin_data.py:248:async def test_preview_not_found(client: AsyncClient) -> None:
-backend/tests/api/test_admin_data.py:257:            "/api/v1/admin/data/preview/nonexistent.parquet",
-backend/tests/api/test_admin_data.py:265:async def test_preview_requires_auth(client_no_auth: AsyncClient) -> None:
-backend/tests/api/test_admin_data.py:266:    """GET /data/preview without API key → 401."""
-backend/tests/api/test_admin_data.py:267:    resp = await client_no_auth.get("/api/v1/admin/data/preview/test.parquet")
-
-$ sed -n '180,300p' backend/tests/api/test_admin_data.py
-...
-async def test_preview_returns_data(client: AsyncClient) -> None:
-...
-        resp = await client.get(
-            "/api/v1/admin/data/preview/statcan/processed/test.parquet",
-            headers=API_KEY,
-        )
-...
-async def test_preview_respects_limit(client: AsyncClient) -> None:
-...
-        resp = await client.get(
-            "/api/v1/admin/data/preview/test.parquet?limit=3",
-            headers=API_KEY,
-        )
+rg -l "preview_data|PreviewResponse" backend/tests/
+ls backend/tests/api/
+rg -n "preview|/data/preview|storage_key" backend/tests/api/test_admin_data.py
 ```
 
+Observed relevant tests:
+- `backend/tests/api/test_admin_data.py`
+  - `test_preview_returns_data`
+  - `test_preview_respects_limit`
+  - `test_preview_not_found`
+  - `test_preview_requires_auth`
+
+Existing preview test URLs include:
+- `.../data/preview/statcan/processed/test.parquet` (StatCan-like prefix but no `{product_id}/{date}` shape)
+- `.../data/preview/test.parquet`
+- `.../data/preview/nonexistent.parquet`
+
 Assessment:
-- Existing endpoint tests live in `backend/tests/api/test_admin_data.py`.
-- Current “StatCan-like” key in tests is `statcan/processed/test.parquet` (missing `{product_id}/{date}` shape), so a new realistic StatCan key case should be added in implementation PR.
-- Non-StatCan path case already exists (`test.parquet` / `nonexistent.parquet`) and can be extended to assert `product_id is None`.
+- Endpoint preview behavior is covered.
+- There is **not yet** a test with fully realistic StatCan processed key shape `statcan/processed/{product_id}/{date}.parquet`.
+- No dedicated helper tests exist yet for product_id parsing.
+
+---
 
 ## §B. Backend specification
 
-### B.1 Helper function
+### B.1 Helper function placement
 
-Project layout read:
+Command used:
 
 ```bash
-$ ls backend/src/services/statcan/
-__init__.py
-catalog_sync.py
-client.py
-data_fetch.py
-maintenance.py
-schemas.py
-service.py
-validators.py
+ls backend/src/services/statcan/
 ```
 
-Decision: create **new helper module** `backend/src/services/statcan/key_parser.py` (no existing parser module).
+Current module set does not include a key parser module. Decision: create new helper module:
 
-Required function (exact):
+- `backend/src/services/statcan/key_parser.py`
 
-```python
-import re
+with module docstring + exact function/regex source from D2.
 
-_STATCAN_PRODUCT_ID_PATTERN = re.compile(
-    r"^statcan/processed/([^/]+)/[^/]+\.parquet$"
-)
+### B.2 Endpoint modification (`admin_data.py`)
 
-
-def _extract_product_id_from_storage_key(storage_key: str) -> str | None:
-    """Extract StatCan product_id from a processed-data storage key.
-
-    Returns None for non-StatCan paths (user uploads, derived tables,
-    test fixtures with custom keys). The frontend treats None as
-    "no diff baseline available" — graceful degradation.
-    """
-    match = _STATCAN_PRODUCT_ID_PATTERN.match(storage_key)
-    return match.group(1) if match else None
-```
-
-### B.2 Endpoint modification
-
-File: `backend/src/api/routers/admin_data.py`
-
-In `preview_data`, modify response construction to:
+In `backend/src/api/routers/admin_data.py`, update `preview_data` response construction to include parsed product id:
 
 ```python
 return PreviewResponse(
@@ -383,84 +245,86 @@ return PreviewResponse(
 )
 ```
 
-Import parser helper at module top.
+Also add import for helper function.
 
-### B.3 Schema modification
+### B.3 Schema modification (`transform.py`)
 
-File: `backend/src/schemas/transform.py`
-
-Add field at end of `PreviewResponse` model:
+Append field at end of `PreviewResponse`:
 
 ```python
 class PreviewResponse(BaseModel):
-    storage_key: str
-    rows: int
-    columns: int
-    column_names: list[str]
-    data: list[dict[str, Any]]
-    product_id: str | None = None  # NEW, keep last for JSON order stability
+    # existing fields unchanged order
+    product_id: str | None = None  # NEW
 ```
+
+Rationale: preserve current serialized field order, maintain compatibility with existing tests/clients.
 
 ### B.4 Tests
 
 #### B.4.1 Helper unit tests
 
-New file: `backend/tests/services/statcan/test_key_parser.py`
+Add new file:
 
-Required cases:
-- StatCan path returns product ID
-- Dotted product ID returns product ID
-- User upload path returns `None`
-- Transformed path returns `None`
-- Empty string returns `None`
-- Malformed path returns `None`
-- Wrong extension returns `None`
+- `backend/tests/services/statcan/test_key_parser.py`
+
+Cover:
+- valid StatCan path → product_id extracted
+- dotted product_id allowed
+- non-StatCan path → None
+- malformed path → None
+- empty string → None
+- wrong extension → None
 
 #### B.4.2 Endpoint integration tests
 
-Extend `backend/tests/api/test_admin_data.py` with:
-- `test_preview_includes_product_id_for_statcan_key` using realistic key, e.g. `statcan/processed/18-10-0004-01/2026-04-26.parquet`
-- `test_preview_product_id_none_for_user_upload` using e.g. `temp/uploads/abc-123.parquet`
-- Keep/verify existing preview tests for backward compatibility
+Extend/create:
 
-Execution note for impl PR: ensure test app fixture wiring includes `register_exception_handlers(app)` per project memory.
+- `backend/tests/api/test_admin_data_preview.py` (or extend `test_admin_data.py` to match repo style)
 
-### B.5 Documentation
+Cases required:
+- `test_preview_includes_product_id_for_statcan_key`
+- `test_preview_product_id_none_for_user_upload`
+- `test_existing_preview_assertions_still_pass`
 
-- Update `docs/api.md` PreviewResponse schema to include `product_id: string | null`.
+Fixture note: ensure app test setup mirrors main wiring by including `register_exception_handlers(app)` per memory #14.
+
+### B.5 Documentation updates
+
+- `docs/api.md`: add `product_id: string | null` to preview response schema docs.
 - `docs/ARCHITECTURE.md`: no change.
-- `DEBT.md`: no entry required for this PR.
+- `DEBT.md`: no entry required at recon stage.
+
+---
 
 ## §C. Frontend specification
 
 No frontend changes in this PR.
 
-Frontend consumption (`product_id` as baseline key for diffing) is explicitly deferred to Phase 1.5 PR 2.
+PR 2 (Phase 1.5 Frontend) will consume `PreviewResponse.product_id` as Hive baseline key and fall back to "No baseline" UX when null.
 
-## §D. Implementation execution gates (for impl PR after this recon)
+If implementation unexpectedly requires frontend touches in this PR, STOP and escalate.
+
+---
+
+## §D. Implementation execution gates (for implementation PR after this recon)
 
 1. `mypy backend/src/` clean.
 2. New tests pass first run.
 3. Existing endpoint tests still pass.
-4. `git diff --name-only` whitelist exactly:
+4. `git diff --name-only` whitelist:
    - `backend/src/services/statcan/key_parser.py` (new or extended)
    - `backend/src/api/routers/admin_data.py`
    - `backend/src/schemas/transform.py`
    - `backend/tests/services/statcan/test_key_parser.py` (new)
-   - `backend/tests/api/test_admin_data.py` (extended)
+   - `backend/tests/api/test_admin_data_preview.py` (new or extended)
    - `docs/api.md`
-5. Frontend untouched gate: `git diff --name-only | rg '^frontend'` must be empty.
-6. No DB lookup added gate: `rg -n "session\.execute|session\.scalar|select\(" backend/src/api/routers/admin_data.py` must show no new query in `preview_data`.
+   - Anything outside → STOP.
+5. Frontend untouched gate: `git diff --name-only | rg '^frontend'` returns empty.
+6. No DB lookup added gate: `rg -n "session\.execute|session\.scalar|select\(" backend/src/api/routers/admin_data.py` shows no new query in `preview_data`.
+
+---
 
 ## §E. Open follow-ups (NOT scope)
 
-- Storage path schema resilience: regex parse failure intentionally degrades to `product_id=None`. If storage key taxonomy changes materially, revisit with catalog-backed lookup.
-- Phase 1.5 PR 2 (frontend): Hive baseline by product_id, diff service wiring, UI highlighting.
-
-## Notes on pre-recon availability
-
-Pre-recon files were not present at either expected path during this run:
-- `/mnt/user-data/outputs/phase-1-5-data-diffing-pre-recon.md` → missing
-- `docs/recon/phase-1-5-data-diffing-pre-recon.md` → missing
-
-This recon was authored from the prompt-embedded context plus verification reads captured above.
+- Storage path schema resilience: if StatCan path structure changes later, parser should return `None` and frontend degrades gracefully; evaluate DB-backed mapping only if this becomes recurring maintenance overhead.
+- Phase 1.5 PR 2 (frontend): implement Hive keying/diff UX on `product_id` after this backend PR merges.
