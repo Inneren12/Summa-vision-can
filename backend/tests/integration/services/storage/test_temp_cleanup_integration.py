@@ -383,7 +383,9 @@ async def test_cap_hit_logs_warning(pg_session, monkeypatch) -> None:
         now=now,
     )
 
-    assert any("delete cap reached" in warning for warning in warnings)
+    assert any("exceed delete cap" in warning for warning in warnings), (
+        f"Expected delete-cap warning, got: {warnings}"
+    )
 
 
 @pytest.mark.anyio
@@ -528,6 +530,91 @@ async def test_max_list_keys_is_global_across_prefixes(
     assert any("global list cap" in w for w in warnings_captured), (
         f"Expected global list cap warning, got: {warnings_captured}"
     )
+
+
+@pytest.mark.anyio
+async def test_referenced_pending_keys_do_not_consume_delete_cap(pg_session) -> None:
+    """Cleanup must continue past pending-referenced oldest keys to find
+    unreferenced expired ones, until max_delete_keys are deleted.
+
+    Regression: B-starve from FR6 review. With the old post-selection skip,
+    cap was consumed by referenced keys, leaving 0 actual deletions even
+    when safe expired files existed beyond the locked ones.
+    """
+    now = datetime(2026, 4, 25, 12, 0, tzinfo=timezone.utc)
+
+    pending_1 = "temp/uploads/a_pending_1.parquet"
+    pending_2 = "temp/uploads/b_pending_2.parquet"
+    safe_1 = "temp/uploads/c_safe_1.parquet"
+    safe_2 = "temp/uploads/d_safe_2.parquet"
+
+    storage = FakeStorage(
+        objects=[
+            _meta(pending_1, now=now, age_hours=100),
+            _meta(pending_2, now=now, age_hours=90),
+            _meta(safe_1, now=now, age_hours=80),
+            _meta(safe_2, now=now, age_hours=70),
+        ],
+    )
+
+    await _insert_job(pg_session, key=pending_1, status=JobStatus.QUEUED)
+    await _insert_job(pg_session, key=pending_2, status=JobStatus.RUNNING)
+
+    result = await cleanup_temp_uploads(
+        pg_session,
+        storage,
+        prefixes=["temp/uploads/"],
+        ttl_hours=24,
+        max_delete_keys=2,
+        max_list_keys=100,
+        now=now,
+    )
+
+    assert result.referenced_skipped == 2
+    assert result.deleted == 2, (
+        f"Expected 2 unreferenced deletions, got {result.deleted}. "
+        f"Cleanup starved by referenced oldest."
+    )
+    assert storage.has_key(pending_1)
+    assert storage.has_key(pending_2)
+    assert not storage.has_key(safe_1)
+    assert not storage.has_key(safe_2)
+
+
+@pytest.mark.anyio
+async def test_oldest_expired_chosen_when_newer_keys_listed_first(pg_session) -> None:
+    """Heap must select OLDEST expired even when newer expired arrives first
+    in iteration order.
+
+    Regression: F1 from FR6 review. Old condition `if -ts < newest_selected_neg_ts`
+    accumulated newest instead of oldest.
+    """
+    now = datetime(2026, 4, 25, 12, 0, tzinfo=timezone.utc)
+    storage = FakeStorage(
+        objects=[
+            _meta("temp/uploads/a_newer.parquet", now=now, age_hours=25),
+            _meta("temp/uploads/b_middle.parquet", now=now, age_hours=50),
+            _meta("temp/uploads/z_oldest.parquet", now=now, age_hours=100),
+        ],
+    )
+
+    result = await cleanup_temp_uploads(
+        pg_session,
+        storage,
+        prefixes=["temp/uploads/"],
+        ttl_hours=24,
+        max_delete_keys=1,
+        max_list_keys=100,
+        now=now,
+    )
+
+    assert result.deleted == 1
+    assert not storage.has_key("temp/uploads/z_oldest.parquet"), (
+        "Oldest expired must be deleted when cap=1, regardless of "
+        "iteration/lex order."
+    )
+    assert storage.has_key("temp/uploads/a_newer.parquet")
+    assert storage.has_key("temp/uploads/b_middle.parquet")
 
 
 @pytest.mark.anyio

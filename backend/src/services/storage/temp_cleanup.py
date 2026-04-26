@@ -57,6 +57,33 @@ async def collect_keys_referenced_by_pending_jobs(
     return referenced
 
 
+async def collect_all_referenced_temp_keys(
+    session: AsyncSession,
+) -> set[str]:
+    """Return ALL temp/* keys referenced by graphics_generate jobs in pending statuses.
+
+    Differs from collect_keys_referenced_by_pending_jobs in that it does NOT
+    take a candidate set — returns the full set for use BEFORE listing.
+    Bounded by count of pending jobs × keys-per-payload, which is small in
+    normal operation.
+    """
+    pending_statuses: list[JobStatus] = [JobStatus.QUEUED, JobStatus.RUNNING]
+    retrying = getattr(JobStatus, "RETRYING", None)
+    if retrying is not None:
+        pending_statuses.append(retrying)
+    stmt = select(Job.payload_json).where(
+        Job.job_type == "graphics_generate",
+        Job.status.in_(pending_statuses),
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    referenced: set[str] = set()
+    for payload_json in rows:
+        data_key = extract_graphics_generate_data_key(payload_json)
+        if data_key is not None:
+            referenced.add(data_key)
+    return referenced
+
+
 async def cleanup_temp_uploads(
     session: AsyncSession,
     storage: StorageInterface,
@@ -77,6 +104,11 @@ async def cleanup_temp_uploads(
     result = CleanupResult()
     current_time = now or datetime.now(timezone.utc)
     cutoff = current_time - timedelta(hours=ttl_hours)
+
+    # Collect referenced temp keys FIRST, so we skip them at admission and
+    # max_delete_keys counts only DELETABLE candidates (no starvation when
+    # oldest expired are locked by long-running jobs).
+    referenced_pending = await collect_all_referenced_temp_keys(session)
 
     oldest_expired: list[tuple[float, str, int, str]] = []
     listed_total = 0
@@ -102,6 +134,13 @@ async def cleanup_temp_uploads(
                         continue
 
                     expired_seen_total += 1
+
+                    # Skip pending-referenced keys at admission so cap
+                    # is only consumed by truly-deletable candidates.
+                    if obj.key in referenced_pending:
+                        result.referenced_skipped += 1
+                        continue
+
                     if max_delete_keys <= 0:
                         continue
 
@@ -110,8 +149,12 @@ async def cleanup_temp_uploads(
                     if len(oldest_expired) < max_delete_keys:
                         heapq.heappush(oldest_expired, entry)
                     else:
-                        newest_selected_neg_ts = oldest_expired[0][0]
-                        if -ts < newest_selected_neg_ts:
+                        # Min-heap on -ts → root is newest currently selected.
+                        # Replace when incoming is OLDER than newest selected:
+                        #   incoming_ts < newest_selected_ts
+                        #   ⟺ -incoming_ts > -newest_selected_ts
+                        newest_selected_ts = -oldest_expired[0][0]
+                        if ts < newest_selected_ts:
                             heapq.heapreplace(oldest_expired, entry)
 
                 if prefix_list_cap_hit:
@@ -166,13 +209,8 @@ async def cleanup_temp_uploads(
 
     result.scanned = len(candidates_by_key)
     candidate_keys = set(candidates_by_key.keys())
-    referenced = await collect_keys_referenced_by_pending_jobs(
-        session,
-        candidates=candidate_keys,
-    )
-
-    deletable = sorted(candidate_keys - referenced)
-    result.referenced_skipped = len(referenced)
+    deletable = sorted(candidate_keys)
+    # result.referenced_skipped already counted at admission (Step 3b).
 
     for key in deletable:
         size_bytes = candidates_by_key[key][1]

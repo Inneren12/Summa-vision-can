@@ -164,6 +164,25 @@ Rules:
   job completion -> cleanup deletes).
 - **Updated 2026-04-25:** FR2 addressed max_keys semantic bug surfaced in review. Storage listings are key-ordered (lexicographic), so capping raw listings could hide expired keys behind fresh ones. Cleanup now lists full prefix, filters by TTL, then caps the EXPIRED set (oldest-first). Warning logged when cap is hit so operators know to increase cycle frequency or cap size. New integration test `test_expired_beyond_fresh_listing_still_reached` covers the regression directly.
 - **Updated 2026-04-25:** FR3 restored hard cap on listing side. Switched from list-all to paginated scan via new iter_objects_with_metadata on StorageInterface. Introduced two caps: max_list_keys_per_cycle (bounds memory/storage cost) and max_delete_keys_per_cycle (bounds DELETE work). Oldest expired candidates prioritized across pages via min-heap. Separate warnings emitted for each cap-hit scenario so operators can tune cycle frequency or cap sizes. Regression tests cover both cap paths and oldest-first ordering.
+- **Updated 2026-04-26:** FR8 fixed three CI failures plus B-starve.
+  (F1) Heap eviction comparison was inverted since FR2 — kept newest, not oldest.
+  Replaced with `if ts < newest_selected_ts` using positive-timestamp comparison
+  via `-oldest_expired[0][0]`. New regression
+  test_oldest_expired_chosen_when_newer_keys_listed_first.
+  (F2) Warning assertion substring updated from "delete cap reached" to
+  "exceed delete cap" matching production log message.
+  (F3) List cap halt verified BEFORE listed_total increment;
+  global_list_cap_hit short-circuits subsequent prefixes.
+  (F4 / B-starve) New collect_all_referenced_temp_keys() pre-listing collects
+  pending-referenced keys; skipped at admission so max_delete_keys counts only
+  deletable candidates. New regression
+  test_referenced_pending_keys_do_not_consume_delete_cap.
+
+  BREAKING CONFIG RENAME (from FR3, re-noted):
+    TEMP_CLEANUP_MAX_KEYS_PER_CYCLE → REMOVED
+    Replaced by:
+      TEMP_CLEANUP_MAX_DELETE_KEYS_PER_CYCLE
+      TEMP_CLEANUP_MAX_LIST_KEYS_PER_CYCLE
 - **Updated 2026-04-25:** FR5 completed global per-cycle cap contract. Heap and both listing/delete counters hoisted outside prefix loop (review found FR4 did not fully apply this). Added two regression tests: test_max_delete_keys_is_global_across_prefixes and test_max_list_keys_is_global_across_prefixes. LocalStorageManager docstring clarified as dev/test-only.
 
 
