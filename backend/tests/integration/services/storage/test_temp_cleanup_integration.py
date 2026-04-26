@@ -498,7 +498,7 @@ async def test_max_list_keys_is_global_across_prefixes(
         _meta("temp/a/fresh_1.parquet", now=now, age_hours=1),
         _meta("temp/b/fresh_0.parquet", now=now, age_hours=1),
         _meta("temp/b/fresh_1.parquet", now=now, age_hours=1),
-        _meta("temp/b/expired.parquet", now=now, age_hours=30),
+        _meta("temp/b/zzz_expired.parquet", now=now, age_hours=30),
     ]
     storage = FakeStorage(objects=objects)
 
@@ -526,7 +526,7 @@ async def test_max_list_keys_is_global_across_prefixes(
         "List cap must halt listing before expired object reached, "
         f"deleted={result.deleted}"
     )
-    assert storage.has_key("temp/b/expired.parquet")
+    assert storage.has_key("temp/b/zzz_expired.parquet")
     assert any("global list cap" in w for w in warnings_captured), (
         f"Expected global list cap warning, got: {warnings_captured}"
     )
