@@ -46,6 +46,10 @@ async def clone_publication(*, session: AsyncSession, source_id: int) -> Publica
         title=new_headline,
     )[:_HASH_SLICE]
 
+    fresh_review_json = json.dumps(
+        {"workflow": "draft", "history": [], "comments": []},
+    )
+
     last_exc: IntegrityError | None = None
     for attempt in range(_MAX_CLONE_VERSION_RETRIES):
         if source.source_product_id is None:
