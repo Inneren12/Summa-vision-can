@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:summa_vision_admin/core/app_bootstrap/app_bootstrap_provider.dart';
 import 'package:summa_vision_admin/core/shell/language_switcher.dart';
-import 'package:summa_vision_admin/core/theme/app_theme.dart';
 import 'package:summa_vision_admin/features/editor/presentation/editor_screen.dart';
 import 'package:summa_vision_admin/features/graphics/application/chart_config_notifier.dart';
 import 'package:summa_vision_admin/features/graphics/application/generation_state_notifier.dart';
@@ -13,7 +10,9 @@ import 'package:summa_vision_admin/features/graphics/presentation/chart_config_s
 import 'package:summa_vision_admin/features/queue/data/queue_repository.dart';
 import 'package:summa_vision_admin/features/queue/domain/content_brief.dart';
 import 'package:summa_vision_admin/features/queue/presentation/queue_screen.dart';
-import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
+import 'package:summa_vision_admin/l10n/generated/app_localizations_en.dart';
+
+import '../helpers/pump_localized_router.dart';
 
 const _brief = ContentBrief(
   id: 42,
@@ -45,10 +44,6 @@ class _MockGenerationNotifier extends ChartGenerationNotifier {
   Future<void> generate(request) async {}
 }
 
-/// Builds a multi-route GoRouter covering /queue, /editor/:briefId, and
-/// /chart-config. Each non-Queue route wraps its screen in a Scaffold whose
-/// AppBar.actions hosts the LanguageSwitcher so tests can switch locale from
-/// any screen without depending on the production drawer chrome.
 GoRouter _buildRouter({String initialLocation = '/queue'}) {
   return GoRouter(
     initialLocation: initialLocation,
@@ -77,9 +72,6 @@ GoRouter _buildRouter({String initialLocation = '/queue'}) {
   );
 }
 
-/// Captured router for tests to drive navigation without traversing the
-/// element tree (`GoRouter.of(context)` would fail at the MaterialApp level
-/// since the router is established below).
 GoRouter? _activeRouter;
 
 Future<void> _pumpAppWithRouter(
@@ -88,48 +80,24 @@ Future<void> _pumpAppWithRouter(
 }) async {
   final router = _buildRouter(initialLocation: initialLocation);
   _activeRouter = router;
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        queueProvider.overrideWith((ref) async => const [_brief]),
-        chartConfigNotifierProvider.overrideWith(
-          () => _MockChartConfigNotifier(
-            const ChartConfig(
-              dataKey: _chartStorageKey,
-              title: 'Aggregator chart title',
-            ),
+  await pumpLocalizedRouter(
+    tester,
+    routerConfig: router,
+    overrides: [
+      queueProvider.overrideWith((ref) async => const [_brief]),
+      chartConfigNotifierProvider.overrideWith(
+        () => _MockChartConfigNotifier(
+          const ChartConfig(
+            dataKey: _chartStorageKey,
+            title: 'Aggregator chart title',
           ),
         ),
-        chartGenerationNotifierProvider.overrideWith(
-          () => _MockGenerationNotifier(const ChartGenerationState()),
-        ),
-      ],
-      child: Consumer(
-        builder: (context, ref, _) {
-          final bootstrap = ref.watch(appBootstrapProvider);
-          return MaterialApp.router(
-            theme: AppTheme.dark,
-            locale: bootstrap.when(
-              data: (state) => state.locale,
-              loading: () => const Locale('en'),
-              error: (_, __) => const Locale('en'),
-            ),
-            supportedLocales: AppLocalizations.supportedLocales,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            routerConfig: router,
-          );
-        },
       ),
-    ),
+      chartGenerationNotifierProvider.overrideWith(
+        () => _MockGenerationNotifier(const ChartGenerationState()),
+      ),
+    ],
   );
-  await tester.pumpAndSettle();
-}
-
-Future<void> _switchToRussianViaAppBar(WidgetTester tester) async {
-  await tester.tap(
-    find.widgetWithText(TextButton, 'Russian', skipOffstage: false),
-  );
-  await tester.pumpAndSettle();
 }
 
 void _navigate(String location) {
@@ -148,40 +116,42 @@ void main() {
       (tester) async {
         await _pumpAppWithRouter(tester);
 
-        // Start at Queue (EN). queueTitle and navQueue share the same value;
-        // findsAtLeastNWidgets(1) per Slice 3.3+3.4 lesson.
-        expect(find.text('Brief Queue'), findsAtLeastNWidgets(1));
-        expect(find.text('Approve'), findsOneWidget);
+        final enQueueTitle = l10n(tester).queueTitle;
+        final enQueueApprove = l10n(tester).queueApproveVerb;
 
-        // Navigate Queue → Editor.
+        expect(find.text(enQueueTitle), findsAtLeastNWidgets(1));
+        expect(find.text(enQueueApprove), findsOneWidget);
+
         _navigate('/editor/42');
         await tester.pumpAndSettle();
 
-        // Editor in EN.
-        expect(find.text('Headline'), findsOneWidget);
-        expect(find.text('Chart Type'), findsOneWidget);
-        expect(find.text('Generate Graphic'), findsOneWidget);
+        final enHeadline = l10n(tester).editorHeadlineLabel;
+        final enChartType = l10n(tester).editorChartTypeLabel;
+        final enGenerate = l10n(tester).editorGenerateGraphicButton;
 
-        // Switch to RU via AppBar switcher (mounted by test wrapper).
-        await _switchToRussianViaAppBar(tester);
+        expect(find.text(enHeadline), findsOneWidget);
+        expect(find.text(enChartType), findsOneWidget);
+        expect(find.text(enGenerate), findsOneWidget);
 
-        // Editor in RU.
-        expect(find.text('Заголовок'), findsAtLeastNWidgets(1));
-        expect(find.text('Тип графика'), findsAtLeastNWidgets(1));
-        expect(find.text('Сгенерировать графику'), findsAtLeastNWidgets(1));
+        await switchLocaleVia(tester, 'ru');
 
-        // EN denial after switch.
-        expect(find.text('Headline'), findsNothing);
-        expect(find.text('Chart Type'), findsNothing);
+        expect(find.text(l10n(tester).editorHeadlineLabel), findsAtLeastNWidgets(1));
+        expect(find.text(l10n(tester).editorChartTypeLabel), findsAtLeastNWidgets(1));
+        expect(
+          find.text(l10n(tester).editorGenerateGraphicButton),
+          findsAtLeastNWidgets(1),
+        );
 
-        // Navigate back to Queue and confirm RU rendering there too.
+        expect(find.text(enHeadline), findsNothing);
+        expect(find.text(enChartType), findsNothing);
+
         _navigate('/queue');
         await tester.pumpAndSettle();
 
-        expect(find.text('Очередь брифов'), findsAtLeastNWidgets(1));
-        expect(find.text('Одобрить'), findsAtLeastNWidgets(1));
-        expect(find.text('Brief Queue'), findsNothing);
-        expect(find.text('Approve'), findsNothing);
+        expect(find.text(l10n(tester).queueTitle), findsAtLeastNWidgets(1));
+        expect(find.text(l10n(tester).queueApproveVerb), findsAtLeastNWidgets(1));
+        expect(find.text(enQueueTitle), findsNothing);
+        expect(find.text(enQueueApprove), findsNothing);
       },
     );
 
@@ -190,68 +160,71 @@ void main() {
       (tester) async {
         await _pumpAppWithRouter(tester);
 
-        // Queue in EN.
-        expect(find.text('Brief Queue'), findsAtLeastNWidgets(1));
+        final enQueueTitle = l10n(tester).queueTitle;
+        expect(find.text(enQueueTitle), findsAtLeastNWidgets(1));
 
-        // Navigate Queue → ChartConfig.
         _navigate('/chart-config');
         await tester.pumpAndSettle();
 
-        // ChartConfig in EN.
-        expect(find.text('Chart Configuration'), findsOneWidget);
-        expect(find.text('Dataset'), findsOneWidget);
-        expect(find.text('Background Category'), findsOneWidget);
+        final enChartConfig = l10n(tester).chartConfigAppBarTitle;
+        final enDataset = l10n(tester).chartConfigDatasetLabel;
+        final enBackground = l10n(tester).chartConfigBackgroundCategoryLabel;
 
-        // Switch to RU via AppBar switcher.
-        await _switchToRussianViaAppBar(tester);
+        expect(find.text(enChartConfig), findsOneWidget);
+        expect(find.text(enDataset), findsOneWidget);
+        expect(find.text(enBackground), findsOneWidget);
 
-        // ChartConfig in RU.
-        expect(find.text('Настройка графика'), findsAtLeastNWidgets(1));
-        expect(find.text('Набор данных'), findsAtLeastNWidgets(1));
-        expect(find.text('Категория фона'), findsAtLeastNWidgets(1));
+        await switchLocaleVia(tester, 'ru');
 
-        // EN denial.
-        expect(find.text('Chart Configuration'), findsNothing);
-        expect(find.text('Dataset'), findsNothing);
-        expect(find.text('Background Category'), findsNothing);
+        expect(find.text(l10n(tester).chartConfigAppBarTitle), findsAtLeastNWidgets(1));
+        expect(find.text(l10n(tester).chartConfigDatasetLabel), findsAtLeastNWidgets(1));
+        expect(
+          find.text(l10n(tester).chartConfigBackgroundCategoryLabel),
+          findsAtLeastNWidgets(1),
+        );
+
+        expect(find.text(enChartConfig), findsNothing);
+        expect(find.text(enDataset), findsNothing);
+        expect(find.text(enBackground), findsNothing);
       },
     );
 
     testWidgets(
       'Full journey: Queue → Editor → ChartConfig under RU',
       (tester) async {
-        // Start with persisted RU so all screens render in RU from first frame.
         SharedPreferences.setMockInitialValues({'selected_locale': 'ru'});
 
         await _pumpAppWithRouter(tester);
 
-        // Queue in RU.
-        expect(find.text('Очередь брифов'), findsAtLeastNWidgets(1));
-        expect(find.text('Одобрить'), findsAtLeastNWidgets(1));
-        expect(find.text('Brief Queue'), findsNothing);
+        final en = AppLocalizationsEn();
+        expect(find.text(l10n(tester).queueTitle), findsAtLeastNWidgets(1));
+        expect(find.text(l10n(tester).queueApproveVerb), findsAtLeastNWidgets(1));
+        expect(find.text(en.queueTitle), findsNothing);
 
-        // Navigate to Editor.
         _navigate('/editor/42');
         await tester.pumpAndSettle();
 
-        // Editor in RU.
-        expect(find.text('Заголовок'), findsAtLeastNWidgets(1));
-        expect(find.text('Тип графика'), findsAtLeastNWidgets(1));
-        expect(find.text('Сгенерировать графику'), findsAtLeastNWidgets(1));
-        expect(find.text('Headline'), findsNothing);
-        expect(find.text('Chart Type'), findsNothing);
+        expect(find.text(l10n(tester).editorHeadlineLabel), findsAtLeastNWidgets(1));
+        expect(find.text(l10n(tester).editorChartTypeLabel), findsAtLeastNWidgets(1));
+        expect(
+          find.text(l10n(tester).editorGenerateGraphicButton),
+          findsAtLeastNWidgets(1),
+        );
+        expect(find.text(en.editorHeadlineLabel), findsNothing);
+        expect(find.text(en.editorChartTypeLabel), findsNothing);
 
-        // Navigate to ChartConfig.
         _navigate('/chart-config');
         await tester.pumpAndSettle();
 
-        // ChartConfig in RU.
-        expect(find.text('Настройка графика'), findsAtLeastNWidgets(1));
-        expect(find.text('Набор данных'), findsAtLeastNWidgets(1));
-        expect(find.text('Категория фона'), findsAtLeastNWidgets(1));
-        expect(find.text('Chart Configuration'), findsNothing);
-        expect(find.text('Dataset'), findsNothing);
-        expect(find.text('Background Category'), findsNothing);
+        expect(find.text(l10n(tester).chartConfigAppBarTitle), findsAtLeastNWidgets(1));
+        expect(find.text(l10n(tester).chartConfigDatasetLabel), findsAtLeastNWidgets(1));
+        expect(
+          find.text(l10n(tester).chartConfigBackgroundCategoryLabel),
+          findsAtLeastNWidgets(1),
+        );
+        expect(find.text(en.chartConfigAppBarTitle), findsNothing);
+        expect(find.text(en.chartConfigDatasetLabel), findsNothing);
+        expect(find.text(en.chartConfigBackgroundCategoryLabel), findsNothing);
       },
     );
   });

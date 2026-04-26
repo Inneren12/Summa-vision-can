@@ -81,6 +81,8 @@ Rules:
   when adding a fifth+ locale-switch smoke (trigger: any new locale
   smoke proves harness duplication painful).
 
+> Updated 2026-04-26: RESOLVED. Introduced shared `pumpLocalizedRouter` helper in `frontend/test/helpers/pump_localized_router.dart` plus `l10n(tester)` and `switchLocaleVia(tester, ...)` utilities. Refactored all 5 locale-switch smokes (queue/editor/graphics/shell/aggregator) to use the helper. All hardcoded literal assertions replaced with `l10n.<key>`-derived values. ~180 lines of duplicated scaffolding removed across the 5 files. No semantic test changes; all 9 tests still pass.
+
 ### DEBT-029: Locale-aware bootstrap-error fallback in Flutter admin app
 
 - **Source:** Phase 3 Slice 3.3+3.4 recon (`docs/phase-3-slice-3-recon.md` §6)

@@ -73,6 +73,7 @@ class _LanguageButton extends ConsumerWidget {
         label: label,
         excludeSemantics: true,
         child: TextButton(
+          key: ValueKey<String>('language-switcher-$code'),
           onPressed: active
               ? null
               : () => ref.read(appBootstrapProvider.notifier).setLocale(
