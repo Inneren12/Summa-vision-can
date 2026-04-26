@@ -172,6 +172,22 @@ Poll via `GET /api/v1/admin/jobs/{job_id}` exactly as for `/generate`.
 
 ---
 
+
+### `GET /api/v1/admin/data/preview/{storage_key:path}`
+
+Preview rows from a stored Parquet file.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `storage_key` | string | Storage key requested for preview. |
+| `rows` | integer | Number of rows returned (capped by server and `limit`). |
+| `columns` | integer | Number of columns in the previewed file. |
+| `column_names` | array of string | Ordered column names in the file. |
+| `data` | array of object | Preview rows serialized as typed JSON objects. |
+| `product_id` | string \| null | StatCan product ID parsed from storage_key, null for non-StatCan paths. |
+
+---
+
 ### `GET /api/v1/admin/tasks/{task_id}`
 
 Poll the status of a background task.
