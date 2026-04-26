@@ -7,7 +7,7 @@ client.
 
 Usage::
 
-    from fastapi import FastAPI
+    from fastapi import FastAPI, status
     from src.core.error_handler import register_exception_handlers
 
     app = FastAPI()
@@ -19,7 +19,8 @@ from __future__ import annotations
 import traceback
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI
+from fastapi import FastAPI, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
@@ -82,6 +83,29 @@ async def _summa_vision_exception_handler(
     )
 
 
+async def _publication_validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
+    """Wrap PATCH admin/publications validation errors with structured code."""
+    if request.url.path.startswith("/api/v1/admin/publications/") and request.method == "PATCH":
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={
+                "detail": {
+                    "error_code": "PUBLICATION_UPDATE_PAYLOAD_INVALID",
+                    "message": "The submitted changes are invalid.",
+                    "details": {"validation_errors": exc.errors()},
+                }
+            },
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={"detail": exc.errors()},
+    )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers on the given FastAPI application.
 
@@ -93,3 +117,4 @@ def register_exception_handlers(app: FastAPI) -> None:
         SummaVisionError,
         _summa_vision_exception_handler,  # type: ignore[arg-type]
     )
+    app.add_exception_handler(RequestValidationError, _publication_validation_exception_handler)
