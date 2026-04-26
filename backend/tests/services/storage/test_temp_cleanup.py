@@ -51,8 +51,8 @@ class FakeStorage(StorageInterface):
     async def list_objects(self, prefix: str) -> list[str]:
         return [obj.key for obj in self.objects if obj.key.startswith(prefix)]
 
-    async def list_objects_with_metadata(self, prefix: str, max_keys: int | None = None) -> list[StorageObjectMetadata]:
-        return [obj for obj in self.objects if obj.key.startswith(prefix)]
+    async def iter_objects_with_metadata(self, prefix: str):
+        yield [obj for obj in self.objects if obj.key.startswith(prefix)]
 
     async def generate_presigned_url(self, path: str, ttl: int = 3600) -> str:
         return ""
@@ -85,7 +85,8 @@ async def test_cleanup_deletes_only_expired_unreferenced_keys() -> None:
         storage,
         prefixes=["temp/uploads/"],
         ttl_hours=24,
-        max_keys=1000,
+        max_delete_keys=1000,
+        max_list_keys=50000,
         now=now,
     )
 
@@ -108,7 +109,8 @@ async def test_cleanup_treats_404_delete_as_success() -> None:
         storage,
         prefixes=["temp/uploads/"],
         ttl_hours=24,
-        max_keys=1000,
+        max_delete_keys=1000,
+        max_list_keys=50000,
         now=now,
     )
 
@@ -148,7 +150,8 @@ async def test_cleaner_uses_short_lived_session_factory() -> None:
         {
             "temp_cleanup_prefixes": ["temp/uploads/"],
             "temp_upload_ttl_hours": 24,
-            "temp_cleanup_max_keys_per_cycle": 1000,
+            "temp_cleanup_max_delete_keys_per_cycle": 1000,
+            "temp_cleanup_max_list_keys_per_cycle": 50000,
         },
     )()
 
@@ -183,7 +186,8 @@ async def test_delete_error_is_non_fatal_and_continues() -> None:
         storage,
         prefixes=["temp/uploads/"],
         ttl_hours=24,
-        max_keys=100,
+        max_delete_keys=100,
+        max_list_keys=50000,
         now=now,
     )
 

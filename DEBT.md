@@ -39,7 +39,7 @@ Rules:
 - **Added:** 2026-04-24
 - **Severity:** low
 - **Category:** code-quality
-- **Status:** resolved
+- **Status:** accepted
 - **Description:** Two parallel generation notifier stacks exist:
   - `frontend/lib/features/graphics/domain/generation_notifier.dart` + `generation_state.dart` use `GenerationPhase { idle, submitting, polling, completed, timeout, failed }`
   - `frontend/lib/features/graphics/application/generation_state_notifier.dart` uses `GenerationPhase { idle, submitting, polling, success, failed, timeout }`
@@ -51,6 +51,8 @@ Rules:
 > Updated 2026-04-24: errorCode plumbing in both notifier stacks completed in Slice 3.8 Fix Round 1 (GitHub review caught dead mapper). DEBT-031 remains open for the phase enum unification proper.
 
 > Updated 2026-04-24: Slice 3.11 pre-recon confirmed phase enum divergence persists but has limited practical impact — the 5 generationStatus* ARB keys are rendered directly from screen widgets via conditional branches, not via a centralized phase→key mapper (Part A2 §3.6). Enum unification remains opportunistic with no UX-blocking symptom.
+
+> Updated 2026-04-25: FR2 resolved stale success artifact regressions in both notifier stacks (ChartGenerationNotifier and GenerationNotifier clear result/resultUrl on terminal failure/timeout). RU hardcoded localized literals in chart_config_screen_localization_test.dart replaced with l10n.<key>-derived assertions. These are improvements ADJACENT to DEBT-031 — the phase enum unification proper remains open.
 
 ### DEBT-032: Locale-switch smoke test harness harmonization
 
@@ -160,6 +162,29 @@ Rules:
   ``temp_cleanup_prefixes``. Added unit + integration coverage including an
   end-to-end pipeline test (upload -> pending job -> cleanup preserves ->
   job completion -> cleanup deletes).
+- **Updated 2026-04-25:** FR2 addressed max_keys semantic bug surfaced in review. Storage listings are key-ordered (lexicographic), so capping raw listings could hide expired keys behind fresh ones. Cleanup now lists full prefix, filters by TTL, then caps the EXPIRED set (oldest-first). Warning logged when cap is hit so operators know to increase cycle frequency or cap size. New integration test `test_expired_beyond_fresh_listing_still_reached` covers the regression directly.
+- **Updated 2026-04-25:** FR3 restored hard cap on listing side. Switched from list-all to paginated scan via new iter_objects_with_metadata on StorageInterface. Introduced two caps: max_list_keys_per_cycle (bounds memory/storage cost) and max_delete_keys_per_cycle (bounds DELETE work). Oldest expired candidates prioritized across pages via min-heap. Separate warnings emitted for each cap-hit scenario so operators can tune cycle frequency or cap sizes. Regression tests cover both cap paths and oldest-first ordering.
+- **Updated 2026-04-26:** FR8 fixed three CI failures plus B-starve.
+  (F1) Heap eviction comparison was inverted since FR2 — kept newest, not oldest.
+  Replaced with `if ts < newest_selected_ts` using positive-timestamp comparison
+  via `-oldest_expired[0][0]`. New regression
+  test_oldest_expired_chosen_when_newer_keys_listed_first.
+  (F2) Warning assertion substring updated from "delete cap reached" to
+  "exceed delete cap" matching production log message.
+  (F3) List cap halt verified BEFORE listed_total increment;
+  global_list_cap_hit short-circuits subsequent prefixes.
+  (F4 / B-starve) New collect_all_referenced_temp_keys() pre-listing collects
+  pending-referenced keys; skipped at admission so max_delete_keys counts only
+  deletable candidates. New regression
+  test_referenced_pending_keys_do_not_consume_delete_cap.
+
+  BREAKING CONFIG RENAME (from FR3, re-noted):
+    TEMP_CLEANUP_MAX_KEYS_PER_CYCLE → REMOVED
+    Replaced by:
+      TEMP_CLEANUP_MAX_DELETE_KEYS_PER_CYCLE
+      TEMP_CLEANUP_MAX_LIST_KEYS_PER_CYCLE
+- **Updated 2026-04-25:** FR5 completed global per-cycle cap contract. Heap and both listing/delete counters hoisted outside prefix loop (review found FR4 did not fully apply this). Added two regression tests: test_max_delete_keys_is_global_across_prefixes and test_max_list_keys_is_global_across_prefixes. LocalStorageManager docstring clarified as dev/test-only.
+
 
 
 ### DEBT-033: Broaden temp_cleanup beyond temp/uploads/ after job-type audit

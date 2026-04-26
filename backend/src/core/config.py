@@ -100,11 +100,17 @@ class Settings(BaseSettings):
         ge=5,
         description="How often the temp uploads cleanup task runs.",
     )
-    temp_cleanup_max_keys_per_cycle: int = Field(
+    temp_cleanup_max_delete_keys_per_cycle: int = Field(
         default=1000,
         ge=1,
         le=10000,
-        description="Maximum expired objects scanned/deleted per prefix per cleanup cycle.",
+        description="Maximum expired objects deleted per cleanup cycle.",
+    )
+    temp_cleanup_max_list_keys_per_cycle: int = Field(
+        default=50000,
+        ge=1000,
+        le=1000000,
+        description="Maximum listed objects scanned per cleanup cycle.",
     )
     temp_cleanup_prefixes: list[str] = Field(
         default_factory=lambda: ["temp/uploads/"],

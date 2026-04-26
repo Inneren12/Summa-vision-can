@@ -1,9 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:summa_vision_admin/features/graphics/data/graphic_repository.dart';
 import 'package:summa_vision_admin/features/graphics/domain/generation_notifier.dart';
 import 'package:summa_vision_admin/features/graphics/domain/generation_state.dart';
 import 'package:summa_vision_admin/features/graphics/domain/task_status.dart';
+
+import '../_helpers/fake_async_polling.dart';
 
 /// Fake repository that scripts submit + status responses.
 ///
@@ -38,6 +41,98 @@ class _FakeGraphicRepository implements GraphicRepository {
 }
 
 void main() {
+
+  group('GenerationNotifier — stale resultUrl clearing', () {
+    test(
+      'failed transition from prior success artifact clears stale resultUrl',
+      () {
+        final fakeRepo = _FakeGraphicRepository(
+          submittedTaskId: 'task-88',
+          statusSequence: const [
+            TaskStatus(
+              taskId: 'task-88',
+              status: 'FAILED',
+              errorCode: 'CHART_EMPTY_DF',
+              detail: 'raw backend text',
+            ),
+          ],
+        );
+
+        final container = ProviderContainer(
+          overrides: [
+            graphicRepositoryProvider.overrideWithValue(fakeRepo),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final notifier = container.read(generationNotifierProvider.notifier);
+        notifier.state = const GenerationState(
+          phase: GenerationPhase.idle,
+          taskId: 'task-prev',
+          resultUrl: 'https://cdn.example.com/old.png',
+        );
+
+        fakeAsync((async) {
+          notifier.generate(88);
+          pumpUntilIdle(async);
+
+          final state = container.read(generationNotifierProvider);
+          expect(state.phase, GenerationPhase.failed);
+          expect(state.errorCode, 'CHART_EMPTY_DF');
+          expect(
+            state.resultUrl,
+            isNull,
+            reason:
+                'terminal failure must not retain previous successful resultUrl',
+          );
+        });
+      },
+      timeout: const Timeout(Duration(seconds: 15)),
+    );
+
+    test(
+      'timeout transition from prior success artifact clears stale resultUrl',
+      () {
+        final fakeRepo = _FakeGraphicRepository(
+          submittedTaskId: 'task-89',
+          statusSequence: const [
+            TaskStatus(taskId: 'task-89', status: 'RUNNING'),
+          ],
+        );
+
+        final container = ProviderContainer(
+          overrides: [
+            graphicRepositoryProvider.overrideWithValue(fakeRepo),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final notifier = container.read(generationNotifierProvider.notifier);
+        notifier.state = const GenerationState(
+          phase: GenerationPhase.idle,
+          taskId: 'task-prev',
+          resultUrl: 'https://cdn.example.com/old.png',
+        );
+
+        fakeAsync((async) {
+          notifier.generate(89);
+          pumpUntilIdle(async, maxTicks: 500);
+
+          final state = container.read(generationNotifierProvider);
+          expect(state.phase, GenerationPhase.timeout);
+          expect(state.errorCode, isNull);
+          expect(
+            state.resultUrl,
+            isNull,
+            reason:
+                'terminal timeout must not retain previous successful resultUrl',
+          );
+        });
+      },
+      timeout: const Timeout(Duration(seconds: 15)),
+    );
+  });
+
   group('GenerationNotifier — error_code plumbing', () {
     test(
       'propagates backend error_code to state.errorCode on failed job',
