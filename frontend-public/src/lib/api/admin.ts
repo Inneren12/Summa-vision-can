@@ -8,6 +8,7 @@ import type {
   VisualConfig,
   ReviewPayload,
 } from '@/lib/types/publication';
+import { extractBackendErrorPayload } from './errorCodes';
 
 const PROXY_BASE = '/api/admin/publications';
 
@@ -22,6 +23,30 @@ export class AdminPublicationNotFoundError extends Error {
   constructor(public readonly id: string) {
     super(`Publication ${id} not found`);
     this.name = 'AdminPublicationNotFoundError';
+  }
+}
+
+/**
+ * Carries a backend error_code + status + optional details for callers
+ * that want to react to specific codes. Distinct from AdminPublicationNotFoundError
+ * which is a typed branch for the very common 404-on-publication case.
+ */
+export class BackendApiError extends Error {
+  public readonly status: number;
+  public readonly code: string | null;
+  public readonly details: Record<string, unknown> | null;
+
+  constructor(args: {
+    status: number;
+    code: string | null;
+    message: string;
+    details: Record<string, unknown> | null;
+  }) {
+    super(args.message);
+    this.name = 'BackendApiError';
+    this.status = args.status;
+    this.code = args.code;
+    this.details = args.details;
   }
 }
 
@@ -95,14 +120,23 @@ export async function updateAdminPublication(
     signal: opts.signal,
     cache: 'no-store',
   });
-  if (res.status === 404) {
-    throw new AdminPublicationNotFoundError(id);
-  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(
-      body?.detail ?? `Admin publication update failed: ${res.status}`,
-    );
+    const payload = extractBackendErrorPayload(body);
+
+    if (payload.code === 'PUBLICATION_NOT_FOUND' || res.status === 404) {
+      throw new AdminPublicationNotFoundError(id);
+    }
+
+    throw new BackendApiError({
+      status: res.status,
+      code: payload.code,
+      message:
+        payload.message ??
+        (typeof body?.detail === 'string' ? body.detail : null) ??
+        `Admin publication update failed: ${res.status}`,
+      details: payload.details,
+    });
   }
   return res.json();
 }

@@ -28,7 +28,9 @@ import { clientToLogical, hitTest, clampRectToSection, type HitAreaEntry } from 
 import {
   updateAdminPublication,
   AdminPublicationNotFoundError,
+  BackendApiError,
 } from '@/lib/api/admin';
+import { getBackendErrorI18nKey } from '@/lib/api/errorCodes';
 import { TopBar } from './components/TopBar';
 import { LeftPanel } from './components/LeftPanel';
 import { Canvas } from './components/Canvas';
@@ -117,6 +119,7 @@ export default function InfographicEditor({
   initialDoc,
   publicationId,
 }: InfographicEditorProps = {}) {
+  const t = useTranslations();
   const tPublication = useTranslations('publication');
   const tImport = useTranslations('import');
   const cvs = useRef<HTMLCanvasElement>(null);
@@ -584,7 +587,19 @@ export default function InfographicEditor({
         }
 
         // Transient / unknown failure — retry with backoff.
-        const msg = err instanceof Error ? err.message : String(err);
+        const mapped = err instanceof BackendApiError
+          ? getBackendErrorI18nKey(err.code)
+          : null;
+        const localized = mapped ? t(mapped as never) : null;
+        if (!mapped && err instanceof BackendApiError && err.code) {
+          console.warn('[backend] unmapped error_code:', err.code);
+        }
+        const msg = localized
+          ?? (err instanceof BackendApiError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : String(err));
         dispatch({ type: "SAVE_FAILED", error: msg, canAutoRetry: true });
         // Bump the failure generation so the retry effect re-runs even
         // when the error string is identical to a previous attempt.
@@ -594,7 +609,7 @@ export default function InfographicEditor({
       .finally(() => {
         savingRef.current = false;
       });
-  }, [dirty, doc, dispatch, publicationId, tPublication]);
+  }, [dirty, doc, dispatch, publicationId, t, tPublication]);
 
   // Debounced autosave (Stage 4 Task 2). Every mutating reducer action
   // produces a new `state.doc` reference; navigational actions (SELECT,
