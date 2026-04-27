@@ -15,20 +15,32 @@ export const LONG_INFOGRAPHIC_HEIGHT_CAP = 4000;
  * Pure async helper that renders a document to a PNG blob for a single preset.
  *
  * Constraints:
- * - main-thread-only, rAF-bound. Must NOT be called from a Web Worker.
+ * - main-thread-only: must NOT be called from Web Worker context.
+ * - rAF-bound: render pass + toBlob run inside `requestAnimationFrame` so that
+ *   sequential per-preset rendering (PR#3 ZIP loop) yields between frames,
+ *   keeping the editor UI responsive during multi-preset export.
  * - Caller must ensure `document.fonts.ready` has resolved before invoking.
- *   The helper does NOT re-check fonts. For sequential per-preset rendering,
+ *   Helper does NOT re-check fonts. For sequential per-preset rendering,
  *   check fonts ONCE at loop entry to avoid the 5-second stall the B1 fix
  *   removed (`index.tsx:1218-1223`).
  * - Re-entrant: safe to invoke N times back-to-back in a single tick with
  *   different `presetId` values. Each invocation creates a fresh detached
  *   canvas; `renderDoc` reads no module-scope mutable state.
  *
- * For the `long_infographic` preset the canvas height is computed from
- * `measureLayout` summation; if the measured height exceeds
- * `LONG_INFOGRAPHIC_HEIGHT_CAP` the helper throws `RenderCapExceededError`
- * before allocating the canvas (no render pass burned).
+ * For `long_infographic` preset:
+ * - Variable height via `measureLayout` summation (Infinity sentinel).
+ * - Hard cap (`LONG_INFOGRAPHIC_HEIGHT_CAP`) enforced before canvas allocation;
+ *   throws `RenderCapExceededError` carrying the raw measured height.
+ * - `Math.ceil` applied to the fractional measured height before assigning
+ *   `canvas.height` (browsers coerce via ToUint32 which would truncate sub-px
+ *   overflow and clip rendered content).
+ *
+ * @throws RenderCapExceededError if long_infographic measured height > cap.
+ * @throws Error from canvas.toBlob if encoding fails.
  */
+// TODO PR#2: tighten presetId type to keyof typeof SIZES after preset ID rename
+// (Q-2.1-12 / approval gate A5). Currently `string` because PR#2 will rename
+// twitter -> twitter_landscape etc., and re-typing here twice is wasted churn.
 export async function renderDocumentToBlob(
   doc: CanonicalDocument,
   pal: Palette,
@@ -41,10 +53,20 @@ export async function renderDocumentToBlob(
 
   let canvasH = sz.h;
   if (presetId === 'long_infographic') {
-    canvasH = computeLongInfographicHeight(doc, sz.w);
-    if (canvasH > LONG_INFOGRAPHIC_HEIGHT_CAP) {
-      throw new RenderCapExceededError(presetId, canvasH, LONG_INFOGRAPHIC_HEIGHT_CAP);
+    const measuredHeight = computeLongInfographicHeight(doc, sz.w);
+    if (measuredHeight > LONG_INFOGRAPHIC_HEIGHT_CAP) {
+      // Report the raw measured height in the error so consumers can show
+      // the actual overflow magnitude in UI ("exceeds by N px").
+      throw new RenderCapExceededError(
+        presetId,
+        measuredHeight,
+        LONG_INFOGRAPHIC_HEIGHT_CAP,
+      );
     }
+    // canvas.height must be integer — browsers coerce via ToUint32, which
+    // truncates fractional values and would clip rendered content. Ceil to
+    // include any sub-pixel overflow safely.
+    canvasH = Math.ceil(measuredHeight);
   }
 
   const canvas = document.createElement('canvas');
@@ -55,23 +77,32 @@ export async function renderDocumentToBlob(
     throw new Error('Canvas 2D context unavailable');
   }
 
-  const bgFn = BGS[doc.page.background] || BGS.solid_dark;
-  bgFn.r(ctx, sz.w, canvasH, pal);
-  renderDoc(ctx, doc, sz.w, canvasH, pal);
-
   return new Promise<Blob>((resolve, reject) => {
     requestAnimationFrame(() => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error(`toBlob returned null for preset ${presetId}`));
-          return;
-        }
-        resolve(blob);
-      }, 'image/png');
+      try {
+        const bgFn = BGS[doc.page.background] || BGS.solid_dark;
+        bgFn.r(ctx, sz.w, canvasH, pal);
+        renderDoc(ctx, doc, sz.w, canvasH, pal);
+
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error(`toBlob returned null for preset ${presetId}`));
+            return;
+          }
+          resolve(blob);
+        }, 'image/png');
+      } catch (err) {
+        reject(err);
+      }
     });
   });
 }
 
+// CONTRACT: This function's padding formula must stay in sync with
+// renderer/engine.ts page padding (currently `pad = 64 * s` top + bottom)
+// and the section stacking model (currently no inter-section gaps).
+// If engine.ts changes either, update this function AND the regression test
+// in renderToBlob.test.ts "padding contract" describe block.
 /**
  * Compute intrinsic height for the `long_infographic` preset by summing
  * `measureLayout` consumed heights with `size.h = Infinity` and adding the
@@ -97,6 +128,10 @@ export function computeLongInfographicHeight(
  * `long_infographic` exceeds `LONG_INFOGRAPHIC_HEIGHT_CAP`. The orchestrator
  * (PR#3 ZIP export) catches this and marks the preset `qa_status: "skipped"`
  * in the manifest while continuing to render the other enabled presets.
+ *
+ * TODO PR#3: consumers should map error type + .presetId/.measuredHeight/.cap
+ * fields to the i18n key `validation.long_infographic.height_cap_exceeded`,
+ * NOT show error.message in UI (message is en-only debug text).
  */
 export class RenderCapExceededError extends Error {
   constructor(

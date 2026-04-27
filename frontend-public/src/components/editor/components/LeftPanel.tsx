@@ -6,7 +6,7 @@ import type { CanonicalDocument, EditorAction, PermissionSet, BlockRegistryEntry
 import { TK } from '../config/tokens';
 import { PALETTES } from '../config/palettes';
 import { BGS } from '../config/backgrounds';
-import { SIZES } from '../config/sizes';
+import { SIZES, EXPORTABLE_PRESET_IDS } from '../config/sizes';
 import { BREG } from '../registry/blocks';
 import { TPLS } from '../registry/templates';
 import { badgeColor, badgeLabel } from '../utils/badge';
@@ -139,7 +139,7 @@ function LeftPanelImpl({ doc, dispatch, selId, ltab, setLtab, effectivePerms }: 
             </div>
             <div>
               <div style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.txtM, textTransform: "uppercase", marginBottom: "3px" }}>{tTheme('size.title')}</div>
-              {Object.entries(SIZES).map(([k, v]) => <button type="button" key={k} onClick={() => effectivePerms.changeSize && dispatch({ type: "CHANGE_PAGE", key: "size", value: k })} disabled={!effectivePerms.changeSize} aria-label={tTheme('option.size.aria', { name: v.n, width: v.w, height: v.h })} aria-pressed={doc.page.size === k} style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.size === k ? TK.c.bgAct : "transparent", border: doc.page.size === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: effectivePerms.changeSize ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: effectivePerms.changeSize ? 1 : 0.5 }}>{v.n} <span style={{ color: TK.c.txtM }}>{v.w}{"\u00D7"}{v.h}</span></button>)}
+              {EXPORTABLE_PRESET_IDS.map((k) => { const v = SIZES[k]; return <button type="button" key={k} onClick={() => effectivePerms.changeSize && dispatch({ type: "CHANGE_PAGE", key: "size", value: k })} disabled={!effectivePerms.changeSize} aria-label={tTheme('option.size.aria', { name: v.n, width: v.w, height: v.h })} aria-pressed={doc.page.size === k} style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.size === k ? TK.c.bgAct : "transparent", border: doc.page.size === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: effectivePerms.changeSize ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: effectivePerms.changeSize ? 1 : 0.5 }}>{v.n} <span style={{ color: TK.c.txtM }}>{v.w}{"\u00D7"}{v.h}</span></button>; })}
             </div>
           </>
         )}
