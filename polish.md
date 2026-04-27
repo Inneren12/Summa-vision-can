@@ -179,6 +179,198 @@ enough to justify a sprint slot.
 
 ---
 
+## P3-007 — LeftPanel.tsx long JSX line readability
+
+- **Source:** Phase 2.1 PR#1 fix round 1 review (post-merge cosmetic note)
+- **Added:** 2026-04-27
+- **Severity:** P3
+- **Category:** code-quality
+- **File:** `frontend-public/src/components/editor/components/LeftPanel.tsx`
+- **Description:** During PR#1 fix1 review the size-picker rendering
+  block grew to a single long JSX line that's hard to read in a
+  diff. The behavior is correct; only the line wrapping is a
+  cosmetic readability issue. Reformatting is purely stylistic and
+  does not change runtime behavior or test outcomes.
+- **Fix sketch:**
+  ```tsx
+  // Wrap the EXPORTABLE_PRESET_IDS.map(...) block onto multi-line
+  // JSX with one prop per line, e.g.:
+  {EXPORTABLE_PRESET_IDS.map((pid) => (
+    <option
+      key={pid}
+      value={pid}
+    >
+      {SIZES[pid].n}
+    </option>
+  ))}
+  ```
+- **Status:** pending
+
+---
+
+## P3-008 — Padding contract test name precision
+
+- **Source:** Phase 2.1 PR#1 fix round 1 review
+- **Added:** 2026-04-27
+- **Severity:** P3
+- **Category:** test-quality
+- **File:** `frontend-public/tests/components/editor/export/renderToBlob.test.ts`
+- **Description:** The test currently named `computeLongInfographicHeight
+  padding contract` could be more precise about what it pins. The
+  test verifies that the helper's height formula matches the
+  `measureLayout` page-padding model in `engine.ts` (currently
+  `2 × 64 × s` width-scaled top + bottom, no inter-section gap).
+  A more explicit name surfaces this contract and makes future
+  failures self-documenting.
+- **Fix sketch:**
+  ```ts
+  // BEFORE
+  describe('computeLongInfographicHeight padding contract', () => { ... });
+
+  // AFTER
+  describe('computeLongInfographicHeight pins formula against engine.ts measureLayout padding contract', () => { ... });
+  ```
+- **Status:** pending
+
+---
+
+## P3-009 — validateImportStrict regression test for unknown page.size
+
+- **Source:** Phase 2.1 PR#2 fix round 1 review (residual risk note)
+- **Added:** 2026-04-27
+- **Severity:** P3
+- **Category:** test-coverage
+- **File:** `frontend-public/tests/components/editor/registry/guards.test.ts`
+  (or wherever `validateImportStrict` regression tests live — verify
+  with `grep -rn "validateImportStrict" frontend-public/tests/`)
+- **Description:** PR#2 fix1 introduced a cast in
+  `hydrateImportedDoc` (`size as CanonicalDocument["page"]["size"]`)
+  to satisfy the tightened `PresetId` type. The architecture
+  relies on `validateImportStrict` rejecting documents with
+  unknown `page.size` values BEFORE hydration runs, so the cast
+  never receives garbage at the consumer. This contract is
+  documented in JSDoc on `hydrateImportedDoc` but not directly
+  tested. Add a regression test that constructs a doc with an
+  unknown `page.size` (e.g. `"not_a_real_preset"`) and asserts
+  `validateImportStrict` rejects it before any hydration path
+  reaches consumer code.
+- **Fix sketch:**
+  ```ts
+  test('validateImportStrict rejects doc with unknown page.size before hydration', () => {
+    const malformed = {
+      schemaVersion: 3,
+      templateId: 'test',
+      page: { size: 'not_a_real_preset', /* ... */ },
+      sections: [],
+      blocks: {},
+    };
+    const result = validateImportStrict(malformed);
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({ key: 'validation.page.unknown_size' }),
+    );
+  });
+  ```
+- **Status:** pending
+
+---
+
+## P3-010 — Move SizePreset interface to config/sizes.ts
+
+- **Source:** Phase 2.1 PR#2 fix round 2 review (final approval, follow-up suggestion)
+- **Added:** 2026-04-27
+- **Severity:** P3
+- **Category:** architectural
+- **Files:**
+  - `frontend-public/src/components/editor/config/sizes.ts` (add `SizePreset` interface declaration)
+  - `frontend-public/src/components/editor/types.ts` (remove `SizePreset` declaration; optionally re-export from sizes.ts for back-compat with external consumers)
+- **Description:** PR#2 fix2 closed the `presetIds.ts` ↔ `sizes.ts`
+  type-only cycle by relocating `PresetId` adjacent to `SIZES`. A
+  smaller residual cycle remains: `sizes.ts` imports `SizePreset`
+  from `types.ts`, while `types.ts` imports `PresetId` from
+  `sizes.ts`. Both imports are `import type` (no runtime coupling),
+  so TypeScript and Next.js builds pass cleanly today. But the
+  cycle becomes a real problem if the project enables strict
+  `import/no-cycle` lint, adopts `madge`/`depcruise` for
+  dependency-graph CI checks, or migrates to a build tool that
+  enforces type-import cycles. Cleanest fix: declare `SizePreset`
+  directly in `sizes.ts` adjacent to `SIZES` and `PresetId`
+  (the same pattern that resolved the prior cycle in fix2).
+- **Fix sketch:**
+  ```ts
+  // config/sizes.ts — add at top
+  export interface SizePreset {
+    readonly w: number;
+    readonly h: number;
+    readonly n: string;
+  }
+
+  export const SIZES = {
+    instagram_1080: { w: 1080, h: 1080, n: "IG 1:1" },
+    // ...
+  } as const satisfies Record<string, SizePreset>;
+
+  export type PresetId = keyof typeof SIZES;
+
+  // types.ts — option A: delete the old SizePreset declaration
+  // types.ts — option B: re-export for back-compat with external consumers
+  export type { SizePreset, PresetId } from './config/sizes';
+  ```
+- **Verification:** `madge --circular frontend-public/src/components/editor/`
+  (or equivalent) should not flag `sizes.ts ↔ types.ts`. Existing
+  typecheck must still pass — `SizePreset` interface shape
+  unchanged, only declaration site moves.
+- **Status:** pending
+
+---
+
+## P3-011 — EXPORTABLE_PRESET_IDS comment naming clarity
+
+- **Source:** Phase 2.1 PR#1 fix round 1 review (continued through PR#2 fix1, partially closed by PR#3)
+- **Added:** 2026-04-27
+- **Severity:** P3
+- **Category:** documentation
+- **File:** `frontend-public/src/components/editor/config/sizes.ts`
+- **Description:** The JSDoc on `EXPORTABLE_PRESET_IDS` evolved
+  across PR#1 / PR#2 fix1 / PR#3 to describe its scope as the
+  "legacy single-PNG export size picker". By the end of PR#3 the
+  list now contains all 7 presets (long_infographic was added once
+  the ZIP flow could handle the cap-exceeded case), which makes
+  the "legacy" qualifier potentially misleading — the constant is
+  still used by the size picker, but it's no longer scoped down.
+  This is a wording-only refresh of the comment to clarify that
+  the constant is the **complete current size-picker scope**, not
+  a deliberately-restricted subset, and that the Inspector
+  "Export presets" list reads `Object.keys(SIZES)` separately.
+  (The Inspector vs. size-picker distinction stays the same;
+  only the comment is reworded.)
+- **Fix sketch:**
+  ```ts
+  /**
+   * Preset IDs exposed in the editor size picker dropdown
+   * (single-PNG export flow).
+   *
+   * As of Phase 2.1 PR#3 this list contains all 7 presets in
+   * SIZES. The Inspector "Export presets" list reads
+   * `Object.keys(SIZES)` directly and is a distinct surface
+   * — those two lists serve different UX purposes (size picker
+   * = active canvas selector; export presets = ZIP opt-in set)
+   * and should not be conflated.
+   */
+  export const EXPORTABLE_PRESET_IDS = [
+    "instagram_1080",
+    "instagram_portrait",
+    "twitter_landscape",
+    "reddit_standard",
+    "linkedin_landscape",
+    "instagram_story",
+    "long_infographic",
+  ] as const;
+  ```
+- **Status:** pending
+
+---
+
 ## Batch dispatch policy
 
 When 3+ items accumulate in same category, OR 5+ items total:
@@ -194,3 +386,7 @@ Current batch candidates:
 - **A11y batch**: needs more items before justifying batch (P2-001
   alone is too small to dispatch standalone unless it becomes
   blocking)
+- **Phase 2.1 frontend batch**: P3-007, P3-008, P3-009, P3-010, P3-011
+  — all in `frontend-public/`, mix of code/test/doc cosmetics,
+  ~45 minutes total. P3-010 (architectural cycle break) is the
+  most substantive; the rest are wording/test-name/format polish.
