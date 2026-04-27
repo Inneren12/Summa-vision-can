@@ -15,10 +15,27 @@ export type PresetQaStatus = 'pass' | 'warning' | 'skipped';
 
 export interface ManifestPresetEntry {
   id: PresetId;
-  filename: string;
+  /**
+   * Absolute filename of the per-preset PNG inside the ZIP archive.
+   * `null` when the preset is skipped (e.g. RenderCapExceededError) — the
+   * PNG is NOT in the archive in that case, so referencing a non-existent
+   * filename would be a broken contract for downstream consumers.
+   */
+  filename: string | null;
   width: number;
   height: number;
   qa_status: PresetQaStatus;
+  /**
+   * Machine-readable i18n key explaining why the preset was skipped.
+   * Present only when `qa_status === 'skipped'`. Sourced from the helper
+   * that raised the skip (e.g. `RenderCapExceededError.i18nKey`).
+   *
+   * Phase 2.2 distribution layer can map this to channel-specific fallback
+   * behavior (drop the social post entirely vs. publish without that
+   * preset). EN-only English text in the underlying `error.message` is
+   * not suitable for that purpose.
+   */
+  skipped_reason?: string;
 }
 
 export interface ZipManifest {
@@ -64,13 +81,22 @@ export function buildManifest(
     generated_at: generatedAt.toISOString(),
     presets: results.map((r) => {
       const sz = SIZES[r.presetId];
-      return {
+      // Skipped entries (e.g. RenderCapExceededError) MUST NOT reference a
+      // PNG filename that is not in the ZIP — see fix1 rationale. The PNG
+      // is only emitted by the orchestrator's pack loop when status === 'pass'.
+      const filename: string | null =
+        r.status === 'pass' ? `${r.presetId}.png` : null;
+      const entry: ManifestPresetEntry = {
         id: r.presetId,
-        filename: `${r.presetId}.png`,
+        filename,
         width: sz.w,
         height: r.measuredHeight ?? sz.h,
         qa_status: r.status,
       };
+      if (r.status === 'skipped' && r.skipReason) {
+        entry.skipped_reason = r.skipReason;
+      }
+      return entry;
     }),
   };
 }

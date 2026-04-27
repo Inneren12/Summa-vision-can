@@ -95,7 +95,7 @@ describe('buildManifest', () => {
     });
   });
 
-  test('skipped preset has qa_status=skipped, measuredHeight in height field', () => {
+  test('skipped preset → filename=null, skipped_reason set, measuredHeight in height field (fix1 manifest contract)', () => {
     const doc = makeDoc(['long_infographic']);
     const m = buildManifest(
       doc,
@@ -111,6 +111,26 @@ describe('buildManifest', () => {
     );
     expect(m.presets[0].qa_status).toBe('skipped');
     expect(m.presets[0].height).toBe(4250);
+    // PR#3 fix1: skipped entries must NOT reference a PNG filename that is
+    // not present in the ZIP. `null` is the explicit "no file" sentinel.
+    expect(m.presets[0].filename).toBeNull();
+    expect(m.presets[0].skipped_reason).toBe(
+      'validation.long_infographic.height_cap_exceeded',
+    );
+  });
+
+  test('pass preset → filename=`<id>.png`, no skipped_reason field (fix1 manifest contract)', () => {
+    // Mirror assertion: the pass path must keep filename populated and
+    // must NOT emit a `skipped_reason` field. This locks the contract
+    // at both ends.
+    const doc = makeDoc(['instagram_1080']);
+    const m = buildManifest(
+      doc,
+      [{ presetId: 'instagram_1080', status: 'pass', blob: new Blob() }],
+      new Date(),
+    );
+    expect(m.presets[0].filename).toBe('instagram_1080.png');
+    expect(m.presets[0]).not.toHaveProperty('skipped_reason');
   });
 
   test('preserves order of input results array (PR#2 fix2 manifest determinism)', () => {
