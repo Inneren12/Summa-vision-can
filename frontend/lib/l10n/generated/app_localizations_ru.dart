@@ -1,7 +1,12 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
 import 'app_localizations.dart';
 
+// ignore_for_file: type=lint
+
+/// The translations for Russian (`ru`).
 class AppLocalizationsRu extends AppLocalizations {
-  AppLocalizationsRu() : super('ru');
+  AppLocalizationsRu([String locale = 'ru']) : super(locale);
 
   @override
   String get appTitle => 'Summa Vision Admin';
@@ -14,6 +19,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get navJobs => 'Задания';
+
+  @override
+  String get navExceptions => 'Исключения';
 
   @override
   String get navKpi => 'KPI';
@@ -44,11 +52,12 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String queueLoadError(String error) {
-    return 'Не удалось загрузить очередь\n$error';
+    return 'Не удалось загрузить очередь\\n$error';
   }
 
   @override
-  String get queueEmptyState => 'В очереди нет брифов.\nНажмите «Обновить», чтобы загрузить новые.';
+  String get queueEmptyState =>
+      'В очереди нет брифов.\\nНажмите «Обновить», чтобы загрузить новые.';
 
   @override
   String get queueRejectVerb => 'Отклонить';
@@ -91,7 +100,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get editorBackgroundPromptLabel => 'Промпт фона';
 
   @override
-  String get editorBackgroundPromptHint => 'Опишите желаемое фоновое изображение...';
+  String get editorBackgroundPromptHint =>
+      'Опишите желаемое фоновое изображение...';
 
   @override
   String get editorChartTypeLabel => 'Тип графика';
@@ -209,7 +219,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chartConfigTryAgainButton => 'Попробовать снова';
 
   @override
-  String get chartConfigUploadMissingError => 'Сначала загрузите файл JSON или CSV.';
+  String get chartConfigUploadMissingError =>
+      'Сначала загрузите файл JSON или CSV.';
 
   @override
   String get chartConfigUploadPickButton => 'Загрузить JSON / CSV';
@@ -264,10 +275,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get errorChartEmptyData => 'Нет данных для построения графика.';
 
   @override
-  String get errorChartInsufficientColumns => 'Недостаточно столбцов для построения графика.';
+  String get errorChartInsufficientColumns =>
+      'Недостаточно столбцов для построения графика.';
 
   @override
-  String get errorJobUnhandled => 'Непредвиденная ошибка при обработке задания.';
+  String get errorJobUnhandled =>
+      'Непредвиденная ошибка при обработке задания.';
 
   @override
   String get errorJobCoolDown => 'Подождите перед повторной генерацией.';
@@ -283,23 +296,51 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String dataPreviewDiffStatusLabel(int count) {
-    if (count == 0) return 'Ничего не изменилось с прошлого раза';
-    if (count == 1) return '1 ячейка изменилась с прошлого раза';
-    final mod10 = count % 10;
-    final mod100 = count % 100;
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
-      return '$count ячейки изменились с прошлого раза';
-    }
-    return '$count ячеек изменилось с прошлого раза';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# ячеек изменилось с прошлого раза',
+      many: '# ячеек изменилось с прошлого раза',
+      few: '# ячейки изменились с прошлого раза',
+      one: '1 ячейка изменилась с прошлого раза',
+      zero: 'Ничего не изменилось с прошлого раза',
+    );
+    return '$_temp0';
   }
 
   @override
-  String get dataPreviewDiffNoBaseline => 'Первый просмотр — сравнение недоступно';
+  String get dataPreviewDiffNoBaseline =>
+      'Первый просмотр — сравнение недоступно';
 
   @override
-  String get dataPreviewDiffSchemaChanged => 'Структура данных изменилась — сравнение недоступно';
+  String get dataPreviewDiffSchemaChanged =>
+      'Структура данных изменилась — сравнение недоступно';
 
   @override
-  String get dataPreviewDiffNoProductId => 'Для этих данных отслеживание изменений недоступно';
+  String get dataPreviewDiffNoProductId =>
+      'Для этих данных отслеживание изменений недоступно';
 
+  @override
+  String get exceptionsTitle => 'Исключения';
+
+  @override
+  String get exceptionsRefreshTooltip => 'Обновить список исключений';
+
+  @override
+  String get exceptionsFilterAll => 'Все';
+
+  @override
+  String get exceptionsFilterFailedExports => 'Неудачные экспорты';
+
+  @override
+  String get exceptionsFilterZombieJobs => 'Зависшие задачи';
+
+  @override
+  String exceptionsLoadError(String error) {
+    return 'Не удалось загрузить список исключений\\n$error';
+  }
+
+  @override
+  String get exceptionsEmptyState =>
+      'Нет исключений для проверки.\\nНажмите «Обновить», чтобы получить новые.';
 }
