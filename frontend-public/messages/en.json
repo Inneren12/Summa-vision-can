@@ -184,6 +184,9 @@
     },
     "source_footer": {
       "default_text": "Source is still default"
+    },
+    "long_infographic": {
+      "height_cap_exceeded": "Long infographic height ({measured}px) exceeds the 4000px maximum. Remove or hide blocks to fit, or migrate to a fixed-aspect template."
     }
   },
   "common": {
