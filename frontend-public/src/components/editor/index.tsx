@@ -984,6 +984,15 @@ export default function InfographicEditor({
   // this effect resets to 'pending' the debounce effect re-runs and the
   // PATCH fires.
   useEffect(() => {
+    // INVARIANT: this effect's reset trigger relies on `doc` being a NEW
+    // reference after every user edit. The editor reducer (`reducer.ts`)
+    // produces immutable state — every dispatch returns a fresh `doc`
+    // object, even for trivial property changes. If that contract ever
+    // breaks (e.g. someone introduces a mutable update path), the
+    // reference comparison below stays falsy and the conflict guard never
+    // releases — autosave gets permanently frozen until reload.
+    // Symptom to watch for: edits feel unresponsive after dismissing
+    // a 412 modal.
     if (
       saveStatus === 'conflict'
       && conflictDocSnapshotRef.current !== null

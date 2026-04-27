@@ -260,7 +260,7 @@ Pure module. No I/O, no clock reads, no DB access. ARCH-PURA-001 + ARCH-DPEN-001
 
 ### Format
 
-Strong ETag. RFC 7232 §2.3 — the validator is derived from row metadata (id + timestamp + config_hash), not the response body, so identical row state always produces byte-identical ETags. Strong validators are the correct fit for If-Match (lost-update protection); weak validators are intended for cache revalidation, not optimistic concurrency. Format: `"<16-hex-sha256>"`.
+Strong ETag (no `W/` prefix). The validator serves as an optimistic-concurrency token for `If-Match`, not as a body hash. It is derived from the persisted publication state version (`id` + last-write timestamp + `config_hash`); identical persisted state always produces an identical token, which is the contract `If-Match` requires. RFC 7232 §2.3 strong-validator semantics about byte-identical response bodies do not strictly apply — our concern is row-state equivalence, not byte equivalence of the response. Format: `"<16-hex-sha256>"`.
 
 ### Where computed
 

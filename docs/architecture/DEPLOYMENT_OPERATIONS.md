@@ -229,7 +229,51 @@ Cross-ref `DEPLOYMENT_READINESS_CHECKLIST.md` for go-live items.
 
 DO NOT remove this placeholder. The placeholder itself is a signal that production deploy procedure has not been documented.
 
-## 9. Maintenance log
+## 9. Phase 1.3 — DEBT-042 hardening flip
+
+**One-time procedure.** Phase 1.3 ships with `PATCH /admin/publications/{id}` in tolerate-absent mode for the `If-Match` header (warn-log + proceed). This avoids breaking old browser tabs mid-deploy. After the deploy window stabilises, the handler must be hardened to require `If-Match` and return 428 Precondition Required when absent.
+
+**Trigger:** at least 2 weeks after Phase 1.3 production deploy AND 7 consecutive days of negligible warn-log volume on the `patch_publication_missing_if_match` codepath.
+
+**Verification before flipping:**
+
+1. Read warn-log volume for the trailing 7 days:
+
+   ```bash
+   # backend log query — adapt to actual log infra
+   grep -c "patch_publication_missing_if_match" <log-source-for-trailing-7d>
+   ```
+
+2. Volume MUST be near-zero. If non-negligible, extend the toleration window rather than breaking active clients. A non-negligible volume indicates either old frontend tabs still in flight OR a frontend regression that stopped sending `If-Match`.
+
+3. If volume is near-zero, proceed to the flip.
+
+**The flip (single PR):**
+
+1. In `backend/src/api/routers/admin_publications.py`, change the `if_match is None` branch from warn-log + proceed to:
+
+   ```python
+   if if_match is None:
+       raise HTTPException(
+           status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+           detail={
+               "error_code": "PRECONDITION_REQUIRED",
+               "message": "If-Match header is required for this endpoint.",
+           },
+       )
+   ```
+
+   (Or use a typed `PublicationPreconditionRequiredError` mirroring `PublicationPreconditionFailedError` — preferred, follows the existing exception class pattern.)
+
+2. Update `BACKEND_API_INVENTORY.md` PATCH row: change "If-Match recommended in v1 (tolerated absent per DEBT-042)" to "If-Match required; absent → 428 Precondition Required".
+
+3. Mark DEBT-042 as `Status: resolved` with the resolving PR # and date in the Resolution field.
+
+4. Update `ARCHITECTURE_INVARIANTS.md` §7 "v1 tolerate-absent posture" subsection: replace with "Required as of <PR#>; missing If-Match returns 428."
+
+**No client-side change needed for the flip.** All Phase 1.3 client paths already send `If-Match` from the seeded `etagRef`. The flip hardens the contract on the server side; clients that were correctly sending `If-Match` continue to work unchanged. Clients that were relying on tolerate-absent (e.g. an unfixed Phase 1.3 regression in the seed path) will start receiving 428s and surface as user-visible breakage — which is the desired signal.
+
+## 10. Maintenance log
 
 | Date | PR / Phase | Sections touched | Notes |
 |---|---|---|---|
