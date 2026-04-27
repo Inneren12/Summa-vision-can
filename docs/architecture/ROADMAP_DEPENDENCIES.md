@@ -40,7 +40,8 @@
 | Phase | Status | Effort | PRs | Notes |
 |---|---|---|---|---|
 | 1.3 Optimistic Concurrency (ETag+412) | IN-PROGRESS — pre-recon | S | 1 | No deps; pre-recon split 11 micro-prompts |
-| 2.5 Exception Inbox (Flutter) | IN-PROGRESS — discovery | M | 2 | No deps; discovery split 5 micro-prompts; blocked on Q-C decision |
+| 2.5a Exception Inbox v1 (Flutter — failed exports + zombie jobs) | IN-PROGRESS — discovery | M | 2 | No deps; discovery split 5 micro-prompts; blocked on Q-C decision |
+| 2.5b Exception Inbox deferred (stale bindings + missing post URLs + validation blockers) | DEFERRED | S | 1+ | Blocked on Phase 2.3 (post_ledger) + Phase 3 (Binding entity); see DEBT-040 |
 
 ### Pending
 
@@ -64,8 +65,12 @@ ASCII DAG (top → bottom = ordering; arrows show "depends on"):
 1.3 Optimistic Concurrency  (no deps)
   └─→ Phase 1.x integration tests harden after 1.3 lands
 
-2.5 Exception Inbox          (no deps)
+2.5a Exception Inbox v1      (no deps; failed exports + zombie jobs)
   └─→ Phase 4 operational dashboard reuses
+
+2.5b Exception Inbox deferred (stale bindings + missing post URLs + validation blockers)
+  └─ blocked by: Phase 2.3 (post_ledger) + Phase 3 (Binding entity)
+  └─ validation-blocker entity ownership TBD (see DEBT-040)
 
 2.1 Multi-preset ZIP         (no deps)
   └─→ 2.2 Publish Kit Generator
@@ -108,7 +113,7 @@ Estimated PR count on critical path: **6-8 PRs minimum**.
 
 ### Off-critical-path opportunities
 
-- **2.5 Exception Inbox** — operational quality but not launch-blocking
+- **2.5a Exception Inbox** — operational quality but not launch-blocking
 - **Editor Stage 3 + 4** — improves authoring UX, not launch-blocking
 - **Phase 4 + 5** — post-launch hardening and growth
 
@@ -147,11 +152,11 @@ When two PRs target the SAME area, conflicts are likely. Currently identified zo
 - 1.3 (autosave error UX) + Stage 3 (review state) → low (different concerns)
 
 ### Backend admin endpoints (`backend/app/api/admin/`)
-- 1.3 PATCH + 2.5 Exception Inbox endpoint additions → low (different endpoints)
+- 1.3 PATCH + 2.5a Exception Inbox endpoint additions → low (different endpoints)
 - Phase 1.x + Phase 2.x → low while disjoint, watch when 2.5 needs aggregation endpoint
 
 ### Flutter admin (`frontend/`)
-- 2.5 Exception Inbox + future Phase 4 ops dashboard → moderate (overlap on /jobs surface)
+- 2.5a Exception Inbox + future Phase 4 ops dashboard → moderate (overlap on /jobs surface)
 
 ### Architecture MD (`docs/architecture/`)
 - Multiple PRs updating same MD in same time window → trivial conflicts (resolve quickly)

@@ -177,7 +177,8 @@ Five phases, sized for ~15-25 agent PRs/week. Phase boundaries are review gates,
 - `publish_kit.txt` contains Reddit/X/LinkedIn captions with UTM-tagged URLs (`?utm_content=<lineage_key>`)
 - Lead submissions with `utm_content` log the lineage_key and are queryable per publication
 - An opt-in "Draft social text" button in the Editor returns 3 platform-specific captions (single Gemini Flash call, no cache, no retry — manual fallback on failure)
-- Flutter Exception Inbox aggregates: stale bindings, failed exports, missing post URLs, zombie jobs, unresolved validation blockers. One list, actionable items only.
+- Phase 2.5a (v1, ships independently): Flutter Exception Inbox aggregates failed exports + zombie jobs in a single list at /exceptions. UI framing: "items needing attention" (review surface, not strict actionable-only — zombie jobs are diagnostic-only without backend requeue/cancel endpoint).
+- Phase 2.5b (deferred, ships when dependencies land): stale bindings (depends on Phase 3 Binding entity), missing post URLs (depends on Phase 2.3 post_ledger), unresolved validation blockers (depends on backend persistence of validator state — no phase currently owns). Each row type attaches to existing /exceptions screen as its dependency phase ships; no architectural placeholder reserved in 2.5a (per Q-C.3 = wait).
 
 ### Phase 3 — Data binding (Weeks 3-4)
 

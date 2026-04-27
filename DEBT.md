@@ -296,3 +296,15 @@ Rules:
 - **Impact:** Operator-visible crop guidance reflects the values currently encoded in `cropZones.ts`. These values are estimates pending live platform verification; they have not been audited against current Reddit/Twitter/LinkedIn cross-post layouts.
 - **Resolution:** Capture screenshots from each platform preview flow, measure crop region, then update `CROP_ZONES` to stable ratios (not absolute pixels).
 - **Target:** Opportunistic — bundle with first operator feedback round during Stage C onboarding.
+
+### DEBT-040: Phase 2.5b — three deferred Exception Inbox row types
+
+- **Source:** Phase 2.5 recon (Part C1 §2 row-type bucket classification) + PR #205 review
+- **Added:** 2026-04-27
+- **Severity:** medium
+- **Category:** scope-deferred
+- **Status:** active
+- **Description:** Phase 2.5 DoD (per `OPERATOR_AUTOMATION_ROADMAP.md` line 180, post-update) calls for 5 row types in the Exception Inbox: failed exports, zombie jobs, stale bindings, missing post URLs, unresolved validation blockers. PR #205 (Phase 2.5a) ships the first two; the other three are blocked on backend entities that do not yet exist: `staleBindings` requires `Binding` model + `BindingRepository` + listing endpoint (owned by Phase 3 Data binding); `missingPostUrls` requires `post_ledger` table + listing endpoint (owned by Phase 2.3 Post URL ledger); `unresolvedValidationBlockers` requires either backend persistence of validation status on `Publication` or editor pushing validation results to a new backend endpoint (no phase currently owns this).
+- **Impact:** Phase 2.5 DoD formally remains open until all 5 row types ship. Operators cannot triage stale bindings, missing post URLs, or validation-blocker exceptions through the inbox in v1; they must use other tools (manual queries, editor sessions). Acceptable for launch since the 2 v1 row types cover the highest-volume exception classes (failed exports, zombie jobs).
+- **Resolution:** as each dependent phase ships, add a new `ExceptionFilter` enum value, a new branch in `exceptionsRowsProvider`, a new filter chip in `_ExceptionsFilterChips`, and ARB key pairs (filter chip label + any row-type-specific empty/error states). Append to existing `/exceptions` screen — no architectural restructure required (per Q-C.5 = flat, no drill-in routes). Subitem: before Phase 4 closure, founder + Claude must explicitly decide whether validation-blocker persistence belongs in a future Phase or stays as an "operator runs editor and notices" UX pattern.
+- **Target:** Phase 3 ships `staleBindings`; Phase 2.3 ships `missingPostUrls`; validation-blocker scope assessment before Phase 4 closure.
