@@ -37,19 +37,20 @@ final exceptionsRowsProvider =
         status: 'running',
         limit: 200,
       );
+      // Source of truth is backend reaper threshold (10 min, R8).
+      // Frontend mirrors via Job.isStale until backend exposes
+      // is_zombie/stale_reason on Job model. See DEBT-040 for tracking.
       return response.items.where((j) => j.isStale).toList();
 
     case ExceptionFilter.all:
-      final failedExports = await repo.listJobs(
-        jobType: 'graphics_generate',
-        status: 'failed',
-        limit: 200,
-      );
-      final running = await repo.listJobs(
-        status: 'running',
-        limit: 200,
-      );
+      final results = await Future.wait([
+        repo.listJobs(jobType: 'graphics_generate', status: 'failed', limit: 200),
+        repo.listJobs(status: 'running', limit: 200),
+      ]);
+      final failedExports = results[0];
+      final running = results[1];
       final zombies = running.items.where((j) => j.isStale).toList();
+
       final byId = <String, Job>{};
       for (final j in failedExports.items) {
         byId[j.id] = j;
