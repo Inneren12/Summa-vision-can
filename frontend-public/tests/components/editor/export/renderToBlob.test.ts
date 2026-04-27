@@ -16,6 +16,7 @@ import {
   RenderCapExceededError,
   LONG_INFOGRAPHIC_HEIGHT_CAP,
 } from '@/components/editor/export/renderToBlob';
+import type { ExportPresetId } from '@/components/editor/export/renderToBlob';
 import { TPLS, mkDoc } from '@/components/editor/registry/templates';
 import { PALETTES } from '@/components/editor/config/palettes';
 import type { CanonicalDocument, Block, Section } from '@/components/editor/types';
@@ -281,6 +282,40 @@ describe('renderDocumentToBlob with long_infographic', () => {
     } finally {
       createSpy.mockRestore();
     }
+  });
+});
+
+describe('ExportPresetId compile-time safety', () => {
+  test('legacy preset IDs do not type-check (compile-time regression)', () => {
+    // PR#2 BLOCKER-1 fix1: `SIZES` now uses `as const satisfies Record<...>`
+    // so `keyof typeof SIZES` resolves to a true union of literal keys.
+    // Before the fix the explicit `Record<string, SizePreset>` annotation
+    // collapsed every key to `string`, and `ExportPresetId` was effectively
+    // `string` — defeating the type-tightening.
+    //
+    // The `@ts-expect-error` directives below are the regression guard:
+    // each "would-be error" line MUST fail to compile. If the line ever
+    // compiles cleanly (i.e. `ExportPresetId` regresses to `string`), the
+    // unused `@ts-expect-error` itself becomes a build-time error.
+
+    // @ts-expect-error — "twitter" is a legacy ID; must not be assignable to ExportPresetId
+    const _legacy1: ExportPresetId = 'twitter';
+
+    // @ts-expect-error — "story" is a legacy ID; must not be assignable to ExportPresetId
+    const _legacy2: ExportPresetId = 'story';
+
+    // @ts-expect-error — random string must not be assignable to ExportPresetId
+    const _garbage: ExportPresetId = 'not_a_real_preset';
+
+    // Sanity: canonical post-rename IDs DO type-check.
+    const valid1: ExportPresetId = 'twitter_landscape';
+    const valid2: ExportPresetId = 'instagram_portrait';
+
+    // Touch the suppressed bindings so lint/strict-unused doesn't flag them
+    // (they exist only for the compile-time regression assertion).
+    expect([_legacy1, _legacy2, _garbage]).toHaveLength(3);
+    expect(valid1).toBe('twitter_landscape');
+    expect(valid2).toBe('instagram_portrait');
   });
 });
 

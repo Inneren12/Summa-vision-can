@@ -5,10 +5,11 @@ import { useTranslations } from 'next-intl';
 import type { EditorAction } from '../types';
 import { TK } from '../config/tokens';
 import { SIZES } from '../config/sizes';
+import type { PresetId } from '../config/presetIds';
 
 interface ExportPresetsSectionProps {
-  currentSize: string;
-  exportPresets: string[];
+  currentSize: PresetId;
+  exportPresets: readonly PresetId[];
   dispatch: React.Dispatch<EditorAction>;
   canEdit: boolean;
 }
@@ -16,13 +17,17 @@ interface ExportPresetsSectionProps {
 /**
  * Phase 2.1 PR#2 — "Export presets" picker.
  *
- * Renders one checkbox per preset in `SIZES` (including `long_infographic`
- * even though `EXPORTABLE_PRESET_IDS` still suppresses it from the legacy
- * size picker — opt-in surface here is intentional per recon Q-2.1-9).
+ * Renders one checkbox per preset in `SIZES` (all 7, including
+ * `long_infographic`) — distinct from `EXPORTABLE_PRESET_IDS`, which is
+ * the 6-entry legacy single-PNG size picker scope. The Inspector list is
+ * the operator opt-in surface for the multi-preset ZIP export per recon
+ * Q-2.1-9; both lists coexist with different purposes.
  *
  * The preset matching `page.size` is force-enabled (disabled checkbox,
- * stays checked) — the current canvas always renders, regardless of what
- * the operator toggles. A `current_required` hint surfaces the rule.
+ * stays checked) AND enforced as a state invariant by
+ * `normalizeExportPresets` in the reducer — the current canvas always
+ * renders, regardless of what the operator toggles or what arrives from
+ * a partial migration. A `current_required` hint surfaces the rule in UI.
  *
  * Toggling a non-current preset dispatches `UPDATE_PAGE_EXPORT_PRESETS`
  * with the next list. The section reads its checked state straight from
@@ -35,13 +40,18 @@ function ExportPresetsSectionImpl({
   canEdit,
 }: ExportPresetsSectionProps) {
   const tExport = useTranslations('inspector.export_presets');
-  const presetIds = Object.keys(SIZES);
-  const enabled = new Set(exportPresets);
+  // Phase 2.1 PR#2 fix1 (P1.3): Inspector enumerates ALL 7 preset IDs from
+  // SIZES, NOT EXPORTABLE_PRESET_IDS (which is the 6-entry legacy size
+  // picker scope and intentionally excludes `long_infographic` until PR#3
+  // ships). Keeping the two lists distinct preserves the operator opt-in
+  // semantics for the long-infographic ZIP path.
+  const presetIds = Object.keys(SIZES) as PresetId[];
+  const enabled = new Set<string>(exportPresets);
 
-  const togglePreset = (id: string) => {
+  const togglePreset = (id: PresetId) => {
     if (!canEdit) return;
     if (id === currentSize) return; // current size is force-enabled
-    const next = enabled.has(id)
+    const next: PresetId[] = enabled.has(id)
       ? exportPresets.filter((p) => p !== id)
       : [...exportPresets, id];
     dispatch({ type: 'UPDATE_PAGE_EXPORT_PRESETS', exportPresets: next });

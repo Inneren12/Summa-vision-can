@@ -24,7 +24,11 @@ function makeDoc(
     schemaVersion: 3,
     templateId: "test",
     page: {
-      size: "square",
+      // Fixture predates the PR#2 SIZES rename; keep the (now-unknown) "square"
+      // sentinel because contrast tests don't depend on the page size. Cast
+      // through `unknown` so the deliberately-invalid value bypasses the
+      // tightened `PresetId` type without triggering @typescript-eslint/no-explicit-any.
+      size: "square" as unknown as CanonicalDocument["page"]["size"],
       background: options?.background ?? "solid_dark",
       palette: options?.palette ?? "housing",
       exportPresets: [],

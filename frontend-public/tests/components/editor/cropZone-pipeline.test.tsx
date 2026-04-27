@@ -47,7 +47,7 @@ const initialDoc = {
   ...baseDoc,
   page: {
     ...baseDoc.page,
-    size: 'instagram_1080',
+    size: 'instagram_1080' as const,
   },
 };
 

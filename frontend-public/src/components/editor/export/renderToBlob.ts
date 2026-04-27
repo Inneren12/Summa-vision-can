@@ -1,5 +1,6 @@
 import type { CanonicalDocument, Palette } from '../types';
 import { SIZES } from '../config/sizes';
+import type { PresetId } from '../config/presetIds';
 import { BGS } from '../config/backgrounds';
 import { renderDoc } from '../renderer/engine';
 import { measureLayout } from '../renderer/measure';
@@ -41,11 +42,16 @@ export const LONG_INFOGRAPHIC_HEIGHT_CAP = 4000;
 /**
  * Phase 2.1 PR#2 (Q-2.1-12 / approval gate A5): preset IDs are now stable
  * post-rename, so tighten the parameter to a literal union over `SIZES`.
- * The `if (!sz)` runtime guard below stays — `keyof typeof SIZES` is
- * compile-time-only, and a legacy doc that escaped migration could still
- * arrive carrying an unknown preset id at runtime.
+ * The `if (!sz)` runtime guard below stays — `PresetId` is compile-time-only,
+ * and a legacy doc that escaped migration could still arrive carrying an
+ * unknown preset id at runtime.
+ *
+ * PR#2 fix1 (P1.2): the canonical type lives in `config/presetIds.ts` so
+ * `types.ts` (for `PageConfig`) can also import it without pulling in
+ * `renderToBlob.ts`. The original `ExportPresetId` name is kept as a
+ * re-export for the existing call sites; under the hood it IS `PresetId`.
  */
-export type ExportPresetId = keyof typeof SIZES;
+export type ExportPresetId = PresetId;
 
 export async function renderDocumentToBlob(
   doc: CanonicalDocument,
@@ -57,7 +63,10 @@ export async function renderDocumentToBlob(
     throw new Error(`Unknown preset id: ${presetId}`);
   }
 
-  let canvasH = sz.h;
+  // After the BLOCKER-1 fix tightened SIZES to a literal-key shape, `sz.h`
+  // is a numeric literal union — without the explicit `number` annotation,
+  // assigning `Math.ceil(measuredHeight)` below would fail to widen.
+  let canvasH: number = sz.h;
   if (presetId === 'long_infographic') {
     const measuredHeight = computeLongInfographicHeight(doc, sz.w);
     if (measuredHeight > LONG_INFOGRAPHIC_HEIGHT_CAP) {

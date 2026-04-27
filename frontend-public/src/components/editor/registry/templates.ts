@@ -1,7 +1,8 @@
 import type { CanonicalDocument, TemplateEntry, BlockProps } from '../types';
+import type { PresetId } from '../config/presetIds';
 import { BREG } from './blocks';
 import { CURRENT_SCHEMA } from './guards';
-import { DEFAULT_EXPORT_PRESETS } from '../config/sizes';
+import { DEFAULT_EXPORT_PRESETS, SIZES } from '../config/sizes';
 import { normalizeBlockData } from '../validation/block-data';
 
 export function mkDoc(tid: string, tpl: TemplateEntry, over: Record<string, BlockProps> = {}): CanonicalDocument {
@@ -35,7 +36,13 @@ export function mkDoc(tid: string, tpl: TemplateEntry, over: Record<string, Bloc
     schemaVersion: CURRENT_SCHEMA,
     templateId: tid,
     page: {
-      size: tpl.defaultSize || "instagram_1080",
+      // PR#2 fix1 (P1.2): `PageConfig.size` is now `PresetId`. Templates
+      // declare `defaultSize` as a free string (legacy registry shape), so
+      // narrow it through the SIZES table and fall back to the canonical
+      // default when the registry value is missing or unknown.
+      size: (tpl.defaultSize && tpl.defaultSize in SIZES
+        ? (tpl.defaultSize as PresetId)
+        : "instagram_1080"),
       background: tpl.defaultBg || "gradient_warm",
       palette: tpl.defaultPal || "housing",
       exportPresets: [...DEFAULT_EXPORT_PRESETS],
