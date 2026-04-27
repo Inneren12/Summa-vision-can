@@ -21,12 +21,13 @@ function makeDoc(
   options?: { palette?: string; background?: string; visible?: boolean },
 ): CanonicalDocument {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     templateId: "test",
     page: {
       size: "square",
       background: options?.background ?? "solid_dark",
       palette: options?.palette ?? "housing",
+      exportPresets: [],
     },
     sections: [{ id: "section-1", type: "hero", blockIds: ["block-1"] }],
     blocks: {

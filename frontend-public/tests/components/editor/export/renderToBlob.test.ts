@@ -48,7 +48,12 @@ function tallDocOverCap(): CanonicalDocument {
   return {
     schemaVersion: 4,
     templateId: 'synthetic_tall',
-    page: { size: 'long_infographic', background: 'solid_dark', palette: 'housing' },
+    page: {
+      size: 'long_infographic',
+      background: 'solid_dark',
+      palette: 'housing',
+      exportPresets: [],
+    },
     sections: [section],
     blocks: { blk_hl: block },
     meta: { createdAt: now, updatedAt: now, version: 1, history: [] },
@@ -75,31 +80,34 @@ describe('renderDocumentToBlob', () => {
     expect(blob.size).toBeGreaterThan(0);
   });
 
-  test('returns Blob for twitter preset', async () => {
+  test('returns Blob for twitter_landscape preset', async () => {
     const doc = baselineDoc();
-    const blob = await renderDocumentToBlob(doc, PAL, 'twitter');
+    const blob = await renderDocumentToBlob(doc, PAL, 'twitter_landscape');
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.type).toBe('image/png');
   });
 
   test('throws on unknown preset id', async () => {
     const doc = baselineDoc();
-    await expect(renderDocumentToBlob(doc, PAL, 'nonexistent_preset')).rejects.toThrow(
-      /Unknown preset id: nonexistent_preset/,
-    );
+    // Cast through unknown — `presetId` is now typed as `keyof typeof SIZES`
+    // and we want to exercise the runtime guard with a value the type system
+    // would otherwise reject.
+    await expect(
+      renderDocumentToBlob(doc, PAL, 'nonexistent_preset' as unknown as never),
+    ).rejects.toThrow(/Unknown preset id: nonexistent_preset/);
   });
 
   test('re-entrancy: 7 sequential calls in single tick produce 7 distinct Blobs (Risk 1)', async () => {
     const doc = baselineDoc();
     const presets = [
       'instagram_1080',
-      'instagram_port',
-      'twitter',
-      'reddit',
-      'linkedin',
-      'story',
+      'instagram_portrait',
+      'twitter_landscape',
+      'reddit_standard',
+      'linkedin_landscape',
+      'instagram_story',
       'long_infographic',
-    ];
+    ] as const;
     const promises = presets.map((id) => renderDocumentToBlob(doc, PAL, id));
     const blobs = await Promise.all(promises);
     expect(blobs).toHaveLength(7);
@@ -160,8 +168,8 @@ describe('renderDocumentToBlob', () => {
     teardown();
     teardown = installCanvasMocks({ forceToBlobNull: true });
     const doc = baselineDoc();
-    await expect(renderDocumentToBlob(doc, PAL, 'reddit')).rejects.toThrow(
-      /toBlob returned null for preset reddit/,
+    await expect(renderDocumentToBlob(doc, PAL, 'reddit_standard')).rejects.toThrow(
+      /toBlob returned null for preset reddit_standard/,
     );
   });
 });

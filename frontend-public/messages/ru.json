@@ -60,6 +60,11 @@
       "status": "STATUS",
       "sections": "SECTIONS",
       "max": "MAX"
+    },
+    "export_presets": {
+      "label": "Пресеты экспорта",
+      "help": "Выберите размеры, которые войдут в ZIP-экспорт.",
+      "current_required": "Текущий размер холста — всегда включён"
     }
   },
   "right_rail": {

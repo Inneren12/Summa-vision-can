@@ -53,6 +53,13 @@ export interface PageConfig {
   size: string;
   background: string;
   palette: string;
+  // Phase 2.1 PR#2: list of preset IDs (keys of SIZES) selected for the
+  // multi-preset ZIP export (PR#3 orchestrator). The preset matching
+  // `page.size` is always rendered regardless of presence; this list
+  // controls which ADDITIONAL presets get included.
+  // Defaults to `DEFAULT_EXPORT_PRESETS` (common-4) for new docs and via
+  // the v2→v3 migration.
+  exportPresets: string[];
 }
 
 /**
@@ -124,11 +131,15 @@ export interface CanonicalDocument {
  * Shape of documents written before Stage 3 PR 1. Exported strictly for the
  * migration signature in `registry/guards.ts`; application code should never
  * reference this type.
+ *
+ * `page` deliberately uses a stripped legacy shape (no `exportPresets`) — that
+ * field was introduced in v3 (Phase 2.1 PR#2) and the v2 → v3 migration is
+ * the only writer. v1 documents predate it.
  */
 export interface LegacyDocumentV1 {
   schemaVersion: 1;
   templateId: string;
-  page: PageConfig;
+  page: { size: string; background: string; palette: string };
   sections: Section[];
   blocks: Record<string, Block>;
   workflow: WorkflowState;
@@ -260,6 +271,10 @@ export type EditorAction =
   | { type: 'DUPLICATE_BLOCK'; blockId: string; newId?: string }
   | { type: 'REMOVE_BLOCK'; blockId: string }
   | { type: 'CHANGE_PAGE'; key: PageKey; value: string }
+  // Phase 2.1 PR#2: replaces `page.exportPresets` wholesale. Uses a
+  // dedicated action (rather than a generic CHANGE_PAGE patch) because
+  // CHANGE_PAGE is keyed on string-valued page fields only.
+  | { type: 'UPDATE_PAGE_EXPORT_PRESETS'; exportPresets: string[] }
   | { type: 'SWITCH_TPL'; tid: string }
   | { type: 'IMPORT'; doc: CanonicalDocument }
   | { type: 'UNDO' }

@@ -11,7 +11,7 @@ describe('measureLayout', () => {
     expect(overflowed).toHaveLength(0);
   });
 
-  test('visual table on twitter size warns about chart section overflow', () => {
+  test('visual table on twitter_landscape size warns about chart section overflow', () => {
     const doc = mkDoc('visual_table', TPLS.visual_table);
     const tableBlockId = Object.keys(doc.blocks).find(id => doc.blocks[id].type === 'table_enriched');
     if (!tableBlockId) throw new Error('missing table_enriched block');
@@ -21,7 +21,7 @@ describe('measureLayout', () => {
       country: `Country ${i + 1}`,
       vals: [50, 20, 30, 60],
     }));
-    const size = SIZES.twitter;
+    const size = SIZES.twitter_landscape;
     const result = measureLayout(doc, size);
     const chartSection = result.find(r => r.sectionType === 'chart');
     expect(chartSection?.overflow).toBe(true);

@@ -29,24 +29,34 @@ const FIXED_TS = "2026-01-01T00:00:00.000Z";
 const FIXED_TS_2 = "2026-02-01T00:00:00.000Z";
 const FIXED_TS_3 = "2026-03-01T00:00:00.000Z";
 
+/**
+ * Phase 2.1 PR#2 NOTE: `mkDoc` now produces a v3 document (post-rename,
+ * post-exportPresets). The historical name `v2Doc` is preserved across
+ * the file because the suite was authored against v2 — every consumer
+ * only needs "the current canonical shape", not specifically v2.
+ */
 function v2Doc(): CanonicalDocument {
-  // `mkDoc` already produces a v2 document. Deep-clone so per-test mutation
-  // cannot leak between cases.
   return JSON.parse(JSON.stringify(mkDoc("single_stat_hero", TPLS.single_stat_hero)));
 }
 
 function v1Doc(overrides: Partial<LegacyDocumentV1> = {}): LegacyDocumentV1 {
-  // Start from a v2 mkDoc output, then strip v2-only fields and add v1-only
-  // fields. Keeps the block graph / sections / required-block invariants
-  // satisfied without reimplementing them in the test.
-  const v2 = v2Doc() as any;
-  delete v2.review;
+  // Start from the current canonical shape, strip post-v1 fields, and
+  // emulate the v1-only `workflow` at the root. Keeps the block graph /
+  // sections / required-block invariants satisfied without reimplementing
+  // them. `exportPresets` is also stripped — v1 documents predate the
+  // field, which the v2 → v3 migration adds with the common-4 default.
+  const current = v2Doc() as any;
+  delete current.review;
   const base: LegacyDocumentV1 = {
     schemaVersion: 1,
-    templateId: v2.templateId,
-    page: v2.page,
-    sections: v2.sections,
-    blocks: v2.blocks,
+    templateId: current.templateId,
+    page: {
+      size: current.page.size,
+      background: current.page.background,
+      palette: current.page.palette,
+    },
+    sections: current.sections,
+    blocks: current.blocks,
     workflow: "draft",
     meta: {
       createdAt: FIXED_TS,
@@ -58,12 +68,13 @@ function v1Doc(overrides: Partial<LegacyDocumentV1> = {}): LegacyDocumentV1 {
   return { ...base, ...overrides };
 }
 
-describe("migrateDoc — v1 → v2 (real production case)", () => {
-  test("bumps schemaVersion to 2 and reports the applied step", () => {
+describe("migrateDoc — v1 → v3 (real production case)", () => {
+  test("bumps schemaVersion to current and reports both applied steps", () => {
     const raw = v1Doc();
     const result = migrateDoc(raw);
-    expect(result.doc.schemaVersion).toBe(2);
-    expect(result.appliedMigrations).toEqual([2]);
+    expect(result.doc.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    // v1 → v2 → v3, both steps applied in sequence.
+    expect(result.appliedMigrations).toEqual([2, 3]);
   });
 
   test("moves workflow from root into review.workflow (defaulting to 'draft')", () => {
@@ -129,7 +140,7 @@ describe("migrateDoc — workflow preservation", () => {
 });
 
 describe("migrateDoc — idempotence on already-current documents", () => {
-  test("v2 input returns without applying any migration", () => {
+  test("current-version input returns without applying any migration", () => {
     const raw = v2Doc();
     const result = migrateDoc(raw);
     expect(result.appliedMigrations).toEqual([]);
@@ -161,16 +172,16 @@ describe("migrateDoc — missing schemaVersion assumes v1", () => {
     const { schemaVersion: _discard, ...unversioned } = raw as any;
     const result = migrateDoc(unversioned);
     expect(result.doc.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-    expect(result.appliedMigrations).toEqual([2]);
+    expect(result.appliedMigrations).toEqual([2, 3]);
   });
 });
 
 describe("validateImportStrict — invariant enforcement", () => {
-  test("accepts a freshly-migrated v2 document", () => {
+  test("accepts a freshly-migrated current-version document", () => {
     const raw = v1Doc();
     expect(() => validateImportStrict(raw)).not.toThrow();
     const doc = validateImportStrict(raw);
-    expect(doc.schemaVersion).toBe(2);
+    expect(doc.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
   });
 
   test("rejects a 'v2' doc that kept workflow at root", () => {
@@ -292,10 +303,16 @@ describe("migrateDoc — deterministic timestamp derivation", () => {
 });
 
 describe("migrateDoc — defensive branches (MIGRATIONS monkey-patch)", () => {
+  // Snapshot the real migrations once so afterEach can reinstate them
+  // after a test temporarily replaces an entry.
+  const ORIGINAL_M1 = MIGRATIONS[1];
+  const ORIGINAL_M2 = MIGRATIONS[2];
   afterEach(() => {
-    // Restore any temporary keys added to the shared MIGRATIONS map.
-    delete (MIGRATIONS as Record<number, unknown>)[2];
-    delete (MIGRATIONS as Record<number, unknown>)[3];
+    const map = MIGRATIONS as Record<number, unknown>;
+    if (ORIGINAL_M1) map[1] = ORIGINAL_M1;
+    if (ORIGINAL_M2) map[2] = ORIGINAL_M2;
+    // Drop any forward-lookahead keys added by the test.
+    delete map[3];
   });
 
   test("throws when a migration step fails to bump schemaVersion", () => {
@@ -329,7 +346,7 @@ describe("migrateDoc — defensive branches (MIGRATIONS monkey-patch)", () => {
   });
 });
 
-describe("mkDoc — produces a valid v2 document", () => {
+describe("mkDoc — produces a valid current-version document", () => {
   test("validateImportStrict accepts the output of mkDoc", () => {
     expect(() => validateImportStrict(mkDoc("single_stat_hero", TPLS.single_stat_hero))).not.toThrow();
   });
@@ -531,5 +548,127 @@ describe("validateImportStrict — Comment element shape (DEBT-023 closure)", ()
     });
     const raw = withComments(root, reply);
     expect(() => validateImportStrict(raw)).not.toThrow();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// Phase 2.1 PR#2 — v2 → v3 migration (preset rename + exportPresets)
+//
+// Risk 3 mitigation per docs/recon/phase-2-1-recon.md §5:
+// the migration must atomically (a) rename `page.size` to the post-rename
+// preset id and (b) populate `page.exportPresets` with the common-4 default
+// when absent. Tests cover the three real-world scenarios plus the
+// abort-discipline contract from EDITOR_BLOCK_ARCHITECTURE.md §6.
+// ────────────────────────────────────────────────────────────────────
+
+import { DEFAULT_EXPORT_PRESETS } from "../config/sizes";
+
+describe("migrateV2toV3 — preset id rename + exportPresets default", () => {
+  function v2Fixture(
+    over: { size?: string; exportPresets?: unknown } = {},
+  ): Record<string, unknown> {
+    // Synthetic v2-shaped doc — does not need to satisfy `validateImportStrict`
+    // because the migration runs BEFORE shape validation in the import
+    // pipeline. Sections + blocks are intentionally minimal.
+    const page: Record<string, unknown> = {
+      size: over.size ?? "instagram_1080",
+      background: "solid_dark",
+      palette: "housing",
+    };
+    if (over.exportPresets !== undefined) {
+      page.exportPresets = over.exportPresets;
+    }
+    return {
+      schemaVersion: 2,
+      templateId: "test",
+      page,
+      sections: [],
+      blocks: {},
+      meta: {
+        createdAt: FIXED_TS,
+        updatedAt: FIXED_TS,
+        version: 1,
+        history: [],
+      },
+      review: { workflow: "draft", history: [], comments: [] },
+    };
+  }
+
+  test("scenario 1: pre-migration document with no exportPresets gets common-4 default", () => {
+    const v2 = v2Fixture();
+    const result = migrateDoc(v2);
+    expect(result.doc.schemaVersion).toBe(3);
+    expect(result.doc.page.exportPresets).toEqual([...DEFAULT_EXPORT_PRESETS]);
+    // page.size unchanged when already on a non-renamed preset id.
+    expect(result.doc.page.size).toBe("instagram_1080");
+    expect(result.appliedMigrations).toEqual([3]);
+  });
+
+  test("scenario 2: pre-migration document with old preset IDs renames page.size", () => {
+    const v2 = v2Fixture({ size: "twitter" });
+    const result = migrateDoc(v2);
+    expect(result.doc.schemaVersion).toBe(3);
+    expect(result.doc.page.size).toBe("twitter_landscape");
+    expect(result.doc.page.exportPresets).toEqual([...DEFAULT_EXPORT_PRESETS]);
+  });
+
+  test("scenario 2 (full coverage): renames every legacy preset id", () => {
+    const cases: Array<[string, string]> = [
+      ["instagram_port", "instagram_portrait"],
+      ["story",          "instagram_story"],
+      ["twitter",        "twitter_landscape"],
+      ["reddit",         "reddit_standard"],
+      ["linkedin",       "linkedin_landscape"],
+    ];
+    for (const [from, to] of cases) {
+      const v2 = v2Fixture({ size: from });
+      const result = migrateDoc(v2);
+      expect(result.doc.page.size).toBe(to);
+    }
+  });
+
+  test("scenario 3: pre-migration document on already-renamed ID is unchanged in size", () => {
+    // Defensive: a doc already carrying a v3 preset id at v2 (e.g. produced
+    // by a forward-compat tool) must not double-rename or corrupt the size.
+    const v2 = v2Fixture({ size: "twitter_landscape" });
+    const result = migrateDoc(v2);
+    expect(result.doc.schemaVersion).toBe(3);
+    expect(result.doc.page.size).toBe("twitter_landscape");
+    expect(result.doc.page.exportPresets).toEqual([...DEFAULT_EXPORT_PRESETS]);
+  });
+
+  test("preserves an existing exportPresets value through the migration", () => {
+    // If a forward-compat client wrote exportPresets at v2 (against the
+    // v2 spec but possible in practice), the migration must NOT clobber it
+    // with the common-4 default — operator intent should survive.
+    const customPresets = ["instagram_1080", "instagram_portrait"];
+    const v2 = v2Fixture({ size: "instagram_1080", exportPresets: customPresets });
+    const result = migrateDoc(v2);
+    expect(result.doc.page.exportPresets).toEqual(customPresets);
+  });
+
+  test("v1 → v2 → v3 chain produces a doc with both renamed size and default exportPresets", () => {
+    const v1 = v1Doc({ page: { size: "twitter", background: "solid_dark", palette: "housing" } });
+    const result = migrateDoc(v1);
+    expect(result.doc.schemaVersion).toBe(3);
+    expect(result.doc.page.size).toBe("twitter_landscape");
+    expect(result.doc.page.exportPresets).toEqual([...DEFAULT_EXPORT_PRESETS]);
+    expect(result.appliedMigrations).toEqual([2, 3]);
+  });
+
+  test("scenario 4 (abort discipline): missing intermediate migration throws", () => {
+    // EDITOR_BLOCK_ARCHITECTURE.md §6 mandates abort on missing intermediate.
+    // Use a synthetic schemaVersion below any registered migration so the
+    // applyMigrations loop hits the no-fn branch on its first iteration.
+    const veryOldDoc: Record<string, unknown> = {
+      schemaVersion: -999,
+      templateId: "test",
+      page: { size: "instagram_1080", background: "solid_dark", palette: "housing" },
+      sections: [],
+      blocks: {},
+      meta: { createdAt: FIXED_TS, updatedAt: FIXED_TS, version: 1, history: [] },
+      review: { workflow: "draft", history: [], comments: [] },
+    };
+    expect(() => applyMigrations(veryOldDoc)).toThrow(/Missing migration/);
   });
 });
