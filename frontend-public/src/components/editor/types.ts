@@ -33,6 +33,14 @@ export interface Block {
   type: string;
   props: BlockProps;
   visible: boolean;
+  // Phase 1.6: user-toggleable instance lock. When true, UPDATE_PROP /
+  // UPDATE_DATA / TOGGLE_VIS are blocked; REMOVE_BLOCK and DUPLICATE_BLOCK
+  // remain allowed (lock blocks editing/movement, not deletion).
+  // Independent from registry-level `status: "required_locked"` which is
+  // template-immutable and additionally blocks deletion.
+  // Optional + undefined-coalesce-to-false for additive backward compat
+  // (no schemaVersion bump in v1).
+  locked?: boolean;
 }
 
 export interface Section {
@@ -248,6 +256,9 @@ export type EditorAction =
   | { type: 'UPDATE_PROP'; blockId: string; key: string; value: any }
   | { type: 'UPDATE_DATA'; blockId: string; data: Record<string, any> }
   | { type: 'TOGGLE_VIS'; blockId: string }
+  | { type: 'TOGGLE_LOCK'; blockId: string }
+  | { type: 'DUPLICATE_BLOCK'; blockId: string; newId?: string }
+  | { type: 'REMOVE_BLOCK'; blockId: string }
   | { type: 'CHANGE_PAGE'; key: PageKey; value: string }
   | { type: 'SWITCH_TPL'; tid: string }
   | { type: 'IMPORT'; doc: CanonicalDocument }

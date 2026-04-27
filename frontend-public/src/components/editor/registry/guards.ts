@@ -590,6 +590,10 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
         type,
         props: sanitizeBlockProps(type, key, b.props, warnings),
         visible: typeof b.visible === "boolean" ? b.visible : true,
+        // Phase 1.6: preserve user-toggled instance lock when present.
+        // Optional; absent / non-boolean values normalize to undefined
+        // (treated as false everywhere via `=== true` checks).
+        ...(typeof b.locked === "boolean" ? { locked: b.locked } : {}),
       };
     }
   }

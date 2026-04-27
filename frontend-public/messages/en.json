@@ -241,6 +241,24 @@
       "cropZoneShort": "CROP",
       "cropZoneTooltip": "Show platform crop zone for this preset",
       "cropZoneUnavailable": "No crop zone for this preset"
+    },
+    "context_menu": {
+      "aria_label": "Block actions",
+      "lock": "Lock",
+      "unlock": "Unlock",
+      "hide": "Hide",
+      "show": "Show",
+      "duplicate": "Duplicate",
+      "delete": "Delete",
+      "delete_disabled_template_locked": "Cannot delete a template-required block",
+      "hide_disabled_locked": "Unlock the block before hiding it",
+      "disabled_template_mode": "Switch to Design mode to use this action"
+    },
+    "delete_confirm": {
+      "title": "Delete this {block}?",
+      "body": "This action can be undone with Cmd/Ctrl+Z.",
+      "confirm": "Delete",
+      "cancel": "Cancel"
     }
   },
   "undo": {

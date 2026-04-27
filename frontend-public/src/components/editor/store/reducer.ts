@@ -51,6 +51,14 @@ function checkModePermission(state: EditorState, action: EditorAction): { allowe
     case "UPDATE_PROP": {
       const block = state.doc.blocks[action.blockId];
       if (!block) return { allowed: false, reason: `Block ${action.blockId} not found` };
+      // Phase 1.6 — block-level lock: when the user has flipped
+      // `block.locked`, prop edits no-op until unlocked. This sits BEFORE
+      // the registry / mode check because a locked block should not surface
+      // a "cannot edit in template mode" reason; the lock is the binding
+      // explanation.
+      if (block.locked === true) {
+        return { allowed: false, reason: `Block ${action.blockId} is locked` };
+      }
       const reg = BREG[block.type];
       if (!reg) return { allowed: false, reason: `Unknown block type: ${block.type}` };
       if (!perms.editBlock(reg, action.key)) {
@@ -62,6 +70,9 @@ function checkModePermission(state: EditorState, action: EditorAction): { allowe
     case "UPDATE_DATA": {
       const block = state.doc.blocks[action.blockId];
       if (!block) return { allowed: false, reason: `Block ${action.blockId} not found` };
+      if (block.locked === true) {
+        return { allowed: false, reason: `Block ${action.blockId} is locked` };
+      }
       const reg = BREG[block.type];
       if (!reg) return { allowed: false, reason: `Unknown block type: ${block.type}` };
       // UPDATE_DATA can carry multiple structural keys — every key must pass
@@ -76,10 +87,38 @@ function checkModePermission(state: EditorState, action: EditorAction): { allowe
     case "TOGGLE_VIS": {
       const block = state.doc.blocks[action.blockId];
       if (!block) return { allowed: false, reason: `Block ${action.blockId} not found` };
+      if (block.locked === true) {
+        return { allowed: false, reason: `Block ${action.blockId} is locked` };
+      }
       const reg = BREG[block.type];
       if (!reg) return { allowed: false, reason: `Unknown block type: ${block.type}` };
       if (!perms.toggleVisibility(reg)) {
         return { allowed: false, reason: `Cannot toggle visibility of ${reg.name} in ${state.mode} mode` };
+      }
+      return { allowed: true };
+    }
+
+    case "TOGGLE_LOCK": {
+      // Lock-toggle is allowed in any mode that already permits any kind
+      // of edit; the mode gate is intentionally permissive (lock is a UI
+      // affordance, not a content edit). Workflow gate still enforces
+      // read-only states via checkWorkflowPermission.
+      const block = state.doc.blocks[action.blockId];
+      if (!block) return { allowed: false, reason: `Block ${action.blockId} not found` };
+      return { allowed: true };
+    }
+
+    case "DUPLICATE_BLOCK":
+    case "REMOVE_BLOCK": {
+      const block = state.doc.blocks[action.blockId];
+      if (!block) return { allowed: false, reason: `Block ${action.blockId} not found` };
+      const reg = BREG[block.type];
+      if (!reg) return { allowed: false, reason: `Unknown block type: ${block.type}` };
+      // Mode axis: structural mutations belong to design mode only. The
+      // menu greys these items out in template mode; this is the reducer
+      // belt-and-suspenders.
+      if (state.mode !== "design") {
+        return { allowed: false, reason: `Cannot ${action.type === "REMOVE_BLOCK" ? "remove" : "duplicate"} ${reg.name} in ${state.mode} mode` };
       }
       return { allowed: true };
     }
@@ -279,6 +318,117 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       // is a structural belt-and-suspenders against a registry without a status.
       if (r.status === "required_locked" || r.status === "required_editable") { nextState = state; break; }
       nextState = push({ ...state.doc, blocks: { ...state.doc.blocks, [blockId]: { ...b, visible: !b.visible } } }, `${b.visible ? "Hid" : "Showed"} ${r?.name}`);
+      break;
+    }
+    case "TOGGLE_LOCK": {
+      const { blockId } = action;
+      const b = state.doc.blocks[blockId];
+      if (!b) { nextState = state; break; }
+      const wasLocked = b.locked === true;
+      const r = BREG[b.type];
+      nextState = push(
+        { ...state.doc, blocks: { ...state.doc.blocks, [blockId]: { ...b, locked: !wasLocked } } },
+        `${wasLocked ? "Unlocked" : "Locked"} ${r?.name ?? b.type}`,
+      );
+      break;
+    }
+    case "DUPLICATE_BLOCK": {
+      const { blockId, newId } = action;
+      const sourceBlock = state.doc.blocks[blockId];
+      if (!sourceBlock) { nextState = state; break; }
+      // Find the section that owns this block; insert the duplicate
+      // immediately after the source so visual order matches user intent.
+      const ownerSecIdx = state.doc.sections.findIndex(s => s.blockIds.includes(blockId));
+      if (ownerSecIdx < 0) { nextState = state; break; }
+      const ownerSec = state.doc.sections[ownerSecIdx];
+      const reg = BREG[sourceBlock.type];
+      // Hard cap: refuse to exceed maxPerSection. Surfaces as a rejection
+      // so the UI can disable the menu item; the menu itself runs the same
+      // check before showing the option.
+      if (reg && reg.maxPerSection) {
+        const sameTypeCount = ownerSec.blockIds.reduce((n, bid) => {
+          return n + (state.doc.blocks[bid]?.type === sourceBlock.type ? 1 : 0);
+        }, 0);
+        if (sameTypeCount >= reg.maxPerSection) {
+          nextState = withRejection(state, action.type, `Cannot duplicate ${reg.name}: maxPerSection (${reg.maxPerSection}) reached in ${ownerSec.type}`);
+          break;
+        }
+      }
+      // Allocate a fresh id. Caller-provided `newId` is used when present
+      // (test determinism); otherwise we mint a sequential `blk_NNN` id
+      // that matches the existing template-generated convention.
+      let nextId = newId;
+      if (!nextId) {
+        let seq = Object.keys(state.doc.blocks).length;
+        do {
+          seq += 1;
+          nextId = `blk_${String(seq).padStart(3, "0")}`;
+        } while (state.doc.blocks[nextId]);
+      }
+      const insertAt = ownerSec.blockIds.indexOf(blockId);
+      const newBlockIds = [
+        ...ownerSec.blockIds.slice(0, insertAt + 1),
+        nextId,
+        ...ownerSec.blockIds.slice(insertAt + 1),
+      ];
+      const newSections = [...state.doc.sections];
+      newSections[ownerSecIdx] = { ...ownerSec, blockIds: newBlockIds };
+      // Duplicate carries identical props (deep-cloned to break aliasing) but
+      // does NOT inherit `locked` — the operator gets a fresh, editable copy.
+      const clonedProps = JSON.parse(JSON.stringify(sourceBlock.props));
+      const newBlock = {
+        id: nextId,
+        type: sourceBlock.type,
+        props: clonedProps,
+        visible: sourceBlock.visible,
+      };
+      nextState = push(
+        {
+          ...state.doc,
+          sections: newSections,
+          blocks: { ...state.doc.blocks, [nextId]: newBlock },
+        },
+        `Duplicated ${reg?.name ?? sourceBlock.type}`,
+      );
+      // Select the new block so the inspector reflects the duplicate.
+      nextState = { ...nextState, selectedBlockId: nextId };
+      break;
+    }
+    case "REMOVE_BLOCK": {
+      const { blockId } = action;
+      const b = state.doc.blocks[blockId];
+      if (!b) { nextState = state; break; }
+      const reg = BREG[b.type];
+      // Registry-level template lock: required_locked blocks cannot be
+      // removed. The menu disables the Delete item for such blocks; this
+      // is the reducer-side enforcement.
+      if (reg?.status === "required_locked" || reg?.status === "required_editable") {
+        nextState = withRejection(state, action.type, `Cannot remove ${reg.name}: template-required block`);
+        break;
+      }
+      const ownerSecIdx = state.doc.sections.findIndex(s => s.blockIds.includes(blockId));
+      if (ownerSecIdx < 0) { nextState = state; break; }
+      const ownerSec = state.doc.sections[ownerSecIdx];
+      const newBlockIds = ownerSec.blockIds.filter(bid => bid !== blockId);
+      const newSections = [...state.doc.sections];
+      newSections[ownerSecIdx] = { ...ownerSec, blockIds: newBlockIds };
+      const newBlocks = { ...state.doc.blocks };
+      delete newBlocks[blockId];
+      // Drop the block from any anchored comments. assertCanonicalDocumentV2Shape
+      // requires every comment.blockId to point to an existing block; deletion
+      // would otherwise produce orphan comments that fail re-import validation.
+      const remainingComments = state.doc.review.comments.filter(c => c.blockId !== blockId);
+      const newDoc = {
+        ...state.doc,
+        sections: newSections,
+        blocks: newBlocks,
+        review: { ...state.doc.review, comments: remainingComments },
+      };
+      nextState = push(newDoc, `Removed ${reg?.name ?? b.type}`);
+      // Clear selection if the removed block was selected.
+      if (state.selectedBlockId === blockId) {
+        nextState = { ...nextState, selectedBlockId: null };
+      }
       break;
     }
     case "CHANGE_PAGE": {

@@ -344,3 +344,22 @@ Rules:
 - **Impact:** Under sustained concurrent-write load on the same publication row, lost-update probability rises. For v1 traffic patterns (single editor per publication is the dominant case), this is acceptable. Under contention, last-writer-wins on the second UPDATE.
 - **Resolution:** if telemetry surfaces lost-update races (operationally: increased rate of 412s on this code path, or audit-log evidence of overlapping successful PATCHes that should have conflicted), promote the get_by_id SELECT to `.with_for_update()`. That converts step (a) into a row lock, eliminating the TOCTOU window at the cost of one Postgres row lock per PATCH. Add a regression test exercising two concurrent PATCHes asserting at most one succeeds.
 - **Target:** telemetry-triggered. Verify before flipping that the `.with_for_update()` change passes a load test on a multi-connection pool to confirm the lock is per-row not per-table.
+
+
+### DEBT-044: Phase 1.6 — multi-block selection + bulk context-menu actions
+
+- **Source:** Phase 1.6 implementation (Q7 = single-block-only locked for v1)
+- **Added:** 2026-04-27
+- **Severity:** small (UX gap, not blocking — single-block path covers the v1 critical path)
+- **Category:** scope-deferred
+- **Status:** active
+- **Description:** Phase 1.6 ships per-block right-click context menu (Lock / Hide / Duplicate / Delete) and matching keyboard shortcuts. Multi-block selection (marquee drag, shift-click extend, aggregated menu state) is explicitly out of scope for v1. Right-clicking a different block while a menu is open already closes the prior menu and reopens for the new block; the editor still treats selection as single-only.
+- **Impact:** Operators must perform structural cleanup (lock 5 blocks, hide 3 blocks, duplicate a section's worth of optional blocks) one block at a time. Acceptable for v1 traffic — operators rarely chain identical mutations across more than 2–3 blocks per editing session per current usage.
+- **Resolution:**
+  - Add marquee-drag selection on Canvas (rectangular selection over hit-test rects)
+  - Add shift-click to extend the current selection
+  - Aggregate context-menu state with mixed-state indicators ("Lock 3 blocks" / "Show 2 of 4" etc.)
+  - Bulk Delete confirms once for the entire selection if any block is non-empty
+  - Bulk Duplicate inserts copies after each source preserving relative order
+  - The reducer's per-block `TOGGLE_LOCK` / `DUPLICATE_BLOCK` / `REMOVE_BLOCK` already form the underlying primitives; multi-select is a UI layer on top, not a refactor of state shape.
+- **Target:** post-Phase-3 polish — operator productivity refinement after the binding system ships. Not roadmap-critical for Phase 2.
