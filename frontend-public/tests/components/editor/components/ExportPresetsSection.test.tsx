@@ -6,8 +6,8 @@
  * Covers (per recon §8 PR#2 row): renders all SIZES presets, force-enables
  * the current canvas size, dispatches UPDATE_PAGE_EXPORT_PRESETS on toggle,
  * reflects the doc's `exportPresets` value in checkbox state, and surfaces
- * `long_infographic` even though `EXPORTABLE_PRESET_IDS` still excludes it
- * from the legacy size picker (operator opt-in surface).
+ * `long_infographic` (operator opt-in surface; post-PR#3 the legacy size
+ * picker also exposes it).
  */
 
 import React from 'react';
@@ -144,10 +144,10 @@ describe('ExportPresetsSection', () => {
   });
 
   test('long_infographic checkbox is rendered (operator opt-in surface)', () => {
-    // EXPORTABLE_PRESET_IDS still excludes long_infographic from the legacy
-    // size picker, but the export-presets section shows ALL 7 — operator
-    // opts in here; PR#3 expands EXPORTABLE_PRESET_IDS once the ZIP flow
-    // handles RenderCapExceededError.
+    // Both EXPORTABLE_PRESET_IDS (post-PR#3) and the export-presets section
+    // include `long_infographic`. The two lists remain semantically distinct
+    // (size picker vs. ZIP inclusion) but their members happen to overlap
+    // entirely now that the ZIP flow handles RenderCapExceededError.
     renderSection();
     const longInfo = screen.getByTestId('export-preset-long_infographic') as HTMLInputElement;
     expect(longInfo).toBeDefined();

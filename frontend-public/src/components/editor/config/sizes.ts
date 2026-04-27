@@ -43,17 +43,18 @@ export const SIZES = {
 export type PresetId = keyof typeof SIZES;
 
 /**
- * Preset IDs currently exposed in the LEGACY editor size picker (single-PNG
- * export flow). NOT the same as the Inspector "Export presets" list — that
- * one shows ALL preset IDs from SIZES (including `long_infographic`), per
- * recon Q-2.1-9. Two distinct lists with different purposes.
+ * Preset IDs currently exposed in the LEGACY editor size picker. NOT the
+ * same as the Inspector "Export presets" list — that one shows ALL preset
+ * IDs from SIZES per recon Q-2.1-9. Both lists now include the same set
+ * post-PR#3, but they remain conceptually distinct (size picker = "what
+ * canvas am I editing", export presets = "what gets included in the ZIP").
  *
- * `long_infographic` is OMITTED here because the legacy single-PNG export
- * does not enforce the 4000px cap. Exposing it before PR#3 (ZIP orchestrator)
- * ships would let users export an oversize document silently.
- *
- * PR#3 expands this list to include `long_infographic` once the ZIP flow
- * catches `RenderCapExceededError` and surfaces a skipped-on-cap toast.
+ * PR#3: now includes `long_infographic`. Previously omitted because the
+ * single-PNG export flow did not enforce the 4000px cap; the new ZIP
+ * orchestrator (export/zipExport.ts) catches `RenderCapExceededError`
+ * and skips the preset gracefully (qa_status: "skipped" in manifest +
+ * partial-success toast), so the size picker can safely expose it without
+ * any silent oversize-export risk.
  */
 export const EXPORTABLE_PRESET_IDS = [
   "instagram_1080",
@@ -62,6 +63,7 @@ export const EXPORTABLE_PRESET_IDS = [
   "reddit_standard",
   "linkedin_landscape",
   "instagram_story",
+  "long_infographic",
 ] as const;
 
 export type ExportablePresetId = typeof EXPORTABLE_PRESET_IDS[number];
