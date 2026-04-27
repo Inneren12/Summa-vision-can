@@ -99,10 +99,19 @@ function estimateBlockHeight(blockType: string, props: any, width: number, scale
  * Compute estimated layout for a document at a given canvas size.
  * Returns per-section consumed/available/overflow so QA can warn BEFORE
  * the user sees a broken render.
+ *
+ * Pass `size.h === Infinity` to measure intrinsic content height for
+ * variable-height presets (long_infographic). In that mode the per-section
+ * `availableHeight` is the unbounded sentinel and `overflow` is always
+ * `false` — section overflow is meaningless when the canvas can grow to
+ * fit. Callers (renderDocumentToBlob) sum `consumedHeight` to get the
+ * intrinsic page height before deciding whether to render or reject for
+ * exceeding the preset cap.
  */
 export function measureLayout(doc: CanonicalDocument, size: SizePreset): SectionMeasurement[] {
   const s = size.w / 1080;
   const pad = 64 * s;
+  const unbounded = size.h === Infinity;
   const results: SectionMeasurement[] = [];
 
   doc.sections.forEach(sec => {
@@ -126,7 +135,7 @@ export function measureLayout(doc: CanonicalDocument, size: SizePreset): Section
       sectionType: sec.type,
       availableHeight: layout.h,
       consumedHeight: consumed,
-      overflow: consumed > layout.h * 1.1,
+      overflow: unbounded ? false : consumed > layout.h * 1.1,
       blocks: blockMeasures,
     });
   });

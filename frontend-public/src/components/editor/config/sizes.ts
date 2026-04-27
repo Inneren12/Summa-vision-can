@@ -7,4 +7,5 @@ export const SIZES: Record<string, SizePreset> = {
   reddit:         { w: 1200, h: 900,  n: "Reddit" },
   linkedin:       { w: 1200, h: 627,  n: "LinkedIn" },
   story:          { w: 1080, h: 1920, n: "Story" },
+  long_infographic: { w: 1200, h: 4000, n: "Long Infographic" },
 };
