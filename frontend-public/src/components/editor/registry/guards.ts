@@ -2,7 +2,7 @@ import type { CanonicalDocument, LegacyDocumentV1, WorkflowState } from '../type
 import { BREG } from './blocks';
 import { validateBlockData, normalizeBlockData } from '../validation/block-data';
 import { formatValidationMessageDev } from '../validation/types';
-import { DEFAULT_EXPORT_PRESETS } from '../config/sizes';
+import { DEFAULT_EXPORT_PRESETS, normalizeExportPresets } from '../config/sizes';
 
 export const SUPPORTED_SCHEMA_VERSIONS = [1, 2, 3] as const;
 export const CURRENT_SCHEMA_VERSION = 3;
@@ -98,23 +98,40 @@ const MIGRATIONS: Record<number, MigrationStep> = {
   // already carries `page.size = "twitter_landscape"` at v2 passes
   // through unchanged on the size axis (the map has no entry for the
   // new name) and still receives the exportPresets default if absent.
+  //
+  // PR#2 fix1 (P1.1): legacy preset IDs that may pre-exist in
+  // `page.exportPresets` (beta builds / forward-compat tools wrote the
+  // field at v2) are also passed through `renamePresetId`, then through
+  // `normalizeExportPresets` so unknown values are dropped and the
+  // (post-rename) current size is force-included.
   2: (doc) => {
     const page = (doc.page as Record<string, unknown> | undefined) ?? {};
+    const renamePresetId = (id: string): string =>
+      PRESET_ID_RENAME_MAP_V2_TO_V3[id] ?? id;
+
     const rawSize = page.size;
     const renamedSize = typeof rawSize === "string"
-      ? (PRESET_ID_RENAME_MAP_V2_TO_V3[rawSize] ?? rawSize)
+      ? renamePresetId(rawSize)
       : rawSize;
-    const existingPresets = page.exportPresets;
-    const exportPresets = Array.isArray(existingPresets)
-      ? existingPresets
-      : [...DEFAULT_EXPORT_PRESETS];
+
+    const rawExportPresets = Array.isArray(page.exportPresets)
+      ? page.exportPresets
+      : DEFAULT_EXPORT_PRESETS;
+    const renamedExportPresets = rawExportPresets
+      .filter((id: unknown): id is string => typeof id === "string")
+      .map(renamePresetId);
+    const normalizedExportPresets = normalizeExportPresets(
+      renamedExportPresets,
+      typeof renamedSize === "string" ? renamedSize : "",
+    );
+
     return {
       ...doc,
       schemaVersion: 3,
       page: {
         ...page,
         size: renamedSize,
-        exportPresets,
+        exportPresets: normalizedExportPresets,
       },
     };
   },
@@ -594,14 +611,27 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
   const doc: CanonicalDocument = {
     schemaVersion: typeof source.schemaVersion === "number" ? source.schemaVersion : CURRENT_SCHEMA,
     templateId: typeof source.templateId === "string" ? source.templateId : "single_stat_hero",
-    page: {
-      size: typeof source.page?.size === "string" ? source.page.size : "instagram_1080",
-      background: typeof source.page?.background === "string" ? source.page.background : "gradient_warm",
-      palette: typeof source.page?.palette === "string" ? source.page.palette : "housing",
-      exportPresets: Array.isArray(source.page?.exportPresets)
+    page: (() => {
+      const size = typeof source.page?.size === "string" ? source.page.size : "instagram_1080";
+      const rawPresets = Array.isArray(source.page?.exportPresets)
         ? source.page.exportPresets.filter((p: unknown): p is string => typeof p === "string")
-        : [...DEFAULT_EXPORT_PRESETS],
-    },
+        : [...DEFAULT_EXPORT_PRESETS];
+      return {
+        // PR#2 fix1 (P1.2): `PageConfig.size` is `PresetId`. Hydration runs
+        // post-migration; the migration's rename + the `assertCanonicalDocumentV2Shape`
+        // pass enforce that `size` is a known preset by the time this
+        // document reaches a consumer. Cast through `as` because the input
+        // is structurally `any`.
+        size: size as CanonicalDocument["page"]["size"],
+        background: typeof source.page?.background === "string" ? source.page.background : "gradient_warm",
+        palette: typeof source.page?.palette === "string" ? source.page.palette : "housing",
+        // PR#2 fix1 (BLOCKER-2): apply the same invariant the reducer
+        // enforces — filter unknown IDs and force-include the current size.
+        // Hydration is the import-time entry point, so anything that lands
+        // in state here must satisfy the runtime invariant up front.
+        exportPresets: normalizeExportPresets(rawPresets, size),
+      };
+    })(),
     sections: Array.isArray(source.sections) ? source.sections.map((sec: any) => ({
       id: String(sec.id || ""),
       type: String(sec.type || ""),

@@ -18,6 +18,7 @@ import type {
   PageConfig,
   WorkflowState,
 } from '../types';
+import type { PresetId } from '../config/presetIds';
 import { mkDoc } from '../registry/templates';
 import { TPLS } from '../registry/templates';
 import { validateImportStrict } from '../registry/guards';
@@ -55,7 +56,7 @@ const SIZE_TO_BACKEND: Record<string, string> = {
 // `document_state` payloads written by older clients map to their new
 // IDs here so deserialization rounds them forward. One-way only — see
 // SIZE_TO_BACKEND comment for the symmetric guarantee on the write side.
-const SIZE_FROM_BACKEND: Record<string, string> = {
+const SIZE_FROM_BACKEND: Record<string, PresetId> = {
   // Backend slug → editor ID
   instagram: 'instagram_1080',
   twitter:   'twitter_landscape',

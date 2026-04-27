@@ -58,7 +58,11 @@ describe("validate / page config unknown checks", () => {
 
   test("flags unknown size", () => {
     const doc = cloneDoc("single_stat_hero");
-    doc.page.size = "not_a_size";
+    // PR#2 fix1 (P1.2): `page.size` is now `PresetId`. Cast through
+    // `unknown` to smuggle in a deliberately-invalid value — the test
+    // exists precisely to verify the runtime guard rejects unknown IDs
+    // that escape the type system.
+    doc.page.size = "not_a_size" as unknown as CanonicalDocument["page"]["size"];
     const r = validate(doc);
     expect(hasValidationKey(r.errors, 'validation.page.unknown_size')).toBe(true);
   });

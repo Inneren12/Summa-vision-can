@@ -2,6 +2,7 @@ import type { EditorState, EditorAction, CanonicalDocument, WorkflowAction, Work
 import { BREG } from '../registry/blocks';
 import { TPLS, mkDoc } from '../registry/templates';
 import { validateImportStrict } from '../registry/guards';
+import { normalizeExportPresets } from '../config/sizes';
 import { PERMS, checkWorkflowPermission } from './permissions';
 import { assertStateIntegrity } from './dev-assert';
 import { assertDocumentIntegrity } from '../validation/invariants';
@@ -483,13 +484,35 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
     }
     case "CHANGE_PAGE": {
       const { key, value } = action;
-      nextState = push({ ...state.doc, page: { ...state.doc.page, [key]: value } }, `Changed ${key} to ${value}`);
+      // PR#2 fix1 (BLOCKER-2): when the canvas size changes, re-normalize
+      // `exportPresets` so the new size is force-included. Without this,
+      // changing size while the previous size was the only "current"
+      // entry would leave the operator with a ZIP missing the working
+      // canvas — same failure mode the UI's force-checked checkbox was
+      // meant to prevent, now enforced at the reducer.
+      const nextPage = { ...state.doc.page, [key]: value } as typeof state.doc.page;
+      if (key === "size") {
+        nextPage.exportPresets = normalizeExportPresets(
+          state.doc.page.exportPresets,
+          value,
+        );
+      }
+      nextState = push({ ...state.doc, page: nextPage }, `Changed ${key} to ${value}`);
       break;
     }
     case "UPDATE_PAGE_EXPORT_PRESETS": {
       const { exportPresets } = action;
+      // PR#2 fix1 (BLOCKER-2): force-include current canvas size and filter
+      // unknown IDs at the reducer (was UI-only via `disabled checked`,
+      // which left `state.doc.page.exportPresets` free to drift).
       nextState = push(
-        { ...state.doc, page: { ...state.doc.page, exportPresets: [...exportPresets] } },
+        {
+          ...state.doc,
+          page: {
+            ...state.doc.page,
+            exportPresets: normalizeExportPresets(exportPresets, state.doc.page.size),
+          },
+        },
         `Updated export presets`,
       );
       break;

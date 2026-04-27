@@ -1,5 +1,6 @@
 import type { ContrastIssue } from './validation/contrast';
 import type { ValidationMessage } from './validation/types';
+import type { PresetId } from './config/presetIds';
 
 export type EditorMode = 'template' | 'design';
 export type QAMode = 'draft' | 'publish';
@@ -50,7 +51,7 @@ export interface Section {
 }
 
 export interface PageConfig {
-  size: string;
+  size: PresetId;
   background: string;
   palette: string;
   // Phase 2.1 PR#2: list of preset IDs (keys of SIZES) selected for the
@@ -58,8 +59,10 @@ export interface PageConfig {
   // `page.size` is always rendered regardless of presence; this list
   // controls which ADDITIONAL presets get included.
   // Defaults to `DEFAULT_EXPORT_PRESETS` (common-4) for new docs and via
-  // the v2→v3 migration.
-  exportPresets: string[];
+  // the v2→v3 migration. PR#2 fix1 (P1.2): tightened from `string[]` to
+  // `PresetId[]`. The migration + reducer normalize step both filter out
+  // unknown IDs, so no runtime path can leak a non-PresetId into here.
+  exportPresets: PresetId[];
 }
 
 /**
@@ -274,7 +277,10 @@ export type EditorAction =
   // Phase 2.1 PR#2: replaces `page.exportPresets` wholesale. Uses a
   // dedicated action (rather than a generic CHANGE_PAGE patch) because
   // CHANGE_PAGE is keyed on string-valued page fields only.
-  | { type: 'UPDATE_PAGE_EXPORT_PRESETS'; exportPresets: string[] }
+  // PR#2 fix1 (P1.2): payload tightened from `string[]` to `PresetId[]`
+  // — Inspector dispatches typed lists, and the reducer additionally
+  // re-normalizes via `normalizeExportPresets` to enforce invariants.
+  | { type: 'UPDATE_PAGE_EXPORT_PRESETS'; exportPresets: readonly PresetId[] }
   | { type: 'SWITCH_TPL'; tid: string }
   | { type: 'IMPORT'; doc: CanonicalDocument }
   | { type: 'UNDO' }

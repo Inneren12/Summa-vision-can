@@ -656,6 +656,34 @@ describe("migrateV2toV3 — preset id rename + exportPresets default", () => {
     expect(result.appliedMigrations).toEqual([2, 3]);
   });
 
+  test("scenario 5: pre-migration document with old IDs in exportPresets array gets them renamed", () => {
+    // PR#2 fix1 (P1.1): the v2 → v3 migration also rewrites legacy preset
+    // IDs that may pre-exist in `page.exportPresets`. Beta builds and
+    // forward-compat tools could have written the field at v2 with the
+    // pre-rename slugs; without per-element rename, the migrated doc would
+    // carry `page.size = "twitter_landscape"` while `page.exportPresets`
+    // still listed `"twitter"` — silently dropping that preset from the
+    // PR#3 ZIP orchestrator's enabled set.
+    const v2 = v2Fixture({
+      size: "twitter",
+      exportPresets: ["twitter", "reddit", "story"],
+    });
+    const result = migrateDoc(v2);
+
+    expect(result.doc.schemaVersion).toBe(3);
+    expect(result.doc.page.size).toBe("twitter_landscape");
+
+    // All three legacy IDs renamed to their v3 equivalents.
+    expect(result.doc.page.exportPresets).toContain("twitter_landscape");
+    expect(result.doc.page.exportPresets).toContain("reddit_standard");
+    expect(result.doc.page.exportPresets).toContain("instagram_story");
+
+    // No legacy IDs survive the migration.
+    expect(result.doc.page.exportPresets).not.toContain("twitter");
+    expect(result.doc.page.exportPresets).not.toContain("reddit");
+    expect(result.doc.page.exportPresets).not.toContain("story");
+  });
+
   test("scenario 4 (abort discipline): missing intermediate migration throws", () => {
     // EDITOR_BLOCK_ARCHITECTURE.md §6 mandates abort on missing intermediate.
     // Use a synthetic schemaVersion below any registered migration so the
