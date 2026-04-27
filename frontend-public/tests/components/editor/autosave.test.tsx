@@ -92,7 +92,11 @@ describe('Autosave — debounce', () => {
       jest.advanceTimersByTime(1);
     });
     expect(mockUpdateAdminPublication).toHaveBeenCalledTimes(1);
-    expect(mockUpdateAdminPublication).toHaveBeenCalledWith('pub1', expect.any(Object));
+    expect(mockUpdateAdminPublication).toHaveBeenCalledWith(
+      'pub1',
+      expect.any(Object),
+      expect.objectContaining({ ifMatch: null }),
+    );
 
     await flushMicrotasks();
   });
