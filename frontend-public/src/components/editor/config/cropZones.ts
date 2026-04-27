@@ -26,13 +26,15 @@ export const CROP_ZONES: Partial<
   Record<PresetId, Partial<Record<PlatformId, CropZone>>>
 > = {
   // Native preset cases — full canvas (label-only render in helper).
-  reddit: {
+  // Outer key = preset id (renamed in Phase 2.1 PR#2);
+  // inner key = platform id (unchanged: PlatformId is its own enum).
+  reddit_standard: {
     reddit: { x: 0, y: 0, w: 1200, h: 900, baseW: 1200, baseH: 900, platform: 'reddit' },
   },
-  twitter: {
+  twitter_landscape: {
     twitter: { x: 0, y: 0, w: 1200, h: 675, baseW: 1200, baseH: 675, platform: 'twitter' },
   },
-  linkedin: {
+  linkedin_landscape: {
     linkedin: { x: 0, y: 0, w: 1200, h: 627, baseW: 1200, baseH: 627, platform: 'linkedin' },
   },
 
@@ -41,11 +43,11 @@ export const CROP_ZONES: Partial<
     reddit: { x: 0, y: 135, w: 1080, h: 810, baseW: 1080, baseH: 1080, platform: 'reddit' },
   },
   // 1080x1350 center-crop for 810px-tall Reddit aspect window.
-  instagram_port: {
+  instagram_portrait: {
     reddit: { x: 0, y: 270, w: 1080, h: 810, baseW: 1080, baseH: 1350, platform: 'reddit' },
   },
 
-  // story preset omitted (no overlay).
+  // instagram_story preset omitted (no overlay).
 };
 
 /**

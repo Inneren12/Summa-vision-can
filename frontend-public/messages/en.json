@@ -60,6 +60,11 @@
       "status": "STATUS",
       "sections": "SECTIONS",
       "max": "MAX"
+    },
+    "export_presets": {
+      "label": "Export presets",
+      "help": "Choose which sizes to include in the ZIP export.",
+      "current_required": "Current canvas size — always included"
     }
   },
   "right_rail": {

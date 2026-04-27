@@ -1,12 +1,12 @@
 import { getCropZoneForPreset } from '@/components/editor/config/cropZones';
 
 describe('getCropZoneForPreset', () => {
-  test('returns null for story preset', () => {
-    expect(getCropZoneForPreset('story')).toBeNull();
+  test('returns null for instagram_story preset', () => {
+    expect(getCropZoneForPreset('instagram_story')).toBeNull();
   });
 
-  test('returns full-canvas zone for reddit preset', () => {
-    const zone = getCropZoneForPreset('reddit');
+  test('returns full-canvas zone for reddit_standard preset', () => {
+    const zone = getCropZoneForPreset('reddit_standard');
     expect(zone).not.toBeNull();
     expect(zone?.platform).toBe('reddit');
     expect(zone?.w).toBe(1200);
@@ -21,8 +21,8 @@ describe('getCropZoneForPreset', () => {
     expect(zone?.h).toBe(810);
   });
 
-  test('returns reddit zone for instagram_port preset', () => {
-    const zone = getCropZoneForPreset('instagram_port');
+  test('returns reddit zone for instagram_portrait preset', () => {
+    const zone = getCropZoneForPreset('instagram_portrait');
     expect(zone).not.toBeNull();
     expect(zone?.platform).toBe('reddit');
   });

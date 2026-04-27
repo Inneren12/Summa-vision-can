@@ -2,11 +2,26 @@ import type { CanonicalDocument, LegacyDocumentV1, WorkflowState } from '../type
 import { BREG } from './blocks';
 import { validateBlockData, normalizeBlockData } from '../validation/block-data';
 import { formatValidationMessageDev } from '../validation/types';
+import { DEFAULT_EXPORT_PRESETS } from '../config/sizes';
 
-export const SUPPORTED_SCHEMA_VERSIONS = [1, 2] as const;
-export const CURRENT_SCHEMA_VERSION = 2;
+export const SUPPORTED_SCHEMA_VERSIONS = [1, 2, 3] as const;
+export const CURRENT_SCHEMA_VERSION = 3;
 // Kept as an alias for existing call sites (templates.ts, legacy tests).
 export const CURRENT_SCHEMA = CURRENT_SCHEMA_VERSION;
+
+/**
+ * Phase 2.1 PR#2 preset ID rename. The v2 → v3 migration applies this map
+ * to `page.size` so previously-saved documents keep resolving to a known
+ * preset key after the SIZES rename. Idempotent: an already-renamed value
+ * (e.g. `"twitter_landscape"`) is not in the map and passes through.
+ */
+const PRESET_ID_RENAME_MAP_V2_TO_V3: Record<string, string> = {
+  instagram_port: 'instagram_portrait',
+  story:          'instagram_story',
+  twitter:        'twitter_landscape',
+  reddit:         'reddit_standard',
+  linkedin:       'linkedin_landscape',
+};
 
 const VALID_WORKFLOW_STATES: ReadonlySet<WorkflowState> = new Set<WorkflowState>([
   "draft", "in_review", "approved", "exported", "published",
@@ -41,12 +56,15 @@ function deriveMigrationTimestamp(doc: LegacyDocumentV1): string {
  * Each migration is PURE: it takes a doc at version N and returns a fresh
  * doc at version N+1. No input mutation; no I/O.
  *
- * Storage currently contains only v1 documents, so the only real-world
- * migration is `1 → 2`. The chain infrastructure is retained so future
- * schema bumps can add `MIGRATIONS[2]` etc. without reshaping this module.
+ * Storage currently contains v1 + v2 documents (post Phase 2.1 PR#2 ship).
+ * Each migration registers under the source version index and bumps
+ * `schemaVersion` by exactly one before returning.
  */
-const MIGRATIONS: Record<number, (doc: any) => any> = {
-  1: (doc: LegacyDocumentV1): CanonicalDocument => {
+type MigrationStep = (doc: Record<string, unknown>) => Record<string, unknown>;
+
+const MIGRATIONS: Record<number, MigrationStep> = {
+  1: (raw) => {
+    const doc = raw as unknown as LegacyDocumentV1;
     const { workflow, ...restRoot } = doc;
     const resolvedWorkflow: WorkflowState =
       typeof workflow === "string" && VALID_WORKFLOW_STATES.has(workflow as WorkflowState)
@@ -70,6 +88,33 @@ const MIGRATIONS: Record<number, (doc: any) => any> = {
           },
         ],
         comments: [],
+      },
+    };
+  },
+  // v2 → v3 (Phase 2.1 PR#2): preset ID rename + exportPresets field.
+  // Single atomic step per recon §5 Risk 3 — both changes happen together
+  // so a doc never sits in a "renamed size but missing exportPresets" state.
+  // Idempotent on the renamed-but-not-bumped case: a doc that somehow
+  // already carries `page.size = "twitter_landscape"` at v2 passes
+  // through unchanged on the size axis (the map has no entry for the
+  // new name) and still receives the exportPresets default if absent.
+  2: (doc) => {
+    const page = (doc.page as Record<string, unknown> | undefined) ?? {};
+    const rawSize = page.size;
+    const renamedSize = typeof rawSize === "string"
+      ? (PRESET_ID_RENAME_MAP_V2_TO_V3[rawSize] ?? rawSize)
+      : rawSize;
+    const existingPresets = page.exportPresets;
+    const exportPresets = Array.isArray(existingPresets)
+      ? existingPresets
+      : [...DEFAULT_EXPORT_PRESETS];
+    return {
+      ...doc,
+      schemaVersion: 3,
+      page: {
+        ...page,
+        size: renamedSize,
+        exportPresets,
       },
     };
   },
@@ -146,6 +191,12 @@ function assertCanonicalDocumentV2Shape(doc: any): string | null {
   if (!doc.meta || typeof doc.meta !== "object") return "Missing meta";
 
   if (!doc.page.size || !doc.page.background || !doc.page.palette) return "Incomplete page config";
+  if (!Array.isArray(doc.page.exportPresets)) return "Missing page.exportPresets array";
+  for (let i = 0; i < doc.page.exportPresets.length; i++) {
+    if (typeof doc.page.exportPresets[i] !== "string") {
+      return `page.exportPresets[${i}] must be a string`;
+    }
+  }
   if (typeof doc.meta.createdAt !== "string" || typeof doc.meta.updatedAt !== "string") return "Invalid meta timestamps";
   if (typeof doc.meta.version !== "number" || !Array.isArray(doc.meta.history)) return "Invalid meta version/history";
   if ("workflow" in doc.meta) return "meta.workflow is not allowed in v2 (lives in review.workflow)";
@@ -523,6 +574,7 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
     if (typeof source.page.size !== "string") warnings.push(`Missing page.size — defaulted to "instagram_1080"`);
     if (typeof source.page.background !== "string") warnings.push(`Missing page.background — defaulted to "gradient_warm"`);
     if (typeof source.page.palette !== "string") warnings.push(`Missing page.palette — defaulted to "housing"`);
+    if (!Array.isArray(source.page.exportPresets)) warnings.push(`Missing page.exportPresets — defaulted to common-4`);
   }
   if (!Array.isArray(source.sections)) {
     warnings.push("Missing sections array — defaulted to []");
@@ -546,6 +598,9 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
       size: typeof source.page?.size === "string" ? source.page.size : "instagram_1080",
       background: typeof source.page?.background === "string" ? source.page.background : "gradient_warm",
       palette: typeof source.page?.palette === "string" ? source.page.palette : "housing",
+      exportPresets: Array.isArray(source.page?.exportPresets)
+        ? source.page.exportPresets.filter((p: unknown): p is string => typeof p === "string")
+        : [...DEFAULT_EXPORT_PRESETS],
     },
     sections: Array.isArray(source.sections) ? source.sections.map((sec: any) => ({
       id: String(sec.id || ""),

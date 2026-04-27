@@ -38,13 +38,19 @@ export const LONG_INFOGRAPHIC_HEIGHT_CAP = 4000;
  * @throws RenderCapExceededError if long_infographic measured height > cap.
  * @throws Error from canvas.toBlob if encoding fails.
  */
-// TODO PR#2: tighten presetId type to keyof typeof SIZES after preset ID rename
-// (Q-2.1-12 / approval gate A5). Currently `string` because PR#2 will rename
-// twitter -> twitter_landscape etc., and re-typing here twice is wasted churn.
+/**
+ * Phase 2.1 PR#2 (Q-2.1-12 / approval gate A5): preset IDs are now stable
+ * post-rename, so tighten the parameter to a literal union over `SIZES`.
+ * The `if (!sz)` runtime guard below stays — `keyof typeof SIZES` is
+ * compile-time-only, and a legacy doc that escaped migration could still
+ * arrive carrying an unknown preset id at runtime.
+ */
+export type ExportPresetId = keyof typeof SIZES;
+
 export async function renderDocumentToBlob(
   doc: CanonicalDocument,
   pal: Palette,
-  presetId: string,
+  presetId: ExportPresetId,
 ): Promise<Blob> {
   const sz = SIZES[presetId];
   if (!sz) {

@@ -284,6 +284,14 @@ export function checkWorkflowPermission(
         : { allowed: false, reason:
             workflow === "in_review" ? COPY_EDIT_ONLY_REASON : READ_ONLY_REASON };
 
+    case "UPDATE_PAGE_EXPORT_PRESETS":
+      // Phase 2.1 PR#2: rides the same workflow axis as CHANGE_PAGE size —
+      // it's a page-config selection, not a content edit.
+      return wp.style
+        ? { allowed: true }
+        : { allowed: false, reason:
+            workflow === "in_review" ? COPY_EDIT_ONLY_REASON : READ_ONLY_REASON };
+
     case "SWITCH_TPL":
       return wp.style
         ? { allowed: true }

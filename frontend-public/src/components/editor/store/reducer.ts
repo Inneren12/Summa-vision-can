@@ -136,6 +136,15 @@ function checkModePermission(state: EditorState, action: EditorAction): { allowe
       return { allowed: true };
     }
 
+    case "UPDATE_PAGE_EXPORT_PRESETS": {
+      // Phase 2.1 PR#2: gated under the same axis as `changeSize` since the
+      // export presets are page-size selections, not block content edits.
+      if (!perms.changeSize) {
+        return { allowed: false, reason: `Cannot change export presets in ${state.mode} mode` };
+      }
+      return { allowed: true };
+    }
+
     case "SWITCH_TPL": {
       if (!perms.switchTemplate) {
         return { allowed: false, reason: `Cannot switch template in ${state.mode} mode` };
@@ -475,6 +484,14 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
     case "CHANGE_PAGE": {
       const { key, value } = action;
       nextState = push({ ...state.doc, page: { ...state.doc.page, [key]: value } }, `Changed ${key} to ${value}`);
+      break;
+    }
+    case "UPDATE_PAGE_EXPORT_PRESETS": {
+      const { exportPresets } = action;
+      nextState = push(
+        { ...state.doc, page: { ...state.doc.page, exportPresets: [...exportPresets] } },
+        `Updated export presets`,
+      );
       break;
     }
     case "SWITCH_TPL": {

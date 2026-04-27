@@ -122,7 +122,9 @@ describe('hydrateDoc', () => {
     );
     expect(doc.page.palette).toBe('government');
     expect(doc.page.background).toBe('solid_dark');
-    expect(doc.page.size).toBe('twitter');
+    // Phase 2.1 PR#2: backend slug 'twitter' deserializes to the renamed
+    // editor preset id 'twitter_landscape' via SIZE_FROM_BACKEND.
+    expect(doc.page.size).toBe('twitter_landscape');
   });
 
   it('round-trips review subtree losslessly', () => {

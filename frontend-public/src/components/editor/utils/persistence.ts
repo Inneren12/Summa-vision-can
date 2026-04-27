@@ -33,25 +33,38 @@ import type {
 // Editor `size` slug (e.g. `instagram_1080`) to backend `size` slug
 // (e.g. `instagram`). Backend accepts a narrower set — see
 // `backend/src/schemas/publication.py::VisualConfig`.
+//
+// Phase 2.1 PR#2: keys are post-rename editor IDs only. The migration
+// guarantees every loaded doc is on the new IDs before any write, so
+// pre-rename slugs cannot reach this serialization map.
 const SIZE_TO_BACKEND: Record<string, string> = {
-  instagram_1080: 'instagram',
-  instagram_port: 'instagram',
-  twitter: 'twitter',
-  reddit: 'reddit',
-  linkedin: 'linkedin',
-  story: 'story',
+  instagram_1080:     'instagram',
+  instagram_portrait: 'instagram',
+  twitter_landscape:  'twitter',
+  reddit_standard:    'reddit',
+  linkedin_landscape: 'linkedin',
+  instagram_story:    'story',
 };
 
 // Inverse mapping used only by the legacy hydrate path. `instagram`
-// collapses to the 1:1 default since `instagram_port` can't be
+// collapses to the 1:1 default since `instagram_portrait` can't be
 // recovered from the backend's coarser `size` slug — irrelevant once a
 // row has `document_state`, which stores the full editor slug.
+//
+// Phase 2.1 PR#2 aliases: pre-rename editor IDs that may still appear in
+// `document_state` payloads written by older clients map to their new
+// IDs here so deserialization rounds them forward. One-way only — see
+// SIZE_TO_BACKEND comment for the symmetric guarantee on the write side.
 const SIZE_FROM_BACKEND: Record<string, string> = {
+  // Backend slug → editor ID
   instagram: 'instagram_1080',
-  twitter: 'twitter',
-  reddit: 'reddit',
-  linkedin: 'linkedin',
-  story: 'story',
+  twitter:   'twitter_landscape',
+  reddit:    'reddit_standard',
+  linkedin:  'linkedin_landscape',
+  story:     'instagram_story',
+
+  // Pre-rename editor IDs → renamed editor IDs (back-compat)
+  instagram_port: 'instagram_portrait',
 };
 
 const DEFAULT_BRANDING: BrandingConfig = {
@@ -272,6 +285,7 @@ function hydrateFromLegacyFields(
       size: SIZE_FROM_BACKEND[vc.size] ?? base.page.size,
       background: vc.background || base.page.background,
       palette: vc.palette || base.page.palette,
+      exportPresets: base.page.exportPresets,
     };
   }
 
