@@ -60,6 +60,12 @@ class AppDrawer extends StatelessWidget {
             selected: currentPath == AppRoutes.jobs,
           ),
           _NavTile(
+            icon: Icons.report_problem,
+            label: loc.navExceptions,
+            route: AppRoutes.exceptions,
+            selected: currentPath == AppRoutes.exceptions,
+          ),
+          _NavTile(
             icon: Icons.bar_chart,
             label: loc.navKpi,
             route: AppRoutes.kpi,

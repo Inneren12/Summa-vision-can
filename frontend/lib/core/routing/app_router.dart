@@ -5,6 +5,7 @@ import '../../features/cubes/presentation/cube_detail_screen.dart';
 import '../../features/cubes/presentation/cube_search_screen.dart';
 import '../../features/data_preview/presentation/data_preview_screen.dart';
 import '../../features/editor/presentation/editor_screen.dart';
+import '../../features/exceptions/presentation/exceptions_screen.dart';
 import '../../features/graphics/presentation/chart_config_screen.dart';
 import '../../features/graphics/presentation/preview_screen.dart';
 import '../../features/jobs/presentation/jobs_dashboard_screen.dart';
@@ -24,6 +25,7 @@ class AppRoutes {
   static const graphicsConfig  = '/graphics/config';
   static const kpi             = '/kpi';
   static const jobs            = '/jobs';
+  static const exceptions      = '/exceptions';
 }
 
 /// Riverpod provider for the [GoRouter] instance.
@@ -46,6 +48,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         '/graphics/',
         '/kpi',
         '/jobs',
+        '/exceptions',
       ];
       final path = state.matchedLocation;
 
@@ -106,6 +109,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.jobs,
         name: 'jobs',
         builder: (context, state) => const JobsDashboardScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.exceptions,
+        name: 'exceptions',
+        builder: (context, state) => const ExceptionsScreen(),
       ),
       GoRoute(
         path: AppRoutes.editor,

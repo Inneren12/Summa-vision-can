@@ -4,6 +4,7 @@
   "navQueue": "Очередь брифов",
   "navCubes": "Кубы",
   "navJobs": "Задания",
+  "navExceptions": "Исключения",
   "navKpi": "KPI",
   "commonLoading": "Загрузка...",
   "commonRetryVerb": "Повторить",
@@ -93,5 +94,12 @@
   },
   "dataPreviewDiffNoBaseline": "Первый просмотр — сравнение недоступно",
   "dataPreviewDiffSchemaChanged": "Структура данных изменилась — сравнение недоступно",
-  "dataPreviewDiffNoProductId": "Для этих данных отслеживание изменений недоступно"
+  "dataPreviewDiffNoProductId": "Для этих данных отслеживание изменений недоступно",
+  "exceptionsTitle": "Исключения",
+  "exceptionsRefreshTooltip": "Обновить список исключений",
+  "exceptionsFilterAll": "Все",
+  "exceptionsFilterFailedExports": "Неудачные экспорты",
+  "exceptionsFilterZombieJobs": "Зависшие задачи",
+  "exceptionsLoadError": "Не удалось загрузить список исключений\\n{error}",
+  "exceptionsEmptyState": "Нет исключений для проверки.\\nНажмите «Обновить», чтобы получить новые."
 }

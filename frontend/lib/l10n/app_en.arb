@@ -16,6 +16,10 @@
   "@navJobs": {
     "description": "Navigation label for the async jobs monitoring screen"
   },
+  "navExceptions": "Exceptions",
+  "@navExceptions": {
+    "description": "AppDrawer navigation label for the /exceptions screen (operator inbox showing failed exports + zombie jobs)."
+  },
   "navKpi": "KPI",
   "@navKpi": {
     "description": "Navigation label for the KPI monitoring screen"
@@ -412,5 +416,38 @@
   "dataPreviewDiffNoProductId": "This data has no diff tracking",
   "@dataPreviewDiffNoProductId": {
     "description": "Banner when storage_key has no parseable product_id (non-StatCan path)"
+  },
+  "exceptionsTitle": "Exceptions",
+  "@exceptionsTitle": {
+    "description": "Title of the /exceptions screen showing failed exports and zombie jobs."
+  },
+  "exceptionsRefreshTooltip": "Refresh exceptions",
+  "@exceptionsRefreshTooltip": {
+    "description": "Tooltip for the refresh icon in the /exceptions AppBar."
+  },
+  "exceptionsFilterAll": "All",
+  "@exceptionsFilterAll": {
+    "description": "Filter chip label: show all exception types."
+  },
+  "exceptionsFilterFailedExports": "Failed Exports",
+  "@exceptionsFilterFailedExports": {
+    "description": "Filter chip label: show only failed graphics_generate jobs."
+  },
+  "exceptionsFilterZombieJobs": "Zombie Jobs",
+  "@exceptionsFilterZombieJobs": {
+    "description": "Filter chip label: show only running jobs that exceed the 10-minute stale threshold."
+  },
+  "exceptionsLoadError": "Failed to load exceptions\\n{error}",
+  "@exceptionsLoadError": {
+    "description": "Error state copy when /exceptions fails to fetch rows.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "exceptionsEmptyState": "No exceptions to review.\\nTap refresh to fetch new ones.",
+  "@exceptionsEmptyState": {
+    "description": "Empty state copy when /exceptions has zero rows under the current filter."
   }
 }

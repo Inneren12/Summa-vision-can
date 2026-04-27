@@ -1,7 +1,12 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
 import 'app_localizations.dart';
 
+// ignore_for_file: type=lint
+
+/// The translations for English (`en`).
 class AppLocalizationsEn extends AppLocalizations {
-  AppLocalizationsEn() : super('en');
+  AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
   String get appTitle => 'Summa Vision Admin';
@@ -14,6 +19,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get navJobs => 'Jobs';
+
+  @override
+  String get navExceptions => 'Exceptions';
 
   @override
   String get navKpi => 'KPI';
@@ -44,11 +52,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String queueLoadError(String error) {
-    return 'Failed to load queue\n$error';
+    return 'Failed to load queue\\n$error';
   }
 
   @override
-  String get queueEmptyState => 'No briefs in queue.\nTap refresh to fetch new ones.';
+  String get queueEmptyState =>
+      'No briefs in queue.\\nTap refresh to fetch new ones.';
 
   @override
   String get queueRejectVerb => 'Reject';
@@ -91,7 +100,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editorBackgroundPromptLabel => 'Background Prompt';
 
   @override
-  String get editorBackgroundPromptHint => 'Describe the AI background image...';
+  String get editorBackgroundPromptHint =>
+      'Describe the AI background image...';
 
   @override
   String get editorChartTypeLabel => 'Chart Type';
@@ -209,7 +219,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chartConfigTryAgainButton => 'Try Again';
 
   @override
-  String get chartConfigUploadMissingError => 'Upload a JSON or CSV file first.';
+  String get chartConfigUploadMissingError =>
+      'Upload a JSON or CSV file first.';
 
   @override
   String get chartConfigUploadPickButton => 'Upload JSON / CSV';
@@ -264,37 +275,70 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errorChartEmptyData => 'No data to chart.';
 
   @override
-  String get errorChartInsufficientColumns => 'Not enough columns to build the chart.';
+  String get errorChartInsufficientColumns =>
+      'Not enough columns to build the chart.';
 
   @override
   String get errorJobUnhandled => 'Unexpected error while processing the job.';
 
   @override
-  String get errorJobCoolDown => 'Please wait before starting another generation.';
+  String get errorJobCoolDown =>
+      'Please wait before starting another generation.';
 
   @override
   String get errorJobNoHandler => 'Unsupported operation.';
 
   @override
-  String get errorJobIncompatiblePayload => 'Version mismatch between client and server payload.';
+  String get errorJobIncompatiblePayload =>
+      'Version mismatch between client and server payload.';
 
   @override
   String get errorJobUnknownType => 'Unknown job type.';
 
   @override
   String dataPreviewDiffStatusLabel(int count) {
-    if (count == 0) return 'No cells changed since last view';
-    if (count == 1) return '1 cell changed since last view';
-    return '$count cells changed since last view';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# cells changed since last view',
+      one: '1 cell changed since last view',
+      zero: 'No cells changed since last view',
+    );
+    return '$_temp0';
   }
 
   @override
-  String get dataPreviewDiffNoBaseline => 'First view — no comparison available';
+  String get dataPreviewDiffNoBaseline =>
+      'First view — no comparison available';
 
   @override
-  String get dataPreviewDiffSchemaChanged => 'Schema changed since last view — diff unavailable';
+  String get dataPreviewDiffSchemaChanged =>
+      'Schema changed since last view — diff unavailable';
 
   @override
   String get dataPreviewDiffNoProductId => 'This data has no diff tracking';
 
+  @override
+  String get exceptionsTitle => 'Exceptions';
+
+  @override
+  String get exceptionsRefreshTooltip => 'Refresh exceptions';
+
+  @override
+  String get exceptionsFilterAll => 'All';
+
+  @override
+  String get exceptionsFilterFailedExports => 'Failed Exports';
+
+  @override
+  String get exceptionsFilterZombieJobs => 'Zombie Jobs';
+
+  @override
+  String exceptionsLoadError(String error) {
+    return 'Failed to load exceptions\\n$error';
+  }
+
+  @override
+  String get exceptionsEmptyState =>
+      'No exceptions to review.\\nTap refresh to fetch new ones.';
 }
