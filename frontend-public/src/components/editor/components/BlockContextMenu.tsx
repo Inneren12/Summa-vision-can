@@ -18,6 +18,11 @@ export interface BlockContextMenuProps {
   // Mode-axis flag — design mode permits structural mutations; in template
   // mode duplicate/delete are greyed out. Lock/hide remain available.
   designMode: boolean;
+  // Workflow-axis flag — true only when the document workflow allows
+  // structural mutations (i.e. `draft`). When false, all four items are
+  // disabled with the disabled_workflow tooltip; the reducer's workflow
+  // gate would otherwise reject the dispatch silently.
+  canStructuralEdit: boolean;
 }
 
 const MENU_MARGIN = 8;
@@ -40,6 +45,7 @@ export function BlockContextMenu({
   onDuplicate,
   onDelete,
   designMode,
+  canStructuralEdit,
 }: BlockContextMenuProps) {
   const t = useTranslations('editor.context_menu');
   const ref = useRef<HTMLDivElement | null>(null);
@@ -105,6 +111,26 @@ export function BlockContextMenu({
   // here because the menu has no section context to count against. The
   // reducer's withRejection path covers the edge case.
 
+  // Centralised disabled-reason precedence (highest priority first):
+  //   1. templateRequired   → delete_disabled_template_locked (delete only)
+  //   2. block.locked       → hide_disabled_locked            (hide only)
+  //   3. !canStructuralEdit → disabled_workflow               (all four)
+  //   4. !designMode        → disabled_template_mode          (duplicate, delete)
+  const reasonFor = (item: 'lock' | 'hide' | 'duplicate' | 'delete'): string | undefined => {
+    if (item === 'delete' && templateRequired) return t('delete_disabled_template_locked');
+    if (item === 'hide' && isLocked) return t('hide_disabled_locked');
+    if (!canStructuralEdit) return t('disabled_workflow');
+    if ((item === 'duplicate' || item === 'delete') && !designMode) {
+      return t('disabled_template_mode');
+    }
+    return undefined;
+  };
+
+  const lockReason = reasonFor('lock');
+  const hideReason = reasonFor('hide');
+  const duplicateReason = reasonFor('duplicate');
+  const deleteReason = reasonFor('delete');
+
   const items: ItemDescriptor[] = [
     {
       testid: 'ctx-lock',
@@ -114,7 +140,8 @@ export function BlockContextMenu({
         onLock();
         onClose();
       },
-      disabled: false,
+      disabled: lockReason !== undefined,
+      disabledTitle: lockReason,
     },
     {
       testid: 'ctx-hide',
@@ -126,8 +153,8 @@ export function BlockContextMenu({
       },
       // Hide requires unlocked block. The menu still renders the item but
       // disables it so the operator sees the cause.
-      disabled: isLocked,
-      disabledTitle: isLocked ? t('hide_disabled_locked') : undefined,
+      disabled: hideReason !== undefined,
+      disabledTitle: hideReason,
     },
     {
       testid: 'ctx-duplicate',
@@ -137,8 +164,8 @@ export function BlockContextMenu({
         onDuplicate();
         onClose();
       },
-      disabled: !designMode,
-      disabledTitle: !designMode ? t('disabled_template_mode') : undefined,
+      disabled: duplicateReason !== undefined,
+      disabledTitle: duplicateReason,
     },
     {
       testid: 'ctx-delete',
@@ -148,12 +175,8 @@ export function BlockContextMenu({
         onDelete();
         onClose();
       },
-      disabled: templateRequired || !designMode,
-      disabledTitle: templateRequired
-        ? t('delete_disabled_template_locked')
-        : !designMode
-          ? t('disabled_template_mode')
-          : undefined,
+      disabled: deleteReason !== undefined,
+      disabledTitle: deleteReason,
     },
   ];
 

@@ -49,6 +49,16 @@ export function isBlockEmpty(block: Block): boolean {
   const reg = BREG[block.type];
   if (!reg) return false;
   const defaults = reg.dp ?? {};
+  const propKeys = Object.keys(block.props ?? {});
+
+  // Any prop key present on the block but missing from defaults is
+  // considered meaningful — empty check fails. Guards against blocks
+  // that carry custom annotations / overrides which would otherwise
+  // vanish without a confirm dialog.
+  for (const key of propKeys) {
+    if (!Object.prototype.hasOwnProperty.call(defaults, key)) return false;
+  }
+
   for (const key of Object.keys(defaults)) {
     if (!deepEqual(block.props[key], defaults[key])) return false;
   }
