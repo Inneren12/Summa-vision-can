@@ -1,6 +1,6 @@
 import type { CanonicalDocument, Palette } from '../types';
 import { SIZES } from '../config/sizes';
-import type { PresetId } from '../config/presetIds';
+import type { PresetId } from '../config/sizes';
 import { BGS } from '../config/backgrounds';
 import { renderDoc } from '../renderer/engine';
 import { measureLayout } from '../renderer/measure';
@@ -46,10 +46,12 @@ export const LONG_INFOGRAPHIC_HEIGHT_CAP = 4000;
  * and a legacy doc that escaped migration could still arrive carrying an
  * unknown preset id at runtime.
  *
- * PR#2 fix1 (P1.2): the canonical type lives in `config/presetIds.ts` so
- * `types.ts` (for `PageConfig`) can also import it without pulling in
- * `renderToBlob.ts`. The original `ExportPresetId` name is kept as a
- * re-export for the existing call sites; under the hood it IS `PresetId`.
+ * PR#2 fix2 (P1.2): the canonical `PresetId` type lives next to `SIZES` in
+ * `config/sizes.ts` (was briefly in a dedicated `presetIds.ts` per fix1 —
+ * that introduced a circular type import). `types.ts` (for `PageConfig`)
+ * imports it via `import type` so no runtime dependency on `sizes.ts`
+ * leaks. The original `ExportPresetId` name is kept as a re-export for
+ * the existing call sites; under the hood it IS `PresetId`.
  */
 export type ExportPresetId = PresetId;
 

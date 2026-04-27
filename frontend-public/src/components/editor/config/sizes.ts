@@ -1,5 +1,4 @@
 import type { SizePreset } from '../types';
-import type { PresetId } from './presetIds';
 
 /**
  * Phase 2.1 PR#2 fix1 (BLOCKER-1): use `as const satisfies` instead of an
@@ -20,6 +19,28 @@ export const SIZES = {
   instagram_story:     { w: 1080, h: 1920, n: "Story" },
   long_infographic:    { w: 1200, h: 4000, n: "Long Infographic" },
 } as const satisfies Record<string, SizePreset>;
+
+/**
+ * Canonical preset ID type — union of all keys in SIZES.
+ *
+ * After PR#2 BLOCKER-1 fix (SIZES uses `as const satisfies`), this resolves
+ * to a true union type:
+ *   "instagram_1080" | "instagram_portrait" | "twitter_landscape"
+ *   | "reddit_standard" | "linkedin_landscape" | "instagram_story"
+ *   | "long_infographic"
+ *
+ * Use this for any internal API surface that should accept ONLY known preset
+ * IDs at compile time. Runtime data (loaded documents, JSON imports) may still
+ * contain unknown strings — runtime guards (e.g. `if (!SIZES[id])`) remain
+ * required for those paths.
+ *
+ * PR#2 fix2: declared adjacent to SIZES (was in dedicated `presetIds.ts` per
+ * fix1 — that introduced a circular type import because `presetIds.ts`
+ * imported `SIZES` while `sizes.ts` imported `PresetId`). Type-only
+ * consumers (`types.ts`, `renderToBlob.ts`, etc.) keep their imports
+ * type-only, so no runtime dependency leaks.
+ */
+export type PresetId = keyof typeof SIZES;
 
 /**
  * Preset IDs currently exposed in the LEGACY editor size picker (single-PNG
@@ -75,12 +96,21 @@ export const DEFAULT_EXPORT_PRESETS = [
  *      accidentally produce a ZIP that excludes the working canvas
  *      (BLOCKER-2 from PR#2 review: was UI-only, now reducer-enforced).
  *
+ * **Order contract (PR#2 fix2):** the result preserves input order for
+ * known IDs, then appends the current size if not already present. This
+ * deterministic ordering is required for PR#3 ZIP manifest stability
+ * (ARCHITECTURE_INVARIANTS.md §8 — same document must produce the same
+ * manifest order on every export). Set-based "did the right ids appear"
+ * assertions are insufficient; the helper has a stable serialization
+ * order that PR#3 manifest emission relies on.
+ *
  * Used in:
  *   - `UPDATE_PAGE_EXPORT_PRESETS` reducer action (Inspector toggle path)
  *   - `CHANGE_PAGE` reducer action when `key === "size"` (size-change path
  *     auto-includes the new size in exportPresets)
  *   - v2 → v3 migration step (after `page.size` rename + per-element
  *     legacy ID rename)
+ *   - `hydrateImportedDoc` (import-time entry point)
  *
  * The current size is only added when it's a known preset ID — a doc whose
  * `page.size` is corrupt (e.g. arrived via a partial migration) does not

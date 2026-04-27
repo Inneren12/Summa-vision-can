@@ -24,6 +24,9 @@ describe('normalizeExportPresets', () => {
 
     expect(result).toContain('instagram_portrait');
     expect(result).toContain('twitter_landscape');
+
+    // PR#2 fix2: explicit order contract — input first, current size appended last.
+    expect(result).toEqual(['twitter_landscape', 'instagram_portrait']);
   });
 
   test('filters unknown preset IDs out', () => {
@@ -40,15 +43,26 @@ describe('normalizeExportPresets', () => {
   });
 
   test('uses DEFAULT_EXPORT_PRESETS when input is undefined', () => {
-    // Undefined input → fall back to the common-4 default. With the current
-    // size already in that default the result is the default itself.
+    // currentSize === "instagram_1080" is already in DEFAULT_EXPORT_PRESETS,
+    // so the result is exactly the default (no append). This test pins
+    // the "use default when input is undefined" path; the order-when-current-
+    // size-is-NOT-in-default path is exercised by the next test below.
     const result = normalizeExportPresets(undefined, 'instagram_1080');
 
-    expect(result).toContain('instagram_1080');
-    expect(result).toContain('twitter_landscape');
-    expect(result).toContain('reddit_standard');
-    expect(result).toContain('linkedin_landscape');
     expect(result).toEqual([...DEFAULT_EXPORT_PRESETS]);
+  });
+
+  test('appends current size when default does not include it', () => {
+    // PR#2 fix2: explicit order contract — when current size is NOT in the
+    // input/default, it is appended last. This guarantees PR#3 ZIP manifest
+    // determinism (ARCHITECTURE_INVARIANTS.md §8): same document produces
+    // the same preset order on every export.
+    const result = normalizeExportPresets(undefined, 'instagram_portrait');
+
+    expect(result).toEqual([
+      ...DEFAULT_EXPORT_PRESETS,
+      'instagram_portrait',
+    ]);
   });
 
   test('deduplicates: current size already in input list yields no duplicate', () => {
@@ -60,7 +74,12 @@ describe('normalizeExportPresets', () => {
       'instagram_1080',
     );
 
+    // Idempotent re-add: count stays 1.
     const count = result.filter((id) => id === 'instagram_1080').length;
     expect(count).toBe(1);
+
+    // PR#2 fix2: order is input-as-given (current size NOT moved to end
+    // because it was already present at position 0).
+    expect(result).toEqual(['instagram_1080', 'twitter_landscape']);
   });
 });
