@@ -69,3 +69,28 @@ class PublicationCloneNotAllowedError(PublicationApiError):
             "publication_id": publication_id,
             "current_status": current_status,
         })
+
+
+class PublicationPreconditionFailedError(PublicationApiError):
+    """Raised when If-Match header on PATCH does not match server ETag.
+
+    Surfaces as HTTP 412 with envelope::
+
+        {"detail": {
+            "error_code": "PRECONDITION_FAILED",
+            "message": "<EN message>",
+            "details": {"server_etag": str, "client_etag": str}
+        }}
+
+    error_code per docs/architecture/ARCHITECTURE_INVARIANTS.md §3.
+    """
+
+    status_code_value = status.HTTP_412_PRECONDITION_FAILED
+    error_code = "PRECONDITION_FAILED"
+    message = "The publication has been modified since you loaded it."
+
+    def __init__(self, *, server_etag: str, client_etag: str) -> None:
+        super().__init__(details={
+            "server_etag": server_etag,
+            "client_etag": client_etag,
+        })

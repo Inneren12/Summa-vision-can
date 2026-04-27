@@ -111,6 +111,33 @@ Append maintenance log entry to FLUTTER_ADMIN_MAP.md §8.
 
 ---
 
+## Section D2 — ETag contract parity across endpoints
+
+**Trigger:** Adding a new admin PATCH endpoint that mutates a versioned ORM model.
+
+**Paste into impl prompt:**
+
+````markdown
+### Drift detection — ETag contract parity (ARCHITECTURE_INVARIANTS.md §7)
+
+After adding any admin PATCH endpoint that mutates a versioned ORM model, the new handler SHOULD set the `ETag` response header on success and SHOULD accept `If-Match` per the v1 contract. Detection script:
+
+```bash
+grep -rn "@router.patch(" backend/src/api/routers/admin_*.py
+```
+
+For each matched handler, verify:
+1. The handler imports `compute_etag` (or an equivalent contract-conforming helper).
+2. The handler reads `If-Match` via `Header(default=None, alias="If-Match")`.
+3. The handler sets `response.headers["ETag"]` before returning on success.
+
+**Carve-outs:** endpoints listed in `ARCHITECTURE_INVARIANTS.md` §7 exemption list (none currently).
+
+**On drift:** flag in PR review; require either inheriting the contract OR documenting an exemption in `ARCHITECTURE_INVARIANTS.md` §7. Adding a new ETag without inheriting `compute_etag` requires explicit founder approval and a DEBT entry, because each independent ETag derivation is a new contract surface.
+````
+
+---
+
 ## Section D — Architectural invariant drift
 
 **Trigger:** PR modifies error envelope shape, ETag derivation, idempotency-related code, token handling, or any other invariant in ARCHITECTURE_INVARIANTS.md.

@@ -97,6 +97,7 @@ Phase 5 (lead funnel scale)
 - **No cycles.** All dependencies are forward-only.
 - **No hidden deps.** Roadmap §6 explicitly defers items that don't fit (CRDT, command palette, cross-family auto-resize) — they are NOT silent prerequisites.
 - **Editor Stage 3 + 1.x phases are parallel-safe** at the tier-2 level (different code zones), but `meta.history` schema may evolve.
+- **Phase 1.3 → Phase 2 ETag-inheritance rule** (added by Phase 1.3 impl): any Phase 2 admin PATCH endpoint that mutates `Publication` rows MUST inherit the ETag-guard contract from `ARCHITECTURE_INVARIANTS.md` §7 OR document an explicit exemption in that section. New admin PATCH endpoints on other versioned ORM models are encouraged (not yet required) to inherit the same contract — see `_DRIFT_DETECTION_TEMPLATE.md` Section D2 for the parity check.
 
 ## 4. Critical path
 
@@ -181,3 +182,4 @@ Memory item: "Always re-verify DEBT.md state at sprint planning, not just handof
 | Date | PR / Phase | Sections touched | Notes |
 |---|---|---|---|
 | 2026-04-26 | initial | all | Created from OPERATOR_AUTOMATION_ROADMAP.md + memory |
+| 2026-04-27 | Phase 1.3 impl | §3 Key facts | Added Phase 1.3 → Phase 2 ETag-inheritance rule. |

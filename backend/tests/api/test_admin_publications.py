@@ -756,3 +756,158 @@ async def test_patch_publication_invalid_payload_returns_structured_error_code(
     body = response.json()
     assert body["detail"]["error_code"] == "PUBLICATION_UPDATE_PAYLOAD_INVALID"
     assert "validation_errors" in body["detail"]["details"]
+
+
+# ---------------------------------------------------------------------------
+# Phase 1.3 — ETag / If-Match / 412 Precondition Failed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_emits_etag_header(session_factory) -> None:
+    """GET single publication MUST set the ``ETag`` response header."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = resp.json()["id"]
+        get_resp = await client.get(
+            f"/api/v1/admin/publications/{pub_id}",
+            headers=_auth_headers(),
+        )
+
+    assert get_resp.status_code == 200
+    etag = get_resp.headers.get("etag")
+    assert etag is not None
+    assert etag.startswith('W/"')
+
+
+@pytest.mark.asyncio
+async def test_patch_without_if_match_warn_logs_and_accepts(
+    session_factory,
+) -> None:
+    """Q3=(a) tolerate path: a PATCH without ``If-Match`` succeeds (warn-logged)."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = resp.json()["id"]
+
+        patch_resp = await client.patch(
+            f"/api/v1/admin/publications/{pub_id}",
+            json={"headline": "no if-match"},
+            headers=_auth_headers(),
+        )
+
+    assert patch_resp.status_code == 200, patch_resp.text
+    assert patch_resp.json()["headline"] == "no if-match"
+    # Server still emits ETag on PATCH success — client can capture it for
+    # the next save.
+    assert patch_resp.headers.get("etag", "").startswith('W/"')
+
+
+@pytest.mark.asyncio
+async def test_patch_with_matching_if_match_succeeds(session_factory) -> None:
+    """Happy path: client sends matching ``If-Match`` and PATCH succeeds.
+
+    The new ``ETag`` returned in the response MUST differ from the request's
+    ``If-Match`` because ``updated_at`` advanced through the UPDATE.
+    """
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = resp.json()["id"]
+        get_resp = await client.get(
+            f"/api/v1/admin/publications/{pub_id}",
+            headers=_auth_headers(),
+        )
+        etag = get_resp.headers["etag"]
+
+        patch_resp = await client.patch(
+            f"/api/v1/admin/publications/{pub_id}",
+            json={"headline": "with if-match"},
+            headers={**_auth_headers(), "If-Match": etag},
+        )
+
+    assert patch_resp.status_code == 200, patch_resp.text
+    new_etag = patch_resp.headers.get("etag")
+    assert new_etag is not None
+    assert new_etag.startswith('W/"')
+    # ETag advanced — fresh ETag for the next If-Match.
+    assert new_etag != etag
+
+
+@pytest.mark.asyncio
+async def test_patch_with_stale_if_match_returns_412(session_factory) -> None:
+    """Stale ``If-Match`` MUST surface as a 412 with PRECONDITION_FAILED envelope."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = resp.json()["id"]
+
+        patch_resp = await client.patch(
+            f"/api/v1/admin/publications/{pub_id}",
+            json={"headline": "stale tag"},
+            headers={**_auth_headers(), "If-Match": 'W/"deadbeefdeadbeef"'},
+        )
+
+    assert patch_resp.status_code == 412, patch_resp.text
+    body = patch_resp.json()
+    assert body["detail"]["error_code"] == "PRECONDITION_FAILED"
+    assert body["detail"]["message"] == "The publication has been modified since you loaded it."
+    details = body["detail"]["details"]
+    assert details["client_etag"] == 'W/"deadbeefdeadbeef"'
+    assert details["server_etag"].startswith('W/"')
+    # Server etag must NOT equal the stale client etag (definitionally).
+    assert details["server_etag"] != details["client_etag"]
+
+
+@pytest.mark.asyncio
+async def test_412_envelope_jsonable(session_factory) -> None:
+    """Anchor regression for DEBT-030 PR1 — 412 body MUST round-trip via JSON.
+
+    Asserts the response body is fully JSON-serialisable (no Pydantic
+    internals leaking through), matching the ``jsonable_encoder`` contract
+    in TEST_INFRASTRUCTURE.md §2.1.
+    """
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = resp.json()["id"]
+
+        patch_resp = await client.patch(
+            f"/api/v1/admin/publications/{pub_id}",
+            json={"headline": "stale"},
+            headers={**_auth_headers(), "If-Match": 'W/"0000000000000000"'},
+        )
+
+    assert patch_resp.status_code == 412
+    # Round-trip via json — must not raise. If `details` carried a
+    # non-serialisable Pydantic internal, this would fail.
+    serialised = json.dumps(patch_resp.json())
+    assert "PRECONDITION_FAILED" in serialised
+    assert "server_etag" in serialised
+    assert "client_etag" in serialised

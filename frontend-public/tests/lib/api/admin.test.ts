@@ -35,10 +35,10 @@ function errorResponse(status: number, body: unknown = {}) {
 }
 
 describe('fetchAdminPublication', () => {
-  it('GETs /api/admin/publications/:id and returns parsed JSON', async () => {
+  it('GETs /api/admin/publications/:id and returns parsed JSON with etag null when header absent', async () => {
     mockFetch().mockResolvedValue(okResponse({ id: '42', headline: 'x' }));
     const result = await fetchAdminPublication('42');
-    expect(result).toEqual({ id: '42', headline: 'x' });
+    expect(result).toEqual({ id: '42', headline: 'x', etag: null });
     const [url, init] = mockFetch().mock.calls[0] as any;
     expect(url).toBe('/api/admin/publications/42');
     expect(init.cache).toBe('no-store');
@@ -96,18 +96,43 @@ describe('fetchAdminPublicationList', () => {
 });
 
 describe('updateAdminPublication', () => {
-  it('PATCHes with JSON body and returns response', async () => {
+  it('PATCHes with JSON body and returns response with etag null when header absent', async () => {
     mockFetch().mockResolvedValue(
       okResponse({ id: '42', headline: 'new' }),
     );
     const result = await updateAdminPublication('42', { headline: 'new' });
-    expect(result).toEqual({ id: '42', headline: 'new' });
+    expect(result).toEqual({ id: '42', headline: 'new', etag: null });
 
     const [url, init] = mockFetch().mock.calls[0] as any;
     expect(url).toBe('/api/admin/publications/42');
     expect(init.method).toBe('PATCH');
     expect(init.headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(init.body)).toEqual({ headline: 'new' });
+    // No If-Match was passed → header not set.
+    expect(init.headers['If-Match']).toBeUndefined();
+  });
+
+  it('forwards opts.ifMatch as If-Match header when provided', async () => {
+    mockFetch().mockResolvedValue(okResponse({ id: '42', headline: 'x' }));
+    await updateAdminPublication(
+      '42',
+      { headline: 'x' },
+      { ifMatch: 'W/"abc1234567890"' },
+    );
+    const [, init] = mockFetch().mock.calls[0] as any;
+    expect(init.headers['If-Match']).toBe('W/"abc1234567890"');
+  });
+
+  it('captures ETag response header into result.etag when present', async () => {
+    const headers = new Headers({ ETag: 'W/"feedfacef00d0001"' });
+    mockFetch().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers,
+      json: async () => ({ id: '42', headline: 'x' }),
+    } as Response);
+    const result = await updateAdminPublication('42', { headline: 'x' });
+    expect(result.etag).toBe('W/"feedfacef00d0001"');
   });
 
   it('throws AdminPublicationNotFoundError on 404', async () => {

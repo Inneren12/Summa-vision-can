@@ -308,3 +308,39 @@ Rules:
 - **Impact:** Phase 2.5 DoD formally remains open until all 5 row types ship. Operators cannot triage stale bindings, missing post URLs, or validation-blocker exceptions through the inbox in v1; they must use other tools (manual queries, editor sessions). Acceptable for launch since the 2 v1 row types cover the highest-volume exception classes (failed exports, zombie jobs).
 - **Resolution:** as each dependent phase ships, add a new `ExceptionFilter` enum value, a new branch in `exceptionsRowsProvider`, a new filter chip in `_ExceptionsFilterChips`, and ARB key pairs (filter chip label + any row-type-specific empty/error states). Append to existing `/exceptions` screen — no architectural restructure required (per Q-C.5 = flat, no drill-in routes). Subitem: before Phase 4 closure, founder + Claude must explicitly decide whether validation-blocker persistence belongs in a future Phase or stays as an "operator runs editor and notices" UX pattern.
 - **Target:** Phase 3 ships `staleBindings`; Phase 2.3 ships `missingPostUrls`; validation-blocker scope assessment before Phase 4 closure.
+
+### DEBT-041: PATCH publications has no idempotency-key short-circuit
+
+- **Source:** Phase 1.3 implementation (R16 idempotency tension decision)
+- **Added:** 2026-04-27
+- **Severity:** low
+- **Category:** architecture
+- **Status:** active
+- **Description:** v1 of optimistic concurrency applies the ETag check unconditionally on every PATCH. A legitimate retry of an already-successful PATCH (e.g. network drop on the response leg) returns 412 because the server's stored ETag has advanced past the client's If-Match. The client treats the 412 as "reload and retry" — correct for both genuine concurrent edit AND rare network retry, but adds one extra round trip per dropped response.
+- **Impact:** One extra round trip per dropped-response retry. Acceptable cost; the alternative (project-wide idempotency-key infrastructure) is materially more expensive than tolerating spurious 412s on a rare failure mode.
+- **Resolution:** when HTTP idempotency-key infrastructure lands project-wide, integrate a cache-hit short-circuit BEFORE the ETag check inside the PATCH handler. On cache hit, replay the stored response verbatim. On cache miss, fall through to the existing ETag check. Ordering is load-bearing — cache-hit MUST short-circuit BEFORE the ETag check, returning the cached 200 OK; the ETag check applies only on cache miss.
+- **Target:** when project-wide HTTP idempotency-key infrastructure is added.
+
+### DEBT-042: PATCH publications tolerates missing If-Match for v1 deploy compat
+
+- **Source:** Phase 1.3 implementation (Q3=(a) backcompat decision)
+- **Added:** 2026-04-27
+- **Severity:** low
+- **Category:** architecture
+- **Status:** active
+- **Description:** v1 server tolerates an absent If-Match header on PATCH (warn-log, proceed without ETag check) to avoid breaking old browser tabs mid-deploy. Without this tolerance, every open tab still running the old frontend would 412-fail on its next autosave the moment the new backend rolls out, producing a thundering herd of "reload and retry" prompts during the deploy window.
+- **Impact:** Operator-visible warn-log noise during the rollout window; rollout-period tabs do not get optimistic-concurrency protection. Once frontend is fully deployed, warn-log volume drops to near-zero.
+- **Resolution:** after two weeks of clean deploy (frontend rolled out everywhere AND no warn-log entries for the missing-If-Match codepath for 7 consecutive days), change the handler to require If-Match and return 428 Precondition Required if absent. Update `docs/architecture/BACKEND_API_INVENTORY.md` to reflect the new strictness. Remove the warn-log emitter.
+- **Target:** 2 weeks after Phase 1.3 production deploy + 7 consecutive days of negligible warn-log volume.
+
+### DEBT-043: PATCH publications has narrow TOCTOU window between ETag check and UPDATE
+
+- **Source:** Phase 1.3 implementation (concurrency-hardening note)
+- **Added:** 2026-04-27
+- **Severity:** low
+- **Category:** architecture
+- **Status:** active
+- **Description:** v1 of optimistic concurrency relies on PostgreSQL's implicit row-level UPDATE serialization to defend against the narrow TOCTOU window between (a) the get_by_id SELECT, (b) the If-Match-vs-server-ETag comparison, and (c) the update_fields UPDATE. All three operations execute on the same per-request AsyncSession in the same transaction; the UPDATE acquires a row-level lock implicitly, so a second concurrent writer's UPDATE serialises behind the first. The SELECT in step (a) is NOT itself locked, so a window exists where two writers observe the same If-Match-valid state before either UPDATE runs. Defence is "second UPDATE produces a stale ETag", not "second UPDATE rejected at SELECT time".
+- **Impact:** Under sustained concurrent-write load on the same publication row, lost-update probability rises. For v1 traffic patterns (single editor per publication is the dominant case), this is acceptable. Under contention, last-writer-wins on the second UPDATE.
+- **Resolution:** if telemetry surfaces lost-update races (operationally: increased rate of 412s on this code path, or audit-log evidence of overlapping successful PATCHes that should have conflicted), promote the get_by_id SELECT to `.with_for_update()`. That converts step (a) into a row lock, eliminating the TOCTOU window at the cost of one Postgres row lock per PATCH. Add a regression test exercising two concurrent PATCHes asserting at most one succeeds.
+- **Target:** telemetry-triggered. Verify before flipping that the `.with_for_update()` change passes a load test on a multi-connection pool to confirm the lock is per-row not per-table.

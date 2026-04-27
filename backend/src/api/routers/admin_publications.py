@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from typing import Literal
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db
@@ -40,9 +40,11 @@ from src.schemas.publication import (
 )
 from src.services.audit import AuditWriter
 from src.services.publications.clone import clone_publication
+from src.services.publications.etag import compute_etag
 from src.services.publications.exceptions import (
     PublicationCloneNotAllowedError,
     PublicationNotFoundError,
+    PublicationPreconditionFailedError,
 )
 
 
@@ -323,12 +325,17 @@ async def list_publications(
 )
 async def get_publication(
     publication_id: int,
+    response: Response,
     repo: PublicationRepository = Depends(_get_repo),
 ) -> PublicationResponse:
-    """Return a single publication by primary key."""
+    """Return a single publication by primary key.
+
+    Sets ``ETag`` response header per docs/architecture/ARCHITECTURE_INVARIANTS.md §7.
+    """
     publication = await repo.get_by_id(publication_id)
     if publication is None:
         raise PublicationNotFoundError()
+    response.headers["ETag"] = compute_etag(publication)
     return _serialize(publication)
 
 
@@ -344,12 +351,15 @@ async def get_publication(
     summary="Partial update of a publication",
     responses={
         404: {"description": "Publication not found."},
+        412: {"description": "ETag does not match — publication has changed."},
         422: {"description": "Validation failure."},
     },
 )
 async def update_publication(
     publication_id: int,
     body: PublicationUpdate,
+    response: Response,
+    if_match: str | None = Header(default=None, alias="If-Match"),
     repo: PublicationRepository = Depends(_get_repo),
     audit: AuditWriter = Depends(_get_audit),
 ) -> PublicationResponse:
@@ -377,6 +387,22 @@ async def update_publication(
     previous = await repo.get_by_id(publication_id)
     if previous is None:
         raise PublicationNotFoundError()
+
+    if if_match is None:
+        # Q3=(a) tolerate-absent: warn-log, proceed without precondition check.
+        # See DEBT-042 for 2-week hardening flip to 428 Precondition Required.
+        logger.warning(
+            "patch_publication_missing_if_match",
+            publication_id=publication_id,
+        )
+    else:
+        server_etag = compute_etag(previous)
+        if if_match != server_etag:
+            raise PublicationPreconditionFailedError(
+                server_etag=server_etag,
+                client_etag=if_match,
+            )
+
     previous_workflow: str | None = None
     if previous.review:
         try:
@@ -456,6 +482,7 @@ async def update_publication(
         previous_workflow=previous_workflow,
         new_workflow=new_workflow,
     )
+    response.headers["ETag"] = compute_etag(publication)
     return _serialize(publication)
 
 
@@ -573,13 +600,19 @@ async def unpublish_publication(
 )
 async def clone_publication_endpoint(
     publication_id: int,
+    response: Response,
     session: AsyncSession = Depends(get_db),
 ) -> PublicationResponse:
-    """Clone a published publication into a new draft."""
+    """Clone a published publication into a new draft.
+
+    Sets ``ETag`` response header on the clone so the editor can use it as
+    the seed ``If-Match`` for the first PATCH (Phase 1.3 fork-path).
+    """
     try:
         clone = await clone_publication(session=session, source_id=publication_id)
     except (PublicationNotFoundError, PublicationCloneNotAllowedError) as exc:
         raise exc
+    response.headers["ETag"] = compute_etag(clone)
     return _serialize(clone)
 
 

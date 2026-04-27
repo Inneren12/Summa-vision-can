@@ -22,6 +22,7 @@ export const KNOWN_BACKEND_ERROR_CODES = [
   'AUTH_API_KEY_MISSING',
   'AUTH_API_KEY_INVALID',
   'AUTH_ADMIN_RATE_LIMITED',
+  'PRECONDITION_FAILED',
 ] as const;
 
 export type BackendErrorCode = (typeof KNOWN_BACKEND_ERROR_CODES)[number];
@@ -52,6 +53,7 @@ export const BACKEND_ERROR_I18N_KEYS: Record<BackendErrorCode, string> = {
   AUTH_API_KEY_MISSING: 'errors.backend.auth_api_key_missing',
   AUTH_API_KEY_INVALID: 'errors.backend.auth_api_key_invalid',
   AUTH_ADMIN_RATE_LIMITED: 'errors.backend.auth_admin_rate_limited',
+  PRECONDITION_FAILED: 'errors.backend.precondition_failed',
 };
 
 const EMPTY_PAYLOAD: BackendErrorPayload = {
