@@ -260,7 +260,7 @@ Pure module. No I/O, no clock reads, no DB access. ARCH-PURA-001 + ARCH-DPEN-001
 
 ### Format
 
-Weak ETag. RFC 7232 §2.3 — autosave bodies are not byte-identical (JSON key ordering, whitespace, optional-field elision), so weak validators are correct. Format: `W/"<16-hex-sha256>"`.
+Strong ETag. RFC 7232 §2.3 — the validator is derived from row metadata (id + timestamp + config_hash), not the response body, so identical row state always produces byte-identical ETags. Strong validators are the correct fit for If-Match (lost-update protection); weak validators are intended for cache revalidation, not optimistic concurrency. Format: `"<16-hex-sha256>"`.
 
 ### Where computed
 
@@ -285,7 +285,7 @@ In handlers, NOT in repository (per ARCH-PURA-001). The pure function takes a `P
 
 ### Hash + truncation
 
-SHA-256 over the UTF-8-encoded composite string `f"{id}|{timestamp}|{config_hash_or_empty}"`, truncated to the first 16 hex characters.
+SHA-256 over the UTF-8-encoded composite string `f"{id}|{timestamp}|{config_hash_or_empty}"`, truncated to the first 16 hex characters, wrapped in double quotes.
 
 ### v1 tolerate-absent posture
 
@@ -327,3 +327,4 @@ Document migration pipeline (`applyMigrations` in editor) MUST abort if an inter
 |---|---|---|---|
 | 2026-04-26 | initial | all | Created from ARCH_[RULES.md](http://RULES.md), [DEBT.md](http://DEBT.md), memory items |
 | 2026-04-27 | Phase 1.3 impl | §7 | Filled placeholder with the live ETag derivation contract (pure `compute_etag` over `id` / `updated_at` OR `created_at` / `config_hash`, weak ETag, `|` separator, SHA-256 truncated to 16 hex). Cross-refs DEBT-041/042/043. |
+| 2026-04-27 | Phase 1.3 fix  | §7 | Corrected ETag format to **strong** (dropped `W/` prefix). Rationale: the validator is derived from row metadata, not the response body, so the byte-identical-output criterion *is* satisfied — strong ETags are the correct semantic fit for `If-Match` lost-update protection. Updated `compute_etag`, all tests, and §7 Format/Hash subsections accordingly. |

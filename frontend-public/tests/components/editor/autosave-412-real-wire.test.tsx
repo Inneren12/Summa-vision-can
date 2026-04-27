@@ -130,8 +130,8 @@ describe('Autosave 412 PRECONDITION_FAILED real-wire', () => {
           error_code: 'PRECONDITION_FAILED',
           message: 'The publication has been modified since you loaded it.',
           details: {
-            server_etag: 'W/"server1234567890"',
-            client_etag: 'W/"client1234567890"',
+            server_etag: '"server1234567890"',
+            client_etag: '"client1234567890"',
           },
         },
       },
@@ -159,7 +159,7 @@ describe('Autosave 412 PRECONDITION_FAILED real-wire', () => {
 
     // Server etag passed through from BackendApiError.details into the modal.
     const dialog = screen.getByRole('dialog', { hidden: false });
-    expect(dialog.getAttribute('data-server-etag')).toBe('W/"server1234567890"');
+    expect(dialog.getAttribute('data-server-etag')).toBe('"server1234567890"');
   });
 
   it('stale-field regression — second 412 with different details does not show first 412 server etag', async () => {
@@ -171,8 +171,8 @@ describe('Autosave 412 PRECONDITION_FAILED real-wire', () => {
           error_code: 'PRECONDITION_FAILED',
           message: 'The publication has been modified since you loaded it.',
           details: {
-            server_etag: 'W/"first0000000000"',
-            client_etag: 'W/"client0000000000"',
+            server_etag: '"first0000000000"',
+            client_etag: '"client0000000000"',
           },
         },
       },
@@ -187,7 +187,7 @@ describe('Autosave 412 PRECONDITION_FAILED real-wire', () => {
     await triggerAutosave();
 
     let dialog = screen.getByRole('dialog');
-    expect(dialog.getAttribute('data-server-etag')).toBe('W/"first0000000000"');
+    expect(dialog.getAttribute('data-server-etag')).toBe('"first0000000000"');
 
     // Dismiss (Esc); modal closes — non-resolving.
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -200,8 +200,8 @@ describe('Autosave 412 PRECONDITION_FAILED real-wire', () => {
           error_code: 'PRECONDITION_FAILED',
           message: 'The publication has been modified since you loaded it.',
           details: {
-            server_etag: 'W/"second000000000"',
-            client_etag: 'W/"client0000000000"',
+            server_etag: '"second000000000"',
+            client_etag: '"client0000000000"',
           },
         },
       },
@@ -211,6 +211,6 @@ describe('Autosave 412 PRECONDITION_FAILED real-wire', () => {
 
     dialog = screen.getByRole('dialog');
     // The new modal must reflect the SECOND 412's server_etag, not the first.
-    expect(dialog.getAttribute('data-server-etag')).toBe('W/"second000000000"');
+    expect(dialog.getAttribute('data-server-etag')).toBe('"second000000000"');
   });
 });

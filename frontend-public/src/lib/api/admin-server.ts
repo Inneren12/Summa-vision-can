@@ -17,9 +17,19 @@ function getConfig(): { apiUrl: string; adminKey: string } {
   return { apiUrl, adminKey };
 }
 
+/**
+ * Server-side fetch return shape augmented with the backend's ``ETag``
+ * header. Phase 1.3 Blocker 2: the editor seeds ``etagRef.current`` from
+ * this value so the very first autosave PATCH carries an ``If-Match``,
+ * preserving lost-update protection from the first edit of a session.
+ */
+export type AdminPublicationServerResult = AdminPublicationResponse & {
+  etag: string | null;
+};
+
 export async function fetchAdminPublicationServer(
   id: string,
-): Promise<AdminPublicationResponse | null> {
+): Promise<AdminPublicationServerResult | null> {
   const { apiUrl, adminKey } = getConfig();
   const res = await fetch(
     `${apiUrl}/api/v1/admin/publications/${encodeURIComponent(id)}`,
@@ -30,7 +40,9 @@ export async function fetchAdminPublicationServer(
   );
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Admin fetch failed: ${res.status}`);
-  return res.json();
+  const publication = (await res.json()) as AdminPublicationResponse;
+  const etag = res.headers.get('etag');
+  return { ...publication, etag };
 }
 
 export interface ListServerOptions {
