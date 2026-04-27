@@ -241,20 +241,59 @@ If ETag derivation includes user ID or session ID, two users editing the same pu
 
 ## 7. ETag derivation contract
 
-**Status:** Placeholder until Phase 1.3 lands.
+**Status:** Active as of Phase 1.3.
 
-This section will be filled in by the Phase 1.3 impl PR. Required content:
+### Pure function signature
 
-- Pure function signature
-- Source columns from Publication
-- Format (weak vs strong)
-- Where computed (repository return convention)
-- Where read on PATCH (handler dep)
-- Stability requirements (must NOT change between identical reads; MUST change after any write)
+```python
+# backend/src/services/publications/etag.py
+def compute_etag(pub: Publication) -> str: ...
+```
 
-Once filled, this becomes a contract: changing the derivation requires explicit founder approval and DEBT entry, because it will invalidate every client's cached `If-Match` token.
+Pure module. No I/O, no clock reads, no DB access. ARCH-PURA-001 + ARCH-DPEN-001 trivially satisfied (no class, no DI).
 
-DO NOT remove this placeholder. The placeholder itself is a signal that 1.3 has not yet landed.
+### Source columns
+
+- `pub.id` (PK, NOT NULL)
+- `pub.updated_at` (`DateTime`, nullable; `onupdate=func.now()`) OR `pub.created_at` (NOT NULL fallback for fresh DRAFT rows)
+- `pub.config_hash` (`String(64)`, nullable; substituted with `""` when NULL for determinism)
+
+### Format
+
+Weak ETag. RFC 7232 §2.3 — autosave bodies are not byte-identical (JSON key ordering, whitespace, optional-field elision), so weak validators are correct. Format: `W/"<16-hex-sha256>"`.
+
+### Where computed
+
+In handlers, NOT in repository (per ARCH-PURA-001). The pure function takes a `Publication` entity; no DB read embedded in the function call. Today three endpoints compute ETag:
+- `GET /api/v1/admin/publications/{id}` — sets the response header.
+- `PATCH /api/v1/admin/publications/{id}` — checks `If-Match` against `compute_etag(previous)`, then sets the response header to `compute_etag(updated)`.
+- `POST /api/v1/admin/publications/{id}/clone` — sets the response header on the freshly created clone so the editor can seed its first PATCH's `If-Match`.
+
+### Where read on PATCH
+
+`if_match: str | None = Header(default=None, alias="If-Match")` parameter on the FastAPI handler. Comparison happens inside the same per-request `AsyncSession` transaction as the SELECT and UPDATE.
+
+### Stability requirements
+
+- MUST NOT change between identical reads of the same row (deterministic).
+- MUST change after any write that touches `updated_at` (the `onupdate=func.now()` trigger guarantees this on every UPDATE through `update_fields`).
+- MUST NOT include user ID, session ID, or any per-request data — same publication has same ETag for any user (per §6 anti-pattern).
+
+### Separator
+
+`|` (ASCII 0x7C). Collision-safe in this domain: id is integer-stringified, timestamp is ISO-8601, config_hash is 64-char hex — none can contain `|`. Changing the separator invalidates every cached `If-Match` token; requires DEBT entry per the rule below.
+
+### Hash + truncation
+
+SHA-256 over the UTF-8-encoded composite string `f"{id}|{timestamp}|{config_hash_or_empty}"`, truncated to the first 16 hex characters.
+
+### v1 tolerate-absent posture
+
+PATCH currently tolerates a missing `If-Match` (warn-log + proceed). Tracked in DEBT-042 for hardening to 428 Precondition Required after the rollout window stabilises.
+
+### Contract immutability
+
+Changing the derivation invalidates every client's cached `If-Match` token. Any change to the inputs, separator, hash algorithm, or truncation length requires explicit founder approval and a DEBT entry.
 
 ## 8. Other invariants
 
@@ -287,3 +326,4 @@ Document migration pipeline (`applyMigrations` in editor) MUST abort if an inter
 | Date | PR / Phase | Sections touched | Notes |
 |---|---|---|---|
 | 2026-04-26 | initial | all | Created from ARCH_[RULES.md](http://RULES.md), [DEBT.md](http://DEBT.md), memory items |
+| 2026-04-27 | Phase 1.3 impl | §7 | Filled placeholder with the live ETag derivation contract (pure `compute_etag` over `id` / `updated_at` OR `created_at` / `config_hash`, weak ETag, `|` separator, SHA-256 truncated to 16 hex). Cross-refs DEBT-041/042/043. |

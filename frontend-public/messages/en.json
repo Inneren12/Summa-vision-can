@@ -627,7 +627,14 @@
       "auth_api_key_missing": "Admin authentication failed. Contact an administrator.",
       "auth_api_key_invalid": "Admin authentication failed. Verify API access settings.",
       "auth_admin_rate_limited": "Too many admin requests. Wait a moment and try again.",
-      "publicationCloneNotAllowed": "This publication cannot be cloned because it is not yet published."
+      "publicationCloneNotAllowed": "This publication cannot be cloned because it is not yet published.",
+      "precondition_failed": {
+        "title": "Publication has changed",
+        "body": "This publication has changed since you loaded it. Reload and reapply your changes, or save as a new draft.",
+        "button_reload": "Reload (lose my changes)",
+        "button_save_as_draft": "Save as new draft",
+        "fork_partial": "Saved as a new draft, but some changes could not be applied: {detail}"
+      }
     }
   }
 }

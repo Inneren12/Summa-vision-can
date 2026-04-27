@@ -12,6 +12,30 @@ import { extractBackendErrorPayload } from './errorCodes';
 
 const PROXY_BASE = '/api/admin/publications';
 
+/**
+ * Admin publication response augmented with the server-emitted ``ETag``
+ * header value. Phase 1.3 optimistic-concurrency contract: callers seed
+ * the next PATCH's ``If-Match`` from the most recently captured ``etag``.
+ *
+ * ``etag`` is ``null`` when the backend did not emit the header (e.g. an
+ * older deploy mid-rollout, or a future endpoint that does not opt in).
+ */
+export type AdminPublicationWithEtag = AdminPublicationResponse & {
+  etag: string | null;
+};
+
+/**
+ * Safely read the ``ETag`` header from a fetch ``Response``. Returns
+ * ``null`` when the response object's ``headers`` is missing or does not
+ * implement ``.get`` — keeps Phase 1.3's optional-ETag contract alive
+ * across mocked test responses that omit ``headers``.
+ */
+function readEtag(res: Response): string | null {
+  const headers = res.headers as Headers | undefined;
+  if (!headers || typeof headers.get !== 'function') return null;
+  return headers.get('etag');
+}
+
 export interface ListAdminPublicationsOptions {
   status?: 'draft' | 'published' | 'all';
   limit?: number;
@@ -67,7 +91,7 @@ export class BackendApiError extends Error {
 export async function fetchAdminPublication(
   id: string,
   opts: { signal?: AbortSignal } = {},
-): Promise<AdminPublicationResponse> {
+): Promise<AdminPublicationWithEtag> {
   const res = await fetch(`${PROXY_BASE}/${encodeURIComponent(id)}`, {
     signal: opts.signal,
     cache: 'no-store',
@@ -81,7 +105,8 @@ export async function fetchAdminPublication(
       body?.detail ?? `Admin publication fetch failed: ${res.status}`,
     );
   }
-  return res.json();
+  const publication = (await res.json()) as AdminPublicationResponse;
+  return { ...publication, etag: readEtag(res) };
 }
 
 export async function fetchAdminPublicationList(
@@ -125,11 +150,16 @@ export interface UpdateAdminPublicationPayload {
 export async function updateAdminPublication(
   id: string,
   payload: UpdateAdminPublicationPayload,
-  opts: { signal?: AbortSignal } = {},
-): Promise<AdminPublicationResponse> {
+  opts: { signal?: AbortSignal; ifMatch?: string | null } = {},
+): Promise<AdminPublicationWithEtag> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (opts.ifMatch) {
+    headers['If-Match'] = opts.ifMatch;
+  }
+
   const res = await fetch(`${PROXY_BASE}/${encodeURIComponent(id)}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(payload),
     signal: opts.signal,
     cache: 'no-store',
@@ -162,14 +192,15 @@ export async function updateAdminPublication(
       details: payload.details,
     });
   }
-  return res.json();
+  const publication = (await res.json()) as AdminPublicationResponse;
+  return { ...publication, etag: readEtag(res) };
 }
 
 
 export async function cloneAdminPublication(
   id: string,
   opts: { signal?: AbortSignal } = {},
-): Promise<AdminPublicationResponse> {
+): Promise<AdminPublicationWithEtag> {
   const res = await fetch(`${PROXY_BASE}/${encodeURIComponent(id)}/clone`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -200,5 +231,6 @@ export async function cloneAdminPublication(
     });
   }
 
-  return res.json();
+  const publication = (await res.json()) as AdminPublicationResponse;
+  return { ...publication, etag: readEtag(res) };
 }

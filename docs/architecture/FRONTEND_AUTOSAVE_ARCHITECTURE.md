@@ -258,16 +258,49 @@ Mocking `admin.ts` (the consumer module) hides pipeline drift. Slice 3.8 lesson:
 
 ---
 
-## 7. Existing 412 / precondition handling
+## 7. 412 Precondition Failed handling
 
-**As of inputs date (Phase 1.3 Part B §1.5): NONE.**
+**Status:** Active as of Phase 1.3.
 
-Greps run in B.1.5:
-- `grep -rn 'PRECONDITION\|412\|If-Match\|stale.*version\|conflict' frontend-public/src` → no matches.
-- `grep -rn '\b412\b' frontend-public/src` → no matches.
-- `grep -rn 'PRECONDITION\|If-Match\|stale\|conflict' frontend-public/src` → only two unrelated `stale` matches (a debounce-status comment in `editor/index.tsx:664` and a dev-assert reducer comment in `editor/store/dev-assert.ts:10`).
+### Discriminator
 
-No existing precondition handling, no `If-Match` header reads/writes, no version-conflict UX, no 412 status branches anywhere in `frontend-public/src`. Greenfield — to be designed in Phase 1.3 implementation work.
+```typescript
+err instanceof BackendApiError && err.code === 'PRECONDITION_FAILED'
+```
+
+In the `performSave` `.catch` chokepoint at `frontend-public/src/components/editor/index.tsx`. Branch is **terminal** — `return` early; no `setSaveFailureGen` bump; no auto-retry. Distinct from `NotificationBanner`'s transient-retry path.
+
+### ETag round-trip
+
+`admin.ts` extends `fetchAdminPublication`, `updateAdminPublication`, and `cloneAdminPublication` to read the `ETag` response header into `result.etag` (returning `AdminPublicationWithEtag`). `updateAdminPublication` also accepts `opts.ifMatch` and forwards it as the `If-Match` request header. The editor keeps an `etagRef` ref that is updated on every successful PATCH and seeded at fork-time from `cloneAdminPublication`'s response. The first PATCH in a session may carry no `If-Match`; the backend tolerates this per Q3=(a) (see DEBT-042).
+
+### Modal trigger
+
+```typescript
+setPreconditionFailedModal({ open: true, serverEtag });
+```
+
+Modal lives at `frontend-public/src/components/editor/components/PreconditionFailedModal.tsx`. Canonical name mirrors the backend `error_code` 1:1.
+
+### Two-button UX (Q4=(a))
+
+- **Reload (lose my changes)** — default focus. Calls `fetchAdminPublication(publicationId)`, dispatches `IMPORT` with the freshly hydrated doc, refreshes the captured `etagRef`.
+- **Save as new draft** — calls `cloneAdminPublication(originalId)` then a fresh `updateAdminPublication(cloneId, ...)` PATCH using the clone's freshly returned ETag as `If-Match`. The editor navigates to the clone via `router.push('/admin/editor/${clone.id}')`.
+
+### Esc / backdrop dismissal
+
+Non-resolving. The modal closes but the conflict is not resolved. The next autosave tick will 412 again and re-open the modal.
+
+### Fork-path failure recovery
+
+Three cases handled by `handleForkFailure` inside `forkLocalSnapshotAsNewDraft`:
+1. Clone fails (e.g. 422 `PUBLICATION_CLONE_NOT_ALLOWED`) — translate via the existing pattern, surface as `importError` banner; user remains on the original.
+2. Clone succeeds, fork-PATCH 422 (validator-blocking error) — surface the `errors.backend.precondition_failed.fork_partial` banner so the user knows the clone exists but their edits did not stick; the editor still navigates to the clone.
+3. Clone succeeds, fork-PATCH fails for another reason — surface a generic localized error banner.
+
+### i18n keys
+
+Under `errors.backend.precondition_failed.*` (cross-cutting protocol namespace per the hybrid policy in §6, NOT `publication.*`). Five keys: `title`, `body`, `button_reload`, `button_save_as_draft`, `fork_partial`. EN + RU parity verified.
 
 ---
 
@@ -276,3 +309,4 @@ No existing precondition handling, no `If-Match` header reads/writes, no version
 | Date | PR | Sections touched | Notes |
 |---|---|---|---|
 | 2026-04-27 | initial | all | Created from Phase 1.3 Part B input (`docs/recon/phase-1-3-B-frontend-inventory.md`). |
+| 2026-04-27 | Phase 1.3 impl | §2, §3, §4, §5, §7 | `PRECONDITION_FAILED` added to `KNOWN_BACKEND_ERROR_CODES` with i18n key `errors.backend.precondition_failed`; new `PreconditionFailedModal` component; autosave catch branch + fork-path implementation; 5 EN + 5 RU keys added under `errors.backend.precondition_failed.*`. `admin.ts` returns `AdminPublicationWithEtag`. |

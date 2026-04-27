@@ -27,6 +27,9 @@ from starlette.requests import Request
 
 from src.core.exceptions import SummaVisionError
 from src.core.logging import get_logger
+from src.services.publications.exceptions import (
+    PublicationPreconditionFailedError,
+)
 
 if TYPE_CHECKING:
     pass
@@ -109,6 +112,23 @@ async def _publication_validation_exception_handler(
     )
 
 
+async def _publication_precondition_failed_exception_handler(
+    request: Request,
+    exc: PublicationPreconditionFailedError,
+) -> JSONResponse:
+    """Emit 412 envelope with mandatory jsonable_encoder wrapping.
+
+    jsonable_encoder is REQUIRED — see TEST_INFRASTRUCTURE.md §2.1 / DEBT-030
+    PR1 lesson. Without it, Pydantic v2 internals can produce non-JSON-
+    serializable objects in ``details``, causing JSONResponse to fail and
+    the handler to surface 500 instead of 412.
+    """
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=jsonable_encoder({"detail": exc.detail}),
+    )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers on the given FastAPI application.
 
@@ -121,3 +141,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         _summa_vision_exception_handler,  # type: ignore[arg-type]
     )
     app.add_exception_handler(RequestValidationError, _publication_validation_exception_handler)
+    app.add_exception_handler(
+        PublicationPreconditionFailedError,
+        _publication_precondition_failed_exception_handler,  # type: ignore[arg-type]
+    )

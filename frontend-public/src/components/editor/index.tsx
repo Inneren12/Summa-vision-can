@@ -30,10 +30,12 @@ import { clientToLogical, hitTest, clampRectToSection, type HitAreaEntry } from 
 import {
   updateAdminPublication,
   cloneAdminPublication,
+  fetchAdminPublication,
   AdminPublicationNotFoundError,
   BackendApiError,
 } from '@/lib/api/admin';
 import { translateBackendError } from '@/lib/api/errorCodes';
+import { hydrateDoc } from './utils/persistence';
 import { TopBar } from './components/TopBar';
 import { LeftPanel } from './components/LeftPanel';
 import { Canvas } from './components/Canvas';
@@ -42,6 +44,7 @@ import { QAPanel } from './components/QAPanel';
 import { ReadOnlyBanner } from './components/ReadOnlyBanner';
 import { NotificationBanner } from './components/NotificationBanner';
 import { NoteModal } from './components/NoteModal';
+import { PreconditionFailedModal } from './components/PreconditionFailedModal';
 import type { NoteRequestConfig } from './components/noteRequest';
 
 // Autosave cadence (Stage 4 Task 2). `AUTOSAVE_DEBOUNCE_MS` is the quiet
@@ -221,6 +224,21 @@ export default function InfographicEditor({
   const [retryCountdownMs, setRetryCountdownMs] = useState<number | null>(null);
   const [saveFailureGen, setSaveFailureGen] = useState<number>(0);
   const [cloneInFlight, setCloneInFlight] = useState<boolean>(false);
+
+  // ETag captured from each successful PATCH response (Phase 1.3).
+  // Seeded from the editor's own GET on mount; updated to the new ETag on
+  // every successful PATCH so the next save can send it as ``If-Match``.
+  // The first save in a fresh session may legitimately be null — the
+  // backend tolerates a missing ``If-Match`` per Q3=(a) (DEBT-042).
+  const etagRef = useRef<string | null>(null);
+
+  // 412 PRECONDITION_FAILED modal state (Phase 1.3 Q4=(a)).
+  // Two terminal actions: Reload (re-fetch + drop local edits) or
+  // Save-as-new-draft (clone + PATCH clone with local snapshot via fresh ETag).
+  const [preconditionFailedModal, setPreconditionFailedModal] = useState<{
+    open: boolean;
+    serverEtag: string | null;
+  }>({ open: false, serverEtag: null });
   const [ltab, setLtab] = useState<LeftTab>("templates");
   const [qaOpen, setQaOpen] = useState(true);
   const [qaMode, setQaMode] = useState<QAMode>("publish");
@@ -573,8 +591,10 @@ export default function InfographicEditor({
     savingRef.current = true;
 
     const payload = buildUpdatePayload(snapshotDoc);
-    updateAdminPublication(publicationId, payload)
-      .then(() => {
+    updateAdminPublication(publicationId, payload, { ifMatch: etagRef.current })
+      .then((result) => {
+        // Capture the new ETag so the next PATCH sends matching If-Match.
+        etagRef.current = result.etag;
         dispatch({ type: "SAVED_IF_MATCHES", snapshotDoc });
         // If the reducer kept dirty=true (user edited mid-flight), the
         // debounce effect will re-arm `'pending'` on its next run — so
@@ -598,6 +618,17 @@ export default function InfographicEditor({
           // unchanged still fires the effect (because saveError transitions
           // null→string), but the state.canAutoRetry guard below makes it a
           // no-op schedule.
+          setSaveStatus('error');
+          return;
+        }
+
+        // Phase 1.3 — 412 PRECONDITION_FAILED terminal branch.
+        // Surfaces the two-button modal (Reload | Save as new draft).
+        // Must NOT enter the transient auto-retry path.
+        if (err instanceof BackendApiError && err.code === 'PRECONDITION_FAILED') {
+          const serverEtagRaw = err.details?.server_etag;
+          const serverEtag = typeof serverEtagRaw === 'string' ? serverEtagRaw : null;
+          setPreconditionFailedModal({ open: true, serverEtag });
           setSaveStatus('error');
           return;
         }
@@ -816,6 +847,88 @@ export default function InfographicEditor({
       setCloneInFlight(false);
     }
   }, [publicationId, cloneInFlight, router, t, tPublication]);
+
+  // ============================================================================
+  // Phase 1.3 — fork-as-new-draft path for 412 PRECONDITION_FAILED Q4=(a)
+  // ============================================================================
+  //
+  // When the user picks "Save as new draft", clone the publication (existing
+  // 1.1 endpoint) and PATCH the clone with the local snapshot using the
+  // clone's fresh ETag as ``If-Match``. The doc reference is captured BEFORE
+  // any async work — the user may keep typing while the clone resolves, but
+  // the buffer that just 412'd is what we want to fork.
+  const forkLocalSnapshotAsNewDraft = useCallback(async (): Promise<void> => {
+    if (!publicationId) return;
+    const snapshot = doc;
+
+    try {
+      const clone = await cloneAdminPublication(publicationId);
+      const payload = buildUpdatePayload(snapshot);
+      await updateAdminPublication(clone.id, payload, { ifMatch: clone.etag });
+      // Successful fork: navigate to the clone. The new editor session
+      // mounts with fresh ETag from its own server fetch.
+      router.push(`/admin/editor/${clone.id}`);
+      setSaveStatus('idle');
+    } catch (forkErr: unknown) {
+      // Three cases handled here:
+      //   (1) Clone failed — surface generic error banner; user remains.
+      //   (2) Clone succeeded, fork-PATCH 422 (validator-blocking) —
+      //       surface fork_partial banner so the user knows the clone
+      //       exists but their edits did not stick.
+      //   (3) Clone succeeded, fork-PATCH failed for other reason —
+      //       generic error banner.
+      if (
+        forkErr instanceof BackendApiError
+        && forkErr.code === 'PUBLICATION_UPDATE_PAYLOAD_INVALID'
+      ) {
+        setImportError(
+          t('errors.backend.precondition_failed.fork_partial', {
+            detail: forkErr.message,
+          }),
+        );
+      } else if (forkErr instanceof BackendApiError) {
+        const localized = translateBackendError(t, forkErr.code);
+        setImportError(localized ?? forkErr.message);
+      } else if (forkErr instanceof AdminPublicationNotFoundError) {
+        setImportError(tPublication('not_found.reload'));
+      } else {
+        setImportError(forkErr instanceof Error ? forkErr.message : String(forkErr));
+      }
+      setSaveStatus('error');
+    }
+  }, [publicationId, doc, router, t, tPublication]);
+
+  const handlePreconditionReload = useCallback(async () => {
+    if (!publicationId) {
+      setPreconditionFailedModal({ open: false, serverEtag: null });
+      return;
+    }
+    setPreconditionFailedModal({ open: false, serverEtag: null });
+    try {
+      const fresh = await fetchAdminPublication(publicationId);
+      etagRef.current = fresh.etag;
+      const hydrated = hydrateDoc(fresh);
+      dispatch({ type: 'IMPORT', doc: hydrated });
+      setSaveStatus('idle');
+    } catch (reloadErr: unknown) {
+      setImportError(
+        reloadErr instanceof Error ? reloadErr.message : String(reloadErr),
+      );
+      setSaveStatus('error');
+    }
+  }, [publicationId, dispatch]);
+
+  const handlePreconditionSaveAsNewDraft = useCallback(async () => {
+    setPreconditionFailedModal({ open: false, serverEtag: null });
+    await forkLocalSnapshotAsNewDraft();
+  }, [forkLocalSnapshotAsNewDraft]);
+
+  const handlePreconditionDismiss = useCallback(() => {
+    // Non-resolving close: the conflict is unresolved; the next autosave
+    // tick will 412 again and re-open the modal. Per Q4=(a) Esc/backdrop
+    // contract.
+    setPreconditionFailedModal((prev) => ({ ...prev, open: false }));
+  }, []);
 
   const handleManualRetry = useCallback(() => {
     // User override: explicit "Retry now" resets both the attempt counter
@@ -1094,6 +1207,14 @@ export default function InfographicEditor({
         required={noteRequest?.required ?? false}
         onSubmit={handleNoteSubmit}
         onCancel={handleNoteCancel}
+      />
+
+      <PreconditionFailedModal
+        open={preconditionFailedModal.open}
+        serverEtag={preconditionFailedModal.serverEtag}
+        onReload={handlePreconditionReload}
+        onSaveAsNewDraft={handlePreconditionSaveAsNewDraft}
+        onDismiss={handlePreconditionDismiss}
       />
     </div>
   );

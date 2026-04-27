@@ -18,7 +18,7 @@
 
 | Method | Path | File:Line | Deps (`Depends(...)`) | Body schema | Response | Notes |
 |---|---|---|---|---|---|---|
-| PATCH | `/api/v1/admin/publications/{publication_id}` | `backend/src/api/routers/admin_publications.py:340` | `_get_repo` (`PublicationRepository`), `_get_audit` (`AuditWriter`) | `PublicationUpdate` (`backend/src/schemas/publication.py:152`) | 200 → `PublicationResponse` (via `_serialize`, `admin_publications.py:459`); 404 → `PublicationNotFoundError`; 422 → DEBT-030 envelope `PUBLICATION_UPDATE_PAYLOAD_INVALID` | No 412 / precondition handling today; declared `responses` block covers 404 + 422 only (A.1.1) |
+| PATCH | `/api/v1/admin/publications/{publication_id}` | `backend/src/api/routers/admin_publications.py:340` | `_get_repo` (`PublicationRepository`), `_get_audit` (`AuditWriter`) | `PublicationUpdate` (`backend/src/schemas/publication.py:152`); reads `If-Match` request header (Phase 1.3) | 200 → `PublicationResponse` with `ETag` response header; 404 → `PublicationNotFoundError`; 412 → `PRECONDITION_FAILED` envelope (`{"detail": {"error_code": "PRECONDITION_FAILED", "message": "...", "details": {"server_etag": str, "client_etag": str}}}`); 422 → DEBT-030 envelope `PUBLICATION_UPDATE_PAYLOAD_INVALID` | Phase 1.3 — ETag/If-Match contract per `docs/architecture/ARCHITECTURE_INVARIANTS.md` §7. ETag header on GET single + PATCH success + clone-201. `If-Match` recommended in v1 (tolerated absent per DEBT-042; flips to required on DEBT-042 resolution). 412 with `PRECONDITION_FAILED` envelope. |
 | GET | `/api/v1/admin/jobs` | `backend/src/api/routers/admin_jobs.py:92` | `_get_job_repo` (`JobRepository`) | n/a (query params) | 200 → `JobListResponse{ items: list[JobItemResponse], total: int }` (router schema, `admin_jobs.py:63-67`) | Query params: `job_type` (str, optional), `status` (str, optional — aliased from `status_filter`), `limit` (int, 1..200, default 50). Pagination: `limit` only — **no offset, no cursor**. Order: `created_at DESC` (`job_repository.py:190`). Invalid `status` → 422 (`admin_jobs.py:110-118`). |
 | GET | `/api/v1/admin/jobs/{job_id}` | `backend/src/api/routers/admin_jobs.py:159` | `_get_job_repo` (`JobRepository`) | n/a | 200 → `JobItemResponse`; 404 → "Job not found" (`admin_jobs.py:175-179`) | Path param `job_id: int` |
 | POST | `/api/v1/admin/jobs/{job_id}/retry` | `backend/src/api/routers/admin_jobs.py:204` | `_get_job_repo` (`JobRepository`) | n/a | 202 → `RetryJobResponse{ job_id: str, status: str }` (`admin_jobs.py:70-74`); 404 (NotFoundError); 409 (ConflictError, "Job is not retryable") | Response carries the **same** job's id + updated status (not a new id), despite Flutter typing it as new. Validation/state mutation in `JobRepository.retry_failed_job` (`job_repository.py:250`). |
@@ -50,7 +50,7 @@ Other columns (full list in source, `models/publication.py:80-155`): `headline`,
 
 `__table_args__` (`models/publication.py:71-78`): unique constraint `uq_publication_lineage_version` on `(source_product_id, config_hash, version)`.
 
-**Key gloss (A.1.2):** `updated_at` already exists with DB-level `onupdate=func.now()`; **no dedicated optimistic-concurrency `row_version`/`etag` column exists today**. `version` is product-lineage version, NOT row-revision counter.
+**Key gloss (A.1.2):** `updated_at` already exists with DB-level `onupdate=func.now()`; **ETag is derived per `docs/architecture/ARCHITECTURE_INVARIANTS.md` §7**, computed over `(id, updated_at OR created_at, config_hash OR "")` — not a persisted column. `version` is product-lineage version, NOT row-revision counter.
 
 ### Job
 File: `backend/src/models/job.py` (`__tablename__ = "jobs"`)
@@ -174,6 +174,10 @@ def register_exception_handlers(app: FastAPI) -> None:
         _summa_vision_exception_handler,  # type: ignore[arg-type]
     )
     app.add_exception_handler(RequestValidationError, _publication_validation_exception_handler)
+    app.add_exception_handler(
+        PublicationPreconditionFailedError,
+        _publication_precondition_failed_exception_handler,
+    )  # Phase 1.3
 ```
 
 ### Existing handlers
@@ -238,6 +242,7 @@ Wire envelope (served by `_summa_vision_exception_handler`, `error_handler.py:53
 | `PUBLICATION_NOT_FOUND` | 404 | `PublicationNotFoundError` | `backend/src/services/publications/exceptions.py` (subclass) |
 | `PUBLICATION_INTERNAL_SERIALIZATION_ERROR` | 500 | `PublicationInternalSerializationError` | `backend/src/services/publications/exceptions.py:52,56` |
 | `PUBLICATION_CLONE_NOT_ALLOWED` | 409 | `PublicationCloneNotAllowedError` | `backend/src/services/publications/exceptions.py` (subclass) |
+| `PRECONDITION_FAILED` | 412 | `PublicationPreconditionFailedError` | `backend/src/services/publications/exceptions.py` (Phase 1.3) |
 | `SUMMA_VISION_ERROR` (default) | — | `SummaVisionError` (base) | `backend/src/core/exceptions.py:21` |
 
 Existing test assertions against this envelope (from A.1.5):
@@ -325,3 +330,4 @@ If a new endpoint dep isn't in the override list, integration tests will pass wh
 | Date | PR | Sections touched | Notes |
 |---|---|---|---|
 | 2026-04-26 | initial | all | Created from Phase 1.3 Part A (`docs/recon/phase-1-3-A-backend-inventory.md`) + Phase 2.5 Part B (`docs/discovery/phase-2-5-B-model.md` §1.4 + §1.5) inputs |
+| 2026-04-27 | Phase 1.3 impl | §1 PATCH row, §2 Publication gloss, §4 handler registration, §5 error-code table | Added 412 `PRECONDITION_FAILED` row; PATCH now consumes `If-Match` and emits `ETag` on success; GET-single + POST-clone also emit `ETag`. |
