@@ -111,6 +111,29 @@ Sections reference block IDs, not block objects directly. This allows:
 - Cleaner deletion (drop section reference; block GC handles cleanup separately)
 - Migration safety (block schema can evolve without restructuring sections)
 
+### Block instance fields (shape in `doc.blocks[id]`)
+
+```typescript
+interface Block {
+  id: string;             // matches the registry key — invariant
+  type: string;           // BREG[type] resolves to BlockRegistryEntry
+  props: BlockProps;      // type-specific data (text, items[], series[], …)
+  visible: boolean;       // false → omitted from render and intrinsic-height calc
+  locked?: boolean;       // Phase 1.6, additive (no schemaVersion bump):
+                          // true → blocks UPDATE_PROP / UPDATE_DATA / TOGGLE_VIS
+                          // through the reducer permission gate. Independent of
+                          // registry-level `status: "required_locked"`, which is
+                          // template-immutable and additionally blocks deletion.
+                          // Optional + undefined-coalesce-to-false to keep older
+                          // serialized docs forward-compatible.
+}
+```
+
+The `visible` and `locked` flags interact independently — a block can be
+both locked and hidden. `REMOVE_BLOCK` ignores `block.locked` (Phase 1.6
+Q2: lock blocks editing/movement, not deletion); `REMOVE_BLOCK` IS blocked
+by registry-level `status: "required_locked" | "required_editable"`.
+
 ### `assertDocumentIntegrity` validator
 
 Runs in dev mode after every dispatch. Asserts:
@@ -228,6 +251,24 @@ Global shortcuts (Cmd+S save, Cmd+Z undo, etc.) MUST run through this utility, w
 
 (Cross-ref `ARCHITECTURE_INVARIANTS.md` §8.) Avoid command palettes (Cmd+K) and developer-culture keybindings. Visual UI is preferred.
 
+### Phase 1.6 — block context-menu shortcuts
+
+Right-click on a block in Canvas opens the context menu (Lock / Hide /
+Duplicate / Delete). The same four actions are bound to keyboard shortcuts
+when a block is selected:
+
+| Shortcut | Action | Notes |
+|---|---|---|
+| `⌘L` / `Ctrl+L` | Toggle `block.locked` | No-op when no selection. |
+| `⌘H` / `Ctrl+H` | Toggle `block.visible` | No-op when block is locked. |
+| `⌘D` / `Ctrl+D` | Duplicate selected block | `preventDefault()` mandatory — browser bookmark default. Clashes with `Ctrl+Shift+D` debug toggle are avoided by checking `!e.shiftKey`. |
+| `Delete` / `Backspace` | Delete selected block | Empty (default-state) blocks delete without confirm; non-empty blocks open `DeleteConfirmModal`. Skipped automatically by `shouldSkipGlobalShortcut` when focus is in an input/textarea/contenteditable. |
+
+All four flow through `shouldSkipGlobalShortcut` so IME composition is
+respected. Right-click on a block selects the block first, then opens the
+menu — selection and inspector stay coherent. Right-click on empty Canvas
+falls through to the browser default.
+
 ## 10. Export pipeline
 
 ### PNG export (Stage 4)
@@ -249,3 +290,4 @@ ZIP includes `distribution.json` + `publish_kit.txt` + per-preset PNGs + UTM-tag
 | Date | PR / Phase | Sections touched | Notes |
 |---|---|---|---|
 | 2026-04-26 | initial | all | Created from aggregated memory items + reference to in-repo EDITOR_ARCHITECTURE.md |
+| 2026-04-27 | Phase 1.6 (`claude/add-context-menus-kf2rk`) | §5, §9, §11 | Right-click block context menu (Lock/Hide/Duplicate/Delete). Schema additive: `Block.locked?: boolean` (no schemaVersion bump). New reducer actions `TOGGLE_LOCK`, `DUPLICATE_BLOCK`, `REMOVE_BLOCK`. Cmd/Ctrl+L/H/D + Delete shortcuts gated on `shouldSkipGlobalShortcut`. DEBT-044 logged for multi-select v2. |

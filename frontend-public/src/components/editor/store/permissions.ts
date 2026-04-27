@@ -265,6 +265,19 @@ export function checkWorkflowPermission(
         : { allowed: false, reason:
             workflow === "in_review" ? COPY_EDIT_ONLY_REASON : READ_ONLY_REASON };
 
+    case "TOGGLE_LOCK":
+    case "DUPLICATE_BLOCK":
+    case "REMOVE_BLOCK":
+      // Phase 1.6 — context-menu structural mutations. Lock toggling and
+      // duplication/deletion alter block-set shape, so they ride the
+      // structural axis: allowed only when the workflow permits structural
+      // changes (draft only). In review/approved/exported/published, the
+      // gate denies and the menu items render disabled in the UI.
+      return wp.structural
+        ? { allowed: true }
+        : { allowed: false, reason:
+            workflow === "in_review" ? COPY_EDIT_ONLY_REASON : READ_ONLY_REASON };
+
     case "CHANGE_PAGE":
       return wp.style
         ? { allowed: true }

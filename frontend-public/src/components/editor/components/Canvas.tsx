@@ -10,6 +10,7 @@ interface CanvasProps {
   onMouseDown?: React.MouseEventHandler<HTMLCanvasElement>;
   onMouseMove?: React.MouseEventHandler<HTMLCanvasElement>;
   onMouseLeave?: React.MouseEventHandler<HTMLCanvasElement>;
+  onContextMenu?: React.MouseEventHandler<HTMLCanvasElement>;
 }
 
 export function Canvas({
@@ -19,6 +20,7 @@ export function Canvas({
   onMouseDown,
   onMouseMove,
   onMouseLeave,
+  onContextMenu,
 }: CanvasProps) {
   return (
     <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "10px", background: `repeating-conic-gradient(${TK.c.bgSurf} 0% 25%, ${TK.c.bgApp} 0% 50%) 50% / 12px 12px`, overflow: "auto" }}>
@@ -30,6 +32,7 @@ export function Canvas({
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
             onMouseLeave={onMouseLeave}
+            onContextMenu={onContextMenu}
           />
           <canvas
             ref={overlayRef}

@@ -45,6 +45,9 @@ import { ReadOnlyBanner } from './components/ReadOnlyBanner';
 import { NotificationBanner } from './components/NotificationBanner';
 import { NoteModal } from './components/NoteModal';
 import { PreconditionFailedModal } from './components/PreconditionFailedModal';
+import { BlockContextMenu } from './components/BlockContextMenu';
+import { DeleteConfirmModal } from './components/DeleteConfirmModal';
+import { isBlockEmpty } from './utils/empty-block';
 import type { NoteRequestConfig } from './components/noteRequest';
 
 // Autosave cadence (Stage 4 Task 2). `AUTOSAVE_DEBOUNCE_MS` is the quiet
@@ -554,6 +557,49 @@ export default function InfographicEditor({
     // deselect that SWITCH_TPL / IMPORT already do in the reducer.
     dispatch({ type: "SELECT", blockId: hit });
   }, [dispatch, sz.w, sz.h]);
+
+  // Phase 1.6 — right-click context menu state. `contextMenu` carries the
+  // target block id and viewport coords; null when closed. `pendingDelete`
+  // gates the confirm modal — set when a non-empty block is asked to be
+  // deleted (Q5: empty blocks delete without confirm).
+  const [contextMenu, setContextMenu] = useState<{ blockId: string; x: number; y: number } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+
+  const handleCanvasContextMenu = useCallback((e: ReactMouseEvent<HTMLCanvasElement>) => {
+    const canvas = cvs.current;
+    if (!canvas) return;
+    const { x, y } = clientToLogical(canvas, e.clientX, e.clientY, sz.w, sz.h);
+    const hit = hitTest(hitAreasRef.current, x, y);
+    // Right-click on empty canvas falls through to the browser default
+    // (per Q3: only block right-clicks open the menu).
+    if (!hit) return;
+    e.preventDefault();
+    dispatch({ type: 'SELECT', blockId: hit });
+    setContextMenu({ blockId: hit, x: e.clientX, y: e.clientY });
+  }, [dispatch, sz.w, sz.h]);
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  // Delete-flow router — empty blocks delete immediately, non-empty open
+  // the confirm modal. Shared by menu Delete click and Delete keyboard
+  // shortcut so both honour the same emptiness rule.
+  const requestDeleteBlock = useCallback((blockId: string) => {
+    const block = state.doc.blocks[blockId];
+    if (!block) return;
+    if (isBlockEmpty(block)) {
+      dispatch({ type: 'REMOVE_BLOCK', blockId });
+      return;
+    }
+    setPendingDelete(blockId);
+  }, [dispatch, state.doc.blocks]);
+
+  const confirmPendingDelete = useCallback(() => {
+    if (!pendingDelete) return;
+    dispatch({ type: 'REMOVE_BLOCK', blockId: pendingDelete });
+    setPendingDelete(null);
+  }, [dispatch, pendingDelete]);
+
+  const cancelPendingDelete = useCallback(() => setPendingDelete(null), []);
 
   const handleCanvasMouseMove = useCallback((e: ReactMouseEvent<HTMLCanvasElement>) => {
     const canvas = cvs.current;
@@ -1085,10 +1131,40 @@ export default function InfographicEditor({
         }
         performSave();
       }
+
+      // Phase 1.6 — block context-menu shortcuts. All require a current
+      // selection; no-op otherwise. Cmd/Ctrl+L locks/unlocks, +H hides/shows,
+      // +D duplicates, Delete/Backspace deletes (with confirm flow).
+      const targetBlockId = state.selectedBlockId;
+      if (!targetBlockId) return;
+      if ((e.ctrlKey || e.metaKey) && key === 'l') {
+        e.preventDefault();
+        dispatch({ type: 'TOGGLE_LOCK', blockId: targetBlockId });
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && key === 'h') {
+        e.preventDefault();
+        dispatch({ type: 'TOGGLE_VIS', blockId: targetBlockId });
+        return;
+      }
+      // NOTE: Cmd/Ctrl+Shift+D is consumed by the debug-toggle branch above
+      // (evaluated BEFORE the isEditable early-return). Plain Cmd/Ctrl+D
+      // here duplicates the selected block; preventDefault stops the
+      // browser bookmark flow.
+      if ((e.ctrlKey || e.metaKey) && key === 'd' && !e.shiftKey) {
+        e.preventDefault();
+        dispatch({ type: 'DUPLICATE_BLOCK', blockId: targetBlockId });
+        return;
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        requestDeleteBlock(targetBlockId);
+        return;
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [dispatch, performSave, debugAvailable]);
+  }, [dispatch, performSave, debugAvailable, state.selectedBlockId, requestDeleteBlock]);
 
   const importJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -1245,6 +1321,7 @@ export default function InfographicEditor({
             onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleCanvasMouseMove}
             onMouseLeave={handleCanvasMouseLeave}
+            onContextMenu={handleCanvasContextMenu}
           />
           <QAPanel
             qaOpen={qaOpen}
@@ -1288,6 +1365,28 @@ export default function InfographicEditor({
         onReload={handlePreconditionReload}
         onSaveAsNewDraft={handlePreconditionSaveAsNewDraft}
         onDismiss={handlePreconditionDismiss}
+      />
+
+      {contextMenu && doc.blocks[contextMenu.blockId] && (
+        <BlockContextMenu
+          block={doc.blocks[contextMenu.blockId]}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onClose={closeContextMenu}
+          onLock={() => dispatch({ type: 'TOGGLE_LOCK', blockId: contextMenu.blockId })}
+          onHide={() => dispatch({ type: 'TOGGLE_VIS', blockId: contextMenu.blockId })}
+          onDuplicate={() => dispatch({ type: 'DUPLICATE_BLOCK', blockId: contextMenu.blockId })}
+          onDelete={() => requestDeleteBlock(contextMenu.blockId)}
+          designMode={mode === 'design'}
+        />
+      )}
+
+      <DeleteConfirmModal
+        isOpen={pendingDelete !== null}
+        blockLabel={pendingDelete && doc.blocks[pendingDelete]
+          ? (BREG[doc.blocks[pendingDelete].type]?.name ?? doc.blocks[pendingDelete].type)
+          : ''}
+        onConfirm={confirmPendingDelete}
+        onCancel={cancelPendingDelete}
       />
     </div>
   );

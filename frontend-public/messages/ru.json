@@ -241,6 +241,24 @@
       "cropZoneShort": "ОБР",
       "cropZoneTooltip": "Показать зону обрезки для этого шаблона",
       "cropZoneUnavailable": "Нет зоны обрезки для этого шаблона"
+    },
+    "context_menu": {
+      "aria_label": "Действия с блоком",
+      "lock": "Заблокировать",
+      "unlock": "Разблокировать",
+      "hide": "Скрыть",
+      "show": "Показать",
+      "duplicate": "Дублировать",
+      "delete": "Удалить",
+      "delete_disabled_template_locked": "Нельзя удалить обязательный блок шаблона",
+      "hide_disabled_locked": "Снимите блокировку, чтобы скрыть блок",
+      "disabled_template_mode": "Перейдите в режим «Дизайн», чтобы использовать это действие"
+    },
+    "delete_confirm": {
+      "title": "Удалить этот блок «{block}»?",
+      "body": "Это действие можно отменить через Cmd/Ctrl+Z.",
+      "confirm": "Удалить",
+      "cancel": "Отмена"
     }
   },
   "undo": {
