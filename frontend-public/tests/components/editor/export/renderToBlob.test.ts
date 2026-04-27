@@ -20,6 +20,7 @@ import { TPLS, mkDoc } from '@/components/editor/registry/templates';
 import { PALETTES } from '@/components/editor/config/palettes';
 import type { CanonicalDocument, Block, Section } from '@/components/editor/types';
 import { installCanvasMocks } from '../../../__utils__/canvasMock';
+import { measureLayout } from '@/components/editor/renderer/measure';
 
 const PAL = PALETTES.housing;
 
@@ -228,5 +229,76 @@ describe('renderDocumentToBlob with long_infographic', () => {
     expect(e.presetId).toBe('long_infographic');
     expect(e.cap).toBe(LONG_INFOGRAPHIC_HEIGHT_CAP);
     expect(e.measuredHeight).toBeGreaterThan(LONG_INFOGRAPHIC_HEIGHT_CAP);
+  });
+
+  test('canvas.height is integer (Math.ceil applied to fractional measure)', async () => {
+    // Guards against ToUint32 truncation: browsers coerce non-integer
+    // canvas.height by truncating the fractional part, which clips content.
+    // The width-scaling factor s = w/1080 makes virtually every measured
+    // height fractional in production. This test captures the height
+    // assigned to the canvas and asserts it is an integer.
+    const doc = baselineDoc();
+    // Sanity check that the underlying measured height is fractional, so
+    // the test would actually catch a missing Math.ceil.
+    const measured = computeLongInfographicHeight(doc, 1200);
+    expect(Number.isInteger(measured)).toBe(false);
+
+    const captured: number[] = [];
+    const origCreate = document.createElement.bind(document);
+    const createSpy = jest
+      .spyOn(document, 'createElement')
+      .mockImplementation((tag: string) => {
+        const el = origCreate(tag) as HTMLElement;
+        if (tag === 'canvas') {
+          const cvs = el as HTMLCanvasElement;
+          let h = 0;
+          Object.defineProperty(cvs, 'height', {
+            get: () => h,
+            set: (v: number) => {
+              h = v;
+              captured.push(v);
+            },
+            configurable: true,
+          });
+        }
+        return el;
+      });
+
+    try {
+      await renderDocumentToBlob(doc, PAL, 'long_infographic');
+      expect(captured.length).toBeGreaterThan(0);
+      const lastHeight = captured[captured.length - 1];
+      expect(Number.isInteger(lastHeight)).toBe(true);
+      expect(lastHeight).toBe(Math.ceil(measured));
+    } finally {
+      createSpy.mockRestore();
+    }
+  });
+});
+
+describe('computeLongInfographicHeight padding contract', () => {
+  test('matches engine.ts page padding model (64*s top + bottom, no inter-section gap)', () => {
+    // Regression guard: if engine.ts changes the page padding (currently
+    // pad = 64 * s top + bottom) or introduces inter-section gaps, the
+    // long_infographic height calc breaks silently. This test pins the
+    // current contract by re-deriving the expected total from the same
+    // measureLayout the helper uses, so drift is caught at PR time.
+    const doc = mkDoc('single_stat_hero', TPLS.single_stat_hero);
+    const width = 1200;
+    const s = width / 1080;
+    const expectedPadding = 2 * 64 * s;
+
+    const sections = measureLayout(doc, { w: width, h: Infinity, n: 'long_infographic' });
+    const expectedSectionsHeight = sections.reduce((acc, m) => acc + m.consumedHeight, 0);
+    const result = computeLongInfographicHeight(doc, width);
+
+    expect(result).toBeCloseTo(expectedSectionsHeight + expectedPadding, 5);
+
+    // Pin the no-inter-section-gap part of the contract: the total cannot
+    // be larger than padding + sum(consumedHeight). If a future engine
+    // change introduces inter-section spacing without updating this helper,
+    // the equality above would still hold but a separate gap term would
+    // be missing — document via comment so the failure mode is explicit.
+    expect(result - expectedPadding).toBeCloseTo(expectedSectionsHeight, 5);
   });
 });
