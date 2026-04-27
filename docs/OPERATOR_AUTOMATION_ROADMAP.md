@@ -136,6 +136,8 @@ Outcome attribution (Phase 2+)
 
 ## 5. Phased roadmap
 
+> **Status tracker:** see `OPERATOR_PHASE_STATUS.md` for current status of every phase listed below. This document is the plan; that document is the state.
+
 Five phases, sized for ~15-25 agent PRs/week. Phase boundaries are review gates, not calendar weeks — a phase can compress or slip without reordering.
 
 ### Phase 1 — Immediate leverage (Week 1)
