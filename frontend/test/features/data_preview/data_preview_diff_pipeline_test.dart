@@ -117,6 +117,30 @@ void main() {
       return r;
     }
 
+    // Sequence the cubeDiff results in lockstep with the dataPreview fetches.
+    // First read (after first dataPreview): NoBaseline (matches "first view" UI).
+    // Second read (after invalidate): Computed with one cell change at row 1, col B
+    //   (matches the change between firstResponse and secondResponse data).
+    // Overriding the provider keeps Hive box.put off the read path, which
+    // round 6 proved hangs on reentrant-runAsync inside the testWidgets fake
+    // zone. The real cubeDiffService logic is exercised by
+    // cube_diff_service_test.dart.
+    var diffCount = 0;
+    CubeDiff currentDiff() {
+      _bc('DIFF-$diffCount-called');
+      final CubeDiff d;
+      if (diffCount == 0) {
+        d = const CubeDiff.noBaseline();
+      } else {
+        d = CubeDiff.computed(
+          changedCells: <DiffCellKey>{const DiffCellKey(1, 'B')},
+        );
+      }
+      diffCount++;
+      _bc('DIFF-returning-idx-${diffCount - 1}');
+      return d;
+    }
+
     _bc('05-creating-container');
     final container = ProviderContainer(
       overrides: [
@@ -128,6 +152,15 @@ void main() {
           final r = currentResponse();
           _bc('OVERRIDE-dataPreview-body-returning');
           return r;
+        }),
+        cubeDiffProvider.overrideWith((ref) async {
+          _bc('OVERRIDE-cubeDiff-body-entered');
+          // Watch dataPreview so cubeDiff invalidation tracks dataPreview
+          // changes (same dependency the real provider has).
+          await ref.watch(dataPreviewProvider.future);
+          final d = currentDiff();
+          _bc('OVERRIDE-cubeDiff-body-returning');
+          return d;
         }),
       ],
     );
@@ -155,19 +188,6 @@ void main() {
     );
     _bc('08-pumpWidget-returned');
 
-    // Drive cubeDiffProvider to completion in real zone — its body does
-    // service.saveSnapshot → Hive box.put which only completes in real
-    // I/O zone. Without this, pumpAndSettle returns with the widget tree
-    // settled into the loading state and find.text on the banner finds 0.
-    await tester.runAsync(() async {
-      _bc('08a-priming-providers-start');
-      await container.read(dataPreviewProvider.future);
-      _bc('08b-dataPreview-future-resolved');
-      await container.read(cubeDiffProvider.future);
-      _bc('08c-cubeDiff-future-resolved');
-    });
-    _bc('08d-priming-runAsync-exited');
-
     _bc('09-pumpAndSettle-1-start');
     await tester.pumpAndSettle(const Duration(seconds: 2));
     _bc('10-pumpAndSettle-1-returned');
@@ -184,6 +204,9 @@ void main() {
     expect(fetchCount, 1, reason: 'First fetch must have run exactly once');
     _bc('13-fetchcount-1-confirmed');
 
+    expect(diffCount, 1, reason: 'First diff fetch must have run exactly once');
+    _bc('13a-diffcount-1-confirmed');
+
     _bc('14-invalidating-dataPreviewProvider');
     container.invalidate(dataPreviewProvider);
     _bc('15-invalidated-dataPreviewProvider');
@@ -192,22 +215,16 @@ void main() {
     container.invalidate(cubeDiffProvider);
     _bc('17-invalidated-cubeDiffProvider');
 
-    // Same priming pattern as first cycle — Hive write must complete in real zone.
-    await tester.runAsync(() async {
-      _bc('17a-priming-2-start');
-      await container.read(dataPreviewProvider.future);
-      _bc('17b-dataPreview-2-resolved');
-      await container.read(cubeDiffProvider.future);
-      _bc('17c-cubeDiff-2-resolved');
-    });
-    _bc('17d-priming-2-exited');
-
     _bc('18-pumpAndSettle-2-start');
     await tester.pumpAndSettle(const Duration(seconds: 2));
     _bc('19-pumpAndSettle-2-returned');
 
     expect(fetchCount, 2, reason: 'Second fetch must have run after invalidate');
     _bc('20-fetchcount-2-confirmed');
+
+    expect(diffCount, 2,
+        reason: 'Second diff fetch must have run after invalidate');
+    _bc('20a-diffcount-2-confirmed');
 
     _bc('21-asserting-second-banner');
     final element2 = tester.element(find.byType(DataPreviewScreen));
