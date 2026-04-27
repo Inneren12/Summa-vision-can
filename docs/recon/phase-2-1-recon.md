@@ -3,7 +3,7 @@
 **Branch:** claude/create-phase-2-1-recon-UI7I3
 **HEAD:** d771484 Merge pull request #213 from Inneren12/claude/phase-2-1-pre-recon-finalize
 **Date:** 2026-04-27
-**Status:** WORK IN PROGRESS — Turn 3A of 3 (§1, §2, §3 Q-1..13, §4, §5, §6); §7, §8, §9 pending Turn 3B.
+**Status:** APPROVAL_PENDING — recon complete; awaiting founder approval gate decisions on items A1-A5 in §7.
 
 **Consumes:** docs/recon/phase-2-1-pre-recon.md (merged to main as of d771484)
 **Produces:** architectural decisions, founder approval gate, PR decomposition for impl phase.
@@ -409,3 +409,105 @@ Critical path: PR#1 → PR#2 → PR#3 → PR#4. Total estimate: 10-17 days impl 
 ### Roadmap update (post-recon-merge action)
 
 Founder updates `OPERATOR_AUTOMATION_ROADMAP.md` row 2.1 from "M, 2-3 PRs" to "M, 4 PRs (PR#1-4 per recon)" in a docs-only PR after recon merges. Variant α deferral closes here.
+
+## 7. Founder approval gate
+
+The following architectural decisions are flagged for founder approval throughout §3. Founder reviews each, approves with explicit yes / no / change. Recon-proper does not dispatch impl prompts until all five are resolved.
+
+### Approval item A1 — Per-preset QA evaluator (Q-2.1-2)
+
+**Recommendation:** Split-rules approach — `validateDocument(doc)` (size-independent) + `validatePresetSize(doc, sizeId)` (size-dependent only). Existing `validate(doc)` wraps both for back-compat.
+
+**Founder decision:** [ ] approve / [ ] reject / [ ] modify with: ____________
+
+### Approval item A2 — Default exportPresets value (Q-2.1-8)
+
+**Recommendation:** Default to `["instagram_1080", "twitter", "reddit", "linkedin"]` (common-4) for both new documents and migration of existing documents.
+
+**Founder decision:** [ ] approve common-4 / [ ] approve all-7 / [ ] modify with: ____________
+
+### Approval item A3 — Toggle UI placement (Q-2.1-9)
+
+**Recommendation:** Inspector page-properties section (Variant b), alongside `page.size`. Current preset force-enabled.
+
+**Founder decision:** [ ] approve Inspector / [ ] TopBar instead / [ ] Modal instead / [ ] modify with: ____________
+
+### Approval item A4 — long_infographic cap blocking scope (Q-2.1-10)
+
+**Recommendation:** Preset-specific block (Variant b) — only `long_infographic` skipped from ZIP when over cap; other 6 presets export normally with toast notification.
+
+**Founder decision:** [ ] approve preset-specific / [ ] document-wide block / [ ] auto-truncate / [ ] modify with: ____________
+
+### Approval item A5 — Preset ID rename strategy (Q-2.1-12)
+
+**Recommendation:** Code-rename to match MD §6, with backward-compat aliases in `SIZE_FROM_BACKEND`. After 2.1 merge, MD is canonical.
+
+**Founder decision:** [ ] approve code-rename / [ ] update MD instead / [ ] modify with: ____________
+
+### Resolution protocol
+
+When all five boxes have a non-empty decision, founder posts a single message:
+> "Approval gate resolved: A1=approve, A2=approve, A3=approve, A4=approve, A5=approve" (or with specifics).
+
+Recon-proper status flips from `APPROVAL_PENDING` to `APPROVED`. Impl prompts for PR#1 dispatch immediately after.
+
+## 8. Test plan consolidated
+
+Aggregates test counts and patterns across all 4 PRs. Real-wire integration tests follow `TEST_INFRASTRUCTURE.md` §4.1 pattern (mock at fetch / canvas boundary, not at consumer module).
+
+| PR | Unit tests | Integration tests | Migration tests | Notes |
+|---|---|---|---|---|
+| PR#1 | ~12 (renderDocumentToBlob, measure variable-height, cap-exceeded) | 1 (real-wire renderToBlob) | — | Re-entrancy test (Risk 1) — invoke helper 7× single-tick, assert distinct blob bytes |
+| PR#2 | ~8 (PageInspector toggle, exportPresets default constant) | — | 3 scenarios (Risk 3) | Migration scenarios: missing field → common-4; old IDs → renamed; already-renamed → unchanged |
+| PR#3 | ~8 (buildManifest, buildZipFilename, packZip) | 1 (real-wire ZIP unzip + manifest verify) | — | Real-wire uses `fflate.unzipSync` to assert byte-level entries |
+| PR#4 | ~6 (validateDocument, validatePresetSize, badge selector) | 1 (skip-on-fail flow with long_infographic over cap) | — | Skip-on-fail integration asserts 6 PNGs in ZIP, manifest skipped entry, toast text |
+| **Total** | **~34** | **3** | **3** | Estimate, may flex ±20% |
+
+### jsdom canvas workaround
+
+All integration tests use the canvas-mock pattern established in `tests/components/editor/context-menu-integration.test.tsx:6,21`:
+
+```typescript
+// HTMLCanvasElement.getContext returns null in jsdom by default
+// Mock it to return a stub ctx with measureText, fillText, etc.
+HTMLCanvasElement.prototype.getContext = jest.fn(() => stubCtx);
+```
+
+Reuse the existing stub from `renderer-contract.test.ts:3-36` (`makeCtx()`) — extract to a shared test util in PR#1 if not already.
+
+### Coverage gate
+
+PR#1, PR#3 each must have one real-wire integration test minimum (Risk 5 mitigation). Reviewer rejects PR if absent. PR#2 doesn't need integration test (no canvas/blob boundary, just schema). PR#4's integration test exercises the skip-on-fail flow end-to-end since that's the critical user-visible behavior.
+
+## 9. DEBT entry stub for Q-2.1-13
+
+To be added to `DEBT.md` by founder when impl PR#1 lands (or earlier if convenient — recon does NOT modify DEBT.md, this is a stub for the founder commit). Following the existing DEBT.md format observed in repo.
+
+````markdown
+### DEBT-NN: Encode per-platform safe-areas + min-font / max-series rules
+
+- **Source:** Phase 2.1 recon Q-2.1-13
+- **Added:** <date when founder commits>
+- **Severity:** low (not blocking 2.1, content-quality concern)
+- **Category:** code-quality
+- **Status:** active
+- **Description:** `DESIGN_SYSTEM_v3.2.md` БЛОК 11 specifies safe areas (top 48 / bottom 80 / L-R 48; story top 120 / bottom 100) and per-platform max-series / min-font / preferred-mode rules. Currently NOT encoded anywhere in code.
+- **Impact:** Per-preset QA from PR#4 evaluates document-level rules but cannot enforce platform-specific minimums (e.g. min font 13px for Twitter cards, 14px for Instagram feed, 12px for LinkedIn). Operator may export technically-valid PNGs that violate per-platform readability standards.
+- **Resolution:**
+  - Extend `SizePreset` shape in `config/sizes.ts` with `safeAreas: { top, bottom, left, right }` field
+  - Modify renderer to honor safe-area boundaries (visual: warn-on-overflow if any block extends past safe area)
+  - Add per-platform QA checks to `validatePresetSize` evaluating min-font / max-series
+- **Target:** Phase 2.1.5 standalone OR fold into Phase 3 binding-status work where data-driven font sizes are computed.
+````
+
+NN is the next available DEBT number. Founder picks at commit time.
+
+## Document history
+
+| Date | Turn | Notes |
+|---|---|---|
+| 2026-04-27 | 1 | §1 executive summary, §2 scope restate, §3 Q-1..6 |
+| 2026-04-27 | 2A | §3 Q-7..10 (after stream-timeout split from Turn 2) |
+| 2026-04-27 | 2B | §3 Q-11..13, §4 drift triage, §5 risk mitigations |
+| 2026-04-27 | 3A | §6 PR decomposition (preventively split from Turn 3 due to size) |
+| 2026-04-27 | 3B | §7 founder approval gate, §8 test plan, §9 DEBT stub, document history. Status flipped to APPROVAL_PENDING. |
