@@ -153,4 +153,137 @@ Without `jsonable_encoder`, Pydantic v2 internals can produce non-JSON-serializa
 
 ---
 
-**End of Part 1. Sections 4-9 added by Part 2.**
+## 4. Publication versioning (R19)
+
+### Lineage key
+
+`(source_product_id, config_hash)` is the lineage key. Two publications with the same `source_product_id` and same `config_hash` share lineage; different `config_hash` means a new version of the same lineage.
+
+### Stored fields on Publication
+
+- `id` — primary key, unique per row
+- `source_product_id` — references the cube/dataset the publication is derived from
+- `config_hash` — deterministic hash of `visual_config` JSON
+- `updated_at` — touched on every write, including autosave
+
+### Determinism requirement
+
+Same input (same data, same config) → same pixel output on export. Any binding or resolution mechanism MUST preserve this.
+
+**Implication:** bindings stored in `visual_config` MUST capture `snapshotValue` + `resolvedAt` + source hash. Rendering uses snapshot, never live read. Live-resolving bindings violate R19 (Phase 3 explicit non-goal).
+
+### Clone behavior (Phase 1.1)
+
+When a publication is cloned:
+- New publication gets fresh `id`
+- `source_product_id` preserved (lineage continuity for the source dataset)
+- `config_hash` recomputed (the clone may diverge)
+- `document_state` set to None on clone — frontend hydrates from column fallback (DEBT-026 lesson). NOT copied verbatim from source.
+
+**Memory item:** Backend Publication clone must NOT copy `document_state` verbatim. Frontend hydrates from `document_state` first; cloned doc keeps source `review.workflow=published`; autosave PATCH then re-publishes the clone. Clone must set `document_state=None` OR run mutate function with `workflow=draft, history=[], comments=[]`.
+
+### Memory item — backend `StatCanClient` constructor argument names
+
+Open question from earlier audit: scheduler's `StatCanClient` constructor argument names (`client`, `guard`, `bucket`) may not match actual `__init__` signature — passes mocked tests but could fail at runtime. Tracked for verification.
+
+## 5. Idempotency state (R16)
+
+### What R16 says
+
+Operations that are conceptually idempotent should be safe to retry without side effects. Specifically: a duplicate request with the same body should not produce a duplicate side effect.
+
+### Current state — partial
+
+**HTTP-level idempotency-key infrastructure does NOT exist** in this codebase as of 2026-04-26.
+
+What DOES exist:
+- Background job retry semantics (jobs that fail are retryable; the same input doesn't double-process if the job is dedup-keyed)
+- APScheduler with SQLAlchemyJobStore (jobs survive restarts, retried per backoff policy)
+
+What does NOT exist:
+- HTTP-level `Idempotency-Key` header handling on PATCH/POST endpoints
+- Request-level cache that short-circuits a duplicate request returning the cached response
+- Idempotency-key TTL infrastructure
+
+### Implication for ETag (Phase 1.3)
+
+Without idempotency-key short-circuit, a legitimate retry of an already-successful PATCH (network drop on response) will return 412 because the server's ETag has advanced past client's `If-Match`.
+
+Phase 1.3 v1 design accepts this trade-off:
+- ETag check applies unconditionally on every PATCH
+- Client treats 412 as "reload and retry" UX (correct for both genuine concurrent edit AND rare retry)
+- One extra round trip per network drop is cheaper than building idempotency-cache infrastructure
+
+### DEBT for future hardening
+
+Tracked: when HTTP idempotency-key infrastructure is added project-wide, integrate cache-hit short-circuit before ETag check. Cache hit MUST short-circuit BEFORE ETag check, returning cached 200; ETag check applies only on cache miss.
+
+(See `[DEBT.md](http://DEBT.md)` for current entry number assigned in Phase 1.3 impl PR.)
+
+## 6. Token / auth boundaries (R17)
+
+### Tokens MUST be tied to resource, not session
+
+Examples:
+- **ETag** is computed over publication fields (id, updated_at, config_hash) — same publication has same ETag for any user. Cross-user requests don't leak via session-bound ETag.
+- **Magic link tokens** for download access are tied to publication ID + lead email, with separate session binding. Token alone doesn't authenticate, but identifies the resource.
+- **Idempotency keys** (when added) MUST be scoped per resource + endpoint, not per session.
+
+### Don't leak tokens in URLs to third parties
+
+- ETag goes in HTTP header, not URL parameter
+- Magic link tokens go in URL but use one-time-use semantics + short TTL
+- UTM tags (Phase 2.3) are non-sensitive lineage IDs, not auth tokens — different category
+
+### Anti-pattern: session-bound ETag
+
+If ETag derivation includes user ID or session ID, two users editing the same publication get different ETags → false 412 mismatches → broken UX. Phase 1.3 explicitly avoids this.
+
+## 7. ETag derivation contract
+
+**Status:** Placeholder until Phase 1.3 lands.
+
+This section will be filled in by the Phase 1.3 impl PR. Required content:
+
+- Pure function signature
+- Source columns from Publication
+- Format (weak vs strong)
+- Where computed (repository return convention)
+- Where read on PATCH (handler dep)
+- Stability requirements (must NOT change between identical reads; MUST change after any write)
+
+Once filled, this becomes a contract: changing the derivation requires explicit founder approval and DEBT entry, because it will invalidate every client's cached `If-Match` token.
+
+DO NOT remove this placeholder. The placeholder itself is a signal that 1.3 has not yet landed.
+
+## 8. Other invariants
+
+### LLM not in critical pipeline
+
+LLM-based components are NOT in the critical content-generation pipeline. Replaced with `KeywordScorer`, `HeadlineTemplateEngine`, `ArtPromptSelector` (deterministic). LLM retained only as optional "AI Enhance" post-launch button.
+
+**Implication:** no cost-tracking infrastructure for LLM, no caching with `prompt_hash + data_hash`, no budget alerts. One-off LLM calls (Phase 2.4 draft social text) are explicit exceptions, not the default.
+
+### Template lock
+
+The editor is template-driven. Free-form canvas is NOT a substitute. 13 block types, 11 templates across 7 families. New blocks/templates added via the strict-template architecture, not by introducing a free-form mode.
+
+### Deterministic export
+
+Same input (data + config) → same pixel output. Any binding or resolution mechanism that breaks this requires explicit founder review and DEBT entry. PNG export uses logical CSS dimensions, not DPR-scaled canvas (memory item).
+
+### Operator-not-developer assumption
+
+Designers come from Figma/Canva culture; data workers come from Excel culture. Neither knows SQL, Polars schemas, or CLI. Command palettes and keyboard-driven interfaces are a misfit.
+
+**Implication:** no Cmd+K palette in admin UI; visual + form-based interfaces preferred. Roadmap §6 explicitly defers command palette as developer-culture pattern.
+
+### applyMigrations pipeline must abort on missing intermediate
+
+Document migration pipeline (`applyMigrations` in editor) MUST abort if an intermediate migration step is missing. Silent skip is forbidden. Memory item from editor architecture.
+
+## 9. Maintenance log
+
+| Date | PR / Phase | Sections touched | Notes |
+|---|---|---|---|
+| 2026-04-26 | initial | all | Created from ARCH_[RULES.md](http://RULES.md), [DEBT.md](http://DEBT.md), memory items |
