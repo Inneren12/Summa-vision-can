@@ -3,7 +3,7 @@
 **Branch:** claude/create-phase-2-1-recon-UI7I3
 **HEAD:** d771484 Merge pull request #213 from Inneren12/claude/phase-2-1-pre-recon-finalize
 **Date:** 2026-04-27
-**Status:** WORK IN PROGRESS — Turn 2 of 3 complete (§1, §2, §3 Q-1..13, §4, §5); awaiting Turn 3 prompt for §6, §7, §8.
+**Status:** WORK IN PROGRESS — Turn 3A of 3 (§1, §2, §3 Q-1..13, §4, §5, §6); §7, §8, §9 pending Turn 3B.
 
 **Consumes:** docs/recon/phase-2-1-pre-recon.md (merged to main as of d771484)
 **Produces:** architectural decisions, founder approval gate, PR decomposition for impl phase.
@@ -253,3 +253,159 @@ If during impl phase 2 reveals deeper `measureLayout` rework than estimated, def
 ### Risk 8 — Preset ID rename ripple (Q-2.1-12 / D1)
 
 **Mitigation:** Q-2.1-12 picks code-rename WITH back-compat aliases. The aliases live in `SIZE_FROM_BACKEND` (`utils/persistence.ts:36-57` per pre-recon §2.C). PR#2 migration test (Risk 3 mitigation, scenario 2) explicitly covers old-ID → new-ID resolution. The forward-compat case (already-renamed) is also tested (scenario 3). Rename direction is one-way: code renamed → matches MD; aliases handle pre-rename DB state.
+
+## 6. PR decomposition
+
+Founder Variant 2 + Variant a from §1 expands roadmap "M, 2-3 PRs" to **4 PRs minimum** (revised estimate per pre-recon §5 Risk 7). This recon is the authoritative source for Phase 2.1 scope; `OPERATOR_AUTOMATION_ROADMAP.md` row 2.1 will be updated by founder post-recon-merge per Variant α.
+
+### PR#1 — Pure render helper + long_infographic rendering
+
+**Branch:** `claude/phase-2-1-pr-1-render-helper-<suffix>`
+**Estimate:** M (~3-5 days impl + 1-2 fix rounds)
+**Depends on:** none (pre-recon and recon merged)
+**Blocks:** PR#3 (ZIP export needs this helper)
+
+**Scope (in):**
+- New module `frontend-public/src/components/editor/export/renderToBlob.ts` — pure async helper
+- Variable-height extension for `long_infographic` preset (Q-2.1-1, Q-2.1-10, Risk 2)
+- Cap enforcement at measure phase: `validation.long_infographic.height_cap_exceeded` error scoped to preset
+- Unit tests for `renderDocumentToBlob` (mocked toBlob)
+- One real-wire integration test (canvas-mock pattern from `tests/components/editor/context-menu-integration.test.tsx`)
+
+**Scope (out — explicitly):**
+- ZIP packing (PR#3)
+- Per-preset QA evaluator (PR#4)
+- `exportPresets` schema field (PR#2)
+- Toggle UI (PR#2)
+- Safe-area encoding (out-of-scope per Q-2.1-13)
+
+**Files added:**
+- `frontend-public/src/components/editor/export/renderToBlob.ts`
+- `frontend-public/tests/components/editor/export/renderToBlob.test.ts`
+- `frontend-public/tests/components/editor/export/renderToBlob.integration.test.tsx`
+
+**Files modified:**
+- `frontend-public/src/components/editor/config/sizes.ts` — add `long_infographic` entry with `h: 4000` cap sentinel
+- `frontend-public/src/components/editor/renderer/measure.ts` — variable-height path for `long_infographic`
+- `frontend-public/src/components/editor/validation/validate.ts` — cap-exceeded error
+- `frontend-public/messages/en.json` + `ru.json` — `validation.long_infographic.height_cap_exceeded` key
+
+**Late-stage split clause (Risk 2):** if measure-phase variable-height work reveals deeper rework than estimated, defer the long_infographic portion to a separate PR#1.5 between PR#1 and PR#2. Impl agent flags founder before splitting.
+
+**Drift docs:** EDITOR_BLOCK_ARCHITECTURE.md §11 maintenance log entry: "Added export/renderToBlob.ts pure helper; long_infographic variable-height rendering with 4000px cap."
+
+### PR#2 — Schema migration + exportPresets field + Inspector UI
+
+**Branch:** `claude/phase-2-1-pr-2-schema-migration-<suffix>`
+**Estimate:** M (~3-5 days impl + 1-2 fix rounds)
+**Depends on:** PR#1 merged (long_infographic ID exists in SIZES; otherwise migration can't reference it)
+**Blocks:** PR#3 (ZIP export needs `exportPresets` field), PR#4 (per-preset QA reads enabled list)
+
+**Scope (in):**
+- schemaVersion bump N → N+1
+- Migration step in `applyMigrations`: add `exportPresets` field with common-4 default (Q-2.1-8); rename old preset IDs (Q-2.1-12)
+- Aliases in `utils/persistence.ts` `SIZE_FROM_BACKEND`
+- Type extension `PageConfig.exportPresets: string[]` in `types.ts`
+- Inspector UI section "Export presets" — 7 checkboxes (Q-2.1-9)
+- Migration tests with three scenarios (Risk 3 mitigation)
+- i18n keys under `editor.inspector.export_presets.*`
+
+**Scope (out):**
+- ZIP packing (PR#3)
+- Per-preset QA UI surfacing (PR#4)
+- TopBar / modal placement (rejected per Q-2.1-9)
+
+**Files added:**
+- `frontend-public/tests/components/editor/migrations/v(N)-to-v(N+1).test.ts`
+
+**Files modified:**
+- `frontend-public/src/components/editor/types.ts` — `PageConfig.exportPresets`
+- `frontend-public/src/components/editor/config/sizes.ts` — preset IDs renamed; `DEFAULT_EXPORT_PRESETS` constant
+- `frontend-public/src/components/editor/utils/persistence.ts` — `SIZE_FROM_BACKEND` aliases
+- `frontend-public/src/components/editor/migrations.ts` (or wherever `applyMigrations` lives)
+- `frontend-public/src/components/editor/components/PageInspector.tsx` (or wherever current `page.size` selector lives — agent verifies during impl)
+- `frontend-public/messages/en.json` + `ru.json`
+
+**Drift docs:** EDITOR_ARCHITECTURE.md §6 entries match code post-merge (D1 closed). EDITOR_BLOCK_ARCHITECTURE.md §11 entry: "schemaVersion bump for exportPresets field; preset IDs renamed to match MD §6."
+
+### PR#3 — fflate ZIP + manifest.json + Export button
+
+**Branch:** `claude/phase-2-1-pr-3-zip-export-<suffix>`
+**Estimate:** M (~2-4 days impl + 1-2 fix rounds)
+**Depends on:** PR#1 merged (renderToBlob), PR#2 merged (exportPresets field)
+**Blocks:** PR#4 (UI gating reads ZIP-export trigger state)
+
+**Scope (in):**
+- New runtime dep: `fflate ^0.8.2` (Q-2.1-4)
+- New module `frontend-public/src/components/editor/export/zipExport.ts` — orchestrates render loop, manifest, ZIP packing
+- `buildManifest`, `buildZipFilename`, `packZip` helpers (Q-2.1-3, Q-2.1-7)
+- TopBar Export button replaced with "Export all valid" (Q-2.1-5)
+- Progress UI component (Q-2.1-5 — per-preset N/7 counter)
+- Cancellation behavior: snapshot via `structuredClone(doc)` at click, allow edits during render (Q-2.1-6)
+- Unit tests + one real-wire integration with `fflate.unzipSync` byte-level verification (Q-2.1-11)
+- i18n keys under `editor.export_zip.*`
+
+**Scope (out):**
+- Per-preset QA evaluator integration (PR#4 — uses placeholder always-pass for now or document-level check only)
+- Backend upload of ZIP (Phase 2.2)
+- `distribution.json` extension (Phase 2.2)
+- Web Worker rendering (Phase 2.2 if at all)
+
+**Files added:**
+- `frontend-public/src/components/editor/export/zipExport.ts`
+- `frontend-public/src/components/editor/export/manifest.ts`
+- `frontend-public/src/components/editor/export/zipFilename.ts`
+- `frontend-public/src/components/editor/components/ZipExportProgress.tsx`
+- `frontend-public/tests/components/editor/export/zipExport.test.ts`
+- `frontend-public/tests/components/editor/export/zipExport.integration.test.tsx`
+
+**Files modified:**
+- `frontend-public/package.json` — `"fflate": "^0.8.2"`
+- `frontend-public/src/components/editor/components/TopBar.tsx` — Export button → "Export all valid"
+- `frontend-public/src/components/editor/index.tsx` — replace `exportPNG` callback or sit alongside; reuse `deferRevoke` from `utils/download.ts`
+- `frontend-public/messages/en.json` + `ru.json`
+
+**Drift docs:** EDITOR_BLOCK_ARCHITECTURE.md §11 entry: "Multi-preset ZIP export shipped; fflate added; manifest.json schema v1."
+
+### PR#4 — Per-preset QA evaluator + UI integration
+
+**Branch:** `claude/phase-2-1-pr-4-per-preset-qa-<suffix>`
+**Estimate:** S-M (~2-3 days impl + 1 fix round)
+**Depends on:** PR#1 merged (cap error type exists), PR#2 merged (exportPresets field), PR#3 merged (ZIP pipeline emits per-preset slots in manifest)
+**Blocks:** none — closes Phase 2.1
+
+**Scope (in):**
+- Refactor `validate.ts` into `validateDocument(doc)` + `validatePresetSize(doc, sizeId)` (Q-2.1-2)
+- Existing `validate(doc)` becomes a back-compat wrapper that combines both
+- ZIP export pipeline calls `validatePresetSize` per enabled preset; combo (A) skip-on-failure logic
+- Inspector UI shows per-preset QA badge next to each enabled preset
+- Toast at end of ZIP export "long_infographic skipped: ..." (Q-2.1-10) when applicable
+- Unit tests for new selectors + integration test that exercises skip-on-fail flow
+
+**Scope (out):**
+- Cross-platform safe-area / max-series / min-font checks (DEBT-NN per Q-2.1-13)
+- Document-level validation rule changes (out of scope — only refactor structure)
+
+**Files modified:**
+- `frontend-public/src/components/editor/validation/validate.ts` — split signature
+- `frontend-public/src/components/editor/components/PageInspector.tsx` — per-preset badge
+- `frontend-public/src/components/editor/export/zipExport.ts` (from PR#3) — combo (A) gate
+- `frontend-public/messages/en.json` + `ru.json` — toast keys, badge labels
+
+**Drift docs:** EDITOR_ARCHITECTURE.md §15 — founder updates post-merge to clarify per-preset semantics (D2 closed). Docs-only follow-up PR ~10 lines.
+
+### Dependency graph
+
+```
+PR#1 ─────┬─→ PR#2 ─────┬─→ PR#3 ─────→ PR#4
+          │              │
+          │              └─ PR#3 also needs PR#1 (renderToBlob)
+          │
+          └─ PR#2 also needs PR#1 (long_infographic ID in SIZES)
+```
+
+Critical path: PR#1 → PR#2 → PR#3 → PR#4. Total estimate: 10-17 days impl + fix rounds, ~2-3 weeks elapsed.
+
+### Roadmap update (post-recon-merge action)
+
+Founder updates `OPERATOR_AUTOMATION_ROADMAP.md` row 2.1 from "M, 2-3 PRs" to "M, 4 PRs (PR#1-4 per recon)" in a docs-only PR after recon merges. Variant α deferral closes here.
