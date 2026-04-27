@@ -73,7 +73,7 @@ def test_compute_etag_fallback_to_created_at() -> None:
         created_at=datetime(2026, 4, 27, 12, 0, 0, tzinfo=timezone.utc),
     )
     etag = compute_etag(pub)
-    assert etag.startswith('W/"')
+    assert etag.startswith('"')
     # Round-trip the same created_at — must match.
     pub_again = _make_pub(
         pub_id=1,
@@ -107,16 +107,16 @@ def test_compute_etag_uses_pipe_separator() -> None:
     pub = _make_pub(pub_id=42, updated_at=ts, config_hash="cfg")
     expected_raw = f"42|{ts.isoformat()}|cfg"
     expected_digest = hashlib.sha256(expected_raw.encode("utf-8")).hexdigest()[:16]
-    assert compute_etag(pub) == f'W/"{expected_digest}"'
+    assert compute_etag(pub) == f'"{expected_digest}"'
 
 
-def test_compute_etag_format_is_weak() -> None:
-    """ETag is weak per RFC 7232 §2.3 — autosave bodies are not byte-identical."""
+def test_compute_etag_format_is_strong() -> None:
+    """ETag is strong per RFC 7232 §2.3 — derived from row metadata, not body."""
     pub = _make_pub()
     etag = compute_etag(pub)
-    assert etag.startswith('W/"')
+    assert etag.startswith('"')
     assert etag.endswith('"')
     # 16 hex chars between the quotes.
-    inner = etag[len('W/"'):-1]
+    inner = etag[1:-1]
     assert len(inner) == 16
     assert all(c in "0123456789abcdef" for c in inner)

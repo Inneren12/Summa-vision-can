@@ -289,7 +289,7 @@ Modal lives at `frontend-public/src/components/editor/components/PreconditionFai
 
 ### Esc / backdrop dismissal
 
-Non-resolving. The modal closes but the conflict is not resolved. The next autosave tick will 412 again and re-open the modal.
+Non-resolving but non-looping. The modal closes and `saveStatus` flips to `'conflict'`. The autosave debounce effect guards on `saveStatus !== 'conflict'`, so the dismissed conflict freezes autosave until the next user edit. A new edit re-marks the doc dirty and resets status to `'pending'` — at which point a fresh PATCH fires and re-triggers the modal if the conflict is still real. User-initiated retry, not auto-loop.
 
 ### Fork-path failure recovery
 

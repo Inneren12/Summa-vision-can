@@ -24,9 +24,11 @@ function focusables(container: HTMLElement): HTMLElement[] {
  *   - Reload (default focus, safer): drops local edits, re-fetches publication.
  *   - Save as new draft: clones source, PATCHes the clone with local snapshot.
  *
- * Esc / backdrop dismissal is non-resolving — autosave remains broken until
- * the user picks an action; the next autosave tick re-fires 412 and re-opens
- * the modal.
+ * Esc / backdrop dismissal is non-resolving but non-looping (Phase 1.3 polish):
+ * the dismissed conflict freezes autosave (`saveStatus = 'conflict'`) until the
+ * user makes a fresh edit. That edit re-arms autosave to 'pending' and a new
+ * PATCH fires, re-triggering this modal if the conflict is still real. User-
+ * initiated retry, not auto-loop.
  */
 export function PreconditionFailedModal({
   open,
@@ -134,7 +136,7 @@ export function PreconditionFailedModal({
         aria-modal="true"
         aria-labelledby={headingId}
         aria-describedby={bodyId}
-        data-server-etag={serverEtag ?? ''}
+        {...(process.env.NODE_ENV !== 'production' && { 'data-server-etag': serverEtag ?? '' })}
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',

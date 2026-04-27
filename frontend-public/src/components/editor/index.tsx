@@ -84,6 +84,16 @@ export interface InfographicEditorProps {
    * no-op (the legacy JSON download was removed in Stage 4 Task 0).
    */
   publicationId?: string;
+
+  /**
+   * Optional initial ``ETag`` captured by the server-side publication
+   * fetch (or, in tests, by a mocked GET). Phase 1.3 Blocker 2 — seeds
+   * ``etagRef.current`` so the very first autosave PATCH of a fresh
+   * editor session carries ``If-Match``, preserving lost-update
+   * protection from the first edit instead of falling into the
+   * tolerate-absent path on Q3=(a).
+   */
+  initialEtag?: string | null;
 }
 
 /**
@@ -124,6 +134,7 @@ function perfMark(label: string): () => void {
 export default function InfographicEditor({
   initialDoc,
   publicationId,
+  initialEtag = null,
 }: InfographicEditorProps = {}) {
   const t = useTranslations();
   const tEditorActions = useTranslations('editor.actions');
@@ -226,11 +237,14 @@ export default function InfographicEditor({
   const [cloneInFlight, setCloneInFlight] = useState<boolean>(false);
 
   // ETag captured from each successful PATCH response (Phase 1.3).
-  // Seeded from the editor's own GET on mount; updated to the new ETag on
-  // every successful PATCH so the next save can send it as ``If-Match``.
-  // The first save in a fresh session may legitimately be null — the
-  // backend tolerates a missing ``If-Match`` per Q3=(a) (DEBT-042).
-  const etagRef = useRef<string | null>(null);
+  // Seeded from the editor's own GET on mount via the ``initialEtag``
+  // prop (Blocker 2 fix — server component threads through the ETag from
+  // its initial server-side fetch); updated to the new ETag on every
+  // successful PATCH so the next save can send it as ``If-Match``.
+  // First save still tolerates null when the server omits the header
+  // (Q3=(a) / DEBT-042), but with this seed the value is normally
+  // populated before the first edit lands.
+  const etagRef = useRef<string | null>(initialEtag);
 
   // 412 PRECONDITION_FAILED modal state (Phase 1.3 Q4=(a)).
   // Two terminal actions: Reload (re-fetch + drop local edits) or
@@ -594,7 +608,13 @@ export default function InfographicEditor({
     updateAdminPublication(publicationId, payload, { ifMatch: etagRef.current })
       .then((result) => {
         // Capture the new ETag so the next PATCH sends matching If-Match.
-        etagRef.current = result.etag;
+        // Guard against rolling-deploy windows where backend may temporarily
+        // omit the ETag header — keeping the previous ref preserves
+        // lost-update protection rather than silently degrading to absent
+        // If-Match on the next save.
+        if (result.etag) {
+          etagRef.current = result.etag;
+        }
         dispatch({ type: "SAVED_IF_MATCHES", snapshotDoc });
         // If the reducer kept dirty=true (user edited mid-flight), the
         // debounce effect will re-arm `'pending'` on its next run — so
@@ -668,6 +688,15 @@ export default function InfographicEditor({
       autosaveTimerRef.current = null;
     }
 
+    // Phase 1.3 polish — break the 412 modal-reopen loop. When the user
+    // dismisses the PreconditionFailedModal without resolving, status
+    // flips to 'conflict' (see handlePreconditionDismiss); we hold the
+    // autosave here until the conflict-reset effect catches the next
+    // user edit and flips status back to 'pending'.
+    if (saveStatus === 'conflict') {
+      return;
+    }
+
     // During active saveError, the retry effect is the sole save
     // orchestrator. A user edit resets retry state (via the edit-reset
     // effect), and the retry effect then schedules the next attempt using
@@ -694,8 +723,12 @@ export default function InfographicEditor({
     if (!dirty || !publicationId) {
       // Either nothing to save or no backend target. Drop a stale
       // `pending`/`saving` status back to `idle`. Functional update
-      // avoids adding `saveStatus` to deps (which would cause a
-      // re-schedule storm on every status transition).
+      // keeps the no-op transitions cheap; combined with the conflict
+      // guard above (which DOES require `saveStatus` in deps so the
+      // effect re-runs on the conflict→pending flip), the extra
+      // re-runs per status transition are bounded and harmless —
+      // each cleared+rescheduled timer fires at the same wall-clock
+      // moment and no extra PATCH is issued.
       setSaveStatus((prev) => (prev === 'pending' || prev === 'saving' ? 'idle' : prev));
       return;
     }
@@ -728,7 +761,7 @@ export default function InfographicEditor({
         autosaveTimerRef.current = null;
       }
     };
-  }, [doc, dirty, publicationId, performSave, state.saveError, state.canAutoRetry]);
+  }, [doc, dirty, publicationId, performSave, state.saveError, state.canAutoRetry, saveStatus]);
 
   // DEBT-027: a user edit during error state used to reset the retry
   // budget via a useEffect([doc]) that excluded state.saveError from
@@ -923,12 +956,43 @@ export default function InfographicEditor({
     await forkLocalSnapshotAsNewDraft();
   }, [forkLocalSnapshotAsNewDraft]);
 
+  // Snapshot of `doc` taken at the moment the user dismisses a 412 modal
+  // without resolving. The conflict-reset effect compares the live `doc`
+  // against this snapshot and flips `saveStatus` from 'conflict' back to
+  // 'pending' as soon as the user makes a fresh edit (doc ref changes).
+  // Storing it in a ref (not state) avoids triggering the conflict-reset
+  // effect on its own write.
+  const conflictDocSnapshotRef = useRef<CanonicalDocument | null>(null);
+
   const handlePreconditionDismiss = useCallback(() => {
-    // Non-resolving close: the conflict is unresolved; the next autosave
-    // tick will 412 again and re-open the modal. Per Q4=(a) Esc/backdrop
-    // contract.
+    // Phase 1.3 polish — break the auto-reopen loop. The user dismissed
+    // without resolving; freeze autosave by flipping saveStatus to
+    // 'conflict'. The next user edit changes `doc`, the conflict-reset
+    // effect catches it, flips status back to 'pending', and the
+    // autosave debounce effect schedules a fresh PATCH — re-triggering
+    // the modal if the conflict is still real. User-initiated retry,
+    // not auto-loop.
     setPreconditionFailedModal((prev) => ({ ...prev, open: false }));
-  }, []);
+    conflictDocSnapshotRef.current = doc;
+    setSaveStatus('conflict');
+  }, [doc]);
+
+  // Conflict-reset effect — flips 'conflict' → 'pending' on the user's
+  // next edit (detected by `doc` ref change vs the dismissal snapshot).
+  // Pairs with the autosave debounce effect's `saveStatus === 'conflict'`
+  // early return: while in conflict, the debounce effect holds; once
+  // this effect resets to 'pending' the debounce effect re-runs and the
+  // PATCH fires.
+  useEffect(() => {
+    if (
+      saveStatus === 'conflict'
+      && conflictDocSnapshotRef.current !== null
+      && doc !== conflictDocSnapshotRef.current
+    ) {
+      conflictDocSnapshotRef.current = null;
+      setSaveStatus('pending');
+    }
+  }, [doc, saveStatus]);
 
   const handleManualRetry = useCallback(() => {
     // User override: explicit "Retry now" resets both the attempt counter

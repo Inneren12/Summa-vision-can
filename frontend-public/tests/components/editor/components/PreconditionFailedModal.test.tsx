@@ -23,7 +23,7 @@ function renderModal(
   const utils = render(
     <PreconditionFailedModal
       open
-      serverEtag={'W/"abc1234567890"'}
+      serverEtag={'"abc1234567890"'}
       onReload={onReload}
       onSaveAsNewDraft={onSaveAsNewDraft}
       onDismiss={onDismiss}
@@ -95,8 +95,8 @@ describe('PreconditionFailedModal', () => {
   });
 
   test('exposes serverEtag via data attribute for diagnostics', () => {
-    renderModal({ serverEtag: 'W/"feedface"' });
+    renderModal({ serverEtag: '"feedface"' });
     const dialog = screen.getByRole('dialog');
-    expect(dialog.getAttribute('data-server-etag')).toBe('W/"feedface"');
+    expect(dialog.getAttribute('data-server-etag')).toBe('"feedface"');
   });
 });

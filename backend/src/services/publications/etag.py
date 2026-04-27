@@ -12,13 +12,17 @@ from src.models.publication import Publication
 
 
 def compute_etag(pub: Publication) -> str:
-    """Derive a weak ETag for a Publication row.
+    """Derive a strong ETag for a Publication row.
 
     Per docs/architecture/ARCHITECTURE_INVARIANTS.md §6 + §7:
       - Inputs: id, updated_at OR created_at fallback, config_hash OR ""
       - Separator: '|' (ASCII 0x7C)
       - Hash: SHA-256, truncated to 16 hex chars
-      - Output: weak ETag, e.g. 'W/"a1b2c3d4e5f60718"'
+      - Output: strong ETag, e.g. '"a1b2c3d4e5f60718"'
+        Strong because the validator is derived from row metadata (id + timestamp +
+        config_hash) — not the response body — so identical inputs always produce
+        byte-identical ETags. RFC 7232 §2.3 strong validator semantics apply.
+        Strong ETags are the correct fit for If-Match (lost-update protection).
 
     The created_at fallback handles fresh DRAFT rows where updated_at is NULL.
     The "" substitution for config_hash handles non-clone rows.
@@ -31,4 +35,4 @@ def compute_etag(pub: Publication) -> str:
     config = pub.config_hash or ""
     raw = f"{pub.id}|{timestamp}|{config}"
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
-    return f'W/"{digest}"'
+    return f'"{digest}"'

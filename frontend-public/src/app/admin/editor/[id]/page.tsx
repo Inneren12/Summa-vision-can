@@ -33,5 +33,11 @@ export default async function AdminEditorPage({ params }: Props) {
     throw err;
   }
 
-  return <AdminEditorClient publicationId={id} initialDoc={initialDoc} />;
+  return (
+    <AdminEditorClient
+      publicationId={id}
+      initialDoc={initialDoc}
+      initialEtag={publication.etag}
+    />
+  );
 }

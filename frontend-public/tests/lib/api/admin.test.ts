@@ -117,14 +117,14 @@ describe('updateAdminPublication', () => {
     await updateAdminPublication(
       '42',
       { headline: 'x' },
-      { ifMatch: 'W/"abc1234567890"' },
+      { ifMatch: '"abc1234567890"' },
     );
     const [, init] = mockFetch().mock.calls[0] as any;
-    expect(init.headers['If-Match']).toBe('W/"abc1234567890"');
+    expect(init.headers['If-Match']).toBe('"abc1234567890"');
   });
 
   it('captures ETag response header into result.etag when present', async () => {
-    const headers = new Headers({ ETag: 'W/"feedfacef00d0001"' });
+    const headers = new Headers({ ETag: '"feedfacef00d0001"' });
     mockFetch().mockResolvedValue({
       ok: true,
       status: 200,
@@ -132,7 +132,7 @@ describe('updateAdminPublication', () => {
       json: async () => ({ id: '42', headline: 'x' }),
     } as Response);
     const result = await updateAdminPublication('42', { headline: 'x' });
-    expect(result.etag).toBe('W/"feedfacef00d0001"');
+    expect(result.etag).toBe('"feedfacef00d0001"');
   });
 
   it('throws AdminPublicationNotFoundError on 404', async () => {

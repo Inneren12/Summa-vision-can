@@ -783,7 +783,7 @@ async def test_get_emits_etag_header(session_factory) -> None:
     assert get_resp.status_code == 200
     etag = get_resp.headers.get("etag")
     assert etag is not None
-    assert etag.startswith('W/"')
+    assert etag.startswith('"')
 
 
 @pytest.mark.asyncio
@@ -811,7 +811,7 @@ async def test_patch_without_if_match_warn_logs_and_accepts(
     assert patch_resp.json()["headline"] == "no if-match"
     # Server still emits ETag on PATCH success — client can capture it for
     # the next save.
-    assert patch_resp.headers.get("etag", "").startswith('W/"')
+    assert patch_resp.headers.get("etag", "").startswith('"')
 
 
 @pytest.mark.asyncio
@@ -845,7 +845,7 @@ async def test_patch_with_matching_if_match_succeeds(session_factory) -> None:
     assert patch_resp.status_code == 200, patch_resp.text
     new_etag = patch_resp.headers.get("etag")
     assert new_etag is not None
-    assert new_etag.startswith('W/"')
+    assert new_etag.startswith('"')
     # ETag advanced — fresh ETag for the next If-Match.
     assert new_etag != etag
 
@@ -866,7 +866,7 @@ async def test_patch_with_stale_if_match_returns_412(session_factory) -> None:
         patch_resp = await client.patch(
             f"/api/v1/admin/publications/{pub_id}",
             json={"headline": "stale tag"},
-            headers={**_auth_headers(), "If-Match": 'W/"deadbeefdeadbeef"'},
+            headers={**_auth_headers(), "If-Match": '"deadbeefdeadbeef"'},
         )
 
     assert patch_resp.status_code == 412, patch_resp.text
@@ -874,8 +874,8 @@ async def test_patch_with_stale_if_match_returns_412(session_factory) -> None:
     assert body["detail"]["error_code"] == "PRECONDITION_FAILED"
     assert body["detail"]["message"] == "The publication has been modified since you loaded it."
     details = body["detail"]["details"]
-    assert details["client_etag"] == 'W/"deadbeefdeadbeef"'
-    assert details["server_etag"].startswith('W/"')
+    assert details["client_etag"] == '"deadbeefdeadbeef"'
+    assert details["server_etag"].startswith('"')
     # Server etag must NOT equal the stale client etag (definitionally).
     assert details["server_etag"] != details["client_etag"]
 
@@ -901,7 +901,7 @@ async def test_412_envelope_jsonable(session_factory) -> None:
         patch_resp = await client.patch(
             f"/api/v1/admin/publications/{pub_id}",
             json={"headline": "stale"},
-            headers={**_auth_headers(), "If-Match": 'W/"0000000000000000"'},
+            headers={**_auth_headers(), "If-Match": '"0000000000000000"'},
         )
 
     assert patch_resp.status_code == 412

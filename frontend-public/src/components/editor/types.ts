@@ -18,7 +18,11 @@ export type PageKey = 'size' | 'background' | 'palette';
 // `dirty=false` it means fully saved. `pending` means a debounce timer is
 // armed. `saving` means a PATCH is in flight. `error` means the last attempt
 // failed and the retry orchestration is active (or has exhausted its budget).
-export type SaveStatus = 'idle' | 'pending' | 'saving' | 'error';
+// `conflict` (Phase 1.3 polish) means the user dismissed a 412 modal without
+// resolving — autosave is frozen until the next user edit re-arms `pending`,
+// which then re-fires the PATCH and re-triggers the modal if the conflict is
+// still real. Prevents the auto-loop where each tick re-412'd and re-opened.
+export type SaveStatus = 'idle' | 'pending' | 'saving' | 'error' | 'conflict';
 
 export interface BlockProps {
   [key: string]: any;
