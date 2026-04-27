@@ -40,11 +40,12 @@ function ExportPresetsSectionImpl({
   canEdit,
 }: ExportPresetsSectionProps) {
   const tExport = useTranslations('inspector.export_presets');
-  // Phase 2.1 PR#2 fix1 (P1.3): Inspector enumerates ALL 7 preset IDs from
-  // SIZES, NOT EXPORTABLE_PRESET_IDS (which is the 6-entry legacy size
-  // picker scope and intentionally excludes `long_infographic` until PR#3
-  // ships). Keeping the two lists distinct preserves the operator opt-in
-  // semantics for the long-infographic ZIP path.
+  // Phase 2.1 PR#2 fix1 (P1.3): Inspector enumerates ALL preset IDs from
+  // SIZES directly. PR#3 has now expanded EXPORTABLE_PRESET_IDS to also
+  // include `long_infographic`, but the two lists remain semantically
+  // distinct (size picker = "what canvas am I editing"; this list = "what
+  // presets get included in the ZIP"). Reading from SIZES keeps Inspector
+  // independent of size-picker scope changes.
   const presetIds = Object.keys(SIZES) as PresetId[];
   const enabled = new Set<string>(exportPresets);
 

@@ -19,7 +19,12 @@ import type { CanonicalDocument } from '@/components/editor/types';
 import { mockDocumentFontsReady } from '../../editor/components/_helpers';
 
 function getExportButton(): HTMLButtonElement {
-  return screen.getByRole('button', { name: /export\.png\.verb|export\.disabled\./i }) as HTMLButtonElement;
+  // PR#3: Export button now triggers ZIP export. Aria-labels span both the
+  // legacy `export.disabled.*` namespace (validation/fonts gating, kept) and
+  // the new `editor.export_zip.button.aria|label` keys.
+  return screen.getByRole('button', {
+    name: /editor\.export_zip\.button\.(aria|label)|export\.disabled\./i,
+  }) as HTMLButtonElement;
 }
 
 function makeTestDoc(): CanonicalDocument {
@@ -65,7 +70,7 @@ describe('Font gate (Stage 4 Task 3)', () => {
       });
 
       expect(btn).not.toBeDisabled();
-      expect(btn.getAttribute('title')).toBe('export.png.verb');
+      expect(btn.getAttribute('title')).toBe('editor.export_zip.button.label');
     } finally {
       fonts.restore();
     }

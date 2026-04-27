@@ -30,7 +30,8 @@ function renderTopBar(overrides: Partial<React.ComponentProps<typeof TopBar>> = 
     importJSON: () => undefined,
     exportJSON: () => undefined,
     markSaved: () => undefined,
-    exportPNG: () => undefined,
+    exportZip: () => undefined,
+    zipExportPhase: null,
     saveStatus: 'idle',
     fontsReady: true,
   };
@@ -80,7 +81,8 @@ describe('TopBar — Crop zone toggle', () => {
         importJSON={() => undefined}
         exportJSON={() => undefined}
         markSaved={() => undefined}
-        exportPNG={() => undefined}
+        exportZip={() => undefined}
+        zipExportPhase={null}
         saveStatus="idle"
         fontsReady={true}
         onToggleCropZone={() => undefined}

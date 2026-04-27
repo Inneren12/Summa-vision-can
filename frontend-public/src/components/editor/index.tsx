@@ -49,6 +49,7 @@ import { BlockContextMenu } from './components/BlockContextMenu';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { isBlockEmpty } from './utils/empty-block';
 import type { NoteRequestConfig } from './components/noteRequest';
+import { exportZip, type ZipExportPhase } from './export/zipExport';
 
 // Autosave cadence (Stage 4 Task 2). `AUTOSAVE_DEBOUNCE_MS` is the quiet
 // window after the last mutating reducer action before a PATCH fires.
@@ -1208,46 +1209,84 @@ export default function InfographicEditor({
     r.readAsText(f);
   };
 
-  const exportPNG = useCallback(() => {
-    // QA gate: never produce broken output. PNG export is blocked when there
+  // Phase 2.1 PR#3: ZIP export progress phase. `null` = not exporting; any
+  // non-null value disables the Export button + drives the inline N/total
+  // counter (ZipExportProgress). Lives in component state, never persisted.
+  const [zipExportPhase, setZipExportPhase] = useState<ZipExportPhase | null>(null);
+  // PR#3 toast surface: there is no centralized toast system in this codebase
+  // yet, so end-of-export feedback is rendered as a transient notification
+  // bar via local state. See SUMMARY: a richer toast system is deferred.
+  const [zipExportNotice, setZipExportNotice] = useState<{
+    kind: 'success' | 'partial' | 'error';
+    message: string;
+    details?: string[];
+  } | null>(null);
+
+  const exportZipCb = useCallback(async () => {
+    // QA gate: never produce broken output. ZIP export is blocked when there
     // are validation errors; JSON export and SAVE are always allowed so users
     // can checkpoint work-in-progress.
     if (!canExp) return;
     // Stage 4 Task 3 B1 (post-review): fontsReady is the single contract.
-    // Once true (via mount-time preload completion or timeout), render
-    // and export both
-    // proceed without re-invoking the helper. An earlier iteration of
-    // this code re-awaited the helper here as belt-and-suspenders, but
-    // that reintroduced the exact 5-second stall in pathological cases
-    // (document.fonts.ready never resolving) that the mount timeout was
-    // designed to prevent. Trust the flag.
+    // Once true, render and export both proceed without re-invoking the
+    // helper.
     if (!fontsReady) return;
+    // Prevent re-entry while a previous export is in progress.
+    if (zipExportPhase) return;
 
-    // Create a separate export canvas at canonical preset size.
-    // Preview canvas stays DPR-scaled; export is exact 1:1 dimensions.
-    const exportCvs = document.createElement("canvas");
-    exportCvs.width = sz.w;
-    exportCvs.height = sz.h;
-    const ctx = exportCvs.getContext("2d");
-    if (!ctx) return;
+    try {
+      const result = await exportZip({
+        doc,
+        pal,
+        onProgress: setZipExportPhase,
+      });
 
-    const bgFn = BGS[doc.page.background] || BGS.solid_dark;
-    bgFn.r(ctx, sz.w, sz.h, pal);
-    renderDoc(ctx, doc, sz.w, sz.h, pal);
+      setZipExportPhase(null);
 
-    // toBlob keeps exports async/memory-safe and avoids base64 data URL inflation.
-    requestAnimationFrame(() => {
-      exportCvs.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `summa-${doc.templateId}-${doc.page.size}.png`;
-        a.click();
-        deferRevoke(url);
-      }, "image/png");
-    });
-  }, [canExp, fontsReady, doc, pal, sz]);
+      if (result.skippedCount === 0) {
+        setZipExportNotice({
+          kind: 'success',
+          message: t('editor.export_zip.toast.success', {
+            count: result.passCount,
+            filename: result.filename,
+          }),
+        });
+      } else {
+        const details: string[] = [];
+        for (const s of result.skipped) {
+          if (
+            s.skipReason === 'validation.long_infographic.height_cap_exceeded'
+          ) {
+            details.push(
+              t('editor.export_zip.skipped.long_infographic_cap_exceeded', {
+                measured: s.measuredHeight ?? 0,
+              }),
+            );
+          } else {
+            details.push(`${s.presetId}: ${s.skipReason}`);
+          }
+        }
+        setZipExportNotice({
+          kind: 'partial',
+          message: t('editor.export_zip.toast.partial', {
+            passCount: result.passCount,
+            total: result.totalPresets,
+            filename: result.filename,
+            skippedCount: result.skippedCount,
+          }),
+          details,
+        });
+      }
+    } catch (err) {
+      setZipExportPhase(null);
+      setZipExportNotice({
+        kind: 'error',
+        message: t('editor.export_zip.toast.error', {
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      });
+    }
+  }, [canExp, fontsReady, doc, pal, zipExportPhase, t]);
 
   const canEdit = useCallback(
     (reg: typeof selR, k: string) => (reg ? effectivePerms.editBlock(reg, k) : false),
@@ -1272,7 +1311,8 @@ export default function InfographicEditor({
         importJSON={importJSON}
         exportJSON={exportJSON}
         markSaved={performSave}
-        exportPNG={exportPNG}
+        exportZip={exportZipCb}
+        zipExportPhase={zipExportPhase}
         saveStatus={saveStatus}
         fontsReady={fontsReady}
         debugAvailable={debugAvailable}
@@ -1286,6 +1326,59 @@ export default function InfographicEditor({
         onClone={handleClone}
         cloneTooltip={tEditorActions('cloneCannotBeCloned')}
       />
+      {zipExportNotice && (
+        <div
+          role={zipExportNotice.kind === 'error' ? 'alert' : 'status'}
+          aria-live="polite"
+          data-testid="zip-export-notice"
+          data-kind={zipExportNotice.kind}
+          style={{
+            borderBottom: `1px solid ${TK.c.brd}`,
+            background:
+              zipExportNotice.kind === 'error'
+                ? `${TK.c.err}14`
+                : zipExportNotice.kind === 'partial'
+                  ? `${TK.c.acc}14`
+                  : `${TK.c.pos}14`,
+            color:
+              zipExportNotice.kind === 'error' ? TK.c.err : TK.c.txtP,
+            padding: '6px 12px',
+            display: 'flex',
+            gap: '8px',
+            alignItems: 'flex-start',
+            flexShrink: 0,
+            fontSize: '9px',
+            lineHeight: 1.4,
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <div>{zipExportNotice.message}</div>
+            {zipExportNotice.details && zipExportNotice.details.length > 0 && (
+              <ul style={{ margin: '2px 0 0', paddingLeft: '16px' }}>
+                {zipExportNotice.details.map((d, i) => (
+                  <li key={`${d}_${i}`}>{d}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setZipExportNotice(null)}
+            aria-label="Dismiss export notice"
+            title="Dismiss"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: TK.c.txtM,
+              cursor: 'pointer',
+              fontSize: '10px',
+              padding: 0,
+            }}
+          >
+            {'✕'}
+          </button>
+        </div>
+      )}
       <NotificationBanner
         state={state}
         importError={importError}

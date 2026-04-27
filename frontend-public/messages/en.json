@@ -241,6 +241,25 @@
       "template": "template",
       "design": "design"
     },
+    "export_zip": {
+      "button": {
+        "label": "Export all valid",
+        "label_short": "EXPORT ZIP",
+        "aria": "Export all valid presets as ZIP"
+      },
+      "progress": {
+        "rendering": "Rendering {current, number}/{total, number}…",
+        "packing": "Packing ZIP…"
+      },
+      "toast": {
+        "success": "Exported {count, plural, =1 {1 preset} other {{count, number} presets}} to {filename}",
+        "partial": "Exported {passCount, number} of {total, number} presets to {filename}. {skippedCount, plural, =1 {1 preset was skipped} other {{skippedCount, number} presets were skipped}}.",
+        "error": "Export failed. {error}"
+      },
+      "skipped": {
+        "long_infographic_cap_exceeded": "long_infographic skipped: height {measured, number}px exceeds 4000px maximum"
+      }
+    },
     "actions": {
       "clone": "Clone",
       "cloneInFlight": "Cloning…",

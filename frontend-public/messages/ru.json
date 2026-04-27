@@ -241,6 +241,25 @@
       "template": "шаблон",
       "design": "дизайн"
     },
+    "export_zip": {
+      "button": {
+        "label": "Экспорт всех валидных",
+        "label_short": "ЭКСПОРТ ZIP",
+        "aria": "Экспортировать все валидные пресеты в ZIP"
+      },
+      "progress": {
+        "rendering": "Рендеринг {current, number} из {total, number}…",
+        "packing": "Упаковка ZIP…"
+      },
+      "toast": {
+        "success": "Экспортировано {count, plural, one {# пресет} few {# пресета} many {# пресетов} other {# пресетов}} в {filename}",
+        "partial": "Экспортировано {passCount, number} из {total, number} пресетов в {filename}. {skippedCount, plural, one {# пропущен} few {# пропущены} many {# пропущены} other {# пропущены}}.",
+        "error": "Ошибка экспорта. {error}"
+      },
+      "skipped": {
+        "long_infographic_cap_exceeded": "long_infographic пропущен: высота {measured, number}px превышает максимум 4000px"
+      }
+    },
     "actions": {
       "clone": "Дублировать",
       "cloneInFlight": "Дублирование…",

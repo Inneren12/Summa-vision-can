@@ -146,11 +146,13 @@ export function computeLongInfographicHeight(
  * (PR#3 ZIP export) catches this and marks the preset `qa_status: "skipped"`
  * in the manifest while continuing to render the other enabled presets.
  *
- * TODO PR#3: consumers should map error type + .presetId/.measuredHeight/.cap
- * fields to the i18n key `validation.long_infographic.height_cap_exceeded`,
- * NOT show error.message in UI (message is en-only debug text).
+ * PR#3: `i18nKey` field added so consumers (UI toast, manifest skipReason)
+ * can show a localized message without parsing `error.message` (which is
+ * EN-only debug text).
  */
 export class RenderCapExceededError extends Error {
+  public readonly i18nKey = 'validation.long_infographic.height_cap_exceeded';
+
   constructor(
     public presetId: string,
     public measuredHeight: number,

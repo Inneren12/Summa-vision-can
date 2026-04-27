@@ -7,6 +7,8 @@ import { TK } from '../config/tokens';
 import { TPLS } from '../registry/templates';
 import { StatusBadge } from './StatusBadge';
 import { SaveStatusIndicator } from './SaveStatusIndicator';
+import { ZipExportProgress } from './ZipExportProgress';
+import type { ZipExportPhase } from '../export/zipExport';
 
 interface TopBarProps {
   doc: CanonicalDocument;
@@ -24,7 +26,12 @@ interface TopBarProps {
   importJSON: (e: React.ChangeEvent<HTMLInputElement>) => void;
   exportJSON: () => void;
   markSaved: () => void;
-  exportPNG: () => void;
+  // Phase 2.1 PR#3: replaces former `exportPNG` callback with the multi-preset
+  // ZIP export. The single-PNG path is gone from the TopBar; per-preset
+  // single-PNG export from context menus (if/when added) is a separate UX
+  // surface.
+  exportZip: () => void;
+  zipExportPhase: ZipExportPhase | null;
   saveStatus: SaveStatus;
   fontsReady: boolean;
   // Stage 4 Task 4: debug overlay toggle. Availability is computed by the
@@ -59,7 +66,8 @@ export function TopBar({
   importJSON,
   exportJSON,
   markSaved,
-  exportPNG,
+  exportZip,
+  zipExportPhase,
   saveStatus,
   fontsReady,
   debugAvailable,
@@ -84,17 +92,20 @@ export function TopBar({
   const tSave = useTranslations('save');
   const tDraft = useTranslations('draft');
   const tActions = useTranslations('editor.actions');
+  const tZipBtn = useTranslations('editor.export_zip.button');
 
-  // Stage 4 Task 3: EXPORT button composes two gates. Validation errors
-  // take priority in the tooltip — the user has to fix those anyway
-  // before export works, and the fonts-loading window is typically
-  // sub-100ms on warm cache.
-  const exportDisabled = !canExp || !fontsReady;
+  // Stage 4 Task 3 + PR#3: EXPORT (ZIP) button composes three gates.
+  // Validation errors take priority in the tooltip — the user has to fix
+  // those anyway before export works, and the fonts-loading window is
+  // typically sub-100ms on warm cache. While a previous export is mid-flight
+  // the button is also disabled (zipExportPhase non-null).
+  const exportInProgress = zipExportPhase !== null;
+  const exportDisabled = !canExp || !fontsReady || exportInProgress;
   const exportMessage = !canExp
     ? tExport('disabled.validation_errors', { count: errs })
     : !fontsReady
       ? tExport('disabled.loading_fonts')
-      : tExport('png.verb');
+      : tZipBtn('label');
   const cropZoneActive = Boolean(cropZoneEnabled && cropZoneAvailable);
 
   return (
@@ -167,12 +178,12 @@ export function TopBar({
         <button type="button" onClick={onClone} disabled={!canClone || cloneInFlight} aria-label={cloneInFlight ? tActions('cloneInFlight') : tActions('clone')} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: !canClone || cloneInFlight ? TK.c.bgSurf : TK.c.acc, color: !canClone || cloneInFlight ? TK.c.txtM : TK.c.bgApp, border: `1px solid ${!canClone || cloneInFlight ? TK.c.brd : TK.c.acc}`, borderRadius: "2px", cursor: !canClone || cloneInFlight ? "default" : "pointer", fontWeight: 700, opacity: !canClone || cloneInFlight ? .6 : 1 }} title={!canClone && !cloneInFlight ? cloneTooltip : tActions('clone')}>{cloneInFlight ? tActions('cloneInFlight') : tActions('clone')}</button>
         <button
           type="button"
-          onClick={exportPNG}
+          onClick={exportZip}
           disabled={exportDisabled}
-          aria-label={exportDisabled ? exportMessage : tExport('png.verb')}
+          aria-label={exportInProgress ? tZipBtn('label') : exportDisabled ? exportMessage : tZipBtn('aria')}
           title={exportMessage}
           style={{ padding: "3px 7px", fontSize: "8px", fontFamily: TK.font.data, background: exportDisabled ? TK.c.txtM : TK.c.acc, color: TK.c.bgApp, border: "none", borderRadius: "2px", cursor: exportDisabled ? "not-allowed" : "pointer", fontWeight: 700, opacity: exportDisabled ? 0.5 : 1 }}
-        >{tExport('label_short')}</button>
+        >{exportInProgress ? <ZipExportProgress phase={zipExportPhase} /> : tZipBtn('label_short')}</button>
       </div>
     </div>
   );
