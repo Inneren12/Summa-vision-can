@@ -291,7 +291,13 @@ void main() {
         // jobTypeDisplay text — "Chart Generation" for graphics_generate.
         // Anchoring on jobTypeDisplay is more stable than counting cards by
         // type lookup because Card is also used elsewhere in the tree.
-        expect(find.text('Chart Generation'), findsNWidgets(3));
+        // skipOffstage: false because ListView.separated is lazy and the
+        // 800x600 default viewport clips the 3rd card off-stage; the
+        // off-stage card is built but not visible.
+        expect(
+          find.text('Chart Generation', skipOffstage: false),
+          findsNWidgets(3),
+        );
         expect(find.byType(ListView), findsOneWidget);
       },
     );
