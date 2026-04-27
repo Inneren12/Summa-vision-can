@@ -299,21 +299,21 @@ describe('ExportPresetId compile-time safety', () => {
     // unused `@ts-expect-error` itself becomes a build-time error.
 
     // @ts-expect-error — "twitter" is a legacy ID; must not be assignable to ExportPresetId
-    const _legacy1: ExportPresetId = 'twitter';
+    const legacy1: ExportPresetId = 'twitter';
+    void legacy1;
 
     // @ts-expect-error — "story" is a legacy ID; must not be assignable to ExportPresetId
-    const _legacy2: ExportPresetId = 'story';
+    const legacy2: ExportPresetId = 'story';
+    void legacy2;
 
     // @ts-expect-error — random string must not be assignable to ExportPresetId
-    const _garbage: ExportPresetId = 'not_a_real_preset';
+    const garbage: ExportPresetId = 'not_a_real_preset';
+    void garbage;
 
     // Sanity: canonical post-rename IDs DO type-check.
     const valid1: ExportPresetId = 'twitter_landscape';
     const valid2: ExportPresetId = 'instagram_portrait';
 
-    // Touch the suppressed bindings so lint/strict-unused doesn't flag them
-    // (they exist only for the compile-time regression assertion).
-    expect([_legacy1, _legacy2, _garbage]).toHaveLength(3);
     expect(valid1).toBe('twitter_landscape');
     expect(valid2).toBe('instagram_portrait');
   });

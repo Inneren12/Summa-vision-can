@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import type { EditorAction } from '../types';
 import { TK } from '../config/tokens';
 import { SIZES } from '../config/sizes';
-import type { PresetId } from '../config/presetIds';
+import type { PresetId } from '../config/sizes';
 
 interface ExportPresetsSectionProps {
   currentSize: PresetId;

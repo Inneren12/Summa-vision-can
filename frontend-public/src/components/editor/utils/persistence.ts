@@ -18,7 +18,7 @@ import type {
   PageConfig,
   WorkflowState,
 } from '../types';
-import type { PresetId } from '../config/presetIds';
+import type { PresetId } from '../config/sizes';
 import { mkDoc } from '../registry/templates';
 import { TPLS } from '../registry/templates';
 import { validateImportStrict } from '../registry/guards';

@@ -1,6 +1,6 @@
 import type { ContrastIssue } from './validation/contrast';
 import type { ValidationMessage } from './validation/types';
-import type { PresetId } from './config/presetIds';
+import type { PresetId } from './config/sizes';
 
 export type EditorMode = 'template' | 'design';
 export type QAMode = 'draft' | 'publish';

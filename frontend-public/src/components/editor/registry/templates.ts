@@ -1,5 +1,5 @@
 import type { CanonicalDocument, TemplateEntry, BlockProps } from '../types';
-import type { PresetId } from '../config/presetIds';
+import type { PresetId } from '../config/sizes';
 import { BREG } from './blocks';
 import { CURRENT_SCHEMA } from './guards';
 import { DEFAULT_EXPORT_PRESETS, SIZES } from '../config/sizes';
