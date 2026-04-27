@@ -19,10 +19,13 @@ def compute_etag(pub: Publication) -> str:
       - Separator: '|' (ASCII 0x7C)
       - Hash: SHA-256, truncated to 16 hex chars
       - Output: strong ETag, e.g. '"a1b2c3d4e5f60718"'
-        Strong because the validator is derived from row metadata (id + timestamp +
-        config_hash) — not the response body — so identical inputs always produce
-        byte-identical ETags. RFC 7232 §2.3 strong validator semantics apply.
-        Strong ETags are the correct fit for If-Match (lost-update protection).
+        Strong format (no W/ prefix) because this ETag serves as an optimistic-
+        concurrency validator for If-Match. It is not a body hash — it is a
+        token derived from the persisted publication state version (id +
+        last-write timestamp + config hash). For lost-update protection
+        purposes this is the correct contract: identical persisted state
+        always produces an identical token. See ARCHITECTURE_INVARIANTS.md §7
+        for the full contract.
 
     The created_at fallback handles fresh DRAFT rows where updated_at is NULL.
     The "" substitution for config_hash handles non-clone rows.

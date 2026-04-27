@@ -20,7 +20,7 @@
  * ``etagRef.current`` updates → a second autosave carries ``If-Match: "v2"``.
  */
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import InfographicEditor from '@/components/editor';
 import enMessages from '@/../messages/en.json';
 
@@ -151,12 +151,21 @@ describe('Autosave initial ETag seed (Phase 1.3 Blocker 2)', () => {
 
     // Second edit: a different palette so the reducer produces a new doc
     // ref and the autosave debounce fires again. The captured ETag from
-    // the first PATCH ("v2") must show up on the second PATCH.
+    // the first PATCH response ("v2") must show up on the second PATCH.
+    // Hard assertion — without it the rotation invariant is unprotected.
     clickPalette(/palette: society/i);
+    // Defensive: confirm the second click was matched and dispatched, so a
+    // failure here surfaces as "click did not dirty doc" not "PATCH timeout".
+    expect(screen.getAllByRole('button').length).toBeGreaterThan(0);
     await tickAutosave();
 
-    if (patchCalls.length >= 2) {
-      expect(patchCalls[1].ifMatch).toBe('"v2"');
-    }
+    await waitFor(
+      () => {
+        expect(patchCalls.length).toBeGreaterThanOrEqual(2);
+      },
+      { timeout: 5000 },
+    );
+    expect(patchCalls[0].ifMatch).toBe('"v1"');
+    expect(patchCalls[1].ifMatch).toBe('"v2"');
   });
 });

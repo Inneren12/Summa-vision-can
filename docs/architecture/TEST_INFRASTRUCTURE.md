@@ -270,6 +270,64 @@ This auto-includes future exports. Prevents the silent break.
 
 **Signature of the bug:** TypeError at `instanceof` line, only in tests using shared mock. Prod is fine.
 
+### 4.3 Real-wire test pattern — mock `global.fetch`, not the admin module
+
+**Source:** Slice 3.8 lesson, re-applied in Phase 1.3.
+
+When a frontend feature relies on a discriminator chain like `fetch → BackendApiError → catch branch → state → UI`, integration tests MUST mock `global.fetch`, NOT the consumer module (`@/lib/api/admin` or similar). Mocking the consumer module skips the discriminator and tests dead plumbing.
+
+- The mapper from raw HTTP body to `BackendApiError.code` lives inside the admin module. If the test mocks the admin module to return a pre-built `BackendApiError`, the mapper never runs, and a regression in the mapper passes the test suite.
+- Mock at the network boundary instead. Phase 1.3 reference: `frontend-public/tests/components/editor/autosave-412-real-wire.test.tsx`.
+
+Pattern:
+
+```typescript
+global.fetch = jest.fn(async (url, init) => {
+  if (typeof url === 'string'
+      && url.includes('/api/admin/publications/')
+      && init?.method === 'PATCH') {
+    return {
+      ok: false,
+      status: 412,
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      json: async () => ({
+        detail: {
+          error_code: 'PRECONDITION_FAILED',
+          message: '...',
+          details: { server_etag: '"...', client_etag: '"...' },
+        },
+      }),
+    } as Response;
+  }
+  return { ok: true, status: 200, headers: new Headers(), json: async () => ({}) } as Response;
+}) as typeof fetch;
+```
+
+The discriminator chain — `extractBackendErrorPayload` → `BackendApiError` constructor → `err.code === 'PRECONDITION_FAILED'` — must run end-to-end under test, otherwise the test guarantees nothing about the production pipeline.
+
+### 4.4 Initial-prop seed for client refs that must be populated before first interaction
+
+**Source:** Phase 1.3 Blocker 2.
+
+When a client component needs a ref populated before its first user-triggered action (e.g. `etagRef` populated before the first autosave PATCH), the seed value MUST be threaded through from the server-side fetch — not deferred to a client-side `useEffect` that calls `fetchSomething()` on mount.
+
+Reason: `useEffect` after mount races against user input. The user's first edit can fire (and its autosave can debounce-trigger) before the mount fetch resolves, defeating the seed.
+
+Two shapes, both encountered in Phase 1.3:
+
+**Shape A (preferred):** server component fetches the resource and threads the seed value as a client-component prop.
+- `app/.../[id]/page.tsx` (server) calls `fetchAdminPublicationServer`, receives `{...publication, etag}`, passes `etag` as `initialEtag` prop to a client wrapper.
+- Client wrapper passes prop to the editor.
+- Editor seeds: `const etagRef = useRef<string | null>(initialEtag);`
+
+Shape A pattern reference: Phase 1.3 PR `app/admin/editor/[id]/page.tsx` + `AdminEditorClient.tsx` + `editor/index.tsx` `initialEtag` prop.
+
+**Shape B (acceptable when no server component is in the path):** client component performs the fetch on mount AND ensures the ref is populated before the autosave effect can fire — typically by gating the autosave effect on a `mountedFetchComplete` state.
+
+Shape B is more error-prone (race window between mount fetch and first edit) and should be avoided when Shape A is feasible.
+
+**Test pattern for either shape:** the integration test passes the seed value directly as a prop (Shape A) or stubs the mount fetch with a `new Promise()` resolved before `act()` (Shape B), then asserts the first network call carries the seeded value. Phase 1.3 reference: `frontend-public/tests/components/editor/autosave-initial-etag-seed.test.tsx`.
+
 ## 5. Cross-cutting principles
 
 ### 5.1 Tests green ≠ pipeline works

@@ -94,9 +94,34 @@ describe('PreconditionFailedModal', () => {
     expect(onSaveAsNewDraft).not.toHaveBeenCalled();
   });
 
-  test('exposes serverEtag via data attribute for diagnostics', () => {
+  test('exposes serverEtag via data attribute outside production builds', () => {
+    // Jest sets NODE_ENV='test', so the dev/test-only attribute is present here.
+    // The complementary production-build assertion lives in the next test.
     renderModal({ serverEtag: '"feedface"' });
     const dialog = screen.getByRole('dialog');
     expect(dialog.getAttribute('data-server-etag')).toBe('"feedface"');
+  });
+
+  test('does not expose serverEtag data attribute in production builds', () => {
+    // Phase 1.3 polish: in production the concurrency token must not surface
+    // in the DOM. The component's spread-conditional renders the attribute
+    // only when NODE_ENV !== 'production'.
+    const previous = process.env.NODE_ENV;
+    // Object.defineProperty avoids tripping CRA/Jest read-only NODE_ENV
+    // guards in some environments.
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: 'production',
+      configurable: true,
+    });
+    try {
+      renderModal({ serverEtag: '"feedface"' });
+      const dialog = screen.getByRole('dialog');
+      expect(dialog.hasAttribute('data-server-etag')).toBe(false);
+    } finally {
+      Object.defineProperty(process.env, 'NODE_ENV', {
+        value: previous,
+        configurable: true,
+      });
+    }
   });
 });
