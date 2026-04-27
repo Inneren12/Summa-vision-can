@@ -3,7 +3,7 @@
 **Branch:** claude/create-phase-2-1-recon-UI7I3
 **HEAD:** d771484 Merge pull request #213 from Inneren12/claude/phase-2-1-pre-recon-finalize
 **Date:** 2026-04-27
-**Status:** WORK IN PROGRESS — Turn 2A of 3 (§1, §2, §3 Q-1..10, §4 and §5 pending Turn 2B).
+**Status:** WORK IN PROGRESS — Turn 2 of 3 complete (§1, §2, §3 Q-1..13, §4, §5); awaiting Turn 3 prompt for §6, §7, §8.
 
 **Consumes:** docs/recon/phase-2-1-pre-recon.md (merged to main as of d771484)
 **Produces:** architectural decisions, founder approval gate, PR decomposition for impl phase.
@@ -151,3 +151,105 @@ This turn writes Q-2.1-1 through Q-2.1-6. Turn 2 writes Q-2.1-7 through Q-2.1-13
 **Rationale:** Document-wide block (Variant a) penalizes the operator for a single oversized preset they may not even have selected for distribution. Auto-truncate (Variant c) silently corrupts the editorial intent — content below 4000px is invisible in the export but visible in the editor, breaking deterministic-export trust. Preset-specific block (Variant b) preserves the deterministic-export invariant (the included presets are pixel-correct), gives operators actionable feedback (single named preset is the problem), and works naturally with combo (A)+(C) — long_infographic already needs per-preset QA evaluation per Q-2.1-2 to validate cap. **FOUNDER APPROVAL REQUIRED — see Turn 3 §7.**
 
 **Implementation hint:** PR#1 measure-phase: when computing `long_infographic` intrinsic height, if Σ section heights > 4000, emit `validation.long_infographic.height_cap_exceeded` error scoped to preset `long_infographic`. PR#4 per-preset QA evaluator reads this scoped error → marks `long_infographic` as `qa_status: "skipped"` in manifest and excludes from render loop. Other 6 presets unaffected. UI notification is a single toast at end of export "long_infographic skipped: <reason>. <N> presets exported successfully."
+
+### Q-2.1-11 — Test depth on toBlob/ZIP boundary
+
+**Recommendation:** **Hybrid (Variant c)** — unit-test per helper (renderDocumentToBlob, buildManifest, buildZipFilename, packZip) with mocked `toBlob` returning predictable bytes, PLUS one real-wire end-to-end test per PR (PR#1 and PR#3) that runs the actual flow and asserts on output bytes via `fflate.unzipSync` to verify ZIP entry filenames + manifest content.
+
+**Rationale:** Pure unit tests with mocked toBlob (Variant b) keep iteration fast but miss the regression class that hurt Slice 3.8 (`TEST_INFRASTRUCTURE.md` §4.1) — pipeline state contamination. Real-wire-only (Variant a) is slow per assertion. The hybrid pattern adopts `TEST_INFRASTRUCTURE.md` §4.1 mandate for HTTP→state→UI boundaries to the analogous render→blob→file boundary. PR#1 estimate: ~12 unit tests + 1 integration. PR#3 estimate: ~8 unit tests + 1 integration that asserts ZIP unzips and contains expected `manifest.json` + N `<preset>.png` entries.
+
+**Implementation hint:** Test files: PR#1 adds `frontend-public/tests/components/editor/export/renderToBlob.test.ts` (unit) and `frontend-public/tests/components/editor/export/renderToBlob.integration.test.tsx` (real-wire). PR#3 adds `frontend-public/tests/components/editor/export/zipExport.test.ts` (unit per helper) and `frontend-public/tests/components/editor/export/zipExport.integration.test.tsx` (real-wire end-to-end). Both integration tests use the canvas-mock pattern from `tests/components/editor/context-menu-integration.test.tsx:6,21` (jsdom workaround for HTMLCanvasElement.getContext returning null).
+
+### Q-2.1-12 — Preset ID rename strategy
+
+**Recommendation:** **Code-rename to match MD §6**, with backward-compat alias map in `utils/persistence.ts`. After 2.1 merge, MD §6 is the canonical source — code reflects MD, not the other way around.
+
+**Rationale:** Pre-recon §4 D1 marks this as High severity. The MD is canonical reference for the architecture (designers, marketing, operators consult it); renaming the MD to match code embeds informal naming into the architectural surface. Code-rename keeps MD authoritative. Alias map (`SIZE_FROM_BACKEND`) handles existing serialized documents in DB — old documents stored with `twitter` resolve to `twitter_landscape` on load. Hard-rename without aliases corrupts existing documents on first edit. **FOUNDER APPROVAL REQUIRED — see Turn 3 §7.**
+
+**Implementation hint:** PR#2 (the schema-touching PR) renames keys in `frontend-public/src/components/editor/config/sizes.ts`:
+- `instagram_port` → `instagram_portrait`
+- `story` → `instagram_story`
+- `twitter` → `twitter_landscape`
+- `reddit` → `reddit_standard`
+- `linkedin` → `linkedin_landscape`
+
+Adds aliases to `utils/persistence.ts` `SIZE_FROM_BACKEND` so old IDs resolve forward. Migration N→N+1 in same PR rewrites stored `page.size` and `page.exportPresets` values to new IDs at document load.
+
+### Q-2.1-13 — Safe-area / per-platform rules location
+
+**Recommendation:** **Out-of-scope for Phase 2.1**. Add a follow-up DEBT entry. Per-platform safe areas and max-series / min-font / preferred-mode rules from `DESIGN_SYSTEM_v3.2.md` БЛОК 11 are not blocking ZIP export; they're a content-quality concern that becomes more relevant when per-preset QA from Q-2.1-2 is actively scoring exports against platform-specific minimums.
+
+**Rationale:** Including safe-area encoding in Phase 2.1 would require: (a) extending `SizePreset` shape with `safeAreas` field, (b) modifying renderer to honor safe-area boundaries, (c) per-platform QA checks evaluating min-font / max-series. That's a separate body of work — call it Phase 2.1.5 or fold into Phase 3 binding-status work where data-driven font sizes are computed. ZIP export ships without it; documents currently produced without explicit safe-areas will continue producing ZIPs with the same visual fidelity they have today.
+
+**Implementation hint:** No PR action in 2.1. Turn 3 §6 PR decomposition does NOT include safe-area work. Recon-proper Turn 3 also adds DEBT entry "DEBT-NN — Encode per-platform safe-areas + min-font / max-series rules from DESIGN_SYSTEM_v3.2.md БЛОК 11" with status active, severity low (not blocking 2.1), category code-quality.
+
+## 4. Drift triage
+
+Pre-recon §4 surfaced 3 drift rows. Recon-proper resolves which are closed in Phase 2.1 vs which remain follow-up.
+
+### D1 — Preset IDs (High severity)
+
+**Resolved by:** Q-2.1-12 — code-rename to match MD §6 + back-compat aliases.
+**PR:** PR#2 (schema migration PR includes the rename).
+**Closure:** After PR#2 merges, `EDITOR_ARCHITECTURE.md` §6 IDs and code IDs match. Aliases preserved indefinitely for old serialized documents.
+
+### D2 — QA per-preset axis (High severity)
+
+**Resolved by:** Q-2.1-2 — split-rules approach (size-independent + size-dependent), Q-2.1-9 — exportPresets toggle making per-preset evaluation reachable from operator UI, Q-2.1-10 — preset-specific cap-blocking honors per-preset evaluation.
+**PR:** PR#4 (per-preset QA evaluator + UI integration).
+**Closure:** After PR#4 merges, combo (A)+(C) is fully implementable. `validate.ts` exports `validateDocument` and `validatePresetSize` separately. UI shows per-preset QA status in the export panel. After 2.1 merge, founder updates `EDITOR_ARCHITECTURE.md` §15 to clarify per-preset semantics — that's a docs-only PR, ~10 lines, not blocking.
+
+### D3 — exportPresets field (Medium-High severity)
+
+**Resolved by:** Q-2.1-8 — default value semantics, Q-2.1-9 — toggle UI placement, founder Variant 2 lock from §1.
+**PR:** PR#2 (schema migration PR adds field + migration + UI).
+**Closure:** After PR#2 merges, `PageConfig` has `exportPresets: string[]` field. All existing documents migrated to common-4 default. Schema docs updated in same PR.
+
+### Drift not surfaced in pre-recon but found during recon
+
+None as of Turn 2. If Turn 3 surfaces additional drift during PR-decomposition design (e.g. existing test patterns assuming document-level QA), add D4+ rows here in Turn 3.
+
+## 5. Risk mitigations
+
+Pre-recon §5 listed 8 risks. Recon-proper assigns each a concrete mitigation (test pattern, PR boundary, documentation discipline).
+
+### Risk 1 — Render helper extraction from impure exportPNG closure
+
+**Mitigation:** Q-2.1-1 confirms `renderDoc` itself is re-entrant. PR#1 helper signature is documented as `main-thread-only, rAF-bound, must NOT be called from Web Worker context` — explicit JSDoc on `renderDocumentToBlob`. Test: invoke helper 7 times back-to-back in a single tick; assert all 7 resolve with distinct Blob bytes (no shared state contamination).
+
+### Risk 2 — long_infographic implementation expands PR#1 scope ~50%
+
+**Mitigation:** PR#1 explicit scope split into two phases within the same PR:
+1. Pure render helper for fixed-size presets (existing 6).
+2. Variable-height extension for `long_infographic` with cap enforcement at measure phase.
+
+If during impl phase 2 reveals deeper `measureLayout` rework than estimated, defer phase 2 to a separate PR#1.5 between PR#1 and PR#2. Recon flags this as a permitted late-stage split — impl agent notifies founder when invoking the split.
+
+### Risk 3 — Schema migration discipline (PR#2)
+
+**Mitigation:** PR#2 includes migration test fixture `frontend-public/tests/components/editor/migrations/v(N)-to-v(N+1).test.ts` with three round-trip scenarios:
+1. Pre-migration document with no `exportPresets` → migrates to default common-4.
+2. Pre-migration document with old preset IDs in `page.size` (e.g. `twitter`) → migrates to `twitter_landscape`.
+3. Pre-migration document with `page.size` already on a renamed ID (forward-compat sanity) → unchanged.
+
+`applyMigrations` abort-on-missing-intermediate from `EDITOR_BLOCK_ARCHITECTURE.md` §6 is verified by adding a deliberately-missing intermediate test that asserts the abort throws.
+
+### Risk 4 — Font-gate single-check semantics
+
+**Mitigation:** PR#1 helper's JSDoc states explicitly: "Caller must ensure `document.fonts.ready` resolved before invoking. Helper does NOT re-check fonts between invocations. For sequential per-preset rendering, check fonts ONCE at loop entry." Caller responsibility, not helper-internal state. PR#3 export trigger code adds a comment at the loop-entry font-check tying back to this contract.
+
+### Risk 5 — Test coverage gap on toBlob/ZIP boundary
+
+**Mitigation:** Q-2.1-11 hybrid testing pattern — every PR introducing a new helper adds unit + one real-wire integration test minimum. PR#1: renderDocumentToBlob unit + integration. PR#3: buildManifest, buildZipFilename, packZip units + ZIP integration that uses `fflate.unzipSync` to verify byte-level correctness.
+
+### Risk 6 — UI placement for exportPresets toggle
+
+**Mitigation:** Q-2.1-9 picks Inspector (Variant b) — in-budget for PR#2 M-size estimate. Modal option (c) explicitly rejected to keep PR#2 in M.
+
+### Risk 7 — 4-PR estimate vs roadmap "M, 2-3 PRs"
+
+**Mitigation:** Recon-proper §6 (Turn 3) explicitly states "supersedes roadmap row 2.1 estimate". Founder updates `OPERATOR_AUTOMATION_ROADMAP.md` row 2.1 in a docs-only PR after recon-proper merges. During the recon period (now until merge), `OPERATOR_PHASE_STATUS.md` row 2.1 stays at status `Pending` — when impl PRs land, founder updates to `In progress`. No silent drift between roadmap and actual scope.
+
+### Risk 8 — Preset ID rename ripple (Q-2.1-12 / D1)
+
+**Mitigation:** Q-2.1-12 picks code-rename WITH back-compat aliases. The aliases live in `SIZE_FROM_BACKEND` (`utils/persistence.ts:36-57` per pre-recon §2.C). PR#2 migration test (Risk 3 mitigation, scenario 2) explicitly covers old-ID → new-ID resolution. The forward-compat case (already-renamed) is also tested (scenario 3). Rename direction is one-way: code renamed → matches MD; aliases handle pre-rename DB state.
