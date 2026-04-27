@@ -10,10 +10,12 @@ import 'package:summa_vision_admin/features/cubes/application/cube_providers.dar
 import 'package:summa_vision_admin/features/cubes/data/cube_repository.dart';
 import 'package:summa_vision_admin/features/cubes/domain/cube_catalog_entry.dart';
 import 'package:summa_vision_admin/features/cubes/presentation/cube_detail_screen.dart';
+import 'package:summa_vision_admin/features/data_preview/application/cube_diff_service.dart';
 import 'package:summa_vision_admin/features/data_preview/application/data_preview_providers.dart';
 import 'package:summa_vision_admin/features/data_preview/data/data_preview_repository.dart';
 import 'package:summa_vision_admin/features/data_preview/domain/data_preview_response.dart';
 import 'package:summa_vision_admin/features/data_preview/presentation/data_preview_screen.dart';
+import 'package:summa_vision_admin/l10n/generated/app_localizations.dart';
 
 // ---------------------------------------------------------------------------
 // Sample data — matches real backend contract
@@ -66,10 +68,13 @@ Widget _buildPreviewScreen({
     overrides: [
       previewOverride,
       previewStorageKeyProvider.overrideWith((ref) => storageKey),
+      cubeDiffProvider.overrideWith((ref) async => const CubeDiff.noBaseline()),
       ...extraOverrides,
     ],
     child: MaterialApp(
       theme: AppTheme.dark,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: MediaQuery(
         data: const MediaQueryData(size: Size(1200, 800)),
         child: DataPreviewScreen(storageKey: storageKey),

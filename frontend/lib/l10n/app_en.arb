@@ -391,5 +391,26 @@
   "errorJobUnknownType": "Unknown job type.",
   "@errorJobUnknownType": {
     "description": "Mapped from backend error_code UNKNOWN_JOB_TYPE. Dispatcher error — operator should rarely see this."
+  },
+  "dataPreviewDiffStatusLabel": "{count, plural, =0 {No cells changed since last view} =1 {1 cell changed since last view} other {# cells changed since last view}}",
+  "@dataPreviewDiffStatusLabel": {
+    "description": "Banner above data table showing how many cells changed since last view",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dataPreviewDiffNoBaseline": "First view — no comparison available",
+  "@dataPreviewDiffNoBaseline": {
+    "description": "Banner when this is the first time viewing this cube"
+  },
+  "dataPreviewDiffSchemaChanged": "Schema changed since last view — diff unavailable",
+  "@dataPreviewDiffSchemaChanged": {
+    "description": "Banner when columns differ from previous snapshot"
+  },
+  "dataPreviewDiffNoProductId": "This data has no diff tracking",
+  "@dataPreviewDiffNoProductId": {
+    "description": "Banner when storage_key has no parseable product_id (non-StatCan path)"
   }
 }

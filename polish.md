@@ -106,6 +106,64 @@ enough to justify a sprint slot.
 
 ---
 
+## P3-004 — Tests must use `localizationsDelegates` for any localized UI
+
+- **Source:** Phase 1.5 frontend fix round 2 (preventive)
+- **Added:** 2026-04-26
+- **Severity:** P3
+- **Category:** test-infrastructure
+- **File:** project-wide pattern
+- **Description:** Several Phase 1.5 widget tests originally passed
+  by accident: `AppLocalizations.of(context)?.X ?? 'EN fallback'`
+  pattern in production code, paired with `MaterialApp` in tests
+  WITHOUT `localizationsDelegates`. Result: `AppLocalizations.of(context)`
+  returns null, UI shows hardcoded EN fallback, test asserts on the
+  fallback string and passes — regardless of whether localization is
+  actually wired. This was caught for diff banners during fix round 2.
+  Same risk exists in any other widget test that uses MaterialApp
+  without delegates AND tests localized strings. This is the third
+  time this lesson has appeared (Slice 3.5, Slice 3.6, Phase 1.5).
+- **Fix sketch:** sweep `frontend/test/` for `MaterialApp(...)`
+  widget setup; verify each that renders localized text either:
+  - Uses `pumpLocalizedRouter` / `pumpLocalizedWidget` helper
+  - Includes `localizationsDelegates: AppLocalizations.localizationsDelegates`
+    + `supportedLocales: AppLocalizations.supportedLocales`
+  - Asserts via `final l10n = AppLocalizations.of(context)!;` then
+    `expect(find.text(l10n.X), findsOneWidget)`, NOT against hardcoded EN
+  Tests that fail this audit get fixed; production code with
+  `?.l10n_key ?? 'fallback'` also gets the `??` removed.
+- **Status:** pending
+
+---
+
+## P3-005 — Document Dart `const Set` with custom equality limitation
+
+- **Source:** Phase 1.5 frontend fix round 2 (preventive)
+- **Added:** 2026-04-26
+- **Severity:** P3
+- **Category:** documentation
+- **File:** `docs/EDITOR_ARCHITECTURE.md` or new `docs/dart-gotchas.md`
+- **Description:** Dart `const Set<T>{}` requires `T` to have
+  primitive equality (`==` based on identity, not custom override).
+  `DiffCellKey` in this PR uses field-based `==`/`hashCode` for
+  Set deduplication — necessary for diff correctness, but means
+  `const Set<DiffCellKey>{}` triggers compile-time error
+  "does not have a primitive equality." This caused 3 test
+  compilation errors in fix round 2.
+- **Fix sketch:** add a short "Dart const collection gotchas"
+  subsection somewhere visible (architecture doc or new gotchas
+  doc). Mention:
+  - `const Set` requires primitive equality on element type
+  - Workaround: drop outer `const`, keep inner `const T(...)` if
+    T's constructor is const: `<T>{const T(...)}` works
+  - Alternative: use `final Set<T> X = {...}` for module-level
+    constants
+  - Custom-equality classes can still be used in non-const Sets
+    without issue
+- **Status:** pending
+
+---
+
 ## Batch dispatch policy
 
 When 3+ items accumulate in same category, OR 5+ items total:

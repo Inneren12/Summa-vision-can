@@ -114,6 +114,10 @@ abstract class AppLocalizations {
   String get errorJobNoHandler;
   String get errorJobIncompatiblePayload;
   String get errorJobUnknownType;
+  String dataPreviewDiffStatusLabel(int count);
+  String get dataPreviewDiffNoBaseline;
+  String get dataPreviewDiffSchemaChanged;
+  String get dataPreviewDiffNoProductId;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

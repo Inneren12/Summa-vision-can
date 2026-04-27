@@ -28,6 +28,8 @@ mixin _$DataPreviewResponse {
   @JsonKey(name: 'column_names')
   List<String> get columnNames => throw _privateConstructorUsedError;
   List<Map<String, dynamic>> get data => throw _privateConstructorUsedError;
+  @JsonKey(name: 'product_id')
+  String? get productId => throw _privateConstructorUsedError;
 
   /// Serializes this DataPreviewResponse to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -52,6 +54,7 @@ abstract class $DataPreviewResponseCopyWith<$Res> {
     int columns,
     @JsonKey(name: 'column_names') List<String> columnNames,
     List<Map<String, dynamic>> data,
+    @JsonKey(name: 'product_id') String? productId,
   });
 }
 
@@ -76,6 +79,7 @@ class _$DataPreviewResponseCopyWithImpl<$Res,
     Object? columns = null,
     Object? columnNames = null,
     Object? data = null,
+    Object? productId = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -99,6 +103,10 @@ class _$DataPreviewResponseCopyWithImpl<$Res,
                 ? _value.data
                 : data // ignore: cast_nullable_to_non_nullable
                       as List<Map<String, dynamic>>,
+            productId: freezed == productId
+                ? _value.productId
+                : productId // ignore: cast_nullable_to_non_nullable
+                      as String?,
           )
           as $Val,
     );
@@ -120,6 +128,7 @@ abstract class _$$DataPreviewResponseImplCopyWith<$Res>
     int columns,
     @JsonKey(name: 'column_names') List<String> columnNames,
     List<Map<String, dynamic>> data,
+    @JsonKey(name: 'product_id') String? productId,
   });
 }
 
@@ -142,6 +151,7 @@ class __$$DataPreviewResponseImplCopyWithImpl<$Res>
     Object? columns = null,
     Object? columnNames = null,
     Object? data = null,
+    Object? productId = freezed,
   }) {
     return _then(
       _$DataPreviewResponseImpl(
@@ -165,6 +175,10 @@ class __$$DataPreviewResponseImplCopyWithImpl<$Res>
             ? _value._data
             : data // ignore: cast_nullable_to_non_nullable
                   as List<Map<String, dynamic>>,
+        productId: freezed == productId
+            ? _value.productId
+            : productId // ignore: cast_nullable_to_non_nullable
+                  as String?,
       ),
     );
   }
@@ -179,6 +193,7 @@ class _$DataPreviewResponseImpl implements _DataPreviewResponse {
     required this.columns,
     @JsonKey(name: 'column_names') required final List<String> columnNames,
     required final List<Map<String, dynamic>> data,
+    @JsonKey(name: 'product_id') this.productId,
   })  : _columnNames = columnNames,
         _data = data;
 
@@ -211,8 +226,12 @@ class _$DataPreviewResponseImpl implements _DataPreviewResponse {
   }
 
   @override
+  @JsonKey(name: 'product_id')
+  final String? productId;
+
+  @override
   String toString() {
-    return 'DataPreviewResponse(storageKey: $storageKey, rows: $rows, columns: $columns, columnNames: $columnNames, data: $data)';
+    return 'DataPreviewResponse(storageKey: $storageKey, rows: $rows, columns: $columns, columnNames: $columnNames, data: $data, productId: $productId)';
   }
 
   @override
@@ -226,7 +245,9 @@ class _$DataPreviewResponseImpl implements _DataPreviewResponse {
             (identical(other.columns, columns) || other.columns == columns) &&
             const DeepCollectionEquality()
                 .equals(other._columnNames, _columnNames) &&
-            const DeepCollectionEquality().equals(other._data, _data));
+            const DeepCollectionEquality().equals(other._data, _data) &&
+            (identical(other.productId, productId) ||
+                other.productId == productId));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -238,6 +259,7 @@ class _$DataPreviewResponseImpl implements _DataPreviewResponse {
     columns,
     const DeepCollectionEquality().hash(_columnNames),
     const DeepCollectionEquality().hash(_data),
+    productId,
   );
 
   /// Create a copy of DataPreviewResponse
@@ -264,6 +286,7 @@ abstract class _DataPreviewResponse implements DataPreviewResponse {
     required final int columns,
     @JsonKey(name: 'column_names') required final List<String> columnNames,
     required final List<Map<String, dynamic>> data,
+    @JsonKey(name: 'product_id') final String? productId,
   }) = _$DataPreviewResponseImpl;
 
   factory _DataPreviewResponse.fromJson(Map<String, dynamic> json) =
@@ -281,6 +304,9 @@ abstract class _DataPreviewResponse implements DataPreviewResponse {
   List<String> get columnNames;
   @override
   List<Map<String, dynamic>> get data;
+  @override
+  @JsonKey(name: 'product_id')
+  String? get productId;
 
   /// Create a copy of DataPreviewResponse
   /// with the given fields replaced by the non-null parameter values.

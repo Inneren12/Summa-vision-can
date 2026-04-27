@@ -19,6 +19,7 @@ class DataPreviewResponse with _$DataPreviewResponse {
     required int columns,
     @JsonKey(name: 'column_names') required List<String> columnNames,
     required List<Map<String, dynamic>> data,
+    @JsonKey(name: 'product_id') String? productId,
   }) = _DataPreviewResponse;
 
   factory DataPreviewResponse.fromJson(Map<String, dynamic> json) =>
