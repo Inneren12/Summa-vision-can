@@ -164,6 +164,21 @@ enough to justify a sprint slot.
 
 ---
 
+## P3-006 — Localize retry snackbar literals on /jobs and /exceptions
+
+- **Source:** Phase 2.5 implementation, retry parity decision per Q-C.2.
+- **Added:** 2026-04-27
+- **Severity:** P3
+- **Category:** i18n-tech-debt
+- **Files:**
+  - `frontend/lib/features/jobs/presentation/jobs_dashboard_screen.dart` (existing debt, lines around 45-65)
+  - `frontend/lib/features/exceptions/presentation/exceptions_screen.dart` (new, mirrors the same debt)
+- **Description:** Retry-action snackbar messages on both screens are hard-coded English literals: `'Job retried (new job: $newJobId)'`, `'Job is not retryable'`, `'Retry failed: ${e.message}'`. The Phase 2.5 inbox inherits the literals byte-for-byte (Q-C.2 = parity, retry uses identical handler).
+- **Fix sketch:** add 3 ARB keys (`jobRetrySuccess`, `jobRetryNotRetryable`, `jobRetryFailed` — name aligns with the existing `nav*`/feature-namespace conventions on screen) under both EN and RU; both screens consume from the same keys. Include `{newJobId}` ICU placeholder in `jobRetrySuccess` and `{error}` in `jobRetryFailed`.
+- **Status:** pending
+
+---
+
 ## Batch dispatch policy
 
 When 3+ items accumulate in same category, OR 5+ items total:
