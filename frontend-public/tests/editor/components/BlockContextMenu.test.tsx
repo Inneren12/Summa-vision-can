@@ -203,4 +203,22 @@ describe("BlockContextMenu", () => {
       "editor.context_menu.delete_disabled_template_locked",
     );
   });
+
+  test("Hide locked tooltip wins over disabled_workflow", () => {
+    // Locked block + workflow disallows structural edit. The locked
+    // reason is more informative for the operator (the cause is on
+    // the block, not the workflow), so it must win.
+    const { onHide } = mountMenu({
+      block: mkBlock({ locked: true }),
+      canStructuralEdit: false,
+    });
+    const hide = screen.getByTestId("ctx-hide");
+    expect(hide).toBeDisabled();
+    expect(hide).toHaveAttribute(
+      "title",
+      "editor.context_menu.hide_disabled_locked",
+    );
+    fireEvent.click(hide);
+    expect(onHide).not.toHaveBeenCalled();
+  });
 });

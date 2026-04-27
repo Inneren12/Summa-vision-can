@@ -49,7 +49,8 @@ export function isBlockEmpty(block: Block): boolean {
   const reg = BREG[block.type];
   if (!reg) return false;
   const defaults = reg.dp ?? {};
-  const propKeys = Object.keys(block.props ?? {});
+  const props = block.props ?? {};
+  const propKeys = Object.keys(props);
 
   // Any prop key present on the block but missing from defaults is
   // considered meaningful — empty check fails. Guards against blocks
@@ -60,7 +61,7 @@ export function isBlockEmpty(block: Block): boolean {
   }
 
   for (const key of Object.keys(defaults)) {
-    if (!deepEqual(block.props[key], defaults[key])) return false;
+    if (!deepEqual(props[key], defaults[key])) return false;
   }
   return true;
 }

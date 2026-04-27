@@ -7,6 +7,7 @@
  */
 import { reducer, initState } from "../../src/components/editor/store/reducer";
 import type { EditorState } from "../../src/components/editor/types";
+import { BREG } from "../../src/components/editor/registry/blocks";
 
 function findBlockIdByType(state: EditorState, type: string): string {
   const bid = Object.keys(state.doc.blocks).find(
@@ -154,16 +155,17 @@ describe("reducer / REMOVE_BLOCK", () => {
   test("REMOVE_BLOCK preserves selection when a different block is selected", () => {
     const s0 = initState();
     const targetBid = findBlockIdByType(s0, "eyebrow_tag");
-    // Pick any other block to be selected — must not be templateRequired
-    // since REMOVE_BLOCK on those gets rejected.
-    const keptBid = Object.keys(s0.doc.blocks).find(
-      id => id !== targetBid &&
-            s0.doc.blocks[id].type !== "source_footer" &&
-            s0.doc.blocks[id].type !== "headline_editorial",
-    )!;
+    // Pick any other block to be selected. Filter via the registry's
+    // status field rather than by hardcoded type names so the test
+    // stays robust if the template-required set evolves.
+    const keptBid = Object.keys(s0.doc.blocks).find(id => {
+      if (id === targetBid) return false;
+      const reg = BREG[s0.doc.blocks[id].type];
+      return reg?.status !== "required_locked" && reg?.status !== "required_editable";
+    });
     expect(keptBid).toBeDefined();
 
-    const sSelected = reducer(s0, { type: "SELECT", blockId: keptBid });
+    const sSelected = reducer(s0, { type: "SELECT", blockId: keptBid! });
     const s1 = reducer(sSelected, { type: "REMOVE_BLOCK", blockId: targetBid });
     expect(s1.selectedBlockId).toBe(keptBid);
   });
