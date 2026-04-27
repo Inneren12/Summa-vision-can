@@ -3,7 +3,7 @@
 **Branch:** claude/phase-2-1-pre-recon
 **HEAD:** eca5cae Update print statement from 'Hello' to 'Goodbye'
 **Date:** 2026-04-27
-**Status:** COMPLETE — pre-recon ready for founder review and recon-proper consumption.
+**Status:** COMPLETE — pre-recon ready for founder review and recon-proper consumption (§1, §2.A–J, §3, §4, §5).
 
 ## 1. Locked scope
 
@@ -295,4 +295,169 @@ Plus three preset-related keys outside `export.*`: `editor.theme.option.size.ari
 - `validation.long_infographic.height_cap_exceeded` (per §2.H, sits under existing `validation.*` ns, NOT under `export_zip.*`).
 **Notes:** RU mirror MUST be added in same PR per `eslint-plugin-i18next` config. Preset-name labels (e.g. "Instagram Story", "LinkedIn") are currently composed via the ID + `SIZES[k].n` literal (`LeftPanel.tsx:142`); if recon decides to localize preset names per `DESIGN_SYSTEM_v3.2.md` БЛОК 14 (Localization & Formatting Policy), that's additional surface — flagged for §3.
 
-<!-- §3 §4 §5 pending — Part B -->
+## 3. Open questions for recon-proper
+
+The following questions remain open after pre-recon. Recon-proper consumes this list and either resolves each (with founder Q&A as needed) or escalates back to founder. Do NOT answer here.
+
+Founder-decided items (long_infographic implementation, exportPresets schema field, 4-PR estimate, 4000px hard cap, Variant α roadmap-defer) are NOT in this list — they are locked in §1.
+
+### Q-2.1-1 — Re-entrant render path
+
+**Why it matters:** PR#1 extracts a pure-or-near-pure render helper from the impure `exportPNG` callback (§2.A) and impure `renderDoc` (§2.B `engine.ts:14-58`). Sequential per-preset rendering requires the helper to be re-entrant. `renderDoc` itself is already invoked twice per session today (preview at `index.tsx:368` + export at `index.tsx:1236`), suggesting it's already re-entrant — but the wrapping closure in `exportPNG` isn't.
+**Pre-recon evidence:** §2.A `index.tsx:1211-1250`, §2.B engine.ts.
+**Recon-proper must answer:** Can `renderDoc` be called N times sequentially in one tick with different (w, h) without state contamination? YES (use directly) / NO (wrap with reset) / UNCLEAR (needs runtime probe).
+
+### Q-2.1-2 — Per-preset QA evaluator placement
+
+**Why it matters:** §2.D — `validate(doc)` is single-arg; size-dependent rules at lines 105/117/135/136/142 of `validation/validate.ts` use `SIZES[doc.page.size]`. Per-preset evaluation needs either (a) `validate(doc, sizeOverride)` signature change, (b) temporary doc-clone with mutated `page.size`, or (c) split rules into size-independent (run once) + size-dependent (run per-preset).
+**Pre-recon evidence:** §2.D.
+**Recon-proper must answer:** signature-change / doc-clone / split-rules — with rationale. Split-rules is recommended (cheaper compute, clearer separation).
+
+### Q-2.1-3 — ZIP filename source
+
+**Why it matters:** Current single-PNG uses `summa-${doc.templateId}-${doc.page.size}.png` (§2.A line in code). For ZIP, `<publication-slug>-<timestamp>.zip` is more descriptive, but slug isn't on document state.
+**Pre-recon evidence:** §2.A filename pattern; §2.F `publication.slug` exists in backend response but not in editor state.
+**Recon-proper must answer:** stay with `summa-${templateId}-export-${timestamp}.zip` (no slug needed) / fetch slug from autosave response and cache in editor state / different scheme.
+
+### Q-2.1-4 — fflate version pin
+
+**Why it matters:** §2.E confirms fflate is absent. Memory item: "no new dependencies without justification" — fflate is justified, but pin policy must match repo conventions. Other deps in `package.json` use `^` (caret) per §2.E except `next` and `react` which are pinned exact.
+**Pre-recon evidence:** §2.E `package.json:17-26`.
+**Recon-proper must answer:** specific version range with rationale. Default proposal: `^0.8.x` (current stable major).
+
+### Q-2.1-5 — Progress UI granularity
+
+**Why it matters:** Sequential render of 7 presets at 200-500ms each = 2-4 sec total. The current TopBar precedent (single Export button) suggests minimal feedback is acceptable.
+**Pre-recon evidence:** §2.A TopBar wiring at `components/TopBar.tsx:170-175`.
+**Recon-proper must answer:** (a) overall spinner / (b) per-preset bar N/7 / (c) per-preset bar with named preset label. Per-preset label adds i18n surface.
+
+### Q-2.1-6 — Cancellation during render
+
+**Why it matters:** If operator triggers ZIP and starts editing during render, what happens? The existing `exportPNG` doesn't have cancel logic — the user is expected to wait the ~rAF frame. ZIP at 2-4 sec makes the question more real.
+**Pre-recon evidence:** §2.A `requestAnimationFrame` flow.
+**Recon-proper must answer:** (a) block edits during ZIP gen / (b) allow edits + abort ZIP if doc mutates / (c) allow edits + continue ZIP from doc-snapshot taken at start. (c) is consistent with deterministic-export invariant.
+
+### Q-2.1-7 — manifest.json schema for 2.1
+
+**Why it matters:** Phase 2.2 extends this; needs forward-compat shape now.
+**Pre-recon evidence:** §1 locked scope; §2.F backend NONE.
+**Recon-proper must answer:** specific schema. Starting proposal: `{ schemaVersion: 1, publication_id: string|null, templateId: string, generated_at: ISO-8601, presets: [{ id, filename, width, height, qa_status: "pass"|"warning"|"skipped" }] }`. Validate and add anything else needed for 2.2's `distribution.json` extension (UTM tags, social captions per Phase 2.2 DoD).
+
+### Q-2.1-8 — exportPresets default value semantics
+
+**Why it matters:** §2.D — field absent on PageConfig; PR#2 adds it via migration. New documents and migrated existing documents need a default.
+**Pre-recon evidence:** §2.D `types.ts:52-56` PageConfig shape.
+**Recon-proper must answer:** default value as JSON. Recommend `["instagram_1080", "twitter", "reddit", "linkedin"]` (the "common 4") for new documents, and same for migration of existing documents — operator opts-in to story / portrait / long_infographic per-document. Or alternative: all 7 enabled by default.
+
+### Q-2.1-9 — Toggle UI placement for exportPresets
+
+**Why it matters:** Affects PR#2 scope. Inspector / TopBar are in-budget; new modal pushes PR#2 from M to L.
+**Pre-recon evidence:** §2.A TopBar, existing Inspector pattern.
+**Recon-proper must answer:** (a) TopBar (always-visible chips) / (b) Inspector page-properties tab / (c) dedicated Export modal opened by Export button. (b) is most consistent with existing UX vocabulary (page.size already lives in Inspector); (c) is most discoverable; (a) is most invasive.
+
+### Q-2.1-10 — long_infographic 4000px cap blocking scope
+
+**Why it matters:** §1 says hard cap → QA error blocks export. Scope of "blocks export" is ambiguous: blocks ALL presets, or only `long_infographic`?
+**Pre-recon evidence:** §1 founder decision; §2.D `validate.ts` global error gate; §2.H impl notes.
+**Recon-proper must answer:** (a) document-wide block (any preset over cap → entire ZIP fails) / (b) preset-specific block (only long_infographic skipped from ZIP, other 6 export with warning) / (c) auto-truncate at 4000 with warning. **Strongly recommend (b)** — single oversize preset shouldn't kill an otherwise-valid 6-preset ZIP. (b) requires per-preset QA from Q-2.1-2.
+
+### Q-2.1-11 — Test depth on toBlob/ZIP boundary
+
+**Why it matters:** §2.I confirms `toBlob` flow is NOT covered by any existing test. PR#1 introduces toBlob multi-call; PR#3 introduces ZIP packing. `TEST_INFRASTRUCTURE.md` §4.1 mandates real-wire integration for HTTP→state→UI; ZIP is analogous (state→blob→file).
+**Pre-recon evidence:** §2.I 70 tests / 15+ render-touching / zero on toBlob.
+**Recon-proper must answer:** (a) real-wire (mock toBlob to return predictable bytes, assert ZIP bytes via fflate.unzip in test) / (b) unit-only (mock toBlob, assert helper shape only) / (c) hybrid (unit per helper + one real-wire end-to-end). (c) is recommended; estimate test count per PR.
+
+### Q-2.1-12 — Preset ID rename strategy
+
+**Why it matters:** §2.C drift D1 — 5 of 7 IDs differ between code (`SIZES`) and EDITOR_ARCHITECTURE.md §6. Both are "live" — code is source of runtime truth, MD is source of docs truth. Recon picks direction.
+**Pre-recon evidence:** §2.C table; `utils/persistence.ts:36-57` SIZE_TO_BACKEND / SIZE_FROM_BACKEND mapping.
+**Recon-proper must answer:** rename in code to match MD (`twitter` → `twitter_landscape`, etc.) with `SIZE_FROM_BACKEND` aliases for back-compat OR update MD to match code. Code-rename is recommended (MD is canonical reference), but requires migration for existing documents.
+
+### Q-2.1-13 — Safe-area / per-platform rules location
+
+**Why it matters:** §2.C — DESIGN_SYSTEM_v3.2.md БЛОК 11 specifies safe areas (top 48 / bottom 80 / L-R 48; story top 120 / bottom 100) and per-platform max-series / min-font / preferred-mode. NOT encoded anywhere in code today. Phase 2.1 doesn't strictly need them, but per-preset QA (Q-2.1-2) becomes more useful with them.
+**Pre-recon evidence:** §2.C, DESIGN_SYSTEM_v3.2.md БЛОК 11.
+**Recon-proper must answer:** include safe-area encoding in PR#2 (with sizes) / defer to follow-up PR / out-of-scope for Phase 2.1.
+
+## 4. Drift signals — code vs reference MDs
+
+Three drift rows surfaced during inventory. Each row maps a divergence between authoritative MD and current code, with severity for recon-proper triage.
+
+| # | Area | Reference MD | What MD says | What code shows | Severity | Resolution path |
+|---|---|---|---|---|---|---|
+| D1 | Preset IDs | EDITOR_ARCHITECTURE.md §6 | 7 preset IDs (instagram_1080, instagram_portrait, instagram_story, twitter_landscape, reddit_standard, linkedin_landscape, long_infographic) | 6 IDs in `SIZES` (instagram_1080, instagram_port, story, twitter, reddit, linkedin); long_infographic absent | High | PR#1 implements long_infographic. PR#2 reconciles ID names per Q-2.1-12 (rename code with back-compat aliases OR update MD). |
+| D2 | QA per-preset axis | EDITOR_ARCHITECTURE.md §15 | Combo (A) export-safe indicator implies per-preset evaluation | `validate(doc)` is single-arg; document-level only; categories (errors/warnings/info/passed) match | High | PR#4 introduces per-preset evaluator per Q-2.1-2. After 2.1 merge, founder updates §15 to clarify per-preset semantics OR §15 stays document-level and combo (A)+(C) is documented as document-level + per-preset hybrid. |
+| D3 | exportPresets field | EDITOR_ARCHITECTURE.md §6 + roadmap §5.2 | Implied by combo (C) "listed in document.exportPresets" | Field absent on PageConfig (`types.ts:52-56`) | Medium-High | PR#2 adds field via schemaVersion bump + migration N→N+1 per Q-2.1-8. Schema docs updated post-merge. |
+
+**Severity heuristic:**
+- High = blocks Phase 2.1 implementation directly
+- Medium-High = needs implementation in 2.1 scope but path is clear
+- Medium = noted, doesn't block 2.1 but creates follow-up
+- Low = cosmetic / docs-only
+
+No additional drift surfaced beyond these three. Inventory in §2.E (deps), §2.F (backend), §2.G (font/DPI), §2.I (tests) all match MDs without divergence.
+
+## 5. Risk pre-read
+
+Honest assessment of the 4-PR estimate (founder Variant 2 + Variant a, locked in §1) based on §2 inventory facts. Recon-proper consumes this list to decide PR boundaries, dependency order, and pre-emptive test design.
+
+**Risk 1 — Render helper extraction from impure exportPNG closure**
+- §2.A — `exportPNG` (`index.tsx:1211-1250`) is a `useCallback` reading `doc, pal, sz, canExp, fontsReady` from React closure
+- §2.B — `renderDoc` itself is impure (writes to ctx) but takes inputs as parameters; already called from two paths today (preview + export), suggesting re-entrancy
+- PR#1 extracts a pure helper `renderDocumentToBlob(doc, pal, presetId): Promise<Blob>` from the closure
+- Risk: if any rAF / font-state assumption in the closure is implicit, the helper will look pure but break in Web Worker / parallel future use. Document explicitly that helper is rAF-bound + main-thread-only.
+- Cite: `engine.ts:14-58`, `index.tsx:1211-1250`, `measure.ts:103-135` (already pure, reuse intact)
+
+**Risk 2 — long_infographic implementation expands PR#1 scope ~50%**
+- §2.H confirms greenfield; founder Variant a decision; 4000px hard cap
+- Variable-height rendering needs: (a) summation of `consumedHeight` from `measureLayout` (`measure.ts:128`), (b) cap enforcement at measure phase (before render), (c) new QA error key `validation.long_infographic.height_cap_exceeded`, (d) decision on `measureLayout` signature for unbounded h (sentinel `Infinity` or new flag)
+- §2.G — current `availableHeight: layout.h` and `overflow: consumed > layout.h * 1.1` (`measure.ts:127, 129`) assume bounded h
+- Risk: cap enforcement at measure phase couples PR#1 to QA evaluator (PR#4) earlier than ideal. Recon-proper decides whether PR#1 emits a temporary measure-phase error and PR#4 migrates to per-preset QA, OR PR#4 is scheduled before PR#1.
+- Cite: §2.B `measure.ts`, §2.H impl notes
+
+**Risk 3 — Schema migration discipline (PR#2)**
+- §1 commits to `schemaVersion` bump for `exportPresets` field
+- `EDITOR_BLOCK_ARCHITECTURE.md` §6 + `ARCHITECTURE_INVARIANTS.md` §8 mandate `applyMigrations` aborts on missing intermediate
+- Existing documents in DB (Phase 1.x cloned drafts, Phase 1.6 fixtures) all need migration N→N+1
+- Risk: default value for migration of existing docs (Q-2.1-8) ripples into the migration function shape. Picking "common 4" default vs "all 7" default changes the migration behavior, not just the default constant.
+- Cite: §2.D current PageConfig shape, `EDITOR_BLOCK_ARCHITECTURE.md` §6 migration rule
+
+**Risk 4 — Font-gate single-check semantics**
+- §2.G — `fontsReady` is single boolean; checked once at export start
+- Sequential per-preset rendering can complete in 2-4 sec; `document.fonts.ready` resolution between presets is theoretically possible but practically blocked by the preload registry
+- Risk: NONE for current preload registry behavior, but if PR#1 helper is reused elsewhere (e.g. Web Worker future use), the single-check assumption needs explicit documentation
+- Cite: §2.G `index.tsx:166`, `font-preload.ts:1-40`, `index.tsx:1218-1223` (B1 fix removed re-await)
+
+**Risk 5 — Test coverage gap on toBlob/ZIP boundary**
+- §2.I — 70 total tests, 15+ touch render/export, but `toBlob` flow is UNTESTED
+- PR#1 introduces toBlob multi-call, PR#3 introduces ZIP packing
+- Without real-wire integration tests, regression on byte-level output (deterministic-export invariant) goes undetected
+- `TEST_INFRASTRUCTURE.md` §4.1 mandates real-wire for HTTP→state→UI; ZIP is analogous boundary
+- Risk: under-investment in test depth at this boundary defers the cost to a future regression, not eliminates it
+- Cite: §2.I, `TEST_INFRASTRUCTURE.md` §4.1
+
+**Risk 6 — UI placement for exportPresets toggle**
+- §2.D — field doesn't exist; UI for it doesn't exist
+- Q-2.1-9 lists three placement options; Inspector (b) is in-budget; modal (c) pushes PR#2 to L
+- Risk: if recon-proper picks (c), PR#2 grows from "schema + simple toggle" to "schema + new modal + Inspector chrome integration"
+- Cite: existing TopBar, Inspector chrome conventions
+
+**Risk 7 — 4-PR estimate vs roadmap "M, 2-3 PRs"**
+- Roadmap row 2.1 says M, 2-3 PRs; pre-recon revised to 4 PRs minimum (founder Variant α defers roadmap update to post-recon-merge)
+- Risk: secondary stakeholders reading old roadmap during recon period plan against stale estimate
+- Mitigation: recon-proper output explicitly states "supersedes roadmap row 2.1 estimate"; founder updates `OPERATOR_AUTOMATION_ROADMAP.md` post-merge
+- Cite: `OPERATOR_AUTOMATION_ROADMAP.md` row 2.1 vs §1 4-PR breakdown
+
+**Risk 8 — Preset ID rename ripple (Q-2.1-12 / D1)**
+- §2.C — code IDs differ from MD §6 IDs; backend mapping in `utils/persistence.ts:36-57` is the bridge
+- If Q-2.1-12 picks code-rename, `SIZE_TO_BACKEND` / `SIZE_FROM_BACKEND` need expansion (alias table); existing documents with old IDs must migrate
+- Risk: rename couples to schema migration in PR#2; getting the alias direction wrong silently corrupts existing documents
+- Cite: §2.C, `utils/persistence.ts:36-57`
+
+## Document history
+
+| Date | Part | Notes |
+|---|---|---|
+| 2026-04-27 | A1 | §1 initial + §2.A–E inventory |
+| 2026-04-27 | A2 | §1 updated with §2.C/D founder decisions; §2.F–J added |
+| 2026-04-27 | B / Finalize | §3 (13 open questions), §4 (3 drift rows), §5 (8 risks). Status flipped to true COMPLETE. |
