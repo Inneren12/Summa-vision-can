@@ -37,4 +37,28 @@ describe("isBlockEmpty", () => {
   test("unknown block type returns false (conservative)", () => {
     expect(isBlockEmpty({ id: "x", type: "ghost_block", props: {}, visible: true })).toBe(false);
   });
+
+  test("returns false when block carries a prop not declared in defaults", () => {
+    const reg = BREG["headline_editorial"];
+    const b: Block = {
+      id: "blk_x",
+      type: "headline_editorial",
+      props: { ...reg.dp, customNote: "important" },
+      visible: true,
+    };
+    expect(isBlockEmpty(b)).toBe(false);
+  });
+
+  test("returns false when block has extra prop even if value is falsy", () => {
+    const reg = BREG["headline_editorial"];
+    const b: Block = {
+      id: "blk_y",
+      type: "headline_editorial",
+      props: { ...reg.dp, customNote: "" },
+      visible: true,
+    };
+    // Empty string in an undeclared key is still a meaningful presence —
+    // the operator deliberately added the key.
+    expect(isBlockEmpty(b)).toBe(false);
+  });
 });

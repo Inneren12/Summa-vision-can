@@ -252,7 +252,8 @@
       "delete": "Delete",
       "delete_disabled_template_locked": "Cannot delete a template-required block",
       "hide_disabled_locked": "Unlock the block before hiding it",
-      "disabled_template_mode": "Switch to Design mode to use this action"
+      "disabled_template_mode": "Switch to Design mode to use this action",
+      "disabled_workflow": "Switch to Draft to use this action"
     },
     "delete_confirm": {
       "title": "Delete this {block}?",

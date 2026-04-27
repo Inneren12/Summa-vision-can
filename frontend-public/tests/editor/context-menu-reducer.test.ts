@@ -7,6 +7,7 @@
  */
 import { reducer, initState } from "../../src/components/editor/store/reducer";
 import type { EditorState } from "../../src/components/editor/types";
+import { BREG } from "../../src/components/editor/registry/blocks";
 
 function findBlockIdByType(state: EditorState, type: string): string {
   const bid = Object.keys(state.doc.blocks).find(
@@ -113,6 +114,25 @@ describe("reducer / DUPLICATE_BLOCK", () => {
     expect(s1.doc).toBe(s0.doc);
     expect(s1._lastRejection?.type).toBe("DUPLICATE_BLOCK");
   });
+
+  test("DUPLICATE_BLOCK rejects caller-provided newId collision", () => {
+    const s0 = reducer(initState(), { type: "SWITCH_TPL", tid: "single_stat_note" });
+    const annId = findBlockIdByType(s0, "body_annotation");
+    const existingId = Object.keys(s0.doc.blocks)[0];
+    const collisionId = existingId === annId
+      ? Object.keys(s0.doc.blocks).find(id => id !== annId)!
+      : existingId;
+
+    const s1 = reducer(s0, {
+      type: "DUPLICATE_BLOCK",
+      blockId: annId,
+      newId: collisionId,
+    });
+
+    expect(s1.doc).toBe(s0.doc);
+    expect(s1._lastRejection?.type).toBe("DUPLICATE_BLOCK");
+    expect(s1._lastRejection?.reason).toMatch(/already exists/i);
+  });
 });
 
 describe("reducer / REMOVE_BLOCK", () => {
@@ -121,12 +141,33 @@ describe("reducer / REMOVE_BLOCK", () => {
     const bid = findBlockIdByType(s0, "eyebrow_tag");
     const ownerSec = s0.doc.sections.find(s => s.blockIds.includes(bid))!;
 
-    const s1 = reducer(s0, { type: "REMOVE_BLOCK", blockId: bid });
+    // Select the target before removing so the selection-clear assertion
+    // below tests REMOVE_BLOCK behavior, not initState() defaults.
+    const sSelected = reducer(s0, { type: "SELECT", blockId: bid });
+    const s1 = reducer(sSelected, { type: "REMOVE_BLOCK", blockId: bid });
     expect(s1.doc.blocks[bid]).toBeUndefined();
     const newSec = s1.doc.sections.find(s => s.id === ownerSec.id)!;
     expect(newSec.blockIds.includes(bid)).toBe(false);
     expect(s1.selectedBlockId).toBeNull();
     expect(s1.dirty).toBe(true);
+  });
+
+  test("REMOVE_BLOCK preserves selection when a different block is selected", () => {
+    const s0 = initState();
+    const targetBid = findBlockIdByType(s0, "eyebrow_tag");
+    // Pick any other block to be selected. Filter via the registry's
+    // status field rather than by hardcoded type names so the test
+    // stays robust if the template-required set evolves.
+    const keptBid = Object.keys(s0.doc.blocks).find(id => {
+      if (id === targetBid) return false;
+      const reg = BREG[s0.doc.blocks[id].type];
+      return reg?.status !== "required_locked" && reg?.status !== "required_editable";
+    });
+    expect(keptBid).toBeDefined();
+
+    const sSelected = reducer(s0, { type: "SELECT", blockId: keptBid! });
+    const s1 = reducer(sSelected, { type: "REMOVE_BLOCK", blockId: targetBid });
+    expect(s1.selectedBlockId).toBe(keptBid);
   });
 
   test("REMOVE_BLOCK on required_locked block is rejected", () => {
@@ -151,6 +192,70 @@ describe("reducer / REMOVE_BLOCK", () => {
     const s1 = reducer(s0, { type: "REMOVE_BLOCK", blockId: bid });
     expect(s1.doc.blocks[bid]).toBeDefined();
     expect(s1._lastRejection?.type).toBe("REMOVE_BLOCK");
+  });
+});
+
+describe("reducer / REMOVE_BLOCK comment subtree", () => {
+  test("removing a block drops anchored comment AND its replies", () => {
+    const s0 = initState();
+    const bid = findBlockIdByType(s0, "eyebrow_tag");
+
+    // Seed: 1 comment anchored to bid, 1 reply (parentId = c1.id) anchored
+    // to a different block (the harder case — proves parentId-chain
+    // closure rather than relying on co-anchoring), 1 unrelated comment
+    // anchored to a different block.
+    const otherBid = Object.keys(s0.doc.blocks).find(id => id !== bid)!;
+    const seeded: EditorState = {
+      ...s0,
+      doc: {
+        ...s0.doc,
+        review: {
+          ...s0.doc.review,
+          comments: [
+            {
+              id: "c1",
+              blockId: bid,
+              parentId: null,
+              author: "u1",
+              text: "parent",
+              createdAt: "2026-04-27T00:00:00Z",
+              updatedAt: null,
+              resolved: false,
+              resolvedAt: null,
+              resolvedBy: null,
+            },
+            {
+              id: "c2",
+              blockId: otherBid,
+              parentId: "c1",
+              author: "u2",
+              text: "reply",
+              createdAt: "2026-04-27T00:00:01Z",
+              updatedAt: null,
+              resolved: false,
+              resolvedAt: null,
+              resolvedBy: null,
+            },
+            {
+              id: "c3",
+              blockId: otherBid,
+              parentId: null,
+              author: "u3",
+              text: "unrelated",
+              createdAt: "2026-04-27T00:00:02Z",
+              updatedAt: null,
+              resolved: false,
+              resolvedAt: null,
+              resolvedBy: null,
+            },
+          ],
+        },
+      },
+    };
+
+    const s1 = reducer(seeded, { type: "REMOVE_BLOCK", blockId: bid });
+    const remaining = s1.doc.review.comments.map(c => c.id).sort();
+    expect(remaining).toEqual(["c3"]);
   });
 });
 

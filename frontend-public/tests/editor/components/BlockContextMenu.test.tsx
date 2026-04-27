@@ -23,6 +23,7 @@ function mkBlock(over: Partial<Block> = {}): Block {
 interface MountOpts {
   block?: Block;
   designMode?: boolean;
+  canStructuralEdit?: boolean;
   position?: { x: number; y: number };
 }
 
@@ -43,6 +44,7 @@ function mountMenu(opts: MountOpts = {}) {
       onDuplicate={onDuplicate}
       onDelete={onDelete}
       designMode={opts.designMode ?? true}
+      canStructuralEdit={opts.canStructuralEdit ?? true}
     />,
   );
   return { onClose, onLock, onHide, onDuplicate, onDelete, ...result };
@@ -151,5 +153,72 @@ describe("BlockContextMenu", () => {
       "aria-label",
       "editor.context_menu.aria_label",
     );
+  });
+
+  test("Lock is disabled when canStructuralEdit=false", () => {
+    const { onLock } = mountMenu({ canStructuralEdit: false });
+    const lock = screen.getByTestId("ctx-lock");
+    expect(lock).toBeDisabled();
+    expect(lock).toHaveAttribute("title", "editor.context_menu.disabled_workflow");
+    fireEvent.click(lock);
+    expect(onLock).not.toHaveBeenCalled();
+  });
+
+  test("Hide is disabled when canStructuralEdit=false", () => {
+    const { onHide } = mountMenu({ canStructuralEdit: false });
+    const hide = screen.getByTestId("ctx-hide");
+    expect(hide).toBeDisabled();
+    expect(hide).toHaveAttribute("title", "editor.context_menu.disabled_workflow");
+    fireEvent.click(hide);
+    expect(onHide).not.toHaveBeenCalled();
+  });
+
+  test("Duplicate is disabled when canStructuralEdit=false even in designMode", () => {
+    const { onDuplicate } = mountMenu({ canStructuralEdit: false, designMode: true });
+    const dup = screen.getByTestId("ctx-duplicate");
+    expect(dup).toBeDisabled();
+    expect(dup).toHaveAttribute("title", "editor.context_menu.disabled_workflow");
+    fireEvent.click(dup);
+    expect(onDuplicate).not.toHaveBeenCalled();
+  });
+
+  test("Delete is disabled when canStructuralEdit=false even in designMode for non-required block", () => {
+    const { onDelete } = mountMenu({ canStructuralEdit: false, designMode: true });
+    const del = screen.getByTestId("ctx-delete");
+    expect(del).toBeDisabled();
+    expect(del).toHaveAttribute("title", "editor.context_menu.disabled_workflow");
+    fireEvent.click(del);
+    expect(onDelete).not.toHaveBeenCalled();
+  });
+
+  test("templateRequired tooltip wins over disabled_workflow", () => {
+    mountMenu({
+      block: mkBlock({ id: "blk_src", type: "source_footer", props: { text: "Src" } }),
+      canStructuralEdit: false,
+    });
+    const del = screen.getByTestId("ctx-delete");
+    expect(del).toBeDisabled();
+    expect(del).toHaveAttribute(
+      "title",
+      "editor.context_menu.delete_disabled_template_locked",
+    );
+  });
+
+  test("Hide locked tooltip wins over disabled_workflow", () => {
+    // Locked block + workflow disallows structural edit. The locked
+    // reason is more informative for the operator (the cause is on
+    // the block, not the workflow), so it must win.
+    const { onHide } = mountMenu({
+      block: mkBlock({ locked: true }),
+      canStructuralEdit: false,
+    });
+    const hide = screen.getByTestId("ctx-hide");
+    expect(hide).toBeDisabled();
+    expect(hide).toHaveAttribute(
+      "title",
+      "editor.context_menu.hide_disabled_locked",
+    );
+    fireEvent.click(hide);
+    expect(onHide).not.toHaveBeenCalled();
   });
 });

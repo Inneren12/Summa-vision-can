@@ -1377,6 +1377,7 @@ export default function InfographicEditor({
           onDuplicate={() => dispatch({ type: 'DUPLICATE_BLOCK', blockId: contextMenu.blockId })}
           onDelete={() => requestDeleteBlock(contextMenu.blockId)}
           designMode={mode === 'design'}
+          canStructuralEdit={workflowPerms.structural}
         />
       )}
 

@@ -342,9 +342,26 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       if (ownerSecIdx < 0) { nextState = state; break; }
       const ownerSec = state.doc.sections[ownerSecIdx];
       const reg = BREG[sourceBlock.type];
-      // Hard cap: refuse to exceed maxPerSection. Surfaces as a rejection
-      // so the UI can disable the menu item; the menu itself runs the same
-      // check before showing the option.
+      // Caller-provided newId must not collide with an existing block.
+      // Belt-and-suspenders for tests that pass deterministic ids; without
+      // this guard `blocks[newId] = newBlock` would silently overwrite and
+      // produce a duplicate id reference in `section.blockIds`.
+      if (newId && state.doc.blocks[newId]) {
+        nextState = withRejection(
+          state,
+          action.type,
+          `Cannot duplicate ${reg?.name ?? sourceBlock.type}: block id ${newId} already exists`,
+        );
+        break;
+      }
+      // Hard cap: refuse to exceed maxPerSection. The reducer is the
+      // single enforcement point — the context menu has no section
+      // context to pre-check, so a click on Duplicate when the cap is
+      // reached produces a no-op rejection (visible in dev via the
+      // rejection log; not blocking, just inert). Pre-disabling in the
+      // menu would require threading section + sameTypeCount through
+      // props; deferred until DEBT-044 multi-select work surfaces a
+      // reason to add that wiring.
       if (reg && reg.maxPerSection) {
         const sameTypeCount = ownerSec.blockIds.reduce((n, bid) => {
           return n + (state.doc.blocks[bid]?.type === sourceBlock.type ? 1 : 0);
@@ -417,7 +434,31 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       // Drop the block from any anchored comments. assertCanonicalDocumentV2Shape
       // requires every comment.blockId to point to an existing block; deletion
       // would otherwise produce orphan comments that fail re-import validation.
-      const remainingComments = state.doc.review.comments.filter(c => c.blockId !== blockId);
+      // Remove the subtree of comments anchored to the deleted block: any
+      // comment with comment.blockId === blockId, plus any reply whose
+      // transitive parentId chain reaches one of those. Holds the invariant
+      // even if a reply was anchored to a different block than its parent.
+      const removedCommentIds = new Set<string>();
+      for (const c of state.doc.review.comments) {
+        if (c.blockId === blockId) removedCommentIds.add(c.id);
+      }
+      let subtreeChanged = true;
+      while (subtreeChanged) {
+        subtreeChanged = false;
+        for (const c of state.doc.review.comments) {
+          if (
+            c.parentId &&
+            removedCommentIds.has(c.parentId) &&
+            !removedCommentIds.has(c.id)
+          ) {
+            removedCommentIds.add(c.id);
+            subtreeChanged = true;
+          }
+        }
+      }
+      const remainingComments = state.doc.review.comments.filter(
+        c => !removedCommentIds.has(c.id),
+      );
       const newDoc = {
         ...state.doc,
         sections: newSections,
