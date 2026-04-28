@@ -179,9 +179,12 @@ async def test_clone_of_clone_preserves_lineage_chain(session_factory) -> None:
         clone_b_id = int(resp_b.json()['id'])
 
         # Promote B to PUBLISHED so it can itself be cloned
-        await client.post(
+        publish_resp = await client.post(
             f'/api/v1/admin/publications/{clone_b_id}/publish',
             headers=_auth_headers(),
+        )
+        assert publish_resp.status_code == 200, (
+            f"Publish failed: {publish_resp.status_code} {publish_resp.text}"
         )
 
         # Second clone (C from B)
@@ -196,7 +199,7 @@ async def test_clone_of_clone_preserves_lineage_chain(session_factory) -> None:
 
 
 @pytest.mark.asyncio
-async def test_clone_of_source_with_null_lineage_key_returns_500_with_diagnostic(
+async def test_clone_of_source_with_null_lineage_key_returns_500(
     session_factory, monkeypatch
 ) -> None:
     """If a source somehow has null lineage_key, derive raises ValueError →

@@ -53,11 +53,17 @@ def _alembic(*args: str, db_url: str) -> subprocess.CompletedProcess[str]:
 
 @pytest.fixture
 def test_db_url() -> str:
-    """Test database URL from env, skips test if missing/SQLite."""
+    """Test database URL from env, skips test if not Postgres async.
+
+    Migration tests use create_async_engine + Postgres-specific SQL
+    (information_schema queries, FK ondelete=SET NULL semantics), so
+    the URL must be ``postgresql+asyncpg://``.
+    """
     url = os.environ.get("TEST_DATABASE_URL")
-    if not url or "sqlite" in url:
+    if not url or not url.startswith("postgresql+asyncpg://"):
         pytest.skip(
-            "TEST_DATABASE_URL not set to PostgreSQL — migration test skipped"
+            "TEST_DATABASE_URL must be set to a postgresql+asyncpg:// URL "
+            "for migration integration tests"
         )
     return url
 
@@ -72,14 +78,19 @@ async def db_at_revision(test_db_url: str):
             engine = await db_at_revision("b4f9a21c8d77")
             ...
 
-    On the first call: downgrades to ``base`` then upgrades to the
-    requested revision (handles dirty state from a prior failed run).
-    On subsequent calls within the same test: runs ``alembic upgrade``
-    (or ``downgrade``) directly so data inserted at an intermediate
-    revision survives forward migrations — alembic figures out which
-    revisions to run between the current and target.
+    Contract — reset-then-upgrade on first call:
+    On the first call within a test, the DB is downgraded to ``base``
+    (tolerating empty/fresh state) and then upgraded forward to the
+    requested revision. This handles dirty state from a prior failed
+    run regardless of where the previous test left the DB.
 
-    Teardown disposes any engines and downgrades to ``base``.
+    On subsequent calls within the same test, ``alembic upgrade``/
+    ``downgrade`` runs directly without resetting — data inserted at
+    an intermediate revision survives forward migrations, which is the
+    whole point of multi-step migration tests.
+
+    Teardown disposes any engines and downgrades to ``base`` so the
+    next test starts clean.
     """
     engines: list[AsyncEngine] = []
     first_call = True
@@ -89,9 +100,17 @@ async def db_at_revision(test_db_url: str):
         if first_call:
             try:
                 _alembic("downgrade", "base", db_url=test_db_url)
-            except RuntimeError:
-                # Empty DB — nothing to downgrade; safe to ignore
-                pass
+            except RuntimeError as exc:
+                msg = str(exc).lower()
+                # Tolerate only legitimate fresh-DB / no-state cases
+                if (
+                    "can't locate revision" in msg
+                    or "no such table" in msg
+                    or ("alembic_version" in msg and "does not exist" in msg)
+                ):
+                    pass
+                else:
+                    raise
             first_call = False
         _alembic("upgrade", revision, db_url=test_db_url)
         engine = create_async_engine(test_db_url, future=True)
@@ -106,5 +125,14 @@ async def db_at_revision(test_db_url: str):
         try:
             _alembic("downgrade", "base", db_url=test_db_url)
         except RuntimeError as exc:
-            # Best-effort cleanup; surface but don't fail next test
-            print(f"WARN: teardown downgrade failed: {exc}")
+            msg = str(exc).lower()
+            # Tolerate only legitimate fresh-DB / no-state cases
+            if (
+                "can't locate revision" in msg
+                or "no such table" in msg
+                or ("alembic_version" in msg and "does not exist" in msg)
+            ):
+                pass
+            else:
+                # Best-effort cleanup; surface but don't fail next test
+                print(f"WARN: teardown downgrade failed: {exc}")
