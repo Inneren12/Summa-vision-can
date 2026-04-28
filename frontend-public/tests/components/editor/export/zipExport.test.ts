@@ -27,13 +27,26 @@ jest.mock('@/components/editor/export/renderToBlob', () => {
   return {
     ...actual,
     renderDocumentToBlob: jest.fn(),
+    // PR#4: validatePresetSize now calls computeLongInfographicHeight inside
+    // the orchestrator's pre-render gate. Wrap as jest.fn(actual) so the
+    // default behavior is the real implementation (existing tests unaffected),
+    // but the PR#4 pre-render-skip case can override per-call.
+    computeLongInfographicHeight: jest.fn(
+      actual.computeLongInfographicHeight,
+    ),
   };
 });
 
-import { renderDocumentToBlob } from '@/components/editor/export/renderToBlob';
+import {
+  renderDocumentToBlob,
+  computeLongInfographicHeight,
+} from '@/components/editor/export/renderToBlob';
 
 const mockedRender = renderDocumentToBlob as jest.MockedFunction<
   typeof renderDocumentToBlob
+>;
+const mockedCompute = computeLongInfographicHeight as jest.MockedFunction<
+  typeof computeLongInfographicHeight
 >;
 
 function makeDoc(presets: readonly PresetId[]): CanonicalDocument {
@@ -165,6 +178,14 @@ describe('exportZip orchestrator (unit)', () => {
   beforeEach(() => {
     teardown = installCanvasMocks();
     mockedRender.mockReset();
+    // PR#4: reset the long-infographic cap mock to the real implementation
+    // each test, so per-test overrides (e.g. the pre-render-skip case below)
+    // don't leak across tests in this file.
+    const actualRender = jest.requireActual(
+      '@/components/editor/export/renderToBlob',
+    );
+    mockedCompute.mockReset();
+    mockedCompute.mockImplementation(actualRender.computeLongInfographicHeight);
     // jsdom does not implement URL.createObjectURL/revokeObjectURL, so
     // direct assignment (rather than jest.spyOn) is required. Capture the
     // originals (likely undefined) for restoration in afterEach.
@@ -264,6 +285,36 @@ describe('exportZip orchestrator (unit)', () => {
     const doc = makeDoc([]);
     await expect(exportZip({ doc, pal: PALETTES.housing })).rejects.toThrow(
       /No presets enabled/,
+    );
+  });
+
+  test('PR#4 pre-render skip: validatePresetSize error → preset skipped without renderDocumentToBlob call', async () => {
+    // Drive the validator's long-infographic cap check into the error branch
+    // so the orchestrator's pre-render gate trips. The render mock would
+    // happily produce a blob — the assertion is that it's never invoked for
+    // long_infographic, proving the gate ran BEFORE the render call rather
+    // than the runtime catch path doing the work.
+    mockedRender.mockImplementation(async () => new Blob([new Uint8Array([1, 2, 3])]));
+    mockedCompute.mockImplementation(() => 4500);
+
+    const doc = makeDoc(['instagram_1080', 'long_infographic']);
+    const result = await exportZip({ doc, pal: PALETTES.housing });
+
+    expect(result.passCount).toBe(1);
+    expect(result.skippedCount).toBe(1);
+    expect(result.skipped[0].presetId).toBe('long_infographic');
+    expect(result.skipped[0].skipReason).toBe(
+      'validation.long_infographic.height_cap_exceeded',
+    );
+
+    // Render was called once for instagram_1080, not twice. The long_infographic
+    // skip happens BEFORE the render call, distinguishing the pre-render gate
+    // from the runtime defense-in-depth catch.
+    expect(mockedRender).toHaveBeenCalledTimes(1);
+    expect(mockedRender).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      'long_infographic',
     );
   });
 });

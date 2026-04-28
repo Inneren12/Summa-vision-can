@@ -5,6 +5,7 @@ import { renderDocumentToBlob, RenderCapExceededError } from './renderToBlob';
 import { buildManifest, type PresetRenderResult } from './manifest';
 import { buildZipFilename } from './zipFilename';
 import { deferRevoke } from '../utils/download';
+import { validatePresetSize } from '../validation/validate';
 
 export type ZipExportPhase =
   | { phase: 'rendering'; current: number; total: number }
@@ -76,6 +77,26 @@ export async function exportZip(
     for (let i = 0; i < total; i += 1) {
       const presetId = enabled[i];
       onProgress?.({ phase: 'rendering', current: i + 1, total });
+
+      // PR#4 pre-render QA gate. validatePresetSize runs the same checks the
+      // Inspector badge shows; any error-level entry skips the render call
+      // entirely and marks the preset skipped in the manifest. Warnings/info
+      // do NOT cause skip — only errors do. The runtime catch below stays as
+      // defense-in-depth for any size-dep rule the validator misses.
+      const presetValidation = validatePresetSize(doc, presetId);
+      if (presetValidation.errors.length > 0) {
+        const firstError = presetValidation.errors[0];
+        const measuredParam = firstError.params?.measured;
+        const measuredHeight =
+          typeof measuredParam === 'number' ? measuredParam : undefined;
+        results.push({
+          presetId,
+          status: 'skipped',
+          skipReason: firstError.key,
+          measuredHeight,
+        });
+        continue;
+      }
 
       try {
         const blob = await renderDocumentToBlob(doc, pal, presetId);
