@@ -31,7 +31,13 @@ _VALID_LINEAGE_KEY = "01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c"
 
 
 def _admin_response_payload(**overrides):
-    """Build a PublicationResponse-shaped dict with sensible defaults."""
+    """Build a PublicationResponse-shaped dict with sensible defaults.
+
+    PublicationResponse.id is typed ``str`` (forward-compat with a future
+    UUID migration — see schema docstring), so the payload uses a string
+    here. The public-response schema uses ``int`` and is tested below
+    with the appropriate type.
+    """
     payload = {
         "id": "1",
         "headline": "test headline",
@@ -75,16 +81,25 @@ def test_publication_create_rejects_lineage_key_in_payload() -> None:
 
 
 def test_publication_public_response_excludes_lineage_key() -> None:
-    """The public-facing schema must not surface ``lineage_key``."""
+    """Public schema must NOT expose ``lineage_key``, even when present in input.
+
+    Real-world risk: an ORM/admin object carrying ``lineage_key`` gets
+    passed to ``PublicationPublicResponse.model_validate(...)`` (e.g.
+    via ``from_attributes=True``); the schema must filter it out
+    rather than silently leak the admin-only identifier.
+    """
     payload = {
         "id": 1,
         "headline": "test",
         "chart_type": "bar",
         "created_at": datetime.now(timezone.utc),
+        "lineage_key": _VALID_LINEAGE_KEY,  # admin-only field; must be dropped
     }
     public = PublicationPublicResponse.model_validate(payload)
     dumped = public.model_dump()
-    assert "lineage_key" not in dumped
+    assert "lineage_key" not in dumped, (
+        f"Public response leaked admin-only lineage_key: {dumped}"
+    )
     # Field also absent at the schema definition level — surfaces type
     # errors immediately if a future change adds it without removing this
     # guard.
