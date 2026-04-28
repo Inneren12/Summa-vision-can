@@ -371,6 +371,54 @@ enough to justify a sprint slot.
 
 ---
 
+## P3-012 — Layer dependency: validation imports from export
+
+- **Source:** Phase 2.1 PR#4 fix1 review (founder)
+- **Added:** 2026-04-28
+- **Severity:** P3
+- **Category:** architecture
+- **File:** `frontend-public/src/components/editor/validation/validate.ts`
+  + `frontend-public/src/components/editor/export/renderToBlob.ts`
+- **Description:** PR#4 added `import { computeLongInfographicHeight,
+  LONG_INFOGRAPHIC_HEIGHT_CAP } from '../export/renderToBlob'` in
+  `validate.ts`. Functionally fine because `renderToBlob.ts` exports
+  these as pure helpers with no DOM/canvas side-effects on module
+  load. But by layering, `validation` should not depend on `export`
+  — both should depend on a lower neutral layer.
+- **Fix sketch:** extract the cap-height helper + constant into a
+  new file like `renderer/longInfographicMeasure.ts` (or
+  `validation/sizeRules.ts`). Both `renderToBlob.ts` and
+  `validate.ts` then import from the neutral module. Pure code
+  move; no behavior change. The PR#4 fix1 parity test still passes
+  unchanged because the function reference resolves to the same
+  implementation.
+- **Status:** pending
+
+---
+
+## P3-013 — RU label `OK · ПРЕД` reads technical for end users
+
+- **Source:** Phase 2.1 PR#4 review (founder)
+- **Added:** 2026-04-28
+- **Severity:** P3
+- **Category:** i18n
+- **File:** `frontend-public/messages/ru.json`
+- **Description:** `inspector.export_presets.qa_status.ok_with_warnings`
+  is currently `"OK · ПРЕД"` (abbreviation of "предупреждения"). The
+  abbreviation is non-standard in Russian UI conventions and reads
+  as overly technical. EN equivalent is `"OK · WARN"` which is also
+  abbreviated but `WARN` is widely recognized in technical UIs;
+  `ПРЕД` is not.
+- **Fix sketch:** consider one of:
+  - `"OK · ВНИМ"` (abbreviation of "внимание") — closer to
+    EN "WARN" register
+  - `"WARN"` alone (matches EN, no translation overhead — many
+    badges-as-status patterns keep English token in RU UIs)
+  - Leave as-is if explicit founder preference for full RU
+- **Status:** pending
+
+---
+
 ## Batch dispatch policy
 
 When 3+ items accumulate in same category, OR 5+ items total:
@@ -386,7 +434,10 @@ Current batch candidates:
 - **A11y batch**: needs more items before justifying batch (P2-001
   alone is too small to dispatch standalone unless it becomes
   blocking)
-- **Phase 2.1 frontend batch**: P3-007, P3-008, P3-009, P3-010, P3-011
-  — all in `frontend-public/`, mix of code/test/doc cosmetics,
-  ~45 minutes total. P3-010 (architectural cycle break) is the
-  most substantive; the rest are wording/test-name/format polish.
+- **Phase 2.1 frontend batch**: P3-007, P3-008, P3-009, P3-010, P3-011,
+  P3-012, P3-013 — all in `frontend-public/`, mix of code/test/doc
+  cosmetics, ~45 minutes total. P3-010 (architectural cycle break) is
+  the most substantive; the rest are wording/test-name/format polish.
+  > Updated 2026-04-28: extended batch to include P3-012 (architecture)
+  > and P3-013 (i18n). Total now 7 items spanning code-quality,
+  > test-coverage, architecture, documentation, and i18n categories.
