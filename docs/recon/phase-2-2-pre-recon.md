@@ -479,3 +479,234 @@ backend/src/core/config.py:132:    public_site_url: str = "http://localhost:3000
 | headline / source / etc | YES (B3 — block props on `headline_editorial`, `source_footer`, `eyebrow_tag`; runtime-typed via `BlockProps { [key: string]: any }`) | YES (DEBT-026 — `eyebrow`, `description`, `source_text`, `footnote` columns + matching `PublicationResponse` fields, plus opaque `document_state` JSON for full lossless round-trip) | None — caption builders can read straight from the in-memory `CanonicalDocument` snapshot at export time. |
 
 This table is a fact summary for recon — recon-proper will design the hydration path to close the gaps.
+
+## F. Open questions for recon
+
+**What's here:** every ambiguity the inventory surfaced. Recon-proper resolves them or escalates to founder. Each Q is anchored to a section of this document.
+
+### Q-2.2-1 — lineage_key introduction strategy
+
+**Discovered in section:** B2, E1, E2.
+**Question:** lineage_key is absent on BOTH frontend and backend (no column on Publication model, no field in PublicationResponse, no frontend reference). Phase 2.2 requires it for UTM-tagged URLs. What's the minimal-introduction path?
+
+**Why it matters:** without lineage_key, every Phase 2.2 caption URL is just the public publication URL with no per-publication tracking. UTM contract requires per-publication identifier; per Q-D, this identifier is `lineage_key`.
+
+**Possible answers (non-exhaustive):**
+- a) Add `lineage_key: str` column on Publication, generate at create time (e.g. UUID v7 or content-hash-derived), backfill existing rows with one-time script, surface in PublicationResponse, frontend hydrates via existing GET path.
+- b) Derive lineage_key on-the-fly from existing fields (e.g. `f"{source_product_id}:{config_hash}:v{version}"`) — no migration needed, but stable string is harder to read and may conflict with composite uniq constraint semantics.
+- c) Use `id` (Publication PK) as lineage_key directly — simplest, but loses the cross-version "same lineage" semantics the term implies.
+- d) Defer to a Phase 2.2.0 sub-PR that ships ONLY lineage_key infrastructure before any 2.2 caption work.
+
+**Adjacent existing surface:** `backend/src/services/publications/lineage.py` already exists (referenced from DEBT-035, see §G1) and currently houses `compute_config_hash`. Any Phase 2.2 generator would naturally extend that module rather than introduce a new one.
+
+**Pre-recon recommendation:** option (a) — explicit column, generated at write time, surfaced in response. Rationale: the term `lineage_key` in roadmap §3 implies stable cross-version identity (clones share lineage), which (b) and (c) don't capture. Option (d) is a scope question — recon decides whether to split.
+
+### Q-2.2-2 — lineage_key generation algorithm
+
+**Discovered in section:** B2, E1.
+**Question:** if Q-2.2-1 = (a), how is lineage_key generated? Several patterns are possible.
+
+**Why it matters:** the choice affects clone semantics, debuggability, and URL aesthetics.
+
+**Possible answers:**
+- a) UUID v7 — globally unique, time-sortable, opaque.
+- b) Short hash from content (e.g. first 12 chars of SHA-256 over `{templateId, source_product_id, headline, created_at}`) — short, deterministic.
+- c) Auto-increment sequence — readable but exposes count.
+- d) Slug derived from headline (with collision suffix) — human-readable but mutable on rename.
+
+**Pre-recon recommendation:** no recommendation; design tradeoff. Recon-proper picks based on URL aesthetics + operator debuggability.
+
+### Q-2.2-3 — public URL hydration channel
+
+**Discovered in section:** B4, E3.
+**Question:** `public_site_url` exists in backend Settings but is not NEXT_PUBLIC_-prefixed and not exposed to frontend. How does the frontend get it for caption URLs?
+
+**Why it matters:** every caption needs a URL like `https://summa.vision/p/<slug>`. Without the base URL, captions can't be constructed deterministically.
+
+**Possible answers:**
+- a) Mirror the env var as `NEXT_PUBLIC_SITE_URL` so Next.js bundles it — simplest, no API call.
+- b) Add `public_url: str` to PublicationResponse so each publication carries its full URL — couples response to deploy URL.
+- c) New dedicated `GET /api/v1/admin/config` endpoint exposing public site URL — extra hop, but cleaner.
+- d) Hardcode `https://summa.vision` in frontend (and dev override via env var) — works for v1, fragile.
+
+**Pre-recon recommendation:** option (a). Site URL is a deploy-time constant; bundling it as `NEXT_PUBLIC_*` aligns with Next.js patterns. Frontend then constructs URLs as `${baseUrl}/p/${slug}`.
+
+### Q-2.2-4 — distribution.json schema
+
+**Discovered in section:** A2.
+**Question:** `distribution.json` is a new artifact. What's its schema, and how does it relate to the existing `manifest.json` (`schemaVersion: 1`)?
+
+**Why it matters:** distribution layer in Phase 2.2 forward-extends; Phase 2.3+ may add fields. Schema versioning sets the upgrade path.
+
+**Possible answers:**
+- a) Separate file with own `schemaVersion: 1` — independent evolution; simplest separation of concerns.
+- b) Inline into manifest.json with bumped manifest schemaVersion 1→2 — single file, but couples evolution.
+- c) Separate file but with field structure mirroring manifest patterns — same `schemaVersion` field, same author conventions.
+
+**Pre-recon recommendation:** option (a). Distribution data is conceptually distinct from per-preset rendering metadata. Independent files keep upgrade paths independent.
+
+### Q-2.2-5 — publish_kit.txt format
+
+**Discovered in section:** A1.
+**Question:** `publish_kit.txt` is plain text (per DoD). What's the structure inside?
+
+**Why it matters:** operator copy-pastes from this file directly into Reddit/X/LinkedIn. Format affects copy-paste workflow.
+
+**Possible answers:**
+- a) Plain text with channel headers separated by `===`:
+  ```
+  === Reddit ===
+  <title>
+  <body>
+
+  === X / Twitter ===
+  <caption>
+
+  === LinkedIn ===
+  <caption>
+  ```
+- b) Markdown with headings (`## Reddit`, etc.) — readable in any markdown viewer.
+- c) Per-channel separate files inside the ZIP (`reddit.txt`, `twitter.txt`, `linkedin.txt`) — easier per-channel copy.
+
+**Pre-recon recommendation:** option (a). Plain text with `===` separators is unambiguous, language-neutral, copy-paste friendly. Operator scrolls to the channel they're posting on.
+
+### Q-2.2-6 — caption template language and i18n
+
+**Discovered in section:** A4.
+**Question:** captions contain text. Where does the source text live? `messages/en.json` (next-intl) or hardcoded ASCII templates?
+
+**Why it matters:** captions are what operators publish. Translation is content, not UI labels. The existing i18n is for UI labels and validation messages, not user-facing publishable content.
+
+**Possible answers:**
+- a) Hardcoded EN template (e.g. in a `frontend-public/src/components/editor/distribution/templates.ts` module) — captions are content, not UI.
+- b) i18n keys under `editor.export_zip.distribution.*` — consistent with other operator-facing strings.
+- c) Operator-editable templates (per-publication or global) — most flexible, biggest scope; deferred.
+
+**Pre-recon recommendation:** option (a). Caption templates are part of the platform's editorial voice, not interface chrome. The headline and source fields ARE per-publication and stay in `CanonicalDocument`; the template wrapper is fixed EN.
+
+### Q-2.2-7 — character limits per platform
+
+**Discovered in section:** C1.
+**Question:** Reddit/X/LinkedIn each have caption length limits (X = 280 / 4000 paid, Reddit title = 300, body = 40000, LinkedIn post = 3000). Does the template enforce or document?
+
+**Why it matters:** if `<headline>` overflows X's 280-char limit, operator pastes truncated text. Worth catching at export time.
+
+**Possible answers:**
+- a) Cap at template generation time, with `[truncated]` indicator — operator may not notice.
+- b) Document the limit but don't truncate — operator handles.
+- c) Validation rule that warns on too-long source text BEFORE export — proactive.
+
+**Pre-recon recommendation:** no recommendation; founder UX decision. (a) is destructive and operators will hit it without seeing why; (b) or (c) for v1 keep semantics clear.
+
+### Q-2.2-8 — UTM URL builder location
+
+**Discovered in section:** C2.
+**Question:** no UTM URL builder exists in the codebase. Where does Phase 2.2 put one?
+
+**Why it matters:** clean module structure now prevents pain in Phase 2.3+.
+
+**Possible answers:**
+- a) `frontend-public/src/components/editor/distribution/utm.ts` — new module, future-proof for distribution.json builder + caption builder + UTM builder all colocated.
+- b) `frontend-public/src/components/editor/utils/utm.ts` — consistent with existing utils/ structure.
+- c) Inside `editor/export/` next to zipExport.ts — colocated with consumer.
+
+**Pre-recon recommendation:** option (a). Phase 2.2 introduces a "distribution" concern that grows in 2.3+ (post ledger, attribution). Dedicated module from day one keeps the surface organized.
+
+## G. DEBT and roadmap state
+
+**What's here:** factual inventory of DEBT entries and roadmap dependencies that touch Phase 2.2 area.
+
+**Source files cited:** `DEBT.md`, `docs/architecture/ROADMAP_DEPENDENCIES.md`, `docs/OPERATOR_AUTOMATION_ROADMAP.md`. (Roadmap files are NOT at repo root as the prompt assumed — see Appendix for path drift.)
+
+### G1. DEBT entries touching Phase 2 / distribution / UTM / lineage
+
+Output of `grep -n -i "lineage\|utm\|distribution\|post.ledger\|2\.2\|2\.3" DEBT.md | head -30`:
+```
+276:### DEBT-035: Parallel config_hash computation in pipeline + lineage helper
+283:- **Description:** `_compute_hashes` in `backend/src/services/graphics/pipeline.py:182` inlines its own SHA-256 hashing logic, parallel to the centralized `compute_config_hash` in `backend/src/services/publications/lineage.py`. Both produce the same hash for the same inputs today, but divergence risk exists if either path is updated independently.
+307:- **Description:** Phase 2.5 DoD (per `OPERATOR_AUTOMATION_ROADMAP.md` line 180, post-update) calls for 5 row types in the Exception Inbox: failed exports, zombie jobs, stale bindings, missing post URLs, unresolved validation blockers. PR #205 (Phase 2.5a) ships the first two; the other three are blocked on backend entities that do not yet exist: `staleBindings` requires `Binding` model + `BindingRepository` + listing endpoint (owned by Phase 3 Data binding); `missingPostUrls` requires `post_ledger` table + listing endpoint (owned by Phase 2.3 Post URL ledger); `unresolvedValidationBlockers` requires either backend persistence of validation status on `Publication` or editor pushing validation results to a new backend endpoint (no phase currently owns this).
+310:- **Target:** Phase 3 ships `staleBindings`; Phase 2.3 ships `missingPostUrls`; validation-blocker scope assessment before Phase 4 closure.
+```
+
+Per-DEBT summary (one line each, by ID, only those that materially touch Phase 2.2):
+
+- **DEBT-035** (status: Resolved, line 276) — references the existing `backend/src/services/publications/lineage.py` module that already houses `compute_config_hash`. This is the natural home for any Phase 2.2 `lineage_key` generator (see Q-2.2-1 adjacent-surface note); the file exists today, but contains no `lineage_key` symbol.
+- **DEBT-040** (status: Resolved, line 300) — Phase 2.5b row "missing post URLs" is blocked on the Phase 2.3 `post_ledger` table. Phase 2.2 emits the URLs that Phase 2.3 will record and Phase 2.5b will eventually surface. This is a downstream consumer relationship; Phase 2.2 has no DEBT-040 work itself.
+
+No DEBT entry currently calls out `lineage_key`, `utm_content`, `distribution.json`, or `publish_kit.txt` directly.
+
+### G2. DEBT-040 Phase 2.3 dependency confirmation
+
+DEBT-040 lists "missing post URLs" as a deferred Exception Inbox row type, blocked on Phase 2.3 (post_ledger). Phase 2.2 ships URL emission; Phase 2.3 records where they were posted; Phase 2.5b's "missing post URLs" row consumes the post_ledger.
+
+Output of `grep -n "Phase 2\.2\|2\.2 \|post.ledger" docs/architecture/ROADMAP_DEPENDENCIES.md`:
+```
+44:| 2.5b Exception Inbox deferred (stale bindings + missing post URLs + validation blockers) | DEFERRED | S | 1+ | Blocked on Phase 2.3 (post_ledger) + Phase 3 (Binding entity); see DEBT-040 |
+51:| 2.2 Publish Kit Generator | M | 2 | 2.1 |
+52:| 2.3 UTM-to-lineage attribution | S | 1 | 2.2 |
+53:| 2.4 Draft Social Text (Gemini Flash) | S | 1 | 2.2 |
+72:  └─ blocked by: Phase 2.3 (post_ledger) + Phase 3 (Binding entity)
+76:  └─→ 2.2 Publish Kit Generator
+109:  → 2.2 (M, 2 PR)
+137:- **2.1 + 2.2:** 2.2 depends on 2.1 ZIP foundation
+138:- **2.3 + 2.4 vs 2.2:** both depend on 2.2 publish kit
+```
+
+Confirmation: DEBT-040 dependency on Phase 2.3 **captured** in `ROADMAP_DEPENDENCIES.md` (line 44 explicitly cites `see DEBT-040`; lines 51-53 + 137-138 establish the 2.1 → 2.2 → {2.3, 2.4} chain; line 72 anchors the 2.5b → 2.3 block in the DAG).
+
+Additional Phase 2.2 facts from ROADMAP_DEPENDENCIES:
+- Phase 2.2 = "Publish Kit Generator", size M, 2 PR, depends on 2.1 (line 51).
+- Phase 2.3 = "UTM-to-lineage attribution", size S, 1 PR, depends on 2.2 (line 52). The roadmap's own naming confirms `lineage` is the attribution key — consistent with founder-locked Q-D.
+- Phase 2.4 = "Draft Social Text (Gemini Flash)", size S, 1 PR, depends on 2.2 (line 53). Phase 2.4 will plug into Phase 2.2's caption surface.
+
+### G3. Existing post-ledger references in code
+
+Output of `grep -rn "post_ledger\|post ledger" backend/src/ frontend-public/src/ docs/`:
+```
+docs/OPERATOR_AUTOMATION_ROADMAP.md:183:- Phase 2.5b (deferred, ships when dependencies land): stale bindings (depends on Phase 3 Binding entity), missing post URLs (depends on Phase 2.3 post_ledger), unresolved validation blockers (depends on backend persistence of validator state — no phase currently owns). ...
+docs/discovery/phase-2-5-C2b-matrix.md:48:... 3 of 5 enumerated row types are deferred (stale bindings, missing post URLs, validation blockers); ... post ledger ... do not exist as queryable records ...
+docs/discovery/phase-2-5-C2a-factors.md:137:- Type 3 (missing post URLs, C): "No `post_url`/`post_ledger` anywhere; Phase-2.3 dep" (C1 §1, type 3)
+docs/discovery/phase-2-5-C2a-factors.md:168:| 3 | missing post URLs | no | n/a (no post ledger exists) | none | n/a (deferred) |
+docs/discovery/phase-2-5-C1-sources.md:93:$ grep -rn 'post_url\|posted_at\|post_ledger\|distribution_package' backend/src frontend/lib
+docs/discovery/phase-2-5-C1-sources.md:98:- No `post_ledger` / `distribution_package` table in `backend/src/models/__init__.py`.
+docs/discovery/phase-2-5-C1-sources.md:99:- Roadmap places the post ledger at item 2.3, which has not shipped.
+docs/discovery/phase-2-5-C1-sources.md:168:| 3 | missing post URLs | **C** | no | No `post_url`/`post_ledger` anywhere; Phase-2.3 dep |
+docs/discovery/phase-2-5-C1-sources.md:191:  3. missing post URLs:     C  (Phase-2.3 dep, no post ledger)
+docs/architecture/ROADMAP_DEPENDENCIES.md:44:| 2.5b Exception Inbox deferred (stale bindings + missing post URLs + validation blockers) | DEFERRED | S | 1+ | Blocked on Phase 2.3 (post_ledger) + Phase 3 (Binding entity); see DEBT-040 |
+```
+
+Conclusion: `post_ledger` is **not yet referenced in implementation code** — zero matches in `backend/src/` or `frontend-public/src/`. All occurrences are in planning docs (`docs/architecture/`, `docs/discovery/`, `docs/OPERATOR_AUTOMATION_ROADMAP.md`). The Phase 2.5 discovery doc at `docs/discovery/phase-2-5-C1-sources.md:98-99` independently confirms "No `post_ledger` / `distribution_package` table in `backend/src/models/__init__.py` ... Roadmap places the post ledger at item 2.3, which has not shipped." This is consistent with Phase 2.3 not yet shipped.
+
+## Appendix — file paths verified during pre-recon
+
+All files actually opened during Chunks 1+2+3 (allows recon to confirm coverage):
+
+**Chunk 1 (A+B):**
+- frontend-public/src/components/editor/export/zipExport.ts
+- frontend-public/src/components/editor/export/manifest.ts
+- frontend-public/src/components/editor/export/zipFilename.ts
+- frontend-public/src/components/editor/types.ts
+- frontend-public/messages/en.json
+- frontend-public/messages/ru.json
+- frontend-public/package.json
+
+**Chunk 2 (C+D+E):**
+- frontend-public/src/components/editor/index.tsx (read range 1210-1380 only — 1380-line file)
+- frontend-public/src/components/editor/components/TopBar.tsx
+- frontend-public/src/components/editor/config/cropZones.ts
+- frontend-public/src/components/editor/config/sizes.ts
+- backend/src/models/publication.py
+- backend/src/schemas/publication.py
+- backend/src/api/routers/admin_publications.py (greps only — confirmed clone path delegates to `services/publications/clone.py`, line 42 import)
+- backend/src/core/config.py
+
+**Chunk 3 (F+G+Appendix):**
+- DEBT.md (at repo root, as expected)
+- docs/architecture/ROADMAP_DEPENDENCIES.md (path drift — prompt expected repo root; actual path under `docs/architecture/`)
+- docs/OPERATOR_AUTOMATION_ROADMAP.md (path drift — prompt expected repo root; actual path under `docs/`)
+
+**Path drift discovered (no extra files read beyond scope):** the two roadmap files were located via `find . -maxdepth 4 -type f \( -iname "*roadmap*" -o -iname "*dependencies*" \)` after `ls` confirmed they were not at repo root. Per Chunk 2's standing instruction ("If a path doesn't exist, run `ls` on the parent directory to find the actual filename and document the drift in the section"), the drift is documented here.
+
+---
+
+**Pre-recon status:** COMPLETE. Recon-proper consumes this document and produces architectural design proposals + open founder questions per `docs/guides/agent-workflow.md` §2.2.
