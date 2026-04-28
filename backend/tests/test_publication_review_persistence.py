@@ -195,6 +195,12 @@ _CREATE_BASE: dict[str, Any] = {
         "background": "gradient_warm",
         "size": "instagram",
     },
+    # Stable fixture UUID v7. Production handler stamps a fresh value
+    # server-side; this entry only matters for direct repo.create_full()
+    # calls that bypass the HTTP layer (e.g. TestRepositoryPersistence,
+    # TestMalformedReviewOnRead). PublicationCreate does not declare
+    # lineage_key, so HTTP-bound payloads silently drop this field.
+    "lineage_key": "01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c",
 }
 
 

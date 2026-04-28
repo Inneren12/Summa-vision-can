@@ -19,6 +19,7 @@ os.environ.setdefault("ADMIN_API_KEY", "test-key")
 
 import subprocess
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import pytest
 from sqlalchemy.ext.asyncio import (
@@ -29,6 +30,8 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from src.core.database import Base
+from src.models.publication import Publication, PublicationStatus
+from src.services.publications.lineage import generate_lineage_key
 
 # ---------------------------------------------------------------------------
 # In-memory async engine for tests
@@ -69,3 +72,30 @@ async def db_session(
     )
     async with session_factory() as session:
         yield session
+
+
+# ---------------------------------------------------------------------------
+# Test factory helpers
+# ---------------------------------------------------------------------------
+
+
+def make_publication(**overrides: Any) -> Publication:
+    """Build a Publication ORM instance with sensible defaults for tests.
+
+    Defaults a fresh ``lineage_key`` via :func:`generate_lineage_key`
+    (UUID v7) so tests don't fail on the post-Phase-2.2.0 NOT NULL
+    constraint. Accepts overrides for any field; pass
+    ``lineage_key="..."`` to pin a specific value (e.g. for clone-
+    inheritance tests).
+
+    Non-persisting: caller is responsible for ``session.add(pub)`` +
+    commit if persistence is needed.
+    """
+    defaults: dict[str, Any] = {
+        "headline": "test publication",
+        "chart_type": "bar",
+        "status": PublicationStatus.DRAFT,
+        "lineage_key": generate_lineage_key(),
+    }
+    defaults.update(overrides)
+    return Publication(**defaults)

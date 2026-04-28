@@ -16,6 +16,7 @@ from src.core.security.auth import AuthMiddleware
 from src.models.publication import Publication, PublicationStatus
 from src.repositories.publication_repository import PublicationRepository
 from src.services.audit import AuditWriter
+from tests.conftest import make_publication
 
 
 @pytest.fixture()
@@ -79,7 +80,7 @@ def _auth_headers() -> dict[str, str]:
 
 async def _seed_publication(session_factory, *, status: PublicationStatus) -> Publication:
     async with session_factory() as session:
-        pub = Publication(
+        pub = make_publication(
             headline='Seed',
             chart_type='bar',
             visual_config=json.dumps({'size': 'instagram'}),
