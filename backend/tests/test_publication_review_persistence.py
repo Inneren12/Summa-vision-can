@@ -186,6 +186,12 @@ _REVIEW_BASE: dict[str, Any] = {
     "comments": [],
 }
 
+# Stable fixture UUID v7 used by both _CREATE_BASE (direct repo.create_full
+# paths) and inline pub_dict fixtures that build PublicationResponse via
+# model_validate. Production stamps a fresh value server-side; tests use
+# a hardcoded value for determinism.
+_FIXTURE_LINEAGE_KEY = "01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c"
+
 _CREATE_BASE: dict[str, Any] = {
     "headline": "Housing starts hit a record",
     "chart_type": "bar",
@@ -195,12 +201,10 @@ _CREATE_BASE: dict[str, Any] = {
         "background": "gradient_warm",
         "size": "instagram",
     },
-    # Stable fixture UUID v7. Production handler stamps a fresh value
-    # server-side; this entry only matters for direct repo.create_full()
-    # calls that bypass the HTTP layer (e.g. TestRepositoryPersistence,
-    # TestMalformedReviewOnRead). PublicationCreate does not declare
-    # lineage_key, so HTTP-bound payloads silently drop this field.
-    "lineage_key": "01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c",
+    # PublicationCreate does not declare lineage_key; HTTP-bound payloads
+    # silently drop this. Only direct repo.create_full() calls
+    # (TestRepositoryPersistence, TestMalformedReviewOnRead) consume it.
+    "lineage_key": _FIXTURE_LINEAGE_KEY,
 }
 
 
@@ -275,6 +279,7 @@ class TestReviewPayloadSchema:
             "review": review_json,
             "status": "DRAFT",
             "created_at": "2026-04-19T00:00:00",
+            "lineage_key": _FIXTURE_LINEAGE_KEY,
         }
         resp = PublicationResponse.model_validate(pub_dict)
         assert resp.review is not None
