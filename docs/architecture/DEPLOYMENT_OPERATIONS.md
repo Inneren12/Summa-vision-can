@@ -115,6 +115,17 @@ docker-compose down -v   # also drops volumes (use sparingly — drops dev DB)
 3. Enum migrations require `postgresql.ENUM(..., create_type=False)` with `checkfirst=True` everywhere they appear.
 4. Naming convention for Alembic revisions: timestamp + descriptive slug (confirm project convention).
 
+### Migrations not safe to roll back in production
+
+Some migrations become forward-only once dependent phases ship. The
+operator-facing runbook in `docs/OPERATIONS.md` ("Migrations not safe
+to roll back") is the canonical list. Currently tracked:
+
+- **Phase 2.2.0 lineage_key migration** — forward-only after Phase 2.3
+  begins logging `?utm_content=<lineage_key>` on lead funnels. Downgrade
+  re-runs `uuid7()` and orphans recorded UTM data. Cross-ref: DEBT-046,
+  `docs/OPERATIONS.md` §"Migrations not safe to roll back".
+
 ### Postgres-specific patterns in queries
 
 - FTS: `to_tsvector('english', column)` with GIN index for search

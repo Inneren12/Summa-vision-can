@@ -34,6 +34,7 @@
 | D-5 verification | ✓ COMPLETE | Pre-launch scripts |
 | Editor Stages 1-2 | ✓ COMPLETE | Strict-template architecture, 13 blocks, 11 templates |
 | 1.5 Visual Data Diffing | ✓ COMPLETE 2026-04-26 | Backend (PR-39/40/41) + frontend (PR #171, 7-round fix saga) |
+| 2.2.0 Backend lineage_key infrastructure | ✓ COMPLETE 2026-04-28 | atomic bundle + Chunks 3a/3b/3c (PR #230) |
 
 ### Active / next
 
@@ -48,7 +49,7 @@
 | Phase | Effort | PRs | Depends on |
 |---|---|---|---|
 | 2.1 Multi-preset ZIP export | M | 2-3 | none |
-| 2.2 Publish Kit Generator | M | 2 | 2.1 |
+| 2.2 Publish Kit Generator | M | 2 | 2.2.0 |
 | 2.3 UTM-to-lineage attribution | S | 1 | 2.2 |
 | 2.4 Draft Social Text (Gemini Flash) | S | 1 | 2.2 |
 | Editor Stage 3 | M | 2-3 | none (parallel to 1.x) |
@@ -73,9 +74,10 @@ ASCII DAG (top → bottom = ordering; arrows show "depends on"):
   └─ validation-blocker entity ownership TBD (see DEBT-040)
 
 2.1 Multi-preset ZIP         (no deps)
-  └─→ 2.2 Publish Kit Generator
-        ├─→ 2.3 UTM-to-lineage attribution
-        └─→ 2.4 Draft Social Text (Gemini Flash)
+  └─→ 2.2.0 Backend lineage_key infrastructure  ✓ COMPLETE 2026-04-28
+        └─→ 2.2 Publish Kit Generator
+              ├─→ 2.3 UTM-to-lineage attribution
+              └─→ 2.4 Draft Social Text (Gemini Flash)
 
 Editor Stage 3               (no deps)
   └─→ Editor Stage 4         (large, multi-PR)
@@ -106,11 +108,12 @@ Phase 5 (lead funnel scale)
 ```
 1.3 (S, 1 PR)
   → 2.1 (M, 2-3 PR)
+  → 2.2.0 (M, 1 PR — atomic bundle + 3 follow-up chunks; ✓ DONE)
   → 2.2 (M, 2 PR)
   → 2.3 (S, 1 PR) + 2.4 (S, 1 PR)  [parallel after 2.2]
 ```
 
-Estimated PR count on critical path: **6-8 PRs minimum**.
+Estimated PR count on critical path: **7-9 PRs minimum**.
 
 ### Off-critical-path opportunities
 
@@ -183,3 +186,4 @@ Memory item: "Always re-verify DEBT.md state at sprint planning, not just handof
 |---|---|---|---|
 | 2026-04-26 | initial | all | Created from OPERATOR_AUTOMATION_ROADMAP.md + memory |
 | 2026-04-27 | Phase 1.3 impl | §3 Key facts | Added Phase 1.3 → Phase 2 ETag-inheritance rule. |
+| 2026-04-28 | Phase 2.2.0 closure | §2 status, §3 DAG, §4 critical path | Split Phase 2.2 into 2.2.0 backend infra + 2.2 frontend kit. Marked 2.2.0 ✓ COMPLETE per atomic bundle + Chunks 3a/3b/3c. |

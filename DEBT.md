@@ -363,3 +363,39 @@ Rules:
   - Bulk Duplicate inserts copies after each source preserving relative order
   - The reducer's per-block `TOGGLE_LOCK` / `DUPLICATE_BLOCK` / `REMOVE_BLOCK` already form the underlying primitives; multi-select is a UI layer on top, not a refactor of state shape.
 - **Target:** post-Phase-3 polish — operator productivity refinement after the binding system ships. Not roadmap-critical for Phase 2.
+
+### DEBT-045: Manual lineage break UI for clone-as-new-story
+
+- **Source:** Phase 2.2.0 recon Chunk 1a §A2 edge case (`docs/recon/phase-2-2-0-recon.md`)
+- **Added:** 2026-04-28
+- **Severity:** low
+- **Category:** product-ux
+- **Status:** accepted
+- **Description:** Operators cloning a publication for editorial purposes (preserve attribution lineage) get a different need from operators cloning for "this is fundamentally a new story" (start fresh lineage). Today, all clones inherit `lineage_key` via `derive_clone_lineage_key(source)`. No UI exists for breaking lineage. The wrapper function exists as a future hook (per recon §A3, §C1) but is unreachable from any UI today.
+- **Impact:** Operator-facing UX gap. Founder confirmed (2026-04-28 Q-2.2-1 lock) that no operator demand has surfaced yet, so deferring is intentional. UTM attribution analytics will reflect the conservative inherit-by-default behaviour until the manual-break UI ships.
+- **Resolution:** Add operator UI control (e.g. checkbox on clone dialog: "Break lineage — treat as new story for analytics") that routes to `generate_lineage_key()` instead of `derive_clone_lineage_key(source)`. Wrapper function body change is trivial; the UI surface is the actual work.
+- **Target:** Phase 4 polish or post-MVP UX iteration when an operator hits the friction point.
+
+### DEBT-046: Phase 2.2.0 lineage migration downgrade orphans Phase 2.3 UTM data
+
+- **Source:** Phase 2.2.0 recon Chunk 1b-i §B4 (`docs/recon/phase-2-2-0-recon.md`)
+- **Added:** 2026-04-28
+- **Severity:** medium
+- **Category:** ops
+- **Status:** active
+- **Description:** Once Phase 2.3 starts logging `?utm_content=<lineage_key>` on lead funnels, downgrading then re-upgrading the lineage_key migration regenerates fresh root keys (`uuid7()` is non-deterministic). Historical UTM data orphans: recorded keys in lead/audit logs no longer match any current row. Documented in migration docstring + ops runbook (Phase 2.2.0 closure PR), but the destructive-downgrade ops decision must be respected at deploy time.
+- **Impact:** Once Phase 2.3 ships, downgrading the lineage_key migration in production silently breaks UTM-to-publication attribution for all leads recorded prior to the downgrade. No automated detection.
+- **Resolution:** Treat the lineage_key migration as forward-only after Phase 2.3 ships. Document in ops runbook section "Migrations not safe to roll back". If downgrade becomes necessary post-Phase-2.3 (e.g. emergency rollback), run a backfill script that regenerates lineage_keys deterministically from the `cloned_from_publication_id` graph, then republishes per-publication lineage_key as a one-time correction to attribution tables. The script does not exist; it would be written on-demand if needed.
+- **Target:** Phase 2.2.0 closure ships docstring + runbook entry; full resolution (deterministic regen script) is on-demand.
+
+### DEBT-047: Dead `create_with_versioning` + `create` repo methods
+
+- **Source:** Phase 2.2.0 recon Chunk 2b §F Q-impl-1, Q-impl-2 (`docs/recon/phase-2-2-0-recon.md`)
+- **Added:** 2026-04-28
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** active
+- **Description:** `PublicationRepository.create_with_versioning` (line ~112) and `PublicationRepository.create` (line ~158) have zero callers in `backend/src/`, `backend/tests/`, and `backend/scripts/`. They are dead code, superseded by `create_full` + `create_clone`. Phase 2.2.0 atomic bundle updated their signatures with the `lineage_key` kwarg for consistency, but the methods themselves remain unused.
+- **Impact:** Code-hygiene / cognitive overhead only. Future maintainers see four "create" methods on the repository and have to trace which are actually called. No runtime cost.
+- **Resolution:** Confirm zero dynamic dispatch / reflection callers via static analysis tools. Once confirmed dead, delete both methods and any associated test coverage in a dedicated cleanup PR.
+- **Target:** Post-Phase-2.2.0 cleanup PR. Bundle with the next backend refactor that touches `publication_repository.py`.

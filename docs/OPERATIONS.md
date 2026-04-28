@@ -127,3 +127,62 @@ with e.connect() as c:
     print(c.execute(text('SELECT 1')).scalar())
 "
 ```
+
+## Migrations not safe to roll back
+
+### Phase 2.2.0 lineage_key migration — forward-only after Phase 2.3
+
+**Status:** Active operational constraint as of 2026-04-28.
+**Cross-ref:** DEBT-046 (full impact analysis), `docs/recon/phase-2-2-0-recon.md` §B4 (Phase 2.2.0 architectural decision).
+
+#### Constraint
+
+Once Phase 2.3 ships and starts logging `?utm_content=<lineage_key>` on
+lead funnel URLs, the lineage_key migration becomes effectively
+forward-only.
+
+#### Why
+
+- `generate_lineage_key()` uses UUID v7, which is non-deterministic
+  (timestamp + randomness).
+- Downgrading the migration drops the `lineage_key` column.
+- Re-upgrading regenerates fresh root keys for every row.
+- Historical UTM data in the `Lead` table or audit logs records keys
+  that no longer match any current row → attribution breaks silently.
+
+#### Operational rule
+
+**Do NOT downgrade the lineage_key migration in production once Phase
+2.3 has logged its first UTM-tagged lead.**
+
+If downgrade becomes necessary (emergency rollback, schema rewrite,
+etc.):
+
+1. Snapshot the current `publications.lineage_key` column to a backup
+   table BEFORE downgrade:
+
+   ```sql
+   CREATE TABLE publications_lineage_backup_<YYYYMMDD> AS
+       SELECT id, lineage_key FROM publications;
+   ```
+
+2. Perform downgrade as needed.
+
+3. After re-upgrade, write a one-shot script to restore lineage_keys:
+
+   ```sql
+   UPDATE publications p
+   SET lineage_key = b.lineage_key
+   FROM publications_lineage_backup_<YYYYMMDD> b
+   WHERE p.id = b.id;
+   ```
+
+4. Verify UTM attribution resumes via spot-check on recent leads.
+
+The restore script does NOT exist today. It would be written on-demand
+if downgrade becomes necessary.
+
+#### Pre-Phase-2.3 (current state)
+
+Until Phase 2.3 ships, downgrading is safe — no UTM data is recorded
+yet. The constraint activates with Phase 2.3 release.
