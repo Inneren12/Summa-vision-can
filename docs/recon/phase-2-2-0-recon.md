@@ -129,3 +129,147 @@ Explicit scope lock — these stay untouched:
 | UTM URL composer | Phase 2.2 frontend chunk, not 2.2.0. |
 
 (Sections B + C in Chunk 1b cover migration + service layer changes. Sections D + E in Chunk 2a cover schema + tests. Section F in Chunk 2b covers open questions for impl.)
+
+## B. Migration design
+
+**What's here:** Alembic migration shape, backfill strategy, rollback path, and the `uuid-utils` dependency add.
+
+**Source files cited:** pre-recon §E1, alembic versions dir (path: `backend/migrations/versions/`), pyproject.toml.
+
+### B1. Dependency addition: `uuid-utils`
+
+(Chunk 1a confirmed Python 3.11.15, no `uuid.uuid7` in stdlib; pyproject.toml currently has zero `uuid` references.)
+
+pyproject.toml dependency section pattern detected (PEP 621, NOT poetry):
+```
+1:[project]
+6:dependencies = [
+```
+
+i.e. `[project].dependencies` is a flat TOML array of PEP 508 strings (lines 6–35), not a `[tool.poetry.dependencies]` table. No `[tool.poetry]` section exists. Insertion is therefore as a single string entry inside the existing array, between any two existing entries (alphabetical placement preferred — slot it next to `tzdata` / `uvicorn` block, e.g. after `structlog`).
+
+Add to `backend/pyproject.toml` under `[project].dependencies`:
+```toml
+    "uuid-utils>=0.10.0,<1.0.0",   # uuid7 generator; stdlib uuid.uuid7 only in Python 3.13+
+```
+
+(PEP 508 string with PEP 440 specifier, matching the `>=X.Y.Z,<NEXT_MAJOR.0.0` pattern used by every other entry in the array, e.g. `httpx>=0.27.0,<1.0.0`, `structlog>=24.1.0,<25.0.0`.)
+
+Import pattern in `services/publications/lineage.py` (Section C will pin exact code):
+```python
+try:
+    from uuid import uuid7  # Python 3.13+ stdlib
+except ImportError:
+    from uuid_utils import uuid7  # uuid-utils package
+```
+
+This try/except keeps the code forward-compatible for the eventual Python 3.13 upgrade — same call site, library swap is invisible to callers. Once `requires-python` bumps to `>=3.13`, the `uuid-utils` dep can be dropped and the try/except collapsed in a follow-up cleanup.
+
+### B2. Migration shape
+
+Alembic head detected at: `backend/migrations/versions/`
+Current head revision: `b4f9a21c8d77` (file: `b4f9a21c8d77_add_cloned_from_to_publication.py`)
+
+Single revision file: `backend/migrations/versions/<rev>_add_lineage_key_to_publications.py`
+
+```python
+"""add lineage_key to publications
+
+Revision ID: <generated>
+Revises: b4f9a21c8d77
+Create Date: 2026-04-28
+
+Phase 2.2.0 backend lineage_key infrastructure. Adds nullable column,
+backfills existing rows by walking the cloned_from_publication_id graph
+in id-ascending order, then enforces NOT NULL + adds index. Atomic
+within one revision so a mid-backfill failure rolls cleanly.
+"""
+import sqlalchemy as sa
+from alembic import op
+
+revision = "<generated>"
+down_revision = "b4f9a21c8d77"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # Step 1: add nullable column
+    op.add_column(
+        "publications",
+        sa.Column("lineage_key", sa.String(length=36), nullable=True),
+    )
+    # Step 2: backfill via Python loop (UUID v7 unavailable in pure SQL)
+    _backfill_lineage_keys()
+    # Step 3: enforce NOT NULL after backfill
+    op.alter_column(
+        "publications",
+        "lineage_key",
+        existing_type=sa.String(length=36),
+        nullable=False,
+    )
+    # Step 4: index for Phase 2.3 attribution queries
+    op.create_index(
+        "ix_publications_lineage_key",
+        "publications",
+        ["lineage_key"],
+    )
+
+
+def downgrade() -> None:
+    op.drop_index("ix_publications_lineage_key", table_name="publications")
+    op.drop_column("publications", "lineage_key")
+
+
+def _backfill_lineage_keys() -> None:
+    """Walk publications by id ASC. Roots get fresh uuid7. Clones inherit
+    from parent — guaranteed already-processed since clones have higher id."""
+    try:
+        from uuid import uuid7
+    except ImportError:
+        from uuid_utils import uuid7
+
+    bind = op.get_bind()
+    rows = bind.execute(sa.text(
+        "SELECT id, cloned_from_publication_id "
+        "FROM publications ORDER BY id ASC"
+    )).fetchall()
+
+    key_by_id: dict[int, str] = {}
+    for row in rows:
+        pub_id = row.id
+        parent_id = row.cloned_from_publication_id
+        if parent_id is not None and parent_id in key_by_id:
+            key = key_by_id[parent_id]
+        else:
+            # Root, OR orphaned clone (parent hard-deleted)
+            key = str(uuid7())
+        key_by_id[pub_id] = key
+        bind.execute(
+            sa.text("UPDATE publications SET lineage_key = :k WHERE id = :i"),
+            {"k": key, "i": pub_id},
+        )
+```
+
+**Why three steps in one revision:** atomic forward path. Mid-backfill failure rolls cleanly via downgrade. Splitting into three migrations leaves ops in mid-state.
+
+**Why Python loop, not SQL:** UUID v7 in Postgres requires `pg_uuidv7` extension (not standard). Migration runs in Python where `uuid-utils` is available via B1.
+
+**Why id-ASC ordering is sufficient:** the `cloned_from_publication_id` FK in pre-recon §E1 (lines 90-94 of `backend/src/models/publication.py`) is populated only at clone time, by which point the source row already exists with a strictly smaller `id` (auto-increment PK). Therefore at the moment the loop processes any clone row, its parent's lineage_key is already in `key_by_id`. No second pass needed.
+
+### B3. Backfill edge cases
+
+| Scenario | Handling |
+|---|---|
+| Root publication (no parent) | Fresh `uuid7()` |
+| Linear clone chain A → B → C | All three share A's lineage_key (B inherits from A; C inherits from B's already-resolved key) |
+| Multiple independent roots | Each gets own `uuid7()` |
+| Orphaned clone (parent_id set, parent hard-deleted via `ondelete="SET NULL"`) | `parent_id` is now NULL post-deletion → falls into "root" branch → fresh `uuid7()`. The branch also covers the impossible-but-defensive case where `parent_id` somehow points at a row not yet in `key_by_id`. |
+| Empty publications table | `rows` is empty list; loop is no-op; ALTER NOT NULL succeeds vacuously |
+| Composite uniq `uq_publication_lineage_version` (over `source_product_id, config_hash, version`) | Untouched — backfill writes only to `lineage_key`, leaves the existing 3-tuple constraint and its columns alone (Chunk 1a §A5 scope lock) |
+
+### B4. Rollback safety + ops note
+
+`downgrade()` drops index + column. Data loss is total but recoverable: re-running `upgrade()` regenerates. Clone-graph topology preserves grouping (same lineage groups stay grouped), but root key VALUES change on each upgrade run.
+
+**Ops implication:** once Phase 2.3 starts logging `?utm_content=<lineage_key>` on lead funnels, downgrade-and-reupgrade orphans historical UTM data (recorded keys no longer match current rows). Document in migration docstring; add to Phase 2.2.0 release checklist as "do not downgrade once Phase 2.3 ships."
