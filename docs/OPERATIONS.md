@@ -62,6 +62,7 @@ docker compose exec api /app/scripts/ops/backup_db.sh
 
 **Étape 0 (Infrastructure):**
 - `DATABASE_URL`
+- `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD` — required by compose `db` service. Compose fails to start if any are unset (no fallback defaults).
 - `ADMIN_API_KEY`
 - `S3_BUCKET`, S3 credentials
 - `BACKUP_S3_BUCKET`
