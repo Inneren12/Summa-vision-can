@@ -661,3 +661,193 @@ backend/tests/models/test_publication_extended.py:45, :76, :95, :127, :147
 - Integration coverage: all create + clone routes (E3) cover lineage_key
 - Schema coverage: 4 cases (E4)
 - Fixture sites updated: 11+ enumerated above; flagged as Q-impl-3 in Chunk 2b §F if any are missed during impl-PR review
+
+## F. Open questions for impl
+
+**What's here:** the questions that surfaced during recon but cannot be fully resolved without exploration of unrelated code paths. Impl prompts pick these up. Recon-proper documents the question + recommended resolution path.
+
+### Q-impl-1 — `create_with_versioning` is dead production code
+
+**Discovered in:** Chunk 1b-ii §C4 (Site 1, `publication_repository.py:112`).
+
+**Question:** `create_with_versioning` is a `Publication()` constructor site distinct from `create_full` and `create_clone`. Phase 2.2.0 must populate `lineage_key` here — does the call site treat the new publication as a root (fresh `generate_lineage_key()`) or as a derivation (inherit)?
+
+**Verification command output** (`grep -rn "create_with_versioning\b" backend/src/ backend/tests/ backend/scripts/`):
+```
+(zero matches)
+```
+
+**Finding:** the method has **zero callers** across `backend/src/`, `backend/tests/`, and `backend/scripts/`. It is dead production code (or called only via dynamic dispatch / reflection, which is uncommon in this codebase).
+
+**Resolution:** Phase 2.2.0 impl adds `lineage_key: str` as a required keyword argument to the method signature. Impl prompt should ALSO file a follow-up DEBT entry for "delete dead `create_with_versioning` repo method" once it confirms no dynamic callers (separate cleanup PR; not in scope for 2.2.0). Choosing `generate_lineage_key()` (root-style) at the future call site is conservative: pipeline-generated rows that share a recipe with another row should rely on `cloned_from_publication_id` + `derive_clone_lineage_key` if/when that pattern is needed.
+
+### Q-impl-2 — `create` (line 158) is dead production code
+
+**Discovered in:** Chunk 1b-ii §C4 (Site 2, `publication_repository.py:158`).
+
+**Question:** Same pattern as Q-impl-1 — third constructor site, caller(s) unknown from Chunk 1b-ii's scope.
+
+**Verification command output** (`grep -rn "\.create(" backend/src/ | grep -v "create_full\|create_clone\|create_with_versioning\|create_lead\|create_engine\|create_async_engine\|create_task\|create_connection\|create_default"`):
+```
+backend/src/api/routers/public_leads.py:330:        new_token = await token_repo.create(
+backend/src/api/routers/public_leads.py:374:    download_token = await token_repo.create(
+```
+
+(Both hits are `token_repo.create` on `DownloadTokenRepository`, NOT `PublicationRepository.create`.)
+
+**Finding:** `PublicationRepository.create` has zero callers in `backend/src/` and `backend/tests/`. Like Q-impl-1, this is dead code.
+
+**Resolution:** add `lineage_key: str` kwarg to method signature for consistency. File a follow-up DEBT for deletion alongside `create_with_versioning`. The two together likely formed an early-Phase-1 API that was superseded by `create_full` (admin endpoint) + `create_clone` (clone service) and never removed.
+
+### Q-impl-3 — Test fixture migration to `make_publication` helper
+
+**Discovered in:** Chunk 2a §E5 (test fixture audit).
+
+**Question:** 11+ test sites construct `Publication()` directly. Phase 2.2.0 NOT NULL constraint will break all of them at the ORM layer. Per memory pattern, the right fix is a centralized factory helper (`make_publication()` in `backend/tests/conftest.py`) that defaults `lineage_key=str(uuid7())`, accepts override kwarg.
+
+**Why it matters:** without a helper, every test maintainer must remember to pass `lineage_key`. The helper makes the right thing the default, and bonus: also future-proofs against the next NOT NULL column add.
+
+**Resolution:** impl prompt creates `make_publication` factory in `backend/tests/conftest.py` (or a sibling test-utils module), migrates all 11+ sites in a single PR. Search command for impl: `grep -rn "Publication(" backend/tests/`. Sites enumerated in Chunk 2a §E5.
+
+### Q-impl-4 — Migration test infrastructure directory
+
+**Discovered in:** Chunk 2a §E2 + E5.
+
+**Question:** `backend/tests/integration/migrations/` does not exist. Per memory pattern (integration tests must use `subprocess.run(['alembic', 'upgrade', 'head'])`, NOT programmatic Alembic API), this directory needs creating with proper conftest.py and a teardown using `alembic downgrade base`.
+
+**Resolution:** impl prompt creates the directory + a `conftest.py` defining the alembic-driven test session pattern (per-test transactional rollback or per-module DB reset). The 5 migration scenarios from Chunk 2a §E2 live in `backend/tests/integration/migrations/test_lineage_key_backfill.py`.
+
+### Q-impl-5 — `uuid-utils` version pin convention
+
+**Discovered in:** Chunk 1b-i §B1.
+
+**Question:** Chunk 1b-i proposed pin `"uuid-utils>=0.10.0,<1.0.0"`. Confirm against repo convention.
+
+**Verification command output** (pyproject.toml dep audit):
+- exact-pin (`==`) count: **1** (`kaleido==0.2.1` only)
+- range-pin (`>=X,<Y`) count: **36** (every other entry)
+
+**Finding:** repo overwhelmingly uses range pins. The proposed `"uuid-utils>=0.10.0,<1.0.0"` matches the dominant convention; keep as-is.
+
+**Resolution:** no change to Chunk 1b-i §B1's recommendation. Use `"uuid-utils>=0.10.0,<1.0.0"`.
+
+### Q-impl-6 — Defence already present (NOT a question)
+
+**Discovered in:** Chunk 2a §D3.
+
+**Note:** `PublicationCreate.model_config = ConfigDict(extra="forbid")` (schemas/publication.py:171) already blocks operator-supplied `lineage_key` with HTTP 422. The "attacker injects lineage_key into POST body" concern is auto-resolved by existing schema configuration. Impl prompt's E4.3 test case verifies this defence still holds; no remediation work needed.
+
+## G. DEBT and roadmap state updates
+
+**What's here:** DEBT.md entries that touch Phase 2.2.0 and any new entries Phase 2.2.0 introduces.
+
+**Source files cited:** DEBT.md, pre-recon §G.
+
+### G1. Existing DEBT entries referenced
+
+Verification output (`grep -n "DEBT-035\|lineage" DEBT.md | head -10`):
+```
+276:### DEBT-035: Parallel config_hash computation in pipeline + lineage helper
+283:- **Description:** `_compute_hashes` in `backend/src/services/graphics/pipeline.py:182` inlines its own SHA-256 hashing logic, parallel to the centralized `compute_config_hash` in `backend/src/services/publications/lineage.py`. Both produce the same hash for the same inputs today, but divergence risk exists if either path is updated independently.
+```
+
+**DEBT-035 (Resolved):** existing `services/publications/lineage.py` houses `compute_config_hash`. Phase 2.2.0 extends this same module with `generate_lineage_key` + `derive_clone_lineage_key`. No DEBT-035 status change needed; just a cross-reference in Phase 2.2.0 impl prompt's "Files modified" list.
+
+**DEBT-040 (per pre-recon §G2):** Phase 2.5b "missing post URLs" row depends on Phase 2.3 post_ledger which depends on Phase 2.2 distribution kit which depends on Phase 2.2.0 (this phase). No DEBT-040 status change in Phase 2.2.0; the dependency chain stays intact.
+
+### G2. New DEBT entries from Phase 2.2.0 recon
+
+Verification confirmed `grep -n -i "lineage_key" DEBT.md` returns **zero hits** — Phase 2.2.0 is the first formal mention.
+
+**Proposed new entries** (impl prompt drafts the actual DEBT.md text and assigns next-available DEBT-NNN numbers):
+
+#### DEBT-NNN: Manual lineage break UI
+
+- **Severity:** P3 (deferred — no operator demand yet)
+- **Category:** product-ux
+- **Source:** Phase 2.2.0 recon Chunk 1a §A2 edge case
+- **Description:** Operators cloning a publication for editorial purposes (preserve attribution) get a different need from operators cloning for "this is fundamentally a new story" (start fresh). Today, all clones inherit `lineage_key` via `derive_clone_lineage_key(source)`. No UI for breaking lineage. Wrapper function exists as a future hook (Chunk 1a §A3, §C1) but is unreachable from any UI today.
+- **Status:** pending; deferred until operator hits the friction point
+- **Target:** Phase 4 polish or post-MVP UX iteration
+
+#### DEBT-NNN: Migration downgrade orphans Phase 2.3 UTM data
+
+- **Severity:** P2 (operational risk, not bug)
+- **Category:** ops-runbook
+- **Source:** Phase 2.2.0 recon Chunk 1b-i §B4
+- **Description:** Once Phase 2.3 starts logging `?utm_content=<lineage_key>` on lead funnels, downgrading then re-upgrading the `b4f9a21c8d77 → <new>` migration regenerates fresh root keys (`uuid7()` is non-deterministic). Historical UTM data orphans (recorded keys no longer match any current row). Document in migration docstring + ops runbook.
+- **Status:** pending; ops note + migration docstring add are the resolution
+- **Target:** Phase 2.2.0 impl includes both the migration docstring (per Chunk 1b-i §B2 boilerplate) and a runbook entry; resolves on merge.
+
+#### DEBT-NNN: Dead `create_with_versioning` + `create` repo methods
+
+- **Severity:** P3 (cleanup)
+- **Category:** code-hygiene
+- **Source:** Phase 2.2.0 recon Chunk 2b §F Q-impl-1, Q-impl-2
+- **Description:** `PublicationRepository.create_with_versioning` (line 112) and `PublicationRepository.create` (line 158) have zero callers in `backend/src/`, `backend/tests/`, and `backend/scripts/`. They are dead code, likely superseded by `create_full` + `create_clone`. Phase 2.2.0 still updates their signatures with `lineage_key` for consistency; deletion belongs in a separate cleanup PR.
+- **Status:** pending; deletion deferred so 2.2.0 stays scoped
+- **Target:** post-2.2.0 cleanup PR
+
+### G3. ROADMAP_DEPENDENCIES.md update
+
+Phase 2.2.0 was NOT in the roadmap as a separate sub-phase before founder split decision (2026-04-28; per pre-recon Q-2.2-1 founder lock). Impl prompt updates `docs/architecture/ROADMAP_DEPENDENCIES.md`:
+
+```
+| 2.2.0 Backend lineage_key infrastructure | M | 1 | 2.1 |
+| 2.2 Publish Kit Generator | M | 2 | 2.2.0 |   <-- update existing row's depends-on (was 2.1)
+```
+
+The 2.2 row currently lists `2.1` as dependency (per pre-recon §G2 line 51); that becomes `2.2.0`. The DAG section is also updated to insert `2.1 → 2.2.0 → 2.2 → {2.3, 2.4}`.
+
+This is a documentation update only; impl prompt covers it as part of the Phase 2.2.0 PR.
+
+## Appendix — file paths verified during Phase 2.2.0 recon
+
+All files actually opened during Chunks 1a + 1b-i + 1b-ii + 2a + 2b (allows impl to confirm coverage):
+
+**Chunk 1a (Section A):**
+- docs/recon/phase-2-2-pre-recon.md (consumed §E1, §E2, §G1)
+- backend/src/services/publications/lineage.py
+- backend/src/models/publication.py
+- backend/pyproject.toml
+
+**Chunk 1b-i (Section B):**
+- backend/pyproject.toml (verified PEP 621 dependency layout)
+- backend/migrations/versions/ (path drift — actual location, NOT backend/alembic/versions/)
+- Alembic head: `b4f9a21c8d77` (file `b4f9a21c8d77_add_cloned_from_to_publication.py`)
+
+**Chunk 1b-ii (Section C):**
+- backend/src/services/publications/clone.py
+- backend/src/repositories/publication_repository.py (path drift — actual location, NOT services/publications/)
+- backend/src/api/routers/admin_publications.py
+
+**Chunk 2a (Sections D + E):**
+- backend/src/schemas/publication.py
+- docs/recon/phase-2-2-pre-recon.md (cross-reference §E2)
+- backend/tests/ tree (directory listings; flatter than prompt assumed — no `unit/`, no `migrations/` subdirs)
+
+**Chunk 2b (Sections F + G + Appendix):**
+- DEBT.md (greps only — DEBT-035 cross-ref at line 276)
+- docs/recon/phase-2-2-pre-recon.md (Appendix cross-reference)
+- Plus grep audits across `backend/src/`, `backend/tests/`, `backend/scripts/` for Q-impl-1, Q-impl-2 caller resolution
+
+**Path drift summary** (impl prompts MUST use actual paths):
+- Alembic dir: `backend/migrations/versions/` (NOT `backend/alembic/versions/`)
+- Repository: `backend/src/repositories/publication_repository.py` (NOT `backend/src/services/publications/publication_repository.py`)
+- Test layout: flat under `backend/tests/` (NOT nested `backend/tests/unit/services/publications/`)
+- Migration tests: new dir `backend/tests/integration/migrations/` needed (no existing `migrations/` subdir under tests)
+
+---
+
+**Phase 2.2.0 Recon-proper status: COMPLETE.**
+
+Recon-proper output is consumed by impl prompts. Recommended impl prompt split:
+
+- **Impl Chunk 1:** Migration + dependency add (per §B1 + §B2). Single Alembic revision, single pyproject.toml edit.
+- **Impl Chunk 2:** Generator functions in lineage.py (per §C1). Pure code, no callers yet.
+- **Impl Chunk 3:** Repository constructor sites (per §C2 + §F Q-impl-1/2). All four sites updated with `lineage_key` kwarg / dict-key.
+- **Impl Chunk 4:** Schema field add (per §D1) + service-layer call sites (per §C3a, §C3b).
+- **Impl Chunk 5:** Test fixture migration to `make_publication` helper (per §F Q-impl-3) + new tests (per §E1-§E4) + new migration test directory (per §F Q-impl-4).
+- **Impl Chunk 6:** DEBT.md updates (per §G2, three entries) + ROADMAP_DEPENDENCIES.md update (per §G3) + migration ops-runbook entry (per §G2 second entry).
+
+Founder reviews recon document, approves, then dispatches impl Chunk 1.
