@@ -134,8 +134,10 @@ def generate_lineage_key() -> str:
         Canonical 36-char UUID v7 string, e.g.
         ``'01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c'``.
 
-    Pure function (ARCH-PURA-001 compliant): module-imported uuid7 is
-    deterministic given current wall-clock; no I/O, no DB.
+    Non-deterministic by design: each call returns a new globally unique,
+    time-sortable identifier. UUID v7 encodes a millisecond timestamp plus
+    a random/counter tail, so two calls in the same millisecond produce
+    distinct values. No I/O, no DB access — safe to call from any layer.
     """
     return str(uuid7())
 

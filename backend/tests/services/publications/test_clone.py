@@ -62,6 +62,43 @@ async def test_clone_published_creates_draft_with_copy_prefix(db_session) -> Non
 
 
 @pytest.mark.asyncio
+async def test_clone_inherits_source_lineage_key(db_session) -> None:
+    """Clone publication inherits source's lineage_key verbatim.
+
+    This is the core lineage invariant — UTM attribution in Phase 2.3
+    aggregates engagement across A -> B -> C clone chains by matching on
+    lineage_key. If clones generated fresh keys, attribution would
+    fragment per version.
+    """
+    pinned_lineage = '01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c'
+    src = make_publication(
+        headline='source publication',
+        chart_type='bar',
+        status=PublicationStatus.PUBLISHED,
+        lineage_key=pinned_lineage,
+        version=1,
+        config_hash='abc123abc123abcd',
+        source_product_id='P1',
+        visual_config=json.dumps({'size': 'instagram'}),
+        review=json.dumps({'workflow': 'published', 'history': [], 'comments': []}),
+    )
+    db_session.add(src)
+    await db_session.flush()
+    await db_session.refresh(src)
+
+    clone = await clone_publication(session=db_session, source_id=src.id)
+
+    assert clone.lineage_key == pinned_lineage, (
+        f'clone should inherit source lineage; '
+        f'source={src.lineage_key} clone={clone.lineage_key}'
+    )
+    assert clone.cloned_from_publication_id == src.id, (
+        f'clone should record source as parent; got {clone.cloned_from_publication_id}'
+    )
+    assert clone.id != src.id
+
+
+@pytest.mark.asyncio
 async def test_clone_resets_document_state_to_none(db_session) -> None:
     """document_state MUST be None on clone to avoid re-publish via hydration."""
     src_doc_state = json.dumps({

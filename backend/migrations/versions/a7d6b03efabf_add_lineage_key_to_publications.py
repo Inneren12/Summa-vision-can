@@ -63,7 +63,17 @@ def downgrade() -> None:
 
 def _backfill_lineage_keys() -> None:
     """Walk publications by id ASC. Roots get fresh uuid7. Clones inherit
-    from parent — guaranteed already-processed since clones have higher id."""
+    lineage_key from parent.
+
+    Business invariant: clones are created via auto-increment PK after
+    their source row exists, so clone.id > parent.id and the parent's
+    lineage_key is already in ``key_by_id`` by the time the loop reaches
+    the clone. This invariant is enforced by application logic, not by a
+    DB constraint. If the invariant is violated (e.g. legacy or manually
+    inserted data where clone.id < parent.id), the affected clone falls
+    into the ``else`` branch and receives a fresh lineage_key — treated
+    as an orphan root rather than an exception.
+    """
     try:
         from uuid import uuid7  # type: ignore[attr-defined]  # Python 3.13+ stdlib
     except ImportError:
