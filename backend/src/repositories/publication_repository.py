@@ -88,6 +88,7 @@ class PublicationRepository:
         version: int,
         config_hash: str,
         content_hash: str,
+        lineage_key: str,
         virality_score: float | None = None,
         status: PublicationStatus = PublicationStatus.PUBLISHED,
     ) -> Publication:
@@ -102,6 +103,9 @@ class PublicationRepository:
             version: The publication version.
             config_hash: Hash of the configuration.
             content_hash: Hash of the image content.
+            lineage_key: UUID v7 lineage identifier; caller computes via
+                ``generate_lineage_key()`` for roots or
+                ``derive_clone_lineage_key(source)`` for clones.
             virality_score: Optional AI-estimated virality score.
 
         Returns:
@@ -120,6 +124,7 @@ class PublicationRepository:
                     content_hash=content_hash,
                     virality_score=virality_score,
                     status=status,
+                    lineage_key=lineage_key,
                 )
                 self._session.add(publication)
                 await self._session.flush()
@@ -136,6 +141,7 @@ class PublicationRepository:
         *,
         headline: str,
         chart_type: str,
+        lineage_key: str,
         s3_key_lowres: str | None = None,
         s3_key_highres: str | None = None,
         virality_score: float | None = None,
@@ -146,6 +152,9 @@ class PublicationRepository:
         Args:
             headline: Short title for the graphic.
             chart_type: Identifier for the chart type.
+            lineage_key: UUID v7 lineage identifier; caller computes via
+                ``generate_lineage_key()`` for roots or
+                ``derive_clone_lineage_key(source)`` for clones.
             s3_key_lowres: Optional S3 key for low-res preview.
             s3_key_highres: Optional S3 key for high-res asset.
             virality_score: Optional AI-estimated virality score.
@@ -162,6 +171,7 @@ class PublicationRepository:
             s3_key_highres=s3_key_highres,
             virality_score=virality_score,
             status=status,
+            lineage_key=lineage_key,
         )
         self._session.add(publication)
         await self._session.flush()
@@ -177,8 +187,20 @@ class PublicationRepository:
         new_config_hash: str,
         new_version: int,
         fresh_review_json: str,
+        lineage_key: str,
     ) -> Publication:
-        """Create a draft clone of a published publication."""
+        """Create a draft clone of a published publication.
+
+        Args:
+            source: The published publication to clone from.
+            new_headline: Headline for the new clone.
+            new_config_hash: Config hash for the new clone version.
+            new_version: Version number for the new clone.
+            fresh_review_json: JSON-serialised fresh review subtree.
+            lineage_key: UUID v7 lineage identifier; caller computes via
+                ``derive_clone_lineage_key(source)`` to inherit the
+                source's lineage_key (clones share with source).
+        """
         clone = Publication(
             headline=new_headline,
             chart_type=source.chart_type,
@@ -199,6 +221,7 @@ class PublicationRepository:
             version=new_version,
             status=PublicationStatus.DRAFT,
             cloned_from_publication_id=source.id,
+            lineage_key=lineage_key,
         )
         self._session.add(clone)
         await self._session.flush()
