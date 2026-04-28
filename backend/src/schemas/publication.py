@@ -130,7 +130,16 @@ class PublicationCreate(BaseModel):
 
     All fields except ``headline`` and ``chart_type`` are optional.
     The created publication starts in ``DRAFT`` status.
+
+    ``extra='forbid'`` is defence-in-depth against lineage_key spoofing:
+    server-side ``generate_lineage_key()`` is the sole authoritative
+    source for ``lineage_key``, so any client-supplied value must be
+    rejected with HTTP 422 rather than silently dropped (the Pydantic
+    default ``extra='ignore'`` would silently drop it). Mirrors
+    :class:`PublicationUpdate`.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     headline: str = Field(..., min_length=1, max_length=500)
     chart_type: str = Field(..., min_length=1, max_length=50)

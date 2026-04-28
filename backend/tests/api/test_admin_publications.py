@@ -201,6 +201,85 @@ async def test_create_publication_invalid_visual_config_returns_422(
 
 
 # ---------------------------------------------------------------------------
+# Phase 2.2.0 — lineage_key spoofing defence (extra="forbid")
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_create_rejects_client_supplied_lineage_key(
+    session_factory,
+) -> None:
+    """POST with ``lineage_key`` in body → HTTP 422 (extra_forbidden).
+
+    Defence-in-depth: ``PublicationCreate`` uses ``extra="forbid"`` so any
+    client-supplied ``lineage_key`` is rejected at validation time before it
+    can reach the service layer. Server-side ``generate_lineage_key()`` is
+    the only authoritative source of lineage_key values; the schema must
+    fail loud on attempted injection rather than silently drop it.
+    """
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    attacker_lineage = "attacker-controlled-uuid-1234567890123456789012345"
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json={
+                "headline": "spoofing test",
+                "chart_type": "bar",
+                "lineage_key": attacker_lineage,
+            },
+            headers=_auth_headers(),
+        )
+
+    assert resp.status_code == 422, (
+        f"expected 422 (extra_forbidden), got {resp.status_code}: {resp.text}"
+    )
+    body = resp.json()
+    errors = body.get("detail", [])
+    extra_forbidden = any(
+        err.get("type") == "extra_forbidden"
+        and "lineage_key" in str(err.get("loc", []))
+        for err in errors
+    )
+    assert extra_forbidden, (
+        f"expected extra_forbidden error on lineage_key field; got: {errors}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_admin_create_stamps_server_side_lineage_key(
+    session_factory,
+) -> None:
+    """POST without lineage_key → server stamps a fresh UUID v7.
+
+    Confirms the admin create handler wires ``generate_lineage_key()`` into
+    the create path and surfaces the value through ``PublicationResponse``
+    end-to-end, not just in isolated unit tests.
+    """
+    import re
+
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json={"headline": "server-stamp test", "chart_type": "bar"},
+            headers=_auth_headers(),
+        )
+
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert "lineage_key" in body, f"response missing lineage_key: {body}"
+
+    uuid7_pattern = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    )
+    assert uuid7_pattern.match(body["lineage_key"]), (
+        f"lineage_key not in UUID v7 format: {body['lineage_key']}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # PATCH /api/v1/admin/publications/{id}
 # ---------------------------------------------------------------------------
 
