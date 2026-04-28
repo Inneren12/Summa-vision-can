@@ -64,7 +64,12 @@
     "export_presets": {
       "label": "Export presets",
       "help": "Choose which sizes to include in the ZIP export.",
-      "current_required": "Current canvas size — always included"
+      "current_required": "Current canvas size — always included",
+      "qa_status": {
+        "ok": "OK",
+        "ok_with_warnings": "OK · WARN",
+        "skip": "SKIP"
+      }
     }
   },
   "right_rail": {

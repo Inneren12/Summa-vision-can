@@ -143,6 +143,7 @@ function LeftPanelImpl({ doc, dispatch, selId, ltab, setLtab, effectivePerms }: 
               {EXPORTABLE_PRESET_IDS.map((k) => { const v = SIZES[k]; return <button type="button" key={k} onClick={() => effectivePerms.changeSize && dispatch({ type: "CHANGE_PAGE", key: "size", value: k })} disabled={!effectivePerms.changeSize} aria-label={tTheme('option.size.aria', { name: v.n, width: v.w, height: v.h })} aria-pressed={doc.page.size === k} style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 6px", marginBottom: "1px", fontSize: "9px", background: doc.page.size === k ? TK.c.bgAct : "transparent", border: doc.page.size === k ? `1px solid ${TK.c.acc}30` : "1px solid transparent", borderRadius: "3px", cursor: effectivePerms.changeSize ? "pointer" : "not-allowed", color: TK.c.txtP, opacity: effectivePerms.changeSize ? 1 : 0.5 }}>{v.n} <span style={{ color: TK.c.txtM }}>{v.w}{"\u00D7"}{v.h}</span></button>; })}
             </div>
             <ExportPresetsSection
+              doc={doc}
               currentSize={doc.page.size}
               exportPresets={doc.page.exportPresets}
               dispatch={dispatch}

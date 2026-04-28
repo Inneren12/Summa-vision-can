@@ -56,18 +56,43 @@ jest.mock('next-intl', () => {
   };
 });
 
+// PR#4: validatePresetSize (called by the badge code path) imports
+// `computeLongInfographicHeight` from the renderToBlob module. Wrap as a
+// jest.fn defaulting to the real implementation so individual tests can
+// override per-call to drive the long-infographic cap into the error branch.
+jest.mock('@/components/editor/export/renderToBlob', () => {
+  const actual = jest.requireActual(
+    '@/components/editor/export/renderToBlob',
+  );
+  return {
+    ...actual,
+    computeLongInfographicHeight: jest.fn(
+      actual.computeLongInfographicHeight,
+    ),
+  };
+});
+
 import { NextIntlClientProvider } from 'next-intl';
+import { within } from '@testing-library/react';
 import { ExportPresetsSection } from '@/components/editor/components/ExportPresetsSection';
 import { SIZES, DEFAULT_EXPORT_PRESETS } from '@/components/editor/config/sizes';
+import { TPLS, mkDoc } from '@/components/editor/registry/templates';
 import type { EditorAction } from '@/components/editor/types';
+import { computeLongInfographicHeight } from '@/components/editor/export/renderToBlob';
+
+const mockedCompute = computeLongInfographicHeight as jest.MockedFunction<
+  typeof computeLongInfographicHeight
+>;
 
 function renderSection(
   props: Partial<React.ComponentProps<typeof ExportPresetsSection>> = {},
 ) {
   const dispatch = jest.fn<void, [EditorAction]>();
+  const baseDoc = mkDoc('single_stat_hero', TPLS.single_stat_hero);
   const utils = render(
     <NextIntlClientProvider locale="en" messages={enMessages as Messages}>
       <ExportPresetsSection
+        doc={baseDoc}
         currentSize="instagram_1080"
         exportPresets={[...DEFAULT_EXPORT_PRESETS]}
         dispatch={dispatch}
@@ -182,5 +207,59 @@ describe('ExportPresetsSection', () => {
       'reddit_standard',
       'linkedin_landscape',
     ]);
+  });
+});
+
+describe('PR#4: per-preset QA badge', () => {
+  beforeEach(() => {
+    // Each test gets the real cap-height computation by default; per-test
+    // overrides drive the validator into the error branch.
+    const actual = jest.requireActual(
+      '@/components/editor/export/renderToBlob',
+    );
+    mockedCompute.mockReset();
+    mockedCompute.mockImplementation(actual.computeLongInfographicHeight);
+  });
+
+  test('renders OK badge for clean preset', () => {
+    renderSection();
+    const badges = screen.getAllByTestId('preset-qa-badge');
+    expect(badges.some((b) => b.getAttribute('data-status') === 'ok')).toBe(
+      true,
+    );
+  });
+
+  test('renders SKIP badge for long_infographic when cap exceeded', () => {
+    mockedCompute.mockImplementation(() => 4500);
+    const longRow = (() => {
+      renderSection({
+        exportPresets: ['instagram_1080', 'long_infographic'],
+      });
+      return screen.getByTestId('export-preset-row-long_infographic');
+    })();
+    const badge = within(longRow).getByTestId('preset-qa-badge');
+    expect(badge.getAttribute('data-status')).toBe('skip');
+  });
+
+  test('renders WARN badge when only warnings present', () => {
+    // visual_table template uses table_enriched. Pre-render against
+    // instagram_portrait (1080×1350) — sz.w=1080 < 1100 triggers the
+    // `validation.layout.table_narrow` warning in validatePresetSize without
+    // pushing any errors.
+    const doc = mkDoc('visual_table', TPLS.visual_table);
+    renderSection({ doc, currentSize: 'instagram_portrait' });
+    const row = screen.getByTestId('export-preset-row-instagram_portrait');
+    const badge = within(row).getByTestId('preset-qa-badge');
+    expect(badge.getAttribute('data-status')).toBe('warn');
+  });
+
+  test('badge tooltip surfaces first issue key', () => {
+    mockedCompute.mockImplementation(() => 4500);
+    renderSection({ exportPresets: ['instagram_1080', 'long_infographic'] });
+    const longRow = screen.getByTestId('export-preset-row-long_infographic');
+    const badge = within(longRow).getByTestId('preset-qa-badge');
+    expect(badge.getAttribute('title')).toBe(
+      'validation.long_infographic.height_cap_exceeded',
+    );
   });
 });

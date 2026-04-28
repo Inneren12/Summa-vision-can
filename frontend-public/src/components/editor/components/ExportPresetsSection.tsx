@@ -1,18 +1,25 @@
 'use client';
 
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
-import type { EditorAction } from '../types';
+import type { CanonicalDocument, EditorAction, ValidationResult } from '../types';
 import { TK } from '../config/tokens';
 import { SIZES } from '../config/sizes';
 import type { PresetId } from '../config/sizes';
+import { validatePresetSize } from '../validation/validate';
 
 interface ExportPresetsSectionProps {
+  doc: CanonicalDocument;
   currentSize: PresetId;
   exportPresets: readonly PresetId[];
   dispatch: React.Dispatch<EditorAction>;
   canEdit: boolean;
 }
+
+// Module-scope so useMemo deps stay stable (Object.keys(SIZES) returns a
+// fresh array each call; promoting it out keeps the QA recompute keyed on
+// `doc` alone, not on identity churn).
+const PRESET_IDS = Object.keys(SIZES) as PresetId[];
 
 /**
  * Phase 2.1 PR#2 — "Export presets" picker.
@@ -34,6 +41,7 @@ interface ExportPresetsSectionProps {
  * `exportPresets`; no local component state.
  */
 function ExportPresetsSectionImpl({
+  doc,
   currentSize,
   exportPresets,
   dispatch,
@@ -46,8 +54,21 @@ function ExportPresetsSectionImpl({
   // distinct (size picker = "what canvas am I editing"; this list = "what
   // presets get included in the ZIP"). Reading from SIZES keeps Inspector
   // independent of size-picker scope changes.
-  const presetIds = Object.keys(SIZES) as PresetId[];
+  const presetIds = PRESET_IDS;
   const enabled = new Set<string>(exportPresets);
+
+  // PR#4: per-preset QA. validatePresetSize is pure; useMemo keys on doc so
+  // re-renders during typing don't redo the work. Cost is dominated by
+  // measureLayout (one call per preset) — for 7 presets that's 7 layout
+  // passes per relevant doc mutation. Acceptable; measureLayout is fast and
+  // Inspector re-renders only on relevant doc updates.
+  const qaByPreset = useMemo(() => {
+    const out: Partial<Record<PresetId, ValidationResult>> = {};
+    for (const id of PRESET_IDS) {
+      out[id] = validatePresetSize(doc, id);
+    }
+    return out as Record<PresetId, ValidationResult>;
+  }, [doc]);
 
   const togglePreset = (id: PresetId) => {
     if (!canEdit) return;
@@ -124,6 +145,7 @@ function ExportPresetsSectionImpl({
                 {'×'}
                 {preset.h}
               </span>
+              <PresetQaBadge result={qaByPreset[id]} />
             </label>
           );
         })}
@@ -144,3 +166,70 @@ function ExportPresetsSectionImpl({
 }
 
 export const ExportPresetsSection = memo(ExportPresetsSectionImpl);
+
+interface PresetQaBadgeProps {
+  result: ValidationResult;
+}
+
+/**
+ * PR#4 per-preset QA badge. Three states:
+ *   - SKIP (red):  errors.length > 0       → preset will be skipped at export
+ *   - WARN (acc):  warnings.length > 0     → renders, but with caveats
+ *   - OK   (pos):  clean                   → no caveats
+ *
+ * Tooltip surfaces the first issue's i18n key. Full localized text lives in
+ * the QA panel; the badge is for at-a-glance status only.
+ */
+function PresetQaBadge({ result }: PresetQaBadgeProps) {
+  const tBadge = useTranslations('inspector.export_presets.qa_status');
+  const errorCount = result.errors.length;
+  const warningCount = result.warnings.length;
+
+  let label: string;
+  let bg: string;
+  let color: string;
+  let tooltip: string;
+  let status: 'ok' | 'warn' | 'skip';
+
+  if (errorCount > 0) {
+    status = 'skip';
+    label = tBadge('skip');
+    bg = `${TK.c.err}30`;
+    color = TK.c.err;
+    tooltip = result.errors[0].key;
+  } else if (warningCount > 0) {
+    status = 'warn';
+    label = tBadge('ok_with_warnings');
+    bg = `${TK.c.acc}30`;
+    color = TK.c.acc;
+    tooltip = result.warnings[0].key;
+  } else {
+    status = 'ok';
+    label = tBadge('ok');
+    bg = `${TK.c.pos}30`;
+    color = TK.c.pos;
+    tooltip = label;
+  }
+
+  return (
+    <span
+      data-testid="preset-qa-badge"
+      data-status={status}
+      title={tooltip}
+      style={{
+        display: 'inline-block',
+        padding: '1px 5px',
+        marginLeft: '6px',
+        fontSize: '7px',
+        fontFamily: TK.font.data,
+        textTransform: 'uppercase',
+        background: bg,
+        color,
+        borderRadius: '2px',
+        flexShrink: 0,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
