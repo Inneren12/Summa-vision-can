@@ -477,3 +477,187 @@ The two `models/publication.py` hits are not constructors — line 27 is the cla
 - No background job / scheduler / sync writer surfaced in the audit. If Chunk 2b's broader scan finds one, it's a surprise to flag.
 
 **Expected outcome:** Chunk 2b §F will pin the open questions (Q-impl-1 pipeline caller, Q-impl-2 `create()` callers) so impl phase has a checklist before touching repo signatures.
+
+## D. Schema and API surface
+
+**What's here:** PublicationResponse field add, request schema treatment (lineage_key is server-generated and already blocked at the request boundary by `extra="forbid"`), and OpenAPI doc impact.
+
+**Source files cited:** schemas/publication.py, pre-recon §E2, admin_publications.py:265 context from Chunk 1b-ii.
+
+### D1. `PublicationResponse` field add
+
+(per pre-recon §E2 — actual schema name is `PublicationResponse`, not `AdminPublicationResponse`)
+
+Schema classes detected in `backend/src/schemas/publication.py`:
+```
+42:class BrandingConfig(BaseModel):
+60:class VisualConfig(BaseModel):
+96:class ReviewPayload(BaseModel):
+128:class PublicationCreate(BaseModel):
+152:class PublicationUpdate(BaseModel):
+196:class PublicationResponse(BaseModel):
+267:class PublicationPublicResponse(BaseModel):
+```
+
+`grep -n "lineage_key" backend/src/schemas/publication.py` → **zero matches**, confirming pre-recon §E2.
+
+**Add field to `PublicationResponse` (line 196):**
+```python
+class PublicationResponse(BaseModel):
+    # ... existing 17 fields ...
+    cloned_from_publication_id: Optional[int] = None
+    lineage_key: str   # NEW — Phase 2.2.0; required (NOT NULL post-migration)
+
+    model_config = ConfigDict(from_attributes=True)   # unchanged (line 222)
+```
+
+**Why `str`, not `Optional[str]`:** post-migration the column is `NOT NULL` (per Chunk 1a §A1, Chunk 1b-i §B2 step 3). Surface type should mirror DB nullability; `Optional[str]` would lie about the contract and force every consumer to write defensive `if k is not None` branches.
+
+**Why no `Field(...)` constraints:** lineage_key is internally-generated (UUID v7), never operator-provided. No `min_length`, `max_length`, `pattern` needed at the response layer — the service-layer generator is the single point of truth for format.
+
+**Pydantic V2 ConfigDict:** existing `model_config = ConfigDict(from_attributes=True)` at line 222 covers ORM→schema attribute access for the new field automatically. No config change.
+
+### D2. `PublicationPublicResponse` — explicit decision NOT to expose
+
+`PublicationPublicResponse` (line 267, public-gallery counterpart) MUST NOT include `lineage_key`. Rationale: the public gallery is unauthenticated; exposing lineage_key there leaks internal cross-version grouping to anyone, which is information the UTM scheme is supposed to keep on Summa's analytics side. Phase 2.3 attribution queries run server-side off the admin-visible field.
+
+If a future phase needs the public response to surface lineage_key (e.g. for client-side share-URL composition), revisit then. Phase 2.2.0 keeps it admin-only.
+
+### D3. Request schema treatment — `extra="forbid"` already blocks operator override
+
+Verified from `schemas/publication.py`:
+- `PublicationCreate` (line 128): `model_config = ConfigDict(extra="forbid")` at line 171 — comment at line 167: "`extra='forbid'` rejects unknown fields with HTTP 422 to prevent ..."
+- `PublicationUpdate` (line 152): `model_config = ConfigDict(extra="forbid")` at line 110
+
+**Implication:** if an attacker tries `POST /api/v1/admin/publications` with `{"lineage_key": "attacker-controlled-uuid", ...}`, Pydantic rejects with HTTP 422 BEFORE the request body reaches `repo.create_full(...)`. The `extra="forbid"` config is the existing defence; lineage_key being absent from `PublicationCreate` is sufficient — no new field, no new validator needed.
+
+**Service layer pattern** (refines Chunk 1b-ii §C3a now that we know the dict from `body.model_dump()` is guaranteed not to contain `lineage_key`):
+```python
+# admin_publications.py around line 265:
+data = body.model_dump()                  # guaranteed clean: extra="forbid" rejected any lineage_key
+data["lineage_key"] = generate_lineage_key()   # server-side stamp
+publication = await repo.create_full(data)
+```
+
+The `data["lineage_key"] = ...` injection is safe because `body.model_dump()` produces a fresh dict — mutation does not bleed back into the request.
+
+**Clone request schema** (whatever the body of the clone endpoint accepts — `clone.py:25` takes only `source_id` from URL; per `admin_publications.py` clone-endpoint pattern there may or may not be a body schema): no change. lineage_key is derived internally from `source` via `derive_clone_lineage_key(source)`. If a future clone endpoint adds a request body, it MUST also use `extra="forbid"` (same defence pattern).
+
+### D4. OpenAPI doc impact
+
+OpenAPI schema regeneration after Phase 2.2.0:
+- `PublicationResponse` gains required field `lineage_key: string`
+- `PublicationPublicResponse` unchanged (per D2)
+- No new endpoints, no new request fields
+- No API version bump (additive output-only field)
+
+**Compatibility:** existing admin clients reading `PublicationResponse` ignore unknown fields by default (most JSON parsers, including Next.js client code per Phase 2.2 frontend roadmap). The frontend will start consuming `lineage_key` when Phase 2.2 ships; in the gap between Phase 2.2.0 backend ship and Phase 2.2 frontend ship, the field is harmlessly present-but-unused.
+
+## E. Test plan
+
+**What's here:** unit + integration tests for the new lineage helpers, migration scenarios, schema serialization, and a fixture-update audit.
+
+**Source files cited:** test directory listings from verification, existing `test_lineage.py`, `test_clone.py`, `test_publication_repository.py`.
+
+**Test layout drift:** the prompt's `backend/tests/unit/services/publications/` and `backend/tests/migrations/` paths do NOT exist. Actual layout (from `find backend/tests`):
+- `backend/tests/services/publications/test_lineage.py` (EXISTS — extend)
+- `backend/tests/services/publications/test_clone.py` (EXISTS — extend)
+- `backend/tests/repositories/test_publication_repository.py` (EXISTS — extend)
+- `backend/tests/api/test_admin_publications.py` (EXISTS — extend)
+- `backend/tests/api/test_clone_publication_endpoint.py` (EXISTS — extend)
+- `backend/tests/integration/` exists (alongside `backend/tests/` proper) — no `migrations/` subdir; new migration test goes in `backend/tests/integration/migrations/test_lineage_key_backfill.py` (new directory)
+
+### E1. Unit tests — extend `tests/services/publications/test_lineage.py`
+
+**Test cases for `generate_lineage_key()`:**
+1. **Returns 36-char canonical UUID v7 format** — regex `^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`
+2. **Distinct calls return distinct values** — call 100 times, assert `len(set(results)) == 100`
+3. **Time-sortable (UUID v7 invariant)** — call N=10 with `time.sleep(0.001)` between; assert `results == sorted(results)`
+
+**Test cases for `derive_clone_lineage_key(source)`:**
+1. **Returns source.lineage_key verbatim** — pass mock `Publication(lineage_key="01923f9e-...")`, assert exact return
+2. **Raises ValueError on null lineage_key** — pass mock `Publication(lineage_key=None)`, assert `ValueError` whose message contains "data integrity"
+3. **Pure function — no DB / I/O** — call requires only an in-memory Publication instance; no `session` / `repo` fixtures
+
+**Coverage target:** 100% on the two new functions (≥6 cases total).
+
+### E2. Migration test — new file `tests/integration/migrations/test_lineage_key_backfill.py`
+
+(no existing migration tests detected; this is a new pattern. Recommend `subprocess.run(['alembic', 'upgrade', 'head'])` style with `alembic downgrade base` teardown — programmatic Alembic API conflicts with the pytest-asyncio event loop.)
+
+**Test scenarios** (per Chunk 1b-i §B3):
+
+1. **Linear clone chain inheritance**
+   - Setup: insert A (root), B (`cloned_from=A`), C (`cloned_from=B`), all with `lineage_key=NULL` AT REVISION `b4f9a21c8d77`
+   - Run: upgrade to head
+   - Assert: `A.lineage_key == B.lineage_key == C.lineage_key`; matches UUID v7 regex
+
+2. **Multiple independent roots**
+   - Setup: insert P1, P2, P3, no clone FKs
+   - Run: upgrade
+   - Assert: 3 distinct lineage_keys
+
+3. **Orphaned clone (parent SET NULL via cascade)**
+   - Setup: insert parent, insert clone with `cloned_from=parent.id`, then `DELETE FROM publications WHERE id=parent.id` (FK has `ondelete="SET NULL"` per pre-recon §E1) — clone's `cloned_from_publication_id` is now NULL
+   - Run: upgrade
+   - Assert: orphan gets fresh lineage_key (not NULL)
+
+4. **Idempotency of upgrade → downgrade → upgrade**
+   - Setup: empty publications table
+   - Run: upgrade, downgrade, upgrade
+   - Assert: schema correct after second upgrade; index re-created; no errors
+
+5. **NOT NULL enforcement after backfill**
+   - Setup: insert one row, run upgrade
+   - Assert: `INSERT INTO publications (headline, chart_type) VALUES (...)` (omitting lineage_key) fails with `IntegrityError` / NOT NULL constraint
+
+**CI level:** integration (Postgres-backed; can also run on SQLite via `aiosqlite` per existing test patterns, but the NOT NULL alter step needs SQLite-compatible Alembic batch_alter_table — flag for impl).
+
+### E3. Integration tests — extend service write-path test files
+
+**Extend `tests/api/test_admin_publications.py` (create path):**
+1. `POST /api/v1/admin/publications` returns response with non-null `lineage_key` matching UUID v7 regex
+2. Two consecutive POSTs return distinct `lineage_key`s (no caching/reuse)
+3. After POST, `GET /api/v1/admin/publications/{id}` returns the same `lineage_key`
+4. POST with `{"lineage_key": "attacker"}` in body returns HTTP 422 (per D3 — `extra="forbid"` defence)
+
+**Extend `tests/api/test_clone_publication_endpoint.py` (clone path):**
+1. `POST /api/v1/admin/publications/{id}/clone` returns clone where `clone.lineage_key == source.lineage_key`
+2. Clone-of-clone preserves chain: A → B → C all share same `lineage_key`
+3. Cloning a source with `source.lineage_key=None` (impossible post-migration but tested defensively) → endpoint returns 500 with diagnostic mentioning "data integrity" (matches `derive_clone_lineage_key` ValueError message)
+
+**Extend `tests/repositories/test_publication_repository.py` (repo signatures):**
+- `create_full({"lineage_key": "01923...", "headline": ..., ...})` persists the value
+- `create_clone(source=src, lineage_key="01923...", ...)` persists the value
+- `create(lineage_key="01923...", ...)` persists the value (Site 2, line 158)
+- `create_with_versioning(lineage_key="01923...", ...)` persists the value (Site 1, line 112)
+
+### E4. Schema serialization tests — extend `tests/services/publications/test_clone.py` or new schema test file
+
+1. `PublicationResponse.model_validate(pub)` populates `lineage_key` from ORM — given `Publication(lineage_key="01923...")`, assert `.lineage_key == "01923..."`
+2. `PublicationResponse.model_validate(pub)` raises `ValidationError` when `pub.lineage_key is None` — because the field type is `str` (not `Optional[str]`)
+3. `PublicationCreate.model_validate({"lineage_key": "x", ...valid_fields})` raises `ValidationError` (HTTP 422 in router) — because `extra="forbid"`. **This test pins the D3 defence.**
+4. `PublicationPublicResponse.model_dump()` MUST NOT contain key `lineage_key` (per D2 — admin-only field).
+
+### E5. Fixture audit + CI gates
+
+**Test-side `Publication(...)` constructor sites** (`grep -rn "Publication(" backend/tests/`):
+```
+backend/tests/services/publications/test_etag.py:25
+backend/tests/services/publications/test_clone.py:29, :177
+backend/tests/api/test_clone_publication_endpoint.py:82
+backend/tests/api/test_lead_capture_scoring.py:28
+backend/tests/api/test_download.py:60
+backend/tests/api/test_lead_capture.py:48
+backend/tests/models/test_publication_extended.py:45, :76, :95, :127, :147
+```
+(`backend/tests/api/test_public_graphics.py:66, :351` use `_FakePublication`, a test-only double — only needs `lineage_key` if a code path under test calls `PublicationResponse.model_validate(fake)`.)
+
+**Treatment:** every site above must add `lineage_key="01923f9e-...-fixture"` (any valid UUID v7 string) OR rely on a new shared fixture helper `make_publication(...)` that defaults `lineage_key=generate_lineage_key()`. Recommendation: add the helper in `backend/tests/conftest.py` and migrate the 11+ call sites in one impl PR; new tests use the helper from day one.
+
+**CI gates:**
+- New code coverage: 100% on `lineage.py` new functions (E1)
+- Migration coverage: all 5 scenarios (E2) green before merge
+- Integration coverage: all create + clone routes (E3) cover lineage_key
+- Schema coverage: 4 cases (E4)
+- Fixture sites updated: 11+ enumerated above; flagged as Q-impl-3 in Chunk 2b §F if any are missed during impl-PR review
