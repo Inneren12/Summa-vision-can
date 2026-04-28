@@ -178,3 +178,98 @@ class TestPublicationRepository:
         published = await repo.get_published(limit=10, offset=0)
         assert len(published) == 1
         assert published[0].headline == "Full lifecycle test"
+
+    # -----------------------------------------------------------------
+    # Phase 2.2.0 chunk 3c — lineage_key persistence per write-path
+    # -----------------------------------------------------------------
+
+    async def test_create_full_persists_lineage_key(
+        self, db_session: AsyncSession
+    ) -> None:
+        """create_full persists the lineage_key supplied via data dict."""
+        repo = PublicationRepository(db_session)
+        lineage_key = generate_lineage_key()
+
+        pub = await repo.create_full(
+            {
+                "headline": "Admin create_full",
+                "chart_type": "bar",
+                "lineage_key": lineage_key,
+            }
+        )
+        await db_session.commit()
+
+        fetched = await repo.get_by_id(pub.id)
+        assert fetched is not None
+        assert fetched.lineage_key == lineage_key
+
+    async def test_create_clone_persists_lineage_key(
+        self, db_session: AsyncSession
+    ) -> None:
+        """create_clone persists the lineage_key from the inheritance helper."""
+        repo = PublicationRepository(db_session)
+        source_lineage_key = generate_lineage_key()
+
+        source = await repo.create(
+            headline="source",
+            chart_type="bar",
+            lineage_key=source_lineage_key,
+            status=PublicationStatus.PUBLISHED,
+        )
+        await db_session.commit()
+
+        clone = await repo.create_clone(
+            source=source,
+            new_headline="Copy of source",
+            new_config_hash="abcd" * 4,
+            new_version=2,
+            fresh_review_json='{"workflow": "draft", "history": [], "comments": []}',
+            lineage_key=source_lineage_key,
+        )
+        await db_session.commit()
+
+        fetched = await repo.get_by_id(clone.id)
+        assert fetched is not None
+        assert fetched.lineage_key == source_lineage_key
+
+    async def test_create_persists_lineage_key(
+        self, db_session: AsyncSession
+    ) -> None:
+        """The basic create() method persists the supplied lineage_key."""
+        repo = PublicationRepository(db_session)
+        lineage_key = generate_lineage_key()
+
+        pub = await repo.create(
+            headline="basic create",
+            chart_type="line",
+            lineage_key=lineage_key,
+        )
+        await db_session.commit()
+
+        fetched = await repo.get_by_id(pub.id)
+        assert fetched is not None
+        assert fetched.lineage_key == lineage_key
+
+    async def test_create_published_persists_lineage_key(
+        self, db_session: AsyncSession
+    ) -> None:
+        """create_published (versioned write path) persists the lineage_key."""
+        repo = PublicationRepository(db_session)
+        lineage_key = generate_lineage_key()
+
+        pub = await repo.create_published(
+            headline="versioned create",
+            chart_type="bar",
+            s3_key_lowres="low/k.png",
+            s3_key_highres="high/k.png",
+            source_product_id="P-versioned",
+            version=1,
+            config_hash="deadbeefcafebabe",
+            content_hash="0123456789abcdef",
+            lineage_key=lineage_key,
+        )
+        await db_session.commit()
+
+        fetched = await repo.get_by_id(pub.id)
+        assert fetched is not None
+        assert fetched.lineage_key == lineage_key

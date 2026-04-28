@@ -990,3 +990,91 @@ async def test_412_envelope_jsonable(session_factory) -> None:
     assert "PRECONDITION_FAILED" in serialised
     assert "server_etag" in serialised
     assert "client_etag" in serialised
+
+
+# ---------------------------------------------------------------------------
+# Phase 2.2.0 chunk 3c — admin create / get lineage_key end-to-end coverage
+# ---------------------------------------------------------------------------
+
+
+_UUID_V7_PATTERN = (
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+)
+
+
+@pytest.mark.asyncio
+async def test_create_publication_returns_lineage_key_uuid_v7_format(
+    session_factory,
+) -> None:
+    """POST /admin/publications response includes a UUID v7 lineage_key."""
+    import re
+
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert "lineage_key" in body
+    assert re.match(_UUID_V7_PATTERN, body["lineage_key"]), (
+        f"lineage_key not in UUID v7 format: {body['lineage_key']!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_two_consecutive_creates_return_distinct_lineage_keys(
+    session_factory,
+) -> None:
+    """Independent root publications must each receive a unique lineage_key."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp1 = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        resp2 = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+
+    assert resp1.status_code == 201
+    assert resp2.status_code == 201
+    key1 = resp1.json()["lineage_key"]
+    key2 = resp2.json()["lineage_key"]
+    assert key1 and key2
+    assert key1 != key2, (
+        f"two independent creates returned the same lineage_key: {key1!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_publication_returns_persisted_lineage_key(
+    session_factory,
+) -> None:
+    """GET round-trips the lineage_key stamped at create time."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = create_resp.json()["id"]
+        created_lineage_key = create_resp.json()["lineage_key"]
+
+        get_resp = await client.get(
+            f"/api/v1/admin/publications/{pub_id}",
+            headers=_auth_headers(),
+        )
+
+    assert get_resp.status_code == 200, get_resp.text
+    assert get_resp.json()["lineage_key"] == created_lineage_key
