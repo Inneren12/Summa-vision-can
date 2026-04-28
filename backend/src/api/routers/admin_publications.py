@@ -46,6 +46,7 @@ from src.services.publications.exceptions import (
     PublicationNotFoundError,
     PublicationPreconditionFailedError,
 )
+from src.services.publications.lineage import generate_lineage_key
 
 
 def _classify_workflow_event(
@@ -262,7 +263,9 @@ async def create_publication(
     repo: PublicationRepository = Depends(_get_repo),
 ) -> PublicationResponse:
     """Create a new publication in ``DRAFT`` status."""
-    publication = await repo.create_full(body.model_dump())
+    data = body.model_dump()
+    data["lineage_key"] = generate_lineage_key()
+    publication = await repo.create_full(data)
     logger.info(
         "publication_created",
         publication_id=publication.id,
