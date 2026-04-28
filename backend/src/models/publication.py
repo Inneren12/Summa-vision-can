@@ -92,6 +92,12 @@ class Publication(Base):
         nullable=True,
         index=True,
     )
+    lineage_key: Mapped[str] = mapped_column(
+        String(length=36),
+        nullable=False,
+        index=True,
+        doc="UUID v7 lineage identifier; clones share with source",
+    )
     status: Mapped[PublicationStatus] = mapped_column(
         Enum(PublicationStatus, name="publication_status"),
         nullable=False,
