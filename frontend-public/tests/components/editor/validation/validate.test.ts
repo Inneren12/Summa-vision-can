@@ -127,4 +127,72 @@ describe('validation split (PR#4)', () => {
       ...sizeResult.contrastIssues,
     ]);
   });
+
+  test('validatePresetSize: REAL over-cap long_infographic doc emits cap error (no mocks, validator/renderer parity)', () => {
+    // PR#4 fix1 — closes a memory #5 gap. The other tests in this file mock
+    // computeLongInfographicHeight via mockedCompute.mockReturnValue. That
+    // covers the validator's branch logic but does NOT prove the validator
+    // and renderer agree on what counts as "over cap" for a real document.
+    //
+    // This test runs validatePresetSize against the REAL implementation by
+    // overriding the mock to pass through. If a future refactor of
+    // computeLongInfographicHeight ever changes its return contract (e.g.
+    // an internal clamp at MAX), the mocked tests would still pass while
+    // production silently breaks. This test catches that.
+    const actual = jest.requireActual(
+      '@/components/editor/export/renderToBlob',
+    );
+    mockedCompute.mockImplementation(actual.computeLongInfographicHeight);
+
+    // Build a doc with enough body_annotation blocks to push real measured
+    // height past LONG_INFOGRAPHIC_HEIGHT_CAP (4000px) when measured at the
+    // long_infographic preset width (1200). The exact threshold depends on
+    // per-block height in measureLayout output; 60 blocks of moderate text
+    // is comfortably above 4000px in any reasonable layout.
+    //
+    // If this count needs adjustment (real height under cap), increase in
+    // increments of 20 until cap is exceeded. DO NOT switch to mocking the
+    // height — that defeats the purpose of this test.
+    const doc = cloneDoc('single_stat_hero');
+    const firstSection = doc.sections[0];
+    if (!firstSection) {
+      throw new Error(
+        'cloneDoc("single_stat_hero") produced no sections — fixture changed; update test',
+      );
+    }
+    for (let i = 0; i < 60; i += 1) {
+      const id = `pr4_fix1_overflow_block_${i}`;
+      doc.blocks[id] = {
+        id,
+        type: 'body_annotation',
+        visible: true,
+        props: {
+          text: 'Real-cap regression filler text for PR#4 fix1. '.repeat(8),
+        },
+      };
+      firstSection.blockIds.push(id);
+    }
+
+    const result = validatePresetSize(doc, 'long_infographic');
+
+    // The error must fire — this is the parity contract.
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        key: 'validation.long_infographic.height_cap_exceeded',
+      }),
+    );
+
+    // Additionally assert the measured value is realistic (>4000), not a
+    // 0 or NaN that accidentally matches >4000 in some narrow case. This
+    // catches a class of regression where computeLongInfographicHeight
+    // returns garbage that still trips the >cap branch.
+    const capError = result.errors.find(
+      (e) => e.key === 'validation.long_infographic.height_cap_exceeded',
+    );
+    expect(capError).toBeDefined();
+    const measured = capError!.params?.measured;
+    expect(typeof measured).toBe('number');
+    expect(measured).toBeGreaterThan(4000);
+    expect(Number.isFinite(measured)).toBe(true);
+  });
 });
