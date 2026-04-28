@@ -6,8 +6,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import TYPE_CHECKING
 
 import structlog
+
+if TYPE_CHECKING:
+    from src.models.publication import Publication
+
+try:
+    from uuid import uuid7  # type: ignore[attr-defined]  # Python 3.13+ stdlib
+except ImportError:
+    from uuid_utils import uuid7  # uuid-utils package per pyproject.toml
 
 _DEFAULT_SIZE: tuple[int, int] = (1080, 1080)
 logger = structlog.get_logger(__name__)
@@ -115,3 +124,41 @@ def derive_size_from_visual_config(
         default_size=_DEFAULT_SIZE,
     )
     return _DEFAULT_SIZE
+
+
+def generate_lineage_key() -> str:
+    """Generate a fresh UUID v7 string for a new (non-clone) publication's
+    lineage. Time-sortable + globally unique. Used by the create path.
+
+    Returns:
+        Canonical 36-char UUID v7 string, e.g.
+        ``'01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c'``.
+
+    Non-deterministic by design: each call returns a new globally unique,
+    time-sortable identifier. UUID v7 encodes a millisecond timestamp plus
+    a random/counter tail, so two calls in the same millisecond produce
+    distinct values. No I/O, no DB access — safe to call from any layer.
+    """
+    return str(uuid7())
+
+
+def derive_clone_lineage_key(source: "Publication") -> str:
+    """Return ``source.lineage_key`` directly. Wrapper exists to make the
+    inheritance contract explicit at clone call sites.
+
+    Future hook for "manual lineage break" UI (Phase 4+): this function
+    would consult an override flag and call :func:`generate_lineage_key`
+    instead when set. Today, always inherits.
+
+    Pure function: no I/O, no side effects.
+
+    Raises:
+        ValueError: if ``source.lineage_key`` is ``None`` (data integrity
+            violation; should be impossible post-Phase-2.2.0 migration).
+    """
+    if source.lineage_key is None:
+        raise ValueError(
+            f"Publication id={source.id} has null lineage_key; "
+            "data integrity violation post-Phase-2.2.0 migration"
+        )
+    return source.lineage_key

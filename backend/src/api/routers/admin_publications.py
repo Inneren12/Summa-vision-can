@@ -46,6 +46,7 @@ from src.services.publications.exceptions import (
     PublicationNotFoundError,
     PublicationPreconditionFailedError,
 )
+from src.services.publications.lineage import generate_lineage_key
 
 
 def _classify_workflow_event(
@@ -229,6 +230,7 @@ def _serialize(publication: Publication) -> PublicationResponse:
         footnote=publication.footnote,
         visual_config=visual_config,
         review=review,
+        lineage_key=publication.lineage_key,
         # Opaque JSON string — never parsed here. Frontend owns rehydrate.
         document_state=publication.document_state,
         virality_score=publication.virality_score,
@@ -262,7 +264,9 @@ async def create_publication(
     repo: PublicationRepository = Depends(_get_repo),
 ) -> PublicationResponse:
     """Create a new publication in ``DRAFT`` status."""
-    publication = await repo.create_full(body.model_dump())
+    data = body.model_dump()
+    data["lineage_key"] = generate_lineage_key()
+    publication = await repo.create_full(data)
     logger.info(
         "publication_created",
         publication_id=publication.id,

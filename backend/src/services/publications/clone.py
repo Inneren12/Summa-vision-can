@@ -14,6 +14,7 @@ from src.services.publications.exceptions import (
 )
 from src.services.publications.lineage import (
     compute_config_hash,
+    derive_clone_lineage_key,
     derive_size_from_visual_config,
 )
 
@@ -64,6 +65,7 @@ async def clone_publication(*, session: AsyncSession, source_id: int) -> Publica
                 new_config_hash=new_config_hash,
                 new_version=new_version,
                 fresh_review_json=fresh_review_json,
+                lineage_key=derive_clone_lineage_key(source),
             )
             await session.commit()
             return clone

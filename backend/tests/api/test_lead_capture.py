@@ -19,6 +19,7 @@ from src.main import app
 from src.models.download_token import DownloadToken
 from src.models.lead import Lead
 from src.models.publication import Publication, PublicationStatus
+from tests.conftest import make_publication
 
 
 # ---------------------------------------------------------------------------
@@ -45,7 +46,7 @@ def _mock_session_factory():
 
 
 def _make_published_pub(asset_id: int = 1) -> Publication:
-    pub = Publication(
+    pub = make_publication(
         headline="Test Graphic",
         chart_type="BAR",
         virality_score=8.0,

@@ -7,6 +7,7 @@ import pytest
 from src.models.publication import Publication, PublicationStatus
 from src.services.publications.clone import clone_publication
 from src.services.publications.exceptions import PublicationCloneNotAllowedError, PublicationNotFoundError
+from tests.conftest import make_publication
 
 
 async def _make_source(
@@ -26,7 +27,7 @@ async def _make_source(
     review: str | None = None,
     version: int = 1,
 ) -> Publication:
-    src = Publication(
+    src = make_publication(
         headline=headline,
         chart_type=chart_type,
         eyebrow=eyebrow,
@@ -58,6 +59,43 @@ async def test_clone_published_creates_draft_with_copy_prefix(db_session) -> Non
     assert clone.headline == 'Copy of X'
     assert clone.status == PublicationStatus.DRAFT
     assert clone.cloned_from_publication_id == src.id
+
+
+@pytest.mark.asyncio
+async def test_clone_inherits_source_lineage_key(db_session) -> None:
+    """Clone publication inherits source's lineage_key verbatim.
+
+    This is the core lineage invariant — UTM attribution in Phase 2.3
+    aggregates engagement across A -> B -> C clone chains by matching on
+    lineage_key. If clones generated fresh keys, attribution would
+    fragment per version.
+    """
+    pinned_lineage = '01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c'
+    src = make_publication(
+        headline='source publication',
+        chart_type='bar',
+        status=PublicationStatus.PUBLISHED,
+        lineage_key=pinned_lineage,
+        version=1,
+        config_hash='abc123abc123abcd',
+        source_product_id='P1',
+        visual_config=json.dumps({'size': 'instagram'}),
+        review=json.dumps({'workflow': 'published', 'history': [], 'comments': []}),
+    )
+    db_session.add(src)
+    await db_session.flush()
+    await db_session.refresh(src)
+
+    clone = await clone_publication(session=db_session, source_id=src.id)
+
+    assert clone.lineage_key == pinned_lineage, (
+        f'clone should inherit source lineage; '
+        f'source={src.lineage_key} clone={clone.lineage_key}'
+    )
+    assert clone.cloned_from_publication_id == src.id, (
+        f'clone should record source as parent; got {clone.cloned_from_publication_id}'
+    )
+    assert clone.id != src.id
 
 
 @pytest.mark.asyncio
@@ -174,7 +212,7 @@ async def test_clone_retries_on_version_collision(db_session, monkeypatch: pytes
             if self.calls == 1:
                 from sqlalchemy.exc import IntegrityError
                 raise IntegrityError('insert', {}, Exception('collision'))
-            clone = Publication(
+            clone = make_publication(
                 headline='Copy of X',
                 chart_type=src.chart_type,
                 status=PublicationStatus.DRAFT,
@@ -182,6 +220,7 @@ async def test_clone_retries_on_version_collision(db_session, monkeypatch: pytes
                 config_hash=kwargs['new_config_hash'],
                 version=kwargs['new_version'],
                 cloned_from_publication_id=src.id,
+                lineage_key=kwargs['lineage_key'],
             )
             return clone
 

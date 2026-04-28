@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.publication import Publication, PublicationStatus
+from tests.conftest import make_publication
 
 
 _VISUAL_CONFIG = {
@@ -42,7 +43,7 @@ class TestPublicationExtended:
 
     async def test_round_trip_all_fields(self, db_session: AsyncSession) -> None:
         """Every new field must persist and read back unchanged."""
-        pub = Publication(
+        pub = make_publication(
             headline="Housing starts hit record high",
             chart_type="bar",
             eyebrow="STATISTICS CANADA · TABLE 18-10-0004",
@@ -73,7 +74,7 @@ class TestPublicationExtended:
         self, db_session: AsyncSession
     ) -> None:
         """``visual_config`` is stored as JSON; round-trip must match dict."""
-        pub = Publication(
+        pub = make_publication(
             headline="Visual config test",
             chart_type="bar",
             visual_config=json.dumps(_VISUAL_CONFIG),
@@ -92,7 +93,7 @@ class TestPublicationExtended:
         self, db_session: AsyncSession
     ) -> None:
         """Modifying a record must populate ``updated_at`` automatically."""
-        pub = Publication(headline="Initial", chart_type="bar")
+        pub = make_publication(headline="Initial", chart_type="bar")
         db_session.add(pub)
         await db_session.flush()
         # Initially updated_at is None
@@ -124,7 +125,7 @@ class TestPublicationExtended:
         self, db_session: AsyncSession
     ) -> None:
         """Setting ``published_at`` manually persists alongside status."""
-        pub = Publication(headline="Pending", chart_type="bar")
+        pub = make_publication(headline="Pending", chart_type="bar")
         db_session.add(pub)
         await db_session.flush()
         await db_session.commit()
@@ -144,7 +145,7 @@ class TestPublicationExtended:
         self, db_session: AsyncSession
     ) -> None:
         """A row created without the new fields must default them to None."""
-        pub = Publication(headline="Legacy", chart_type="bar")
+        pub = make_publication(headline="Legacy", chart_type="bar")
         db_session.add(pub)
         await db_session.flush()
         await db_session.commit()

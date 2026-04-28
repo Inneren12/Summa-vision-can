@@ -367,7 +367,8 @@ async def test_repo_create_published_retry_logic():
         source_product_id="123",
         version=1,
         config_hash="hash",
-        content_hash="content"
+        content_hash="content",
+        lineage_key="01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c",
     )
 
     assert pub.version == 3
