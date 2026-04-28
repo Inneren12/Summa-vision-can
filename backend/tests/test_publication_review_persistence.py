@@ -186,10 +186,12 @@ _REVIEW_BASE: dict[str, Any] = {
     "comments": [],
 }
 
-# Stable fixture UUID v7 used by both _CREATE_BASE (direct repo.create_full
-# paths) and inline pub_dict fixtures that build PublicationResponse via
-# model_validate. Production stamps a fresh value server-side; tests use
-# a hardcoded value for determinism.
+# Stable fixture UUID v7 used by direct repo.create_full() call sites and
+# inline pub_dict fixtures that build PublicationResponse via model_validate.
+# Production stamps a fresh value server-side; tests use a hardcoded value
+# for determinism. Spread into the dict at each direct-repo call site —
+# PublicationCreate uses extra="forbid" so HTTP-bound payloads MUST NOT
+# carry lineage_key (it's a 422), and this fixture is shared with HTTP tests.
 _FIXTURE_LINEAGE_KEY = "01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c"
 
 _CREATE_BASE: dict[str, Any] = {
@@ -201,10 +203,6 @@ _CREATE_BASE: dict[str, Any] = {
         "background": "gradient_warm",
         "size": "instagram",
     },
-    # PublicationCreate does not declare lineage_key; HTTP-bound payloads
-    # silently drop this. Only direct repo.create_full() calls
-    # (TestRepositoryPersistence, TestMalformedReviewOnRead) consume it.
-    "lineage_key": _FIXTURE_LINEAGE_KEY,
 }
 
 
@@ -322,7 +320,7 @@ class TestRepositoryPersistence:
         async with session_factory() as session:
             repo = PublicationRepository(session)
             pub = await repo.create_full(
-                {**_CREATE_BASE, "review": _REVIEW_BASE}
+                {**_CREATE_BASE, "lineage_key": _FIXTURE_LINEAGE_KEY, "review": _REVIEW_BASE}
             )
             await session.commit()
             assert pub.review is not None
@@ -332,7 +330,9 @@ class TestRepositoryPersistence:
     async def test_update_fields_with_review(self, session_factory) -> None:
         async with session_factory() as session:
             repo = PublicationRepository(session)
-            pub = await repo.create_full({**_CREATE_BASE})
+            pub = await repo.create_full(
+                {**_CREATE_BASE, "lineage_key": _FIXTURE_LINEAGE_KEY}
+            )
             await session.commit()
             pub_id = pub.id
 
@@ -350,7 +350,7 @@ class TestRepositoryPersistence:
         async with session_factory() as session:
             repo = PublicationRepository(session)
             pub = await repo.create_full(
-                {**_CREATE_BASE, "review": _REVIEW_BASE}
+                {**_CREATE_BASE, "lineage_key": _FIXTURE_LINEAGE_KEY, "review": _REVIEW_BASE}
             )
             await session.commit()
             pub_id = pub.id
@@ -369,7 +369,9 @@ class TestRepositoryPersistence:
         rp = ReviewPayload(**_REVIEW_BASE)
         async with session_factory() as session:
             repo = PublicationRepository(session)
-            pub = await repo.create_full({**_CREATE_BASE, "review": rp})
+            pub = await repo.create_full(
+                {**_CREATE_BASE, "lineage_key": _FIXTURE_LINEAGE_KEY, "review": rp}
+            )
             await session.commit()
             pub_id = pub.id
 
@@ -635,6 +637,7 @@ class TestReviewLeakPrevention:
             pub = await repo.create_full(
                 {
                     **_CREATE_BASE,
+                    "lineage_key": _FIXTURE_LINEAGE_KEY,
                     "review": {**_REVIEW_BASE, "workflow": "published"},
                     "s3_key_lowres": "low/key.png",
                     "s3_key_highres": "high/key.png",
@@ -1189,7 +1192,9 @@ class TestMalformedReviewOnRead:
         """
         async with session_factory() as session:
             repo = PublicationRepository(session)
-            pub = await repo.create_full(_CREATE_BASE)
+            pub = await repo.create_full(
+                {**_CREATE_BASE, "lineage_key": _FIXTURE_LINEAGE_KEY}
+            )
             pub.review = "{not: valid: json"
             session.add(pub)
             await session.commit()
