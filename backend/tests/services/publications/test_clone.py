@@ -7,6 +7,7 @@ import pytest
 from src.models.publication import Publication, PublicationStatus
 from src.services.publications.clone import clone_publication
 from src.services.publications.exceptions import PublicationCloneNotAllowedError, PublicationNotFoundError
+from tests.conftest import make_publication
 
 
 async def _make_source(
@@ -26,7 +27,7 @@ async def _make_source(
     review: str | None = None,
     version: int = 1,
 ) -> Publication:
-    src = Publication(
+    src = make_publication(
         headline=headline,
         chart_type=chart_type,
         eyebrow=eyebrow,
@@ -174,7 +175,7 @@ async def test_clone_retries_on_version_collision(db_session, monkeypatch: pytes
             if self.calls == 1:
                 from sqlalchemy.exc import IntegrityError
                 raise IntegrityError('insert', {}, Exception('collision'))
-            clone = Publication(
+            clone = make_publication(
                 headline='Copy of X',
                 chart_type=src.chart_type,
                 status=PublicationStatus.DRAFT,
@@ -182,6 +183,7 @@ async def test_clone_retries_on_version_collision(db_session, monkeypatch: pytes
                 config_hash=kwargs['new_config_hash'],
                 version=kwargs['new_version'],
                 cloned_from_publication_id=src.id,
+                lineage_key=kwargs['lineage_key'],
             )
             return clone
 

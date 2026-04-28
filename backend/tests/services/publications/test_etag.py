@@ -8,6 +8,7 @@ import pytest
 
 from src.models.publication import Publication, PublicationStatus
 from src.services.publications.etag import compute_etag
+from tests.conftest import make_publication
 
 
 def _make_pub(
@@ -22,7 +23,7 @@ def _make_pub(
     Avoids hitting the DB — the function under test is pure and only reads
     attributes from the entity, so an unsaved instance is sufficient.
     """
-    pub = Publication(
+    pub = make_publication(
         headline="H",
         chart_type="bar",
         status=PublicationStatus.DRAFT,

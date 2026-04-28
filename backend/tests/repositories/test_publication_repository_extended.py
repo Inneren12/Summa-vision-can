@@ -21,6 +21,9 @@ from src.models.publication import PublicationStatus
 from src.repositories.publication_repository import PublicationRepository
 from src.schemas.publication import VisualConfig
 
+# Stable fixture UUID v7. Tests do not assert on lineage_key value;
+# shared constant keeps each create_full payload minimal.
+_FIXTURE_LINEAGE_KEY = "01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c"
 
 _VISUAL_DICT = {
     "layout": "bar_editorial",
@@ -54,6 +57,7 @@ class TestCreateFull:
             "footnote": "Year over year change.",
             "visual_config": _VISUAL_DICT,
             "virality_score": 0.7,
+            "lineage_key": _FIXTURE_LINEAGE_KEY,
         }
 
         pub = await repo.create_full(data)
@@ -73,7 +77,11 @@ class TestCreateFull:
         """``visual_config`` is optional — None remains None."""
         repo = PublicationRepository(db_session)
         pub = await repo.create_full(
-            {"headline": "No visual", "chart_type": "bar"}
+            {
+                "headline": "No visual",
+                "chart_type": "bar",
+                "lineage_key": _FIXTURE_LINEAGE_KEY,
+            }
         )
         await db_session.commit()
         assert pub.visual_config is None
@@ -101,6 +109,7 @@ class TestUpdateFields:
                 "headline": "Original",
                 "chart_type": "bar",
                 "description": "original description",
+                "lineage_key": _FIXTURE_LINEAGE_KEY,
             }
         )
         await db_session.commit()
@@ -133,6 +142,7 @@ class TestUpdateFields:
                 "footnote": "Seasonally adjusted",
                 "eyebrow": "STATCAN",
                 "description": "desc",
+                "lineage_key": _FIXTURE_LINEAGE_KEY,
             }
         )
         await db_session.commit()
@@ -156,7 +166,11 @@ class TestUpdateFields:
         """A Pydantic ``VisualConfig`` should be serialised to JSON."""
         repo = PublicationRepository(db_session)
         pub = await repo.create_full(
-            {"headline": "Vc test", "chart_type": "bar"}
+            {
+                "headline": "Vc test",
+                "chart_type": "bar",
+                "lineage_key": _FIXTURE_LINEAGE_KEY,
+            }
         )
         await db_session.commit()
 
@@ -197,7 +211,11 @@ class TestPublishUnpublish:
         """publish() should set status=PUBLISHED and stamp published_at."""
         repo = PublicationRepository(db_session)
         pub = await repo.create_full(
-            {"headline": "To publish", "chart_type": "bar"}
+            {
+                "headline": "To publish",
+                "chart_type": "bar",
+                "lineage_key": _FIXTURE_LINEAGE_KEY,
+            }
         )
         await db_session.commit()
         assert pub.status == PublicationStatus.DRAFT
@@ -216,7 +234,11 @@ class TestPublishUnpublish:
         """unpublish() should flip status back to DRAFT."""
         repo = PublicationRepository(db_session)
         pub = await repo.create_full(
-            {"headline": "Round trip", "chart_type": "bar"}
+            {
+                "headline": "Round trip",
+                "chart_type": "bar",
+                "lineage_key": _FIXTURE_LINEAGE_KEY,
+            }
         )
         await db_session.commit()
         await repo.publish(pub.id)
@@ -259,10 +281,26 @@ class TestGetByIdAndListing:
     ) -> None:
         """``status_filter=DRAFT`` returns only drafts."""
         repo = PublicationRepository(db_session)
-        await repo.create_full({"headline": "draft 1", "chart_type": "bar"})
-        await repo.create_full({"headline": "draft 2", "chart_type": "bar"})
+        await repo.create_full(
+            {
+                "headline": "draft 1",
+                "chart_type": "bar",
+                "lineage_key": _FIXTURE_LINEAGE_KEY,
+            }
+        )
+        await repo.create_full(
+            {
+                "headline": "draft 2",
+                "chart_type": "bar",
+                "lineage_key": _FIXTURE_LINEAGE_KEY,
+            }
+        )
         pub3 = await repo.create_full(
-            {"headline": "to be published", "chart_type": "bar"}
+            {
+                "headline": "to be published",
+                "chart_type": "bar",
+                "lineage_key": _FIXTURE_LINEAGE_KEY,
+            }
         )
         await db_session.commit()
         await repo.publish(pub3.id)

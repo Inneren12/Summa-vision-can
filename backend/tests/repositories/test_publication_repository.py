@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.publication import PublicationStatus
 from src.repositories.publication_repository import PublicationRepository
+from src.services.publications.lineage import generate_lineage_key
 
 
 @pytest.mark.asyncio
@@ -27,6 +28,7 @@ class TestPublicationRepository:
             s3_key_lowres="low/key.png",
             s3_key_highres="high/key.png",
             virality_score=0.85,
+            lineage_key=generate_lineage_key(),
         )
 
         assert pub.id is not None
@@ -44,7 +46,11 @@ class TestPublicationRepository:
         """Creating with minimal args should use sane defaults."""
         repo = PublicationRepository(db_session)
 
-        pub = await repo.create(headline="Minimal pub", chart_type="line")
+        pub = await repo.create(
+            headline="Minimal pub",
+            chart_type="line",
+            lineage_key=generate_lineage_key(),
+        )
 
         assert pub.status == PublicationStatus.DRAFT
         assert pub.s3_key_lowres is None
@@ -58,18 +64,28 @@ class TestPublicationRepository:
         repo = PublicationRepository(db_session)
 
         # Create a mix of DRAFT and PUBLISHED
-        await repo.create(headline="Draft 1", chart_type="bar")
+        await repo.create(
+            headline="Draft 1",
+            chart_type="bar",
+            lineage_key=generate_lineage_key(),
+        )
         pub2 = await repo.create(
             headline="Published 1",
             chart_type="line",
             status=PublicationStatus.PUBLISHED,
+            lineage_key=generate_lineage_key(),
         )
         pub3 = await repo.create(
             headline="Published 2",
             chart_type="pie",
             status=PublicationStatus.PUBLISHED,
+            lineage_key=generate_lineage_key(),
         )
-        await repo.create(headline="Draft 2", chart_type="area")
+        await repo.create(
+            headline="Draft 2",
+            chart_type="area",
+            lineage_key=generate_lineage_key(),
+        )
         await db_session.commit()
 
         results = await repo.get_published(limit=10, offset=0)
@@ -90,6 +106,7 @@ class TestPublicationRepository:
                 headline=f"Publication {i}",
                 chart_type="bar",
                 status=PublicationStatus.PUBLISHED,
+                lineage_key=generate_lineage_key(),
             )
         await db_session.commit()
 
@@ -106,7 +123,11 @@ class TestPublicationRepository:
     ) -> None:
         """get_published returns empty list when no published records."""
         repo = PublicationRepository(db_session)
-        await repo.create(headline="Only draft", chart_type="bar")
+        await repo.create(
+            headline="Only draft",
+            chart_type="bar",
+            lineage_key=generate_lineage_key(),
+        )
         await db_session.commit()
 
         results = await repo.get_published(limit=10, offset=0)
@@ -115,7 +136,11 @@ class TestPublicationRepository:
     async def test_update_status(self, db_session: AsyncSession) -> None:
         """update_status should change the publication status."""
         repo = PublicationRepository(db_session)
-        pub = await repo.create(headline="To publish", chart_type="bar")
+        pub = await repo.create(
+            headline="To publish",
+            chart_type="bar",
+            lineage_key=generate_lineage_key(),
+        )
         await db_session.commit()
 
         assert pub.status == PublicationStatus.DRAFT
@@ -137,6 +162,7 @@ class TestPublicationRepository:
             headline="Full lifecycle test",
             chart_type="infographic",
             virality_score=0.72,
+            lineage_key=generate_lineage_key(),
         )
         await db_session.commit()
         assert pub.status == PublicationStatus.DRAFT

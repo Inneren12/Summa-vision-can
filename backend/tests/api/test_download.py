@@ -15,6 +15,7 @@ from src.main import app
 from src.models.download_token import DownloadToken
 from src.models.lead import Lead
 from src.models.publication import Publication, PublicationStatus
+from tests.conftest import make_publication
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +58,7 @@ def _make_lead(lead_id: int = 1) -> Lead:
 
 
 def _make_pub(asset_id: int = 1) -> Publication:
-    pub = Publication(
+    pub = make_publication(
         headline="Test",
         chart_type="BAR",
         status=PublicationStatus.PUBLISHED,
