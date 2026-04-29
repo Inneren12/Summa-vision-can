@@ -12,6 +12,8 @@ services:
       - ./backend/.env
     environment:
       STORAGE_BACKEND: s3
+      # Dev-only fallback: localhost MinIO bucket. Production uses real CDN.
+      CDN_BASE_URL: ${CDN_BASE_URL:-http://localhost:9000/summa-vision-dev}
     volumes:
       - ./backend:/app  # hot reload via bind mount
     depends_on:
