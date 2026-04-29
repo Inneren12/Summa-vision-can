@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   api:
     build:
@@ -7,19 +5,38 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    # NOTE: api.environment is an explicit whitelist — only the vars listed
+    # below reach the container. Vars present in .env files but not enumerated
+    # here are silently dropped. When backend Settings gains a new field that
+    # must be runtime-configurable, add it here deliberately.
     environment:
+      # Application mode
+      # Backend Settings reads ENVIRONMENT; .env files use APP_ENV by convention.
+      # Do not rename without also updating either side.
+      ENVIRONMENT: ${APP_ENV:-development}
+      DEBUG: ${DEBUG:-false}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
+      # Database
       DATABASE_URL: ${DATABASE_URL}
+      # Auth
       ADMIN_API_KEY: ${ADMIN_API_KEY}
       # Storage
-      STORAGE_BACKEND: ${STORAGE_BACKEND:-s3}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
       S3_BUCKET: ${S3_BUCKET}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       S3_REGION: ${S3_REGION:-us-east-1}
-      CDN_BASE_URL: ${CDN_BASE_URL}
-      # App
-      LOG_FORMAT: ${LOG_FORMAT:-json}
+      # CDN/CORS
+      CDN_BASE_URL: ${CDN_BASE_URL:-http://localhost:9000/summa-vision-dev}
+      # Backend Settings reads CORS_ORIGINS; .env files conventionally use
+      # ALLOWED_ORIGINS. Default mirrors Settings.cors_origins Python default
+      # ("*"). pydantic-settings env_ignore_empty=False — empty env value
+      # WIPES Python default; the explicit fallback prevents that.
+      CORS_ORIGINS: ${ALLOWED_ORIGINS:-*}
+      # Public site (required-in-prod, validated by Settings)
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:3000}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
     depends_on:
       db:
         condition: service_healthy
