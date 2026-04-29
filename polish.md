@@ -419,6 +419,217 @@ enough to justify a sprint slot.
 
 ---
 
+## P2-002 — Replace MagicMock with SimpleNamespace in lineage helper tests
+
+- **Source:** Phase 2.2.0 Chunk 3b PR #229 review
+- **Added:** 2026-04-29
+- **Severity:** P2
+- **Category:** test-quality
+- **File:** `backend/tests/services/publications/test_lineage.py`
+- **Description:** Tests for `derive_clone_lineage_key` use `MagicMock`
+  to fake a Publication source object. `MagicMock` can hide attribute
+  errors and type mismatches — if `derive_clone_lineage_key` accesses
+  `source.foo` and `foo` isn't set, MagicMock returns a new mock
+  instead of raising AttributeError. `SimpleNamespace` is more honest:
+  raises AttributeError on missing attrs, no method call recording
+  surface area.
+- **Fix sketch:**
+  ```python
+  from types import SimpleNamespace
+
+  source = SimpleNamespace(
+      lineage_key="01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c",
+      id=42,
+  )
+  result = derive_clone_lineage_key(source)
+  assert result == source.lineage_key
+  ```
+- **Affected tests:** `test_derive_clone_lineage_key_returns_source_value_verbatim`,
+  `test_derive_clone_lineage_key_raises_on_null_source_key`,
+  `test_derive_clone_lineage_key_is_pure_no_io_required` (3 tests)
+- **Status:** pending
+
+---
+
+## P2-003 — Fixed container_name on db service limits compose project isolation
+
+- **Source:** Phase 2.2.0 docker-compose production-defaults PR review
+- **Added:** 2026-04-29
+- **Severity:** P2
+- **Category:** infra-quality
+- **File:** `docker-compose.yml`
+- **Description:** `container_name: summa-db` was added so the backup
+  script can predict the container name across `docker compose down/up`
+  cycles. Trade-off: fixed names break compose project isolation —
+  running multiple instances of the same compose project (e.g. parallel
+  CI jobs, dev + staging on same host) collides on the container name
+  and one fails to start.
+- **Founder note:** decision was deliberate — single VPS deployment +
+  predictable backup targeting was prioritized over multi-tenancy. This
+  item exists to flag the trade-off if multi-tenant becomes relevant.
+- **Fix sketch (deferred):** if multi-tenant ever needed, drop
+  `container_name` and switch backup script to discover the container
+  via:
+  ```bash
+  CONTAINER_ID=$(docker compose ps -q db)
+  docker exec "$CONTAINER_ID" pg_dump ...
+  ```
+- **Status:** pending — defer until multi-tenant requirement surfaces
+- **Note:** unlike most polish items, this is a known trade-off rather
+  than a code defect. Documented for future reconsideration, not
+  immediate fix.
+
+---
+
+## P3-014 — Bump time.sleep margin in UUID v7 sortability test
+
+- **Source:** Phase 2.2.0 Chunk 3b PR #229 review
+- **Added:** 2026-04-29
+- **Severity:** P3
+- **Category:** test-stability
+- **File:** `backend/tests/services/publications/test_lineage.py`
+- **Description:** `test_generate_lineage_key_is_time_sortable` uses
+  `time.sleep(0.002)` between UUID generations. On loaded CI / Windows
+  with coarse timer resolution, 2ms can rarely produce same-millisecond
+  UUIDs causing flaky sort assertion. 5ms is comfortably above all
+  observed timer resolutions and adds only +30ms total test runtime.
+- **Fix sketch:**
+  ```python
+  for _ in range(10):
+      results.append(generate_lineage_key())
+      time.sleep(0.005)  # was 0.002
+  ```
+- **Status:** pending
+- **Trigger to escalate:** any flake observation in CI or local runs.
+  Until then, P3.
+
+---
+
+## P3-015 — Extract FIXTURE_UUID_V7 constant for repeated UUID literal
+
+- **Source:** Phase 2.2.0 Chunk 3b PR #229 review
+- **Added:** 2026-04-29
+- **Severity:** P3
+- **Category:** code-quality
+- **File:** `backend/tests/services/publications/test_lineage.py`
+- **Description:** UUID literal `"01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c"`
+  appears in 3 different test bodies. Extract to module-level constant
+  `FIXTURE_UUID_V7` near `UUID_V7_REGEX` for DRY.
+- **Fix sketch:**
+  ```python
+  # Top of file, near UUID_V7_REGEX
+  FIXTURE_UUID_V7 = "01923f9e-3c12-7c7e-8b32-1d4f5e6a7b8c"
+
+  # In test bodies
+  source = SimpleNamespace(lineage_key=FIXTURE_UUID_V7, id=42)
+  ```
+- **Status:** pending
+- **Note:** combine with P2-002 in same batch — both touch identical
+  test functions.
+
+---
+
+## P3-016 — Strengthen UUID v7 format test with stdlib parse + version check
+
+- **Source:** Phase 2.2.0 Chunk 3b PR #229 review
+- **Added:** 2026-04-29
+- **Severity:** P3
+- **Category:** test-coverage
+- **File:** `backend/tests/services/publications/test_lineage.py`
+- **Description:** `test_generate_lineage_key_returns_canonical_uuid_v7_format`
+  uses regex match. While the regex enforces shape correctly, adding a
+  `uuid.UUID(result)` parse + `parsed.version == 7` check provides a
+  second independent assertion using stdlib semantics. Defense in depth.
+- **Fix sketch:**
+  ```python
+  from uuid import UUID
+
+  parsed = UUID(result)
+  assert str(parsed) == result
+  assert parsed.version == 7
+  ```
+- **Status:** pending
+
+---
+
+## P3-017 — Consolidate per-test asyncio decorators to module-level pytestmark
+
+- **Source:** Phase 2.2.0 Chunk 3c PR #230 fix round 2 review
+- **Added:** 2026-04-29
+- **Severity:** P3
+- **Category:** code-quality
+- **File:** `backend/tests/integration/migrations/test_lineage_key_backfill.py`
+- **Description:** All 5 tests are decorated with `@pytest.mark.asyncio`
+  individually. Module-level `pytestmark = [pytest.mark.integration,
+  pytest.mark.asyncio]` would consolidate to one line. Current
+  per-test pattern was chosen explicitly during fix round 2 to satisfy
+  acceptance criteria literally; consolidation is a stylistic
+  improvement only.
+- **Fix sketch:**
+  ```python
+  # Replace these two:
+  pytestmark = pytest.mark.integration
+
+  @pytest.mark.asyncio
+  async def test_X(...): ...
+
+  # With this:
+  pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
+
+  async def test_X(...): ...
+  ```
+- **Status:** pending
+- **Note:** purely cosmetic. Don't ship in same batch as functional
+  fixes — could mask intent during review.
+
+---
+
+## P3-018 — Alembic error message matching in conftest is brittle
+
+- **Source:** Phase 2.2.0 Chunk 3c PR #230 fix round 2 review
+- **Added:** 2026-04-29
+- **Severity:** P3
+- **Category:** test-stability
+- **File:** `backend/tests/integration/migrations/conftest.py`
+- **Description:** The narrow `except RuntimeError` blocks check error
+  text via substring matching: `"can't locate revision"`, `"no such
+  table"`, `"alembic_version" + "does not exist"`. Alembic upstream
+  could change error wording, breaking these checks silently. Acceptable
+  for fixture code, but brittle if Alembic version is upgraded.
+- **Fix sketch:** consider catching specific exception types if Alembic
+  exposes them:
+  ```python
+  from alembic.util.exc import CommandError
+  # Or check error code attribute if available
+  ```
+  Investigate whether Alembic provides typed exceptions for these cases.
+  If yes, switch to type-based checks. If no, keep current approach.
+- **Status:** pending
+- **Trigger to escalate:** observed test failure after Alembic version
+  bump.
+
+---
+
+## P3-019 — Quote style drift (single vs double) in clone endpoint tests
+
+- **Source:** Phase 2.2.0 Chunk 3c PR #230 round 3 review
+- **Added:** 2026-04-29
+- **Severity:** P3
+- **Category:** code-quality
+- **File:** `backend/tests/api/test_clone_publication_endpoint.py`
+- **Description:** New tests added in Chunk 3c use single quotes
+  (`'lineage_key'`) while file's pre-existing convention is double
+  quotes. `black` would normalize but the project's CI runs
+  `black --check` with `|| true` so drift can land.
+- **Fix sketch:** run `black backend/tests/api/test_clone_publication_endpoint.py`
+  to normalize quotes consistently. Verify `git diff` only shows quote
+  changes, not logic.
+- **Status:** pending
+- **Note:** can be batched with any other code-quality nits; single
+  black run resolves.
+
+---
+
 ## Batch dispatch policy
 
 When 3+ items accumulate in same category, OR 5+ items total:
@@ -441,3 +652,14 @@ Current batch candidates:
   > Updated 2026-04-28: extended batch to include P3-012 (architecture)
   > and P3-013 (i18n). Total now 7 items spanning code-quality,
   > test-coverage, architecture, documentation, and i18n categories.
+- **Phase 2.2.0 backend test polish batch**: P2-002, P3-014, P3-015,
+  P3-016 — all in `backend/tests/services/publications/test_lineage.py`,
+  ~30 minutes total. Combine SimpleNamespace migration (P2-002) with
+  the constant extraction (P3-015) and stdlib UUID parse check (P3-016)
+  in single sweep. Time.sleep bump (P3-014) lands trivially in same PR.
+- **Phase 2.2.0 integration test polish batch**: P3-017, P3-018, P3-019
+  — three separate files. Lower coupling than batch above. P3-017 is
+  cosmetic-only and should NOT ship same time as functional fixes
+  (per its note). P3-019 is mechanical (single `black` run).
+- **Compose infrastructure batch**: P2-003 alone for now. Defer until
+  multi-tenant requirement surfaces or another compose nit accumulates.
