@@ -11,7 +11,8 @@ services:
     # must be runtime-configurable, add it here deliberately.
     environment:
       # Application mode
-      # Backend Settings reads ENVIRONMENT; VPS env files currently use APP_ENV.
+      # Backend Settings reads ENVIRONMENT; .env files use APP_ENV by convention.
+      # Do not rename without also updating either side.
       ENVIRONMENT: ${APP_ENV:-development}
       DEBUG: ${DEBUG:-false}
       LOG_FORMAT: ${LOG_FORMAT:-json}
@@ -28,7 +29,9 @@ services:
       S3_REGION: ${S3_REGION:-us-east-1}
       # CDN/CORS
       CDN_BASE_URL: ${CDN_BASE_URL}
-      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # Backend Settings reads CORS_ORIGINS; .env files conventionally use
+      # ALLOWED_ORIGINS. Do not rename without also updating either side.
+      CORS_ORIGINS: ${ALLOWED_ORIGINS:-}
       # Public site (required-in-prod, validated by Settings)
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
