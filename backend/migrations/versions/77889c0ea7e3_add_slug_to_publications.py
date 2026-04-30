@@ -99,6 +99,13 @@ def _backfill_slugs() -> None:
         )
 
 
+def _append_suffix_within_column(base: str, n: int) -> str:
+    """Append ``-N`` suffix, truncating base if needed to fit ``SLUG_COLUMN_LEN``."""
+    suffix = f"-{n}"
+    max_base = SLUG_COLUMN_LEN - len(suffix)
+    return f"{base[:max_base]}{suffix}"
+
+
 def _generate_slug_for_backfill(
     pub_id: int, headline: str | None, assigned: set[str]
 ) -> str:

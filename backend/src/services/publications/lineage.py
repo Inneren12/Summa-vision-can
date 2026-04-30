@@ -181,9 +181,6 @@ RESERVED_SLUGS: frozenset[str] = frozenset({
     "search", "feed", "rss", "atom", "manifest",
 })
 
-_COPY_PREFIX = "Copy of "  # mirror clone.py:21; sync test in Chunk 5
-
-
 def _slugify_internal(text: str) -> str:
     """Pure slugify transform (no collision/reserved logic)."""
     return _slugify_lib(text or "", max_length=MAX_SLUG_BODY_LEN)
@@ -219,8 +216,11 @@ def derive_clone_slug(
     *,
     existing_slugs: Collection[str] | None = None,
 ) -> str:
-    """Generate fresh clone slug after stripping `_COPY_PREFIX` if present."""
-    headline = source.headline or ""
-    if headline.startswith(_COPY_PREFIX):
-        headline = headline[len(_COPY_PREFIX):]
-    return generate_slug(headline, existing_slugs=existing_slugs)
+    """Generate fresh clone slug from source headline.
+
+    Slug is per-row URL identity, not inherited from source. Clone gets
+    its own slug from its own headline (which clone.py prepends
+    ``_COPY_PREFIX`` to before persistence). The "copy-of-" URL prefix is
+    accepted; operator can rename headline post-clone for cleaner URL.
+    """
+    return generate_slug(source.headline or "", existing_slugs=existing_slugs)
