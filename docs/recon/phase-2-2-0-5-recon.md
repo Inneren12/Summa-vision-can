@@ -534,7 +534,7 @@ Confirm 4 `Publication()` construction sites at lines 116, 167, 204, 469 (per pr
 |---|---|---|
 | `create_full` | `Publication(**payload)` style | Repo computes: `existing = await self._get_existing_slugs(session)`; `payload["slug"] = generate_slug(payload["headline"], existing_slugs=existing)` BEFORE `Publication(**payload)` |
 | `create_clone` | Explicit constructor | Repo computes: `existing = await self._get_existing_slugs(session)`; `clone_slug = derive_clone_slug(source, existing_slugs=existing)`; pass into constructor as `slug=clone_slug` |
-| `create_with_versioning` | Pipeline-driven, retry loop | **Per Q-CC2 lock: compute slug per retry attempt** (each retry may have different headline state). Inject as `slug=generate_slug(headline, existing_slugs=existing)` per attempt. **Q-impl-C1 flag: confirm pipeline caller does not pre-compute slug.** |
+| `create_published` | Pipeline-driven, retry loop | **Per Q-CC2 lock: compute slug per retry attempt** (each retry may have different headline state). Inject as `slug=generate_slug(headline, existing_slugs=existing)` per attempt. **Q-impl-C1 flag: confirm pipeline caller does not pre-compute slug.** |
 | `create` | Minimal DRAFT create | Repo computes inline. Same pattern as `create_full`. **Q-impl-C2 flag: grep audit of callers — may be legacy/test-only.** |
 
 **Construction body change pattern** (sites 167, 204, 469):
@@ -559,7 +559,7 @@ publication = Publication(
 )
 ```
 
-**Q-CC2 ratification:** in `create_with_versioning` retry loop, slug is computed per attempt because each retry may operate on different headline state and a different `existing_slugs` snapshot. The in-memory set check is essentially free; correctness wins over micro-optimization.
+**Q-CC2 ratification:** in `create_published` retry loop, slug is computed per attempt because each retry may operate on different headline state and a different `existing_slugs` snapshot. The in-memory set check is essentially free; correctness wins over micro-optimization.
 
 **Imports added to `publication_repository.py`:**
 
@@ -623,7 +623,7 @@ grep -rn "Publication(" backend/src/ | grep -v test | grep -v __pycache__
 
 | Site | Path:line | Method | Purpose | Phase 2.2.0.5 treatment |
 |---|---|---|---|---|
-| 1 | `publication_repository.py:116` | `create_with_versioning` | Pipeline-driven retry loop | Repo computes slug per attempt (Q-CC2 lock). Q-impl-C1 flag (pipeline caller verification). |
+| 1 | `publication_repository.py:116` | `create_published` | Pipeline-driven retry loop | Repo computes slug per attempt (Q-CC2 lock). Q-impl-C1 flag (pipeline caller verification). |
 | 2 | `publication_repository.py:167` | `create` | Minimal DRAFT create | Repo computes slug inline. Q-impl-C2 flag (caller audit). |
 | 3 | `publication_repository.py:204` | `create_clone` | Service clone path | Repo computes via `derive_clone_slug(source)`. |
 | 4 | `publication_repository.py:469` | `create_full` | Admin REST create via `Publication(**payload)` | Repo injects `payload["slug"] = generate_slug(...)` before construction. |
@@ -736,7 +736,7 @@ Per Q-CC3 lock: this UX rule is **NOT documented in 2.2.0.5 recon as operator-fa
 | DEBT.md entry text + ID assignment | Chunk D |
 | ROADMAP_DEPENDENCIES.md Phase 2.2.0.5 row | Chunk D |
 | Frontend `/p/${slug}` blacklist verification against `frontend/app/` route tree | Chunk D |
-| Q-impl-C1 (pipeline caller for `create_with_versioning`) | Impl phase grep audit |
+| Q-impl-C1 (pipeline caller for `create_published`) | Impl phase grep audit |
 | Q-impl-C2 (`create()` caller audit, may be legacy/test-only) | Impl phase grep audit |
 | Phase 2.2 frontend distribution kit consumer changes | Separate Phase 2.2 unblock work post-2.2.0.5 |
 | Operator-facing tooltip "URL identity is immutable" (Q-CC3) | Phase 2.2 frontend impl prompt |
@@ -1001,7 +1001,7 @@ Status:
 
 | Q-impl ID | Description | Resolution path |
 |---|---|---|
-| Q-impl-C1 | `create_published` (formerly `create_with_versioning`) caller verification | Impl phase grep audit |
+| Q-impl-C1 | `create_published` caller verification | Impl phase grep audit |
 | Q-impl-C2 | `create()` minimal-DRAFT caller audit (legacy/test-only?) | Impl phase grep audit |
 | Q-impl-D1 | Public endpoint path `/p/{slug}` confirmation | Impl phase route inventory |
 | Q-impl-D2 | Chinese transliteration exact token recording | Chunk D test fixture (§F2) |
