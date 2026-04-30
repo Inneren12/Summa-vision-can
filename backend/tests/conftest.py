@@ -122,7 +122,15 @@ def make_publication(**overrides: Any) -> Publication:
     return Publication(**defaults)
 
 
-@pytest.fixture()
-def make_publication_factory() -> Any:
-    """Pytest-fixture wrapper around :func:`make_publication`."""
+@pytest.fixture(name="make_publication")
+def _make_publication_fixture() -> Any:
+    """Pytest-fixture wrapper that exposes :func:`make_publication` as the
+    ``make_publication`` fixture, so test methods can request it via DI
+    (``def test_x(self, make_publication): ...``) instead of importing.
+
+    Registered under a different symbol (``_make_publication_fixture``)
+    via ``name=`` so the module-level ``make_publication`` function
+    remains importable for legacy tests that do
+    ``from tests.conftest import make_publication``.
+    """
     return make_publication
