@@ -1,9 +1,9 @@
 # Phase 2.2.0.5 Recon — Backend slug Infrastructure
 
-**Status:** Recon-proper Chunk A — IN PROGRESS, Chunks B + C + D pending
+**Status:** Recon-proper Chunk A — APPROVED (founder review 2026-04-30, FR-1 through FR-4 applied), Chunks B + C + D pending
 **Author:** Claude Code (architect agent)
 **Date:** 2026-04-30
-**Branch:** work
+**Branch:** claude/phase-2-2-0-5-recon-chunk-a
 **Pre-recon source:** docs/recon/phase-2-2-0-5-pre-recon.md (Sections A, B, F1–F6)
 **Founder lock-in:** Q-2.2-9 (2026-04-30) backend-owned slug column
 
@@ -55,14 +55,31 @@ def generate_slug(headline: str, *, existing_slugs: set[str] | None = None) -> s
 
 def derive_clone_slug(source: Publication, *, existing_slugs: set[str] | None = None) -> str:
     """
-    Generate clone slug from clone headline input path (including copy prefix),
-    producing a fresh immutable slug for the new clone row.
+    Generate a fresh slug for a clone row.
 
-    Does not inherit source.slug because slug is row-identity URL, not lineage key.
+    Strips the `_COPY_PREFIX` (clone.py:41) from the source headline before
+    invoking `generate_slug`, so clone URLs are not polluted with "copy-of-"
+    prefixes.
+
+    Example:
+        source.headline = "Copy of Canada GDP Q3 2026"
+        → strip prefix → "Canada GDP Q3 2026"
+        → generate_slug → "canada-gdp-q3-2026" → collision check → "canada-gdp-q3-2026-2"
+
+    Does not inherit source.slug: slug is per-row URL identity (UNIQUE), not
+    lineage grouping. Each clone row owns its own URL path.
+
+    Raises:
+        PublicationSlugGenerationError: if stripped headline produces empty/short slug body.
+        PublicationSlugCollisionError: if collisions exceed capped attempts.
     """
 ```
 
 **Clone slug semantics:** fresh slug, not inherited. Lineage semantics inherit (`lineage_key` in Phase 2.2.0 §A2), but slug must identify each publication row URL uniquely and immutably. If clone inherited slug, URL identity would be shared and ambiguous.
+
+**`_COPY_PREFIX` strip:** `derive_clone_slug` strips the `_COPY_PREFIX` constant (defined at `backend/src/services/publications/clone.py:21`) from the headline before calling `generate_slug`. Without this strip, clone URLs would be `/p/copy-of-canada-gdp-q3-2026`, polluting the URL with internal-only display prefix. The stripped headline produces a clean slug; collision suffixing (§A4) ensures uniqueness against the source's existing slug.
+
+**Edge case — clone of clone:** A → B (clone of A) → C (clone of B). Clone path strips one `_COPY_PREFIX` per clone op (B.headline = "Copy of A"; C.headline = "Copy of Copy of A"). After strip: B → "A" base, C → "Copy of A" base. C still carries one prefix because clone.py prepends each time. Acceptable: chained clones get progressively-suffixed slugs (`a`, `a-2`, `copy-of-a`, etc.) — operator can rename headline before publish to clean up. Not a blocker for Phase 2.2.0.5; document as known UX nit.
 
 **Purity contract lock:** `generate_slug` does not touch DB. Repo/service caller assembles `existing_slugs` collision context before invocation (ARCH-PURA-001 parity with prior lineage utility style).
 
@@ -145,12 +162,20 @@ Group rationale:
 - Brand terms avoid confusing canonical marketing/product roots.
 - Future-reserved terms avoid locking out expected near-term discovery/feed endpoints.
 
-Disambiguation rule:
-1. If base slug is reserved, append `-1` and re-check reserved + collisions.
-2. If still blocked, increment (`-2`, `-3`, ...).
-3. Collision algorithm then continues same numeric sequence if publication conflicts also exist.
+Disambiguation rule (unified with §A4 collision algorithm):
 
-Why reserved starts at `-1` while collision starts `-2`: semantics differ. `-1` denotes “system-path disambiguation,” while `-2+` on non-reserved base denotes “duplicate publication slug.” This keeps intent legible.
+1. If base slug ∈ RESERVED_SLUGS, treat it as a collision (add base slug to the conflict set passed into §A4 collision algorithm).
+2. Run §A4 collision algorithm with the augmented conflict set: bare slug rejected (because reserved), tries `-2`, `-3`, ..., `-99`.
+3. If any candidate also collides with an existing publication slug, the same loop skips it.
+4. If exhaustion at `-99`, raise `PublicationSlugCollisionError` (same exception as pure collision case).
+
+This unifies reserved-path defense and inter-publication uniqueness into a single suffix sweep. No special `-1` semantic. Examples:
+- `admin` (reserved, no other conflicts) → `admin-2`
+- `admin` (reserved, `admin-2` already taken by a publication) → `admin-3`
+- `canada-gdp` (not reserved, one prior collision) → `canada-gdp-2`
+- `canada-gdp` (not reserved, prior `canada-gdp-2` taken) → `canada-gdp-3`
+
+Implementation note: at call site, the conflict set is built as `existing_slugs ∪ RESERVED_SLUGS` before invoking the collision loop. Pure function contract preserved (§A2): caller assembles the union, generator does not reach into the blacklist module.
 
 Pre-recon did not fully inventory current frontend route tree in this chunk’s source set; Chunk D should verify blacklist against `frontend/app/` routes before final implementation lock.
 
