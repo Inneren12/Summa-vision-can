@@ -168,12 +168,7 @@ class Settings(BaseSettings):
             )
         return self
 
-    model_config = {
-        "env_file": ".env",
-        "env_file_encoding": "utf-8",
-        "extra": "ignore",
-        "env_ignore_empty": True,
-    }
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 @lru_cache(maxsize=1)
