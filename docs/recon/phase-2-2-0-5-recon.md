@@ -134,7 +134,7 @@ Decisions:
 - Start at `-2`, not `-1`: bare slug is canonical first occurrence; second occurrence becomes `-2` by established URL convention.
 - Cap at 99: balances deterministic bounded behavior, suffix budget (`-99`), and operator UX (99 duplicates implies headline is effectively non-distinct and should be edited).
 - 100th collision behavior: raise `PublicationSlugCollisionError` hard error; no UUID fallback or silent mutation.
-- Truncation interaction: ensure base candidate feeding collision loop is at most `MAX_SLUG_LEN - 4` when suffix may be needed, so any `-NN` variant remains within column width.
+- Truncation interaction: §A3 Step 7 already truncates the slug body to `MAX_SLUG_LEN = 196`, reserving 4 chars for worst-case `-99` suffix (1 hyphen + 2 digits + 1 char headroom). The collision loop receives the base directly and uses it without further truncation; any `-NN` variant fits within the 200-char column.
 
 ### A5. Reserved slug blacklist + disambiguation
 
@@ -491,4 +491,256 @@ def derive_clone_slug(
     return generate_slug(headline, existing_slugs=existing_slugs)
 ```
 
-Decisions: `_COPY_PREFIX` duplicated intentionally (avoid cross-module coupling; sync test deferred to Chunk D). `_slugify_internal` exists for testability and purity boundary. `existing_slugs` optional supports first-row/test contexts. Forward reference `
+Decisions: `_COPY_PREFIX` duplicated intentionally (avoid cross-module coupling; sync test deferred to Chunk D). `_slugify_internal` exists for testability and purity boundary. `existing_slugs` optional supports first-row/test contexts. Forward reference `"Publication"` for type hint avoids circular import (mirrors existing `derive_clone_lineage_key` pattern).
+
+### §C4. `existing_slugs` collision context query strategy
+
+Per X1 founder lock: full table scan. Query lives in `publication_repository.py`.
+
+```python
+async def _get_existing_slugs(self, session: AsyncSession) -> set[str]:
+    """Fetch all publication slugs for collision context.
+
+    Performance: full scan acceptable at <10k rows. Postgres index-only
+    scan on uq_publications_slug; ~50ms at projected 2026 prod scale.
+
+    Future optimization (deferred): if scale exceeds 10k rows, replace
+    with prefix-filtered query (SELECT slug FROM publications WHERE slug LIKE :prefix).
+
+    Per ARCH-DPEN-001: session injected via constructor DI, not module-global.
+    """
+    result = await session.execute(sa.select(Publication.slug))
+    return {row for row in result.scalars().all() if row is not None}
+```
+
+Decisions:
+- No caching in 2.2.0.5; each create call re-queries.
+- This is the ONLY new DB query introduced by Chunk C; all other slug logic is pure (per §A2 ARCH-PURA-001 contract).
+- Defensive `if row is not None` filter handles migration-window NULL transients.
+
+---
+
+### §C5. Repository layer changes — `publication_repository.py`
+
+**Inventory verification (paste output in Summary Report):**
+
+```bash
+grep -n "Publication(\|^    async def \|^    def " backend/src/repositories/publication_repository.py | head -30
+```
+
+Confirm 4 `Publication()` construction sites at lines 116, 167, 204, 469 (per pre-recon §D1). State actual line numbers if shifted.
+
+| Method | Construction site | Slug computation pattern |
+|---|---|---|
+| `create_full` | `Publication(**payload)` style | Repo computes: `existing = await self._get_existing_slugs(session)`; `payload["slug"] = generate_slug(payload["headline"], existing_slugs=existing)` BEFORE `Publication(**payload)` |
+| `create_clone` | Explicit constructor | Repo computes: `existing = await self._get_existing_slugs(session)`; `clone_slug = derive_clone_slug(source, existing_slugs=existing)`; pass into constructor as `slug=clone_slug` |
+| `create_with_versioning` | Pipeline-driven, retry loop | **Per Q-CC2 lock: compute slug per retry attempt** (each retry may have different headline state). Inject as `slug=generate_slug(headline, existing_slugs=existing)` per attempt. **Q-impl-C1 flag: confirm pipeline caller does not pre-compute slug.** |
+| `create` | Minimal DRAFT create | Repo computes inline. Same pattern as `create_full`. **Q-impl-C2 flag: grep audit of callers — may be legacy/test-only.** |
+
+**Construction body change pattern** (sites 167, 204, 469):
+
+```python
+# Before:
+publication = Publication(
+    headline=...,
+    chart_type=...,
+    lineage_key=lineage_key,
+    # ... existing fields ...
+)
+# After:
+existing_slugs = await self._get_existing_slugs(session)
+slug = generate_slug(headline, existing_slugs=existing_slugs)
+publication = Publication(
+    headline=...,
+    chart_type=...,
+    lineage_key=lineage_key,
+    slug=slug,
+    # ... existing fields ...
+)
+```
+
+**Q-CC2 ratification:** in `create_with_versioning` retry loop, slug is computed per attempt because each retry may operate on different headline state and a different `existing_slugs` snapshot. The in-memory set check is essentially free; correctness wins over micro-optimization.
+
+**Imports added to `publication_repository.py`:**
+
+```python
+from src.services.publications.lineage import (
+    derive_clone_slug,
+    generate_slug,
+)
+```
+
+Insertion point: alphabetical, between existing `compute_config_hash` and `derive_clone_lineage_key` lineage imports.
+
+**Divergence from Phase 2.2.0 callout:** Phase 2.2.0 lineage_key is service-computed (pure function, no DB) and passed INTO repo as kwarg. Phase 2.2.0.5 slug is repo-computed because it needs DB query for `existing_slugs`. Future readers should NOT assume parity between these two patterns.
+
+---
+
+### §C6. Service layer call sites
+
+#### §C6a. Create path — `admin_publications.py`
+
+**Per X2 lock: NO CHANGE required.**
+
+```python
+# admin_publications.py (UNCHANGED):
+data = body.model_dump()
+publication = await repo.create_full(data)
+```
+
+This is a divergence from Phase 2.2.0 §C3a (which adds `data["lineage_key"] = generate_lineage_key()` at service layer). For slug, the repo handles it.
+
+#### §C6b. Clone path — `clone.py`
+
+**Per X2 lock: NO CHANGE to clone.py for slug.**
+
+The `_COPY_PREFIX` strip happens INSIDE `derive_clone_slug` (per §C3), not in clone.py. clone.py's `new_headline` calculation (which prepends `_COPY_PREFIX`) is unchanged.
+
+```python
+# clone.py:62 (UNCHANGED — no slug kwarg in repo call):
+clone = await repo.create_clone(
+    source=source,
+    new_headline=new_headline,
+    new_config_hash=new_config_hash,
+    new_version=new_version,
+    fresh_review_json=fresh_review_json,
+    lineage_key=derive_clone_lineage_key(source),  # Phase 2.2.0
+    # Repo computes slug internally via derive_clone_slug(source).
+)
+```
+
+`source=source` is already passed to `repo.create_clone`, so repo has access for `derive_clone_slug(source)` internal call.
+
+---
+
+### §C7. Audit — all `Publication()` constructor sites
+
+**Inventory verification (paste output):**
+
+```bash
+grep -rn "Publication(" backend/src/ | grep -v test | grep -v __pycache__
+```
+
+| Site | Path:line | Method | Purpose | Phase 2.2.0.5 treatment |
+|---|---|---|---|---|
+| 1 | `publication_repository.py:116` | `create_with_versioning` | Pipeline-driven retry loop | Repo computes slug per attempt (Q-CC2 lock). Q-impl-C1 flag (pipeline caller verification). |
+| 2 | `publication_repository.py:167` | `create` | Minimal DRAFT create | Repo computes slug inline. Q-impl-C2 flag (caller audit). |
+| 3 | `publication_repository.py:204` | `create_clone` | Service clone path | Repo computes via `derive_clone_slug(source)`. |
+| 4 | `publication_repository.py:469` | `create_full` | Admin REST create via `Publication(**payload)` | Repo injects `payload["slug"] = generate_slug(...)` before construction. |
+
+**Surprise sites outside repository:** state "none" or list any surprises found.
+
+The two `models/publication.py` matches (class def + `__repr__`) are NOT constructor sites; discard from audit.
+
+---
+
+## D. Schema and API surface
+
+**What's here:** `Publication{Create,Update,Response,PublicResponse}` field treatment, immutability enforcement for PublicationUpdate (Q-2.2.0.5-9), and the existing `extra="forbid"` defence chain.
+
+**Source files cited:** `schemas/publication.py`, pre-recon §A2 (PublicationUpdate explicit class with `extra="forbid"`).
+
+### §D1. `PublicationResponse` field add
+
+**Inventory verification (paste output):**
+
+```bash
+grep -n "lineage_key\|^class " backend/src/schemas/publication.py
+```
+
+Confirm `lineage_key` already in `PublicationResponse` (Phase 2.2.0 added it).
+
+```python
+class PublicationResponse(BaseModel):
+    # ... existing fields ...
+    lineage_key: str   # Phase 2.2.0
+    slug: str          # NEW — Phase 2.2.0.5; required (NOT NULL post-migration)
+
+    model_config = ConfigDict(from_attributes=True)   # unchanged
+```
+
+- Type `str` (not `Optional[str]`): post-migration column is NOT NULL.
+- No `Field(...)` constraints: server-generated, never operator-provided.
+- `from_attributes=True` covers ORM→schema mapping automatically.
+
+### §D2. `PublicationPublicResponse` — must include slug (DIVERGENCE)
+
+**Critical divergence from Phase 2.2.0 §D2.** Phase 2.2.0 chose NOT to expose `lineage_key` on PublicationPublicResponse (analytics-internal). Slug **MUST** be exposed because public response IS used by frontend to construct `/p/${slug}` URLs.
+
+```python
+class PublicationPublicResponse(BaseModel):
+    # ... existing fields ...
+    headline: str
+    slug: str   # NEW — Phase 2.2.0.5; public URL identity
+    # NO lineage_key here (Phase 2.2.0 §D2 decision stands)
+```
+
+`lineage_key` is internal analytics, slug is public URL — opposite exposure decisions for opposite reasons.
+
+### §D3. `PublicationCreate` — slug NOT in input fields
+
+```python
+class PublicationCreate(BaseModel):
+    headline: str = Field(..., min_length=1, max_length=500)
+    chart_type: str = Field(..., min_length=1, max_length=100)
+    # ... other input fields ...
+    # NO slug field — server-stamped via repo.generate_slug
+
+    model_config = ConfigDict(extra="forbid")  # blocks operator-supplied slug
+```
+
+`extra="forbid"` is the defence (not field absence alone). Without it, an attacker POST `{"slug": "attacker", ...}` would have it silently ignored but request still passes Pydantic. With `extra="forbid"`, request fails 422 BEFORE reaching repo.
+
+### §D4. `PublicationUpdate` — Q-2.2.0.5-9 immutability ratification
+
+**Inventory verification (paste output):**
+
+```bash
+sed -n '161,205p' backend/src/schemas/publication.py
+```
+
+Confirm:
+- `PublicationUpdate` is explicit class (not inheritance alias)
+- `model_config = ConfigDict(extra="forbid")` present
+- All current fields enumerated (none should be `slug`)
+
+Immutability mechanism: `slug` is omitted from PublicationUpdate field list. Any PATCH/PUT request including `{"slug": "..."}` triggers Pydantic 422 via `extra="forbid"`. **No new validator needed.** Field absence + existing `extra="forbid"` is the enforcement.
+
+**Verification gate (deferred to Chunk D):**
+- `PATCH /api/v1/admin/publications/{id}` with `{"slug": "x"}` body → 422
+- `PATCH /api/v1/admin/publications/{id}` with `{"headline": "new"}` body → 200, slug UNCHANGED in response
+
+**UX rule — headline change does NOT regenerate slug:**
+
+If operator PATCHes headline, slug stays. The headline-slug coupling is one-way at create time only.
+
+> Why no auto-regenerate on headline change: breaking inbound URL stability is worse than slight slug-headline drift. If operator wants new URL identity, they should clone the publication (clone gets fresh slug per §A2 derive_clone_slug) and edit the clone, leaving the original at its public URL.
+
+Per Q-CC3 lock: this UX rule is **NOT documented in 2.2.0.5 recon as operator-facing copy**. Phase 2.2 frontend impl prompt MUST add the operator-facing tooltip ("URL identity is immutable. Clone the publication for a new URL.") in the admin edit view.
+
+---
+
+## E. Scope locks for Chunk C (deferred to Chunk D + impl phase)
+
+| Surface | Status |
+|---|---|
+| Migration file actual creation in `backend/migrations/versions/` | Impl phase (Chunk D specifies test fixtures, impl writes migration per §B2 spec) |
+| `make_publication` factory default in `backend/tests/conftest.py:82` | Chunk D (Q-2.2.0.5-8) |
+| Migration tests (upgrade, downgrade, backfill behavior) | Chunk D |
+| Unit tests for `generate_slug` (Chinese transliteration, empty headline, collision exhaustion, reserved blacklist) | Chunk D |
+| Unit tests for `derive_clone_slug` (`_COPY_PREFIX` strip, chained clone, `source.headline=None` defensive) | Chunk D |
+| Repository tests for `_get_existing_slugs` query + integration with `create_full` / `create_clone` | Chunk D |
+| Schema tests for PublicationUpdate slug rejection (422 contract per §D4) | Chunk D |
+| Integration tests for end-to-end slug flow (admin POST → DB → admin GET → public GET) | Chunk D |
+| `_COPY_PREFIX` cross-module sync test (lineage.py constant === clone.py constant) | Chunk D |
+| DEBT.md entry text + ID assignment | Chunk D |
+| ROADMAP_DEPENDENCIES.md Phase 2.2.0.5 row | Chunk D |
+| Frontend `/p/${slug}` blacklist verification against `frontend/app/` route tree | Chunk D |
+| Q-impl-C1 (pipeline caller for `create_with_versioning`) | Impl phase grep audit |
+| Q-impl-C2 (`create()` caller audit, may be legacy/test-only) | Impl phase grep audit |
+| Phase 2.2 frontend distribution kit consumer changes | Separate Phase 2.2 unblock work post-2.2.0.5 |
+| Operator-facing tooltip "URL identity is immutable" (Q-CC3) | Phase 2.2 frontend impl prompt |
+
+Chunk D covers tests + DEBT + roadmap + factory. Phase 2.2.0.5 recon is COMPLETE after Chunk D, and impl can begin.
+
+---
