@@ -218,7 +218,7 @@ Rules:
 - **Added:** 2026-04-30
 - **Severity:** medium
 - **Category:** architecture
-- **Status:** active
+- **Status:** resolved
 - **Description:** Phase 2.2.0.5 ships backend slug infrastructure in expand-contract sequence: Chunk 1 nullable column + backfill, Chunk 2 ORM/exceptions/runtime generators, Chunk 3 repo wiring, Chunk 4 schemas. Several follow-ups remain open after the impl PRs merge:
   1. `create_published` (publication_repository.py) caller verification — confirm graphics pipeline does not pre-compute slug and slug-per-retry pattern works end-to-end.
   2. `create()` repo method caller audit — likely legacy/test-only; consider deprecation if no production callers.
@@ -230,6 +230,8 @@ Rules:
 - **Impact:** Items 1-2 are audit tasks; if pipeline pre-computes slug or `create()` is legacy, current code may have dead paths or double-compute. Item 5 risk: a frontend route name (e.g. `/admin`) could collide with a slug if blacklist is incomplete, breaking either the route or the publication URL. Item 6 risk: production downgrade after frontend ships breaks all inbound `/p/{slug}` links. Item 7 is required before slug becomes a stable public contract.
 - **Resolution:** Sequential follow-up work post-impl: items 1-4 are grep audits and test fixture confirmations (1-2 hours total); item 5 runs alongside Phase 2.2 frontend dispatch; item 6 added to release checklist before Phase 2.2 frontend deploy; item 7 is the Chunk 4.5 migration PR (separate scope).
 - **Target:** Items 1-4 in next maintenance window; items 5-6 before Phase 2.2 frontend deploy; item 7 as standalone Chunk 4.5 PR after Chunks 2-4 deployed and stable.
+
+> Resolved 2026-04-30: Phase 2.2.0.5 Part B merged. Routers pass slug, schemas tightened to required `str`. All layers (DB/ORM/repo/router/schema) consistently require slug. Phase 2.2.0.5 closed.
 
 ---
 
@@ -263,6 +265,7 @@ Rules:
 | DEBT-024 | Rename `validateDocumentShape` -> `assertCanonicalDocumentV2Shape` | Stage 3 PR 4 (`claude/reconnaissance-persistence-cleanup-EJ4uX`) | 2026-04-19 |
 | DEBT-026 | Lossy round-trip between `CanonicalDocument` and `AdminPublicationResponse` | Stage 4 Task 0 full close (`claude/close-infographic-blockers-wkjVX`) | 2026-04-19 |
 | DEBT-045 | `cors_origins` Settings field declared but unused | codex/debt-045-cors-origins-remove | 2026-04-30 |
+| DEBT-049 | Phase 2.2.0.5 slug infrastructure follow-ups | claude/slug-required-all-layers-qwdHV | 2026-04-30 |
 
 ### DEBT-026: Lossy round-trip between CanonicalDocument and AdminPublicationResponse
 

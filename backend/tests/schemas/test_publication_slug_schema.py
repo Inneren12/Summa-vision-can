@@ -68,22 +68,6 @@ class TestPublicationResponseIncludesSlug:
         dumped = response.model_dump()
         assert dumped["slug"] == "canada-gdp-q3-2026"
 
-    def test_slug_accepts_none_pre_not_null_migration(self):
-        """TRANSITIONAL: this test asserts the nullable response schema state
-        that exists between Chunk 4.5 (DB+ORM tighten) and Part B (router+schema
-        tighten). DELETE THIS TEST when Part B lands and slug becomes
-        ``slug: str`` (non-optional) in PublicationResponse / PublicationPublicResponse.
-
-        Tracked in DEBT-049 follow-ups.
-        """
-        # Pre-Chunk-4.5 the column is nullable; the response schema must
-        # tolerate ``None`` until the NOT NULL migration ships.
-        response = PublicationResponse.model_validate(
-            _response_payload(slug=None)
-        )
-        assert response.slug is None
-
-
 class TestPublicationPublicResponseIncludesSlug:
     def test_slug_field_present(self):
         assert "slug" in PublicationPublicResponse.model_fields
