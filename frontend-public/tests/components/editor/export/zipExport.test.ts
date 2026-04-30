@@ -49,6 +49,12 @@ const mockedCompute = computeLongInfographicHeight as jest.MockedFunction<
   typeof computeLongInfographicHeight
 >;
 
+const publishKitOpts = {
+  lineage_key: 'ln_test_123',
+  slug: 'test-slug',
+  baseUrl: 'https://example.com',
+};
+
 function makeDoc(presets: readonly PresetId[]): CanonicalDocument {
   const doc = mkDoc('single_stat_hero', TPLS.single_stat_hero);
   doc.page.exportPresets = [...presets];
@@ -219,7 +225,7 @@ describe('exportZip orchestrator (unit)', () => {
     const doc = makeDoc(['instagram_1080']);
     const originalTemplateId = doc.templateId;
 
-    const promise = exportZip({ doc, pal: PALETTES.housing });
+    const promise = exportZip({ doc, pal: PALETTES.housing, ...publishKitOpts });
     // Mutate the original doc immediately. The snapshot is taken
     // synchronously at entry, so this mutation must not affect the result.
     doc.templateId = 'mutated_after_call';
@@ -238,7 +244,7 @@ describe('exportZip orchestrator (unit)', () => {
     });
 
     const doc = makeDoc(['instagram_1080', 'long_infographic', 'reddit_standard']);
-    const result = await exportZip({ doc, pal: PALETTES.housing });
+    const result = await exportZip({ doc, pal: PALETTES.housing, ...publishKitOpts });
 
     expect(result.totalPresets).toBe(3);
     expect(result.passCount).toBe(2);
@@ -258,7 +264,7 @@ describe('exportZip orchestrator (unit)', () => {
     const onProgress = jest.fn();
     const doc = makeDoc(['instagram_1080']);
     await expect(
-      exportZip({ doc, pal: PALETTES.housing, onProgress }),
+      exportZip({ doc, pal: PALETTES.housing, ...publishKitOpts, onProgress }),
     ).rejects.toThrow('canvas allocation failed');
 
     const phases = onProgress.mock.calls.map((c) => c[0].phase);
@@ -271,7 +277,7 @@ describe('exportZip orchestrator (unit)', () => {
 
     const onProgress = jest.fn();
     const doc = makeDoc(['instagram_1080', 'twitter_landscape', 'reddit_standard']);
-    await exportZip({ doc, pal: PALETTES.housing, onProgress });
+    await exportZip({ doc, pal: PALETTES.housing, ...publishKitOpts, onProgress });
 
     const phases = onProgress.mock.calls.map((c) => c[0]);
     expect(phases[0]).toEqual({ phase: 'rendering', current: 1, total: 3 });
@@ -283,7 +289,7 @@ describe('exportZip orchestrator (unit)', () => {
 
   test('throws when exportPresets is empty', async () => {
     const doc = makeDoc([]);
-    await expect(exportZip({ doc, pal: PALETTES.housing })).rejects.toThrow(
+    await expect(exportZip({ doc, pal: PALETTES.housing, ...publishKitOpts })).rejects.toThrow(
       /No presets enabled/,
     );
   });
@@ -298,7 +304,7 @@ describe('exportZip orchestrator (unit)', () => {
     mockedCompute.mockImplementation(() => 4500);
 
     const doc = makeDoc(['instagram_1080', 'long_infographic']);
-    const result = await exportZip({ doc, pal: PALETTES.housing });
+    const result = await exportZip({ doc, pal: PALETTES.housing, ...publishKitOpts });
 
     expect(result.passCount).toBe(1);
     expect(result.skippedCount).toBe(1);

@@ -57,6 +57,12 @@ const mockedCompute = computeLongInfographicHeight as jest.MockedFunction<
   typeof computeLongInfographicHeight
 >;
 
+const publishKitOpts = {
+  lineage_key: 'ln_test_123',
+  slug: 'test-slug',
+  baseUrl: 'https://example.com',
+};
+
 describe('exportZip end-to-end (real-wire)', () => {
   let teardown: () => void;
   let clickSpy: jest.SpyInstance;
@@ -119,7 +125,7 @@ describe('exportZip end-to-end (real-wire)', () => {
       'reddit_standard',
     ];
 
-    const result = await exportZip({ doc, pal: PALETTES.housing });
+    const result = await exportZip({ doc, pal: PALETTES.housing, ...publishKitOpts });
 
     expect(result.passCount).toBe(3);
     expect(result.skippedCount).toBe(0);
@@ -130,8 +136,10 @@ describe('exportZip end-to-end (real-wire)', () => {
     const entries = unzipSync(zipBytes);
 
     expect(Object.keys(entries).sort()).toEqual([
+      'distribution.json',
       'instagram_1080.png',
       'manifest.json',
+      'publish_kit.txt',
       'reddit_standard.png',
       'twitter_landscape.png',
     ]);
@@ -154,6 +162,14 @@ describe('exportZip end-to-end (real-wire)', () => {
       'twitter_landscape',
       'reddit_standard',
     ]);
+
+    const distribution = JSON.parse(strFromU8(entries['distribution.json']));
+    expect(distribution.publication.slug).toBe(publishKitOpts.slug);
+    expect(distribution.publication.lineage_key).toBe(publishKitOpts.lineage_key);
+
+    const publishKit = strFromU8(entries['publish_kit.txt']);
+    expect(publishKit).toContain('=== Reddit ===');
+    expect(publishKit).toContain(distribution.channels.reddit.share_url);
   });
 
   test('skipped preset → no PNG entry in ZIP, manifest filename=null + skipped_reason (fix1 contract)', async () => {
@@ -174,7 +190,7 @@ describe('exportZip end-to-end (real-wire)', () => {
       'reddit_standard',
     ];
 
-    const result = await exportZip({ doc, pal: PALETTES.housing });
+    const result = await exportZip({ doc, pal: PALETTES.housing, ...publishKitOpts });
 
     expect(result.passCount).toBe(2);
     expect(result.skippedCount).toBe(1);
@@ -225,7 +241,7 @@ describe('exportZip end-to-end (real-wire)', () => {
     const doc = mkDoc('single_stat_hero', TPLS.single_stat_hero);
     doc.page.exportPresets = ['instagram_1080', 'long_infographic'];
 
-    const result = await exportZip({ doc, pal: PALETTES.housing });
+    const result = await exportZip({ doc, pal: PALETTES.housing, ...publishKitOpts });
 
     expect(result.passCount).toBe(1);
     expect(result.skippedCount).toBe(1);

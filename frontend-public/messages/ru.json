@@ -257,8 +257,8 @@
         "packing": "Упаковка ZIP…"
       },
       "toast": {
-        "success": "Экспортировано {count, plural, one {# пресет} few {# пресета} many {# пресетов} other {# пресетов}} в {filename}",
-        "partial": "Экспортировано {passCount, number} из {total, number} пресетов в {filename}. {skippedCount, plural, one {# пропущен} few {# пропущены} many {# пропущены} other {# пропущены}}.",
+        "success": "Экспортировано {count, plural, one {# пресет} few {# пресета} many {# пресетов} other {# пресетов}} + комплект публикации в {filename}",
+        "partial": "Экспортировано {passCount, number} из {total, number} пресетов + комплект публикации в {filename}. {skippedCount, plural, one {# пропущен} few {# пропущены} many {# пропущены} other {# пропущены}}.",
         "error": "Ошибка экспорта. {error}"
       },
       "skipped": {

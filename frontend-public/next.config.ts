@@ -25,6 +25,7 @@ const nextConfig: NextConfig = {
   // In development: http://localhost:8000
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
   },
   images: {
     remotePatterns: [
