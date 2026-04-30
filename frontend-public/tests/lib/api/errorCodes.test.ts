@@ -121,3 +121,36 @@ describe('getBackendErrorI18nKey', () => {
     expect(getBackendErrorI18nKey(code)).toBe(BACKEND_ERROR_I18N_KEYS[code]);
   });
 });
+
+describe('nested envelope (auth middleware, DEBT-034)', () => {
+  it('extracts auth.missing_api_key from nested envelope', () => {
+    const body = {
+      detail: {
+        error_code: 'auth.missing_api_key',
+        message: 'Missing X-API-KEY header',
+        context: {},
+      },
+    };
+    const payload = extractBackendErrorPayload(body);
+    expect(payload.code).toBe('auth.missing_api_key');
+    expect(payload.envelope).toBe('nested');
+  });
+
+  it('maps auth.missing_api_key to existing snake_case i18n key', () => {
+    expect(getBackendErrorI18nKey('auth.missing_api_key')).toBe(
+      'errors.backend.auth_api_key_missing',
+    );
+  });
+
+  it('maps all four auth wire codes via dictionary', () => {
+    expect(getBackendErrorI18nKey('auth.not_configured')).toBe(
+      'errors.backend.auth_not_configured',
+    );
+    expect(getBackendErrorI18nKey('auth.invalid_api_key')).toBe(
+      'errors.backend.auth_api_key_invalid',
+    );
+    expect(getBackendErrorI18nKey('auth.admin_rate_limited')).toBe(
+      'errors.backend.auth_admin_rate_limited',
+    );
+  });
+});

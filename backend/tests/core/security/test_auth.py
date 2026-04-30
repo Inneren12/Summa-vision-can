@@ -120,15 +120,18 @@ class TestAdminEndpointWithoutKey:
         resp = client.get("/api/v1/admin/queue")
         assert resp.status_code == 401
         body = resp.json()
-        assert "error" in body
-        assert body["error"] == "Missing X-API-KEY header"
+        assert "detail" in body
+        assert body["detail"]["error_code"] == "auth.missing_api_key"
+        assert body["detail"]["message"] == "Missing X-API-KEY header"
 
     def test_admin_post_endpoint_without_key_returns_401(self) -> None:
         client = _client()
         resp = client.post("/api/v1/admin/graphics/generate")
         assert resp.status_code == 401
         body = resp.json()
-        assert "error" in body
+        assert "detail" in body
+        assert body["detail"]["error_code"] == "auth.missing_api_key"
+        assert body["detail"]["message"] == "Missing X-API-KEY header"
 
 
 # ---------------------------------------------------------------------------
@@ -147,8 +150,9 @@ class TestAdminEndpointWithInvalidKey:
         )
         assert resp.status_code == 401
         body = resp.json()
-        assert "error" in body
-        assert body["error"] == "Invalid API key"
+        assert "detail" in body
+        assert body["detail"]["error_code"] == "auth.invalid_api_key"
+        assert body["detail"]["message"] == "Invalid API key"
 
     def test_admin_endpoint_with_empty_key_returns_401(self) -> None:
         """An explicitly empty X-API-KEY header is treated as missing."""
@@ -159,7 +163,8 @@ class TestAdminEndpointWithInvalidKey:
         )
         assert resp.status_code == 401
         body = resp.json()
-        assert body["error"] == "Missing X-API-KEY header"
+        assert body["detail"]["error_code"] == "auth.missing_api_key"
+        assert body["detail"]["message"] == "Missing X-API-KEY header"
 
 
 # ---------------------------------------------------------------------------
@@ -269,8 +274,9 @@ class TestUnconfiguredApiKey:
         resp = client.get("/api/v1/admin/queue")
         assert resp.status_code == 401
         body = resp.json()
-        assert "error" in body
-        assert body["error"] == "Admin API key not configured"
+        assert "detail" in body
+        assert body["detail"]["error_code"] == "auth.not_configured"
+        assert body["detail"]["message"] == "Admin API key not configured"
 
     def test_unconfigured_key_does_not_affect_public(self) -> None:
         """Public endpoints should still work when admin key is empty."""
@@ -314,8 +320,9 @@ class TestRateLimitAdmin:
             )
             assert resp.status_code == 429, f"Request {11 + i} should return 429"
             body = resp.json()
-            assert "error" in body
-            assert "Rate limit exceeded" in body["error"]
+            assert "detail" in body
+            assert body["detail"]["error_code"] == "auth.admin_rate_limited"
+            assert "Rate limit exceeded" in body["detail"]["message"]
 
     def test_rate_limit_does_not_affect_public_endpoints(self) -> None:
         """Public endpoints have no secondary rate limit from AuthMiddleware."""

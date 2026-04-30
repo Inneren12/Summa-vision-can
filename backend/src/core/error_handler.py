@@ -53,6 +53,36 @@ def _status_code_for(error_code: str) -> int:
     return _ERROR_CODE_TO_STATUS.get(error_code, _DEFAULT_STATUS_CODE)
 
 
+def format_error_envelope(
+    *,
+    error_code: str,
+    message: str,
+    context: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Build the canonical nested error envelope.
+
+    Used by AuthMiddleware (DEBT-034) and any future caller that needs to
+    emit the canonical envelope from outside the FastAPI exception-handler
+    pipeline (e.g. ASGI middleware where exceptions don't always route
+    through registered handlers).
+
+    Returns a dict matching the publication-handler nested shape:
+
+        {"detail": {"error_code": "<code>", "message": "<msg>", "context": {}}}
+
+    NOTE: This helper does NOT yet replace ``_summa_vision_exception_handler``
+    which still emits the legacy flat envelope. That migration is tracked
+    by DEBT-048.
+    """
+    return {
+        "detail": {
+            "error_code": error_code,
+            "message": message,
+            "context": context or {},
+        },
+    }
+
+
 async def _summa_vision_exception_handler(
     request: Request,
     exc: SummaVisionError,

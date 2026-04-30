@@ -56,6 +56,21 @@ export const BACKEND_ERROR_I18N_KEYS: Record<BackendErrorCode, string> = {
   PRECONDITION_FAILED: 'errors.backend.precondition_failed',
 };
 
+/**
+ * Wire-code → i18n-key map (Approach Z, DEBT-034).
+ *
+ * Backend AuthMiddleware emits lowercase dot-format codes
+ * (e.g. ``auth.missing_api_key``); existing locale resources use
+ * snake_case underscore keys (e.g. ``errors.backend.auth_api_key_missing``).
+ * This dictionary bridges the two formats without renaming locale keys.
+ */
+export const AUTH_WIRE_TO_I18N: Readonly<Record<string, string>> = {
+  'auth.not_configured': 'errors.backend.auth_not_configured',
+  'auth.missing_api_key': 'errors.backend.auth_api_key_missing',
+  'auth.invalid_api_key': 'errors.backend.auth_api_key_invalid',
+  'auth.admin_rate_limited': 'errors.backend.auth_admin_rate_limited',
+} as const;
+
 const EMPTY_PAYLOAD: BackendErrorPayload = {
   code: null,
   message: null,
@@ -72,7 +87,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  *
  * Lookup precedence:
  *   1. body.detail.error_code (nested envelope, publication contract).
- *   2. body.error_code (flat envelope, auth middleware).
+ *   2. body.error_code (flat envelope, global SummaVisionError handler — see DEBT-048).
  *   3. None — return empty payload with envelope='none'.
  *
  * Never throws. Never returns undefined.
@@ -110,6 +125,10 @@ export function extractBackendErrorPayload(body: unknown): BackendErrorPayload {
 export function getBackendErrorI18nKey(code: string | null): string | null {
   if (code === null) {
     return null;
+  }
+  // Approach Z (DEBT-034): dot-format wire codes mapped via dictionary first.
+  if (code in AUTH_WIRE_TO_I18N) {
+    return AUTH_WIRE_TO_I18N[code];
   }
   if ((KNOWN_BACKEND_ERROR_CODES as readonly string[]).includes(code)) {
     return BACKEND_ERROR_I18N_KEYS[code as BackendErrorCode];
