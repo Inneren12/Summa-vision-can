@@ -20,8 +20,10 @@ os.environ.setdefault("ADMIN_API_KEY", "test-key")
 import subprocess
 from collections.abc import AsyncGenerator
 from typing import Any
+from uuid import uuid4
 
 import pytest
+from slugify import slugify as _slugify_lib
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -79,6 +81,20 @@ async def db_session(
 # ---------------------------------------------------------------------------
 
 
+def _make_test_slug(headline: str) -> str:
+    """Deterministic-ish test slug with uuid suffix for fixture isolation.
+
+    Mirrors prod slugify but appends ``-<uuid8>`` to avoid collisions
+    across multiple ``make_publication()`` calls in the same test
+    session (the slug column will gain a UNIQUE constraint in
+    Chunk 4.5).
+    """
+    base = _slugify_lib(headline or "test-publication", max_length=180)
+    if not base:
+        base = "test-publication"
+    return f"{base}-{uuid4().hex[:8]}"
+
+
 def make_publication(**overrides: Any) -> Publication:
     """Build a Publication ORM instance with sensible defaults for tests.
 
@@ -87,6 +103,9 @@ def make_publication(**overrides: Any) -> Publication:
     constraint. Accepts overrides for any field; pass
     ``lineage_key="..."`` to pin a specific value (e.g. for clone-
     inheritance tests).
+
+    A unique ``slug`` is auto-generated from the final headline (after
+    overrides) unless the caller passes ``slug=`` explicitly.
 
     Non-persisting: caller is responsible for ``session.add(pub)`` +
     commit if persistence is needed.
@@ -98,4 +117,12 @@ def make_publication(**overrides: Any) -> Publication:
         "lineage_key": generate_lineage_key(),
     }
     defaults.update(overrides)
+    if "slug" not in defaults:
+        defaults["slug"] = _make_test_slug(defaults["headline"])
     return Publication(**defaults)
+
+
+@pytest.fixture()
+def make_publication_factory() -> Any:
+    """Pytest-fixture wrapper around :func:`make_publication`."""
+    return make_publication
