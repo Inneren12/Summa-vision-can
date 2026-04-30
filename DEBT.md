@@ -231,6 +231,8 @@ Rules:
 - **Resolution:** Sequential follow-up work post-impl: items 1-4 are grep audits and test fixture confirmations (1-2 hours total); item 5 runs alongside Phase 2.2 frontend dispatch; item 6 added to release checklist before Phase 2.2 frontend deploy; item 7 is the Chunk 4.5 migration PR (separate scope).
 - **Target:** Items 1-4 in next maintenance window; items 5-6 before Phase 2.2 frontend deploy; item 7 as standalone Chunk 4.5 PR after Chunks 2-4 deployed and stable.
 
+> Updated 2026-04-30: Phase 2.2.0.5 Part B merged. Production routers (admin_publications._serialize, public_graphics) now pass slug; PublicationResponse and PublicationPublicResponse tightened to `slug: str`. Items 2 and 7 closed. Items 1, 3, 4, 5, 6 remain open per their scheduled targets.
+
 ---
 
 ## Resolved

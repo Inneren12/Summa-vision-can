@@ -179,6 +179,7 @@ async def list_public_graphics(
             PublicationPublicResponse(
                 id=pub.id,
                 headline=pub.headline,
+                slug=pub.slug,
                 chart_type=pub.chart_type,
                 virality_score=pub.virality_score or 0.0,
                 preview_url=preview_url,
