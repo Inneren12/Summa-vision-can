@@ -252,7 +252,7 @@ class PublicationResponse(BaseModel):
     published_at: Optional[datetime] = None
     cloned_from_publication_id: Optional[int] = None
     lineage_key: str
-    slug: str | None = None  # Phase 2.2.0.5; will become required (str) after NOT NULL migration
+    slug: str | None = None  # tightened to `str` in Part B once admin_publications._serialize passes it
 
     @field_validator("review", mode="before")
     @classmethod
@@ -289,7 +289,7 @@ class PublicationPublicResponse(BaseModel):
 
     id: int
     headline: str
-    slug: str | None = None  # public URL identity; will become required after NOT NULL migration
+    slug: str | None = None  # tightened to `str` in Part B once public_graphics router passes it
     chart_type: str
     eyebrow: Optional[str] = None
     description: Optional[str] = None

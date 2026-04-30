@@ -20,6 +20,7 @@ os.environ.setdefault("ADMIN_API_KEY", "test-key")
 import subprocess
 from collections.abc import AsyncGenerator
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import (
@@ -96,6 +97,7 @@ def make_publication(**overrides: Any) -> Publication:
         "chart_type": "bar",
         "status": PublicationStatus.DRAFT,
         "lineage_key": generate_lineage_key(),
+        "slug": f"test-pub-{uuid4().hex[:12]}",
     }
     defaults.update(overrides)
     return Publication(**defaults)
