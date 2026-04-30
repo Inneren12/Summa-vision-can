@@ -212,6 +212,28 @@ Rules:
 - **Resolution:** Migrate `_summa_vision_exception_handler` to emit nested envelope (one-line change in handler body, but blast radius is every backend route raising `SummaVisionError`). Update all backend tests asserting flat shape. Remove flat branch from `frontend-public/src/lib/api/errorCodes.ts` and narrow `BackendErrorPayload.envelope` enum to `'nested' | 'none'`. Atomic backend + frontend PR per DEBT-034 precedent.
 - **Target:** Opportunistic; before any new admin router is added (each new router compounds the migration scope).
 
+### DEBT-049: Phase 2.2.0.5 follow-ups
+
+**Status:** Active (recon complete, impl in progress)
+**Created:** 2026-04-30
+**Phase:** 2.2.0.5
+
+**Scope of follow-ups:**
+
+1. **Q-impl-C1** — Verify `create_published` (line ~80 in publication_repository.py) caller does not pre-compute slug; confirm slug-per-retry pattern works correctly for graphics pipeline. Grep audit: `rg "create_published\(" backend/src/`.
+
+2. **Q-impl-C2** — Audit callers of `create()` (line ~139) repo method. May be legacy/test-only. If only tests use it, consider deprecation in a separate cleanup PR.
+
+3. **Q-impl-D1** — Confirm public endpoint path `GET /api/v1/public/p/{slug}`. Recon assumed based on `${PUBLIC_SITE_URL}/p/${slug}` URL contract; backend route may differ.
+
+4. **Chinese transliteration test expectation** — `test_generate_slug_chinese_transliteration` (Chunk 5) records actual python-slugify output as test expectation. Confirm the recorded output matches operator expectations.
+
+5. **Frontend route blacklist verification** — Reserved blacklist (lineage.py `RESERVED_SLUGS`, 25 entries) was not verified against `frontend/app/` routes during recon (frontend dir not present in repo at recon time). Re-verify before Phase 2.2 frontend ships.
+
+6. **Migration downgrade safety** — Slug migration (revision `77889c0ea7e3`) must not be downgraded in production after Phase 2.2 frontend ships, since slug is the public URL path (`/p/{slug}`); down→up regenerates slugs and breaks inbound links. Add to release ops checklist.
+
+7. **NOT NULL + UNIQUE migration (Chunk 4.5)** — Pending. Will run after Chunks 2+3+4 deploy and write paths populate slug. ORM types tighten from `Mapped[str | None]` / `str | None` to `Mapped[str]` / `str` in same PR.
+
 ---
 
 ## Resolved

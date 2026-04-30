@@ -48,7 +48,8 @@
 | Phase | Effort | PRs | Depends on |
 |---|---|---|---|
 | 2.1 Multi-preset ZIP export | M | 2-3 | none |
-| 2.2 Publish Kit Generator | M | 2 | 2.1 |
+| 2.2.0.5 Backend slug infrastructure (column, generator, migration, schema, immutability) | S | 1 | 2.2.0 (lineage_key) |
+| 2.2 Publish Kit Generator | M | 2 | 2.1, 2.2.0.5 |
 | 2.3 UTM-to-lineage attribution | S | 1 | 2.2 |
 | 2.4 Draft Social Text (Gemini Flash) | S | 1 | 2.2 |
 | Editor Stage 3 | M | 2-3 | none (parallel to 1.x) |
