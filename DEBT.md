@@ -178,7 +178,7 @@ Rules:
 
 - **Source:** PR-D recon (`docs/recon/pr-d-env-ignore-empty-recon.md`)
 - **Added:** 2026-04-29
-- **Severity:** low
+- **Severity:** P3
 - **Category:** code-quality
 - **Status:** active
 - **Description:** `Settings.cors_origins` exists with Python default `"*"` and is
