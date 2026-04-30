@@ -22,6 +22,23 @@
 # Note: docker-compose.override.yml itself is .gitignored to keep
 # environment-specific config out of the repo. See DEBT-047 for the
 # tracked concern that prod override is not version-controlled.
+#
+# REQUIREMENTS
+#
+# Docker Compose 2.24.4 or newer (Jan 2024 release).
+# The `!override` YAML tag below requires this minimum version. Older
+# Compose versions will either fail to parse the file or silently
+# append the ports list to the base, re-exposing 0.0.0.0:8000.
+#
+# Verify before deploying:
+#   $ docker compose version
+#
+# After copying to docker-compose.override.yml, validate the merged
+# configuration shows only the expected loopback binding:
+#   $ docker compose config | grep -A 3 "ports:"
+# Expected output: single entry with host_ip: 127.0.0.1, target: 8000.
+# If two entries appear, the !override tag is not being honored —
+# upgrade Compose or use explicit -f file invocation as fallback.
 
 services:
   db:
