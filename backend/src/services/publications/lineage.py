@@ -178,7 +178,7 @@ RESERVED_SLUGS: frozenset[str] = frozenset({
     "admin", "p", "about", "privacy", "terms", "login", "signup", "logout",
     "health", "robots", "sitemap", "favicon",
     "summa", "summa-vision",
-    "search", "feed", "rss", "atom",
+    "search", "feed", "rss", "atom", "manifest",
 })
 
 _COPY_PREFIX = "Copy of "  # mirror clone.py:21; sync test in Chunk 5

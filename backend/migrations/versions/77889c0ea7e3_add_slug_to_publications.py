@@ -29,14 +29,15 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-MAX_SLUG_LEN = 196
+SLUG_COLUMN_LEN = 200
+MAX_SLUG_BODY_LEN = 196
 MIN_SLUG_BODY_LEN = 3
 RESERVED_SLUGS: frozenset[str] = frozenset({
     "_next", "static", "api", "_error", "404", "500",
     "admin", "p", "about", "privacy", "terms", "login", "signup", "logout",
     "health", "robots", "sitemap", "favicon",
     "summa", "summa-vision",
-    "search", "feed", "rss", "atom",
+    "search", "feed", "rss", "atom", "manifest",
 })
 
 
@@ -92,7 +93,7 @@ def _backfill_slugs() -> None:
 def _generate_slug_for_backfill(
     pub_id: int, headline: str | None, assigned: set[str]
 ) -> str:
-    base = slugify(headline or "", max_length=MAX_SLUG_LEN)
+    base = slugify(headline or "", max_length=MAX_SLUG_BODY_LEN)
     if not base or len(base) < MIN_SLUG_BODY_LEN:
         return f"publication-{pub_id}"
 
