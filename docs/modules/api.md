@@ -61,6 +61,7 @@ Sync uses dedupe_key `catalog_sync:{date}` — same-day requests return existing
 | PATCH  | `/api/v1/admin/publications/{publication_id}`| Partial update (editorial + visual_config)       | X-API-KEY |
 | POST   | `/api/v1/admin/publications/{publication_id}/publish`   | Flip DRAFT → PUBLISHED + emit audit event | X-API-KEY |
 | POST   | `/api/v1/admin/publications/{publication_id}/unpublish` | Flip PUBLISHED → DRAFT (preserves `published_at`) | X-API-KEY |
+| GET    | `/api/v1/admin/publications/{publication_id}/leads`     | List leads attributed to this publication via UTM (Phase 2.3) | X-API-KEY |
 
 **Query params for list:**
 - `status` (optional, one of `draft` / `published` / `all`, default `all`).
@@ -92,6 +93,7 @@ Sync uses dedupe_key `catalog_sync:{date}` — same-day requests return existing
 - Missing IDs → 404 `{"detail": "Publication not found"}`.
 - Sensitive S3 keys (`s3_key_lowres`, `s3_key_highres`) are **never** included in the admin response — only `cdn_url` (currently always `null` until CDN integration lands).
 - Dependencies: `PublicationRepository` and `AuditWriter` are injected via `_get_repo` / `_get_audit` (ARCH-DPEN-001).
+- **Phase 2.3 — `GET /{publication_id}/leads`.** Returns the leads attributed to this publication via `Lead.utm_content == Publication.lineage_key`. Response is `list[AdminLeadResponse]` (admin-only, includes `utm_*`, `ip_address`-adjacent fields are not returned). Ordered newest-first; `limit` query param defaults to 200 (1–500). 404 if the publication does not exist. The contract relies on the publish-kit lock that `utm_content == lineage_key` (Phase 2.2) — leads with no UTM (organic submissions) are deliberately excluded.
 
 ### Admin KPI Router (`routers/admin_kpi.py`)
 
@@ -147,7 +149,7 @@ Dependency: `KPIService` injected via `Depends`. Uses `get_session_factory()` fo
 |--------|------|--------|-------------|
 | `POST` | `/api/v1/public/leads/capture` | 200 / 403 / 404 / 422 / 429 | Trade email + Turnstile CAPTCHA for a Magic Link email |
 
-**Request Body:** `LeadCaptureRequest` — `email: EmailStr`, `asset_id: int`, `turnstile_token: str`
+**Request Body:** `LeadCaptureRequest` (`extra="forbid"`) — `email: EmailStr`, `asset_id: int`, `turnstile_token: str`, plus optional Phase 2.3 UTM attribution: `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`. Visitors arriving via a publish-kit share URL forward these from `URLSearchParams`; `utm_content` carries the source publication's `lineage_key`.
 
 **Flow:**
 1. Rate limit (3 req/min per IP) → 429.

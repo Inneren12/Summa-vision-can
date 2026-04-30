@@ -43,6 +43,10 @@ class LeadRepository:
         asset_id: str,
         is_b2b: bool = False,
         company_domain: str | None = None,
+        utm_source: str | None = None,
+        utm_medium: str | None = None,
+        utm_campaign: str | None = None,
+        utm_content: str | None = None,
     ) -> Lead:
         """Create a new lead record.
 
@@ -52,6 +56,11 @@ class LeadRepository:
             asset_id: Identifier of the downloaded asset.
             is_b2b: Whether this is a B2B lead.
             company_domain: Extracted company domain (optional).
+            utm_source: UTM source param at submit time (Phase 2.3).
+            utm_medium: UTM medium param (Phase 2.3).
+            utm_campaign: UTM campaign param (Phase 2.3).
+            utm_content: UTM content param = publication lineage_key
+                (Phase 2.3).
 
         Returns:
             The newly created ``Lead`` instance with its ``id`` populated
@@ -63,6 +72,10 @@ class LeadRepository:
             asset_id=asset_id,
             is_b2b=is_b2b,
             company_domain=company_domain,
+            utm_source=utm_source,
+            utm_medium=utm_medium,
+            utm_campaign=utm_campaign,
+            utm_content=utm_content,
         )
         self._session.add(lead)
         await self._session.flush()
@@ -77,6 +90,10 @@ class LeadRepository:
         asset_id: str,
         is_b2b: bool = False,
         company_domain: str | None = None,
+        utm_source: str | None = None,
+        utm_medium: str | None = None,
+        utm_campaign: str | None = None,
+        utm_content: str | None = None,
     ) -> tuple[Lead, bool]:
         """Create a lead or return the existing one.  Race-safe.
 
@@ -103,6 +120,10 @@ class LeadRepository:
                 asset_id=asset_id,
                 is_b2b=is_b2b,
                 company_domain=company_domain,
+                utm_source=utm_source,
+                utm_medium=utm_medium,
+                utm_campaign=utm_campaign,
+                utm_content=utm_content,
             )
             self._session.add(lead)
             await self._session.flush()
@@ -186,6 +207,31 @@ class LeadRepository:
         )
         result = await self._session.execute(stmt)
         return result.scalar_one()
+
+    async def list_by_utm_content(
+        self, utm_content: str, *, limit: int = 200
+    ) -> Sequence[Lead]:
+        """Return leads attributed to a publication via ``utm_content``.
+
+        Phase 2.3: ``utm_content`` carries the source publication's
+        ``lineage_key``. Ordered newest-first to match admin dashboard
+        consumption.
+
+        Args:
+            utm_content: The publication ``lineage_key`` to filter by.
+            limit: Maximum number of rows to return.
+
+        Returns:
+            A sequence of matching :class:`Lead` rows.
+        """
+        stmt = (
+            select(Lead)
+            .where(Lead.utm_content == utm_content)
+            .order_by(Lead.created_at.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
 
     async def get_unsynced(self, limit: int = 100) -> Sequence[Lead]:
         """Retrieve leads that have not yet been successfully synced to the ESP

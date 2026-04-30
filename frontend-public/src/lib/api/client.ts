@@ -1,6 +1,7 @@
 // Used ONLY in 'use client' components
 // No next.revalidate — plain browser fetch
 
+import type { UtmAttribution } from '../attribution/utm';
 import type { PaginatedResponse, PublicationResponse } from '../types/publication';
 
 export type { PaginatedResponse, PublicationResponse };
@@ -26,6 +27,7 @@ export async function captureLeadForDownload(
   email: string,
   assetId: number,
   turnstileToken: string,
+  utm: UtmAttribution = {},
 ): Promise<LeadCaptureResponse> {
   const res = await fetch(`${API_URL}/api/v1/public/leads/capture`, {
     method: 'POST',
@@ -34,6 +36,9 @@ export async function captureLeadForDownload(
       email,
       asset_id: assetId,
       turnstile_token: turnstileToken,
+      // Phase 2.3 UTM attribution. Only present keys are sent so the
+      // backend's ``extra="forbid"`` schema does not reject empty strings.
+      ...utm,
     }),
   });
   if (!res.ok) {

@@ -26,9 +26,11 @@ import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.schemas.admin_leads import AdminLeadResponse
 from src.core.database import get_db
 from src.core.logging import get_logger
 from src.models.publication import Publication, PublicationStatus
+from src.repositories.lead_repository import LeadRepository
 from src.repositories.publication_repository import PublicationRepository
 from src.schemas.events import EventType
 from src.schemas.publication import (
@@ -619,6 +621,46 @@ async def clone_publication_endpoint(
         raise exc
     response.headers["ETag"] = compute_etag(clone)
     return _serialize(clone)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/admin/publications/{publication_id}/leads
+# Phase 2.3 — UTM-to-lineage attribution: per-publication lead listing.
+# Match key is ``utm_content == publication.lineage_key`` (set at submit
+# time by the lead-capture endpoint).
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/{publication_id}/leads",
+    response_model=list[AdminLeadResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List leads attributed to this publication via UTM",
+    responses={
+        404: {"description": "Publication not found."},
+    },
+)
+async def list_publication_leads(
+    publication_id: int,
+    limit: int = Query(default=200, ge=1, le=500),
+    repo: PublicationRepository = Depends(_get_repo),
+    session: AsyncSession = Depends(get_db),
+) -> list[AdminLeadResponse]:
+    """Return leads attributed to a publication via ``utm_content``.
+
+    Phase 2.3 contract: a lead's ``utm_content`` mirrors the source
+    publication's ``lineage_key``, set when the visitor arrives via a
+    publish-kit share URL. Ordered newest-first.
+    """
+    publication = await repo.get_by_id(publication_id)
+    if publication is None:
+        raise PublicationNotFoundError()
+
+    lead_repo = LeadRepository(session)
+    leads = await lead_repo.list_by_utm_content(
+        publication.lineage_key, limit=limit
+    )
+    return [AdminLeadResponse.model_validate(lead) for lead in leads]
 
 
 __all__ = ["router"]
