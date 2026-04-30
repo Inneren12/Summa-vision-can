@@ -241,6 +241,7 @@ class TestJsonSchema:
         resp = PublicationResponse(
             id=1,
             headline="Test",
+            slug="test-graphic",
             chart_type="bar",
             virality_score=0.8,
             preview_url="https://example.com/img.png",
@@ -493,6 +494,7 @@ class TestPaginatedGraphicsResponseSchema:
         item = PublicationResponse(
             id=1,
             headline="Test Graphic",
+            slug="test-graphic",
             chart_type="bar",
             virality_score=0.9,
             preview_url="https://cdn.example.com/preview.png",
