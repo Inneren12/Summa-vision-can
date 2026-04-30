@@ -94,3 +94,25 @@ class PublicationPreconditionFailedError(PublicationApiError):
             "server_etag": server_etag,
             "client_etag": client_etag,
         })
+
+
+class PublicationSlugGenerationError(PublicationApiError):
+    """Slug body empty/too short after slugification."""
+
+    status_code_value = status.HTTP_422_UNPROCESSABLE_CONTENT
+    error_code = "PUBLICATION_SLUG_GENERATION_FAILED"
+    message = "headline produces empty/short slug body (min=3 chars)."
+
+    def __init__(self, *, headline: str) -> None:
+        super().__init__(details={"headline": headline})
+
+
+class PublicationSlugCollisionError(PublicationApiError):
+    """Slug suffix space -2..-99 exhausted."""
+
+    status_code_value = status.HTTP_409_CONFLICT
+    error_code = "PUBLICATION_SLUG_COLLISION_EXHAUSTED"
+    message = "Slug collision suffix range exhausted; rename headline."
+
+    def __init__(self, *, base_slug: str, attempts: int) -> None:
+        super().__init__(details={"base_slug": base_slug, "attempts": attempts})

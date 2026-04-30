@@ -162,3 +162,65 @@ def derive_clone_lineage_key(source: "Publication") -> str:
             "data integrity violation post-Phase-2.2.0 migration"
         )
     return source.lineage_key
+
+
+from slugify import slugify as _slugify_lib  # noqa: E402
+
+from src.services.publications.exceptions import (  # noqa: E402
+    PublicationSlugCollisionError,
+    PublicationSlugGenerationError,
+)
+
+MAX_SLUG_LEN: int = 196
+MIN_SLUG_BODY_LEN: int = 3
+RESERVED_SLUGS: frozenset[str] = frozenset({
+    "_next", "static", "api", "_error", "404", "500",
+    "admin", "p", "about", "privacy", "terms", "login", "signup", "logout",
+    "health", "robots", "sitemap", "favicon",
+    "summa", "summa-vision",
+    "search", "feed", "rss", "atom",
+})
+
+_COPY_PREFIX = "Copy of "  # mirror clone.py:21; sync test in Chunk 5
+
+
+def _slugify_internal(text: str) -> str:
+    """Pure slugify transform (no collision/reserved logic)."""
+    return _slugify_lib(text or "", max_length=MAX_SLUG_LEN)
+
+
+def generate_slug(headline: str, *, existing_slugs: set[str] | None = None) -> str:
+    """Generate slug from headline using slugify + reserved blacklist + collision suffix.
+
+    Pure function: no DB. Caller assembles existing_slugs.
+
+    Raises:
+        PublicationSlugGenerationError: empty/short slug body.
+        PublicationSlugCollisionError: -2..-99 suffix range exhausted.
+    """
+    base = _slugify_internal(headline)
+    if not base or len(base) < MIN_SLUG_BODY_LEN:
+        raise PublicationSlugGenerationError(headline=headline)
+
+    blocked = (existing_slugs or set()) | RESERVED_SLUGS
+    if base not in blocked:
+        return base
+
+    for n in range(2, 100):
+        candidate = f"{base}-{n}"
+        if candidate not in blocked:
+            return candidate
+
+    raise PublicationSlugCollisionError(base_slug=base, attempts=99)
+
+
+def derive_clone_slug(
+    source: "Publication",
+    *,
+    existing_slugs: set[str] | None = None,
+) -> str:
+    """Generate fresh clone slug after stripping `_COPY_PREFIX` if present."""
+    headline = source.headline or ""
+    if headline.startswith(_COPY_PREFIX):
+        headline = headline[len(_COPY_PREFIX):]
+    return generate_slug(headline, existing_slugs=existing_slugs)
