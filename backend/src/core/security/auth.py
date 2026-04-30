@@ -22,6 +22,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from src.core.error_codes import (
+    AUTH_ADMIN_RATE_LIMITED,
+    AUTH_INVALID_API_KEY,
+    AUTH_MISSING_API_KEY,
+    AUTH_NOT_CONFIGURED,
+)
+from src.core.error_handler import format_error_envelope
 from src.core.security.ip_rate_limiter import InMemoryRateLimiter
 
 # Paths that bypass authentication entirely.
@@ -116,7 +123,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # 2a. Check that admin_api_key is configured
             if self._admin_api_key == "":
                 return JSONResponse(
-                    {"error": "Admin API key not configured"},
+                    format_error_envelope(
+                        error_code=AUTH_NOT_CONFIGURED,
+                        message="Admin API key not configured",
+                    ),
                     status_code=401,
                 )
 
@@ -125,13 +135,19 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
             if api_key == "":
                 return JSONResponse(
-                    {"error": "Missing X-API-KEY header", "error_code": "AUTH_API_KEY_MISSING"},
+                    format_error_envelope(
+                        error_code=AUTH_MISSING_API_KEY,
+                        message="Missing X-API-KEY header",
+                    ),
                     status_code=401,
                 )
 
             if api_key != self._admin_api_key:
                 return JSONResponse(
-                    {"error": "Invalid API key", "error_code": "AUTH_API_KEY_INVALID"},
+                    format_error_envelope(
+                        error_code=AUTH_INVALID_API_KEY,
+                        message="Invalid API key",
+                    ),
                     status_code=401,
                 )
 
@@ -139,7 +155,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
             client_key: str = api_key[:8]
             if not self._rate_limiter.is_allowed(client_key):
                 return JSONResponse(
-                    {"error": "Rate limit exceeded. Max 10 requests/min for admin endpoints.", "error_code": "AUTH_ADMIN_RATE_LIMITED"},
+                    format_error_envelope(
+                        error_code=AUTH_ADMIN_RATE_LIMITED,
+                        message="Rate limit exceeded. Max 10 requests/min for admin endpoints.",
+                    ),
                     status_code=429,
                 )
 

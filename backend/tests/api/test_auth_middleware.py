@@ -29,7 +29,7 @@ async def test_missing_api_key_returns_structured_error_code(app: FastAPI) -> No
 
     assert response.status_code == 401
     body = response.json()
-    assert body["error_code"] == "AUTH_API_KEY_MISSING"
+    assert body["detail"]["error_code"] == "auth.missing_api_key"
 
 
 @pytest.mark.asyncio
@@ -44,7 +44,7 @@ async def test_invalid_api_key_returns_structured_error_code(app: FastAPI) -> No
 
     assert response.status_code == 401
     body = response.json()
-    assert body["error_code"] == "AUTH_API_KEY_INVALID"
+    assert body["detail"]["error_code"] == "auth.invalid_api_key"
 
 
 @pytest.mark.asyncio
@@ -62,4 +62,4 @@ async def test_rate_limited_returns_structured_error_code(app: FastAPI) -> None:
     assert last is not None
     assert last.status_code == 429
     body = last.json()
-    assert body["error_code"] == "AUTH_ADMIN_RATE_LIMITED"
+    assert body["detail"]["error_code"] == "auth.admin_rate_limited"

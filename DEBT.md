@@ -119,11 +119,13 @@ Rules:
 - **Added:** 2026-04-26
 - **Severity:** low
 - **Category:** architecture
-- **Status:** active
+- **Status:** accepted
 - **Description:** AuthMiddleware uses flat error envelope while publication endpoints use nested envelope; frontend extractor handles both. Once auth migrates to nested, the flat-envelope branch in `extractBackendErrorPayload` becomes obsolete.
 - **Impact:** Minor client-side complexity (dual-envelope parsing and diagnostics). No current user-facing bug because both are handled.
 - **Resolution:** Migrate auth handlers to the nested envelope contract, then remove flat branch from frontend extractor and narrow `BackendErrorPayload.envelope`.
 - **Target:** Backend follow-up: migrate auth handlers to nested envelope. Then remove flat branch + update `BackendErrorPayload.envelope` enum.
+
+> Updated 2026-04-30: AuthMiddleware migrated to nested envelope via direct helper (`format_error_envelope`) in `backend/src/core/error_handler.py`. Status `active` → `accepted` because partial: global `SummaVisionError` handler still emits flat envelope and frontend extractor still has flat-envelope branch. Full envelope unification + flat-branch removal tracked by DEBT-048.
 
 ### DEBT-027: Autosave retry-reset effect uses exhaustive-deps exception
 
@@ -197,6 +199,18 @@ Rules:
 - **Impact:** If VPS is rebuilt or migrated, override file must be recreated from memory or runbook. No automated guarantee that prod config matches operator intent. Risk: silent omission of intended prod-only tweaks (db bind mount path, ports replacement) in disaster-recovery scenario. Not a security risk after DEBT-046; durability/operability risk only.
 - **Resolution:** Pick one of: (a) commit `docker-compose.prod.yml` and deploy via explicit `-f` flags (changes CI/runbook), or (b) document override requirement in `OPERATIONS.md` runbook with exact file content for operator recreation, or (c) move template to `scripts/templates/` committed in repo with deploy procedure that copies it into place. No path chosen yet — opportunistic next time deploy hygiene is touched.
 - **Target:** Opportunistic, no specific milestone. Next deploy-hygiene PR or VPS deploy Section J runbook work.
+
+### DEBT-048: Global SummaVisionError handler emits flat envelope; frontend extractor retains flat branch
+
+- **Source:** DEBT-034 recon (2026-04-30) — discovered global handler `_summa_vision_exception_handler` emits flat envelope while publication-specific handlers emit nested
+- **Added:** 2026-04-30
+- **Severity:** low
+- **Category:** architecture
+- **Status:** active
+- **Description:** `backend/src/core/error_handler.py:_summa_vision_exception_handler` emits flat envelope `{error_code, message, detail}` for all `SummaVisionError` subclasses NOT covered by a more specific handler. Publication-specific handlers emit nested `{detail: {error_code, message, details}}`. Three envelope shapes coexist after DEBT-034: nested-publication, nested-auth (via direct helper), flat-global. Frontend `extractBackendErrorPayload` still has flat-envelope branch to handle global-handler responses; cannot be removed until backend unifies on nested.
+- **Impact:** Frontend extractor carries dual-envelope parsing logic. Future backend code raising arbitrary `SummaVisionError` subclasses gets flat envelope without operator-visible warning. Code-quality drift across error paths; no current user-facing bug.
+- **Resolution:** Migrate `_summa_vision_exception_handler` to emit nested envelope (one-line change in handler body, but blast radius is every backend route raising `SummaVisionError`). Update all backend tests asserting flat shape. Remove flat branch from `frontend-public/src/lib/api/errorCodes.ts` and narrow `BackendErrorPayload.envelope` enum to `'nested' | 'none'`. Atomic backend + frontend PR per DEBT-034 precedent.
+- **Target:** Opportunistic; before any new admin router is added (each new router compounds the migration scope).
 
 ---
 
