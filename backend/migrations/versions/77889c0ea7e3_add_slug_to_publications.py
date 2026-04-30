@@ -4,10 +4,13 @@ Revision ID: 77889c0ea7e3
 Revises: a7d6b03efabf
 Create Date: 2026-04-30 12:00:00.000000
 
-Phase 2.2.0.5 backend slug infrastructure. Adds nullable column,
-backfills existing rows by slugifying headlines with collision suffixing,
-then enforces NOT NULL + UNIQUE. Atomic within one revision so a
-mid-backfill failure rolls cleanly.
+Phase 2.2.0.5 backend slug infrastructure — Part 1.
+Adds nullable slug column and backfills existing rows.
+
+NOT NULL + UNIQUE enforcement is deferred to a later migration that
+runs after write-path PRs deploy slug population. This expand-contract
+sequencing prevents production INSERT failures during the rolling
+deploy window.
 
 OPS NOTE: once slug URLs are public-facing, do not downgrade this
 migration in production; down->up can change slug paths and break links.
@@ -39,7 +42,9 @@ RESERVED_SLUGS: frozenset[str] = frozenset({
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # Step 1: add nullable column (batch_alter_table for SQLite portability)
+    # Step 1: add nullable column (batch_alter_table for SQLite portability).
+    # Column stays nullable in this migration; a later migration will
+    # enforce NOT NULL + UNIQUE once write-path PRs (Chunks 2-4) ship.
     with op.batch_alter_table("publications", schema=None) as batch_op:
         batch_op.add_column(sa.Column("slug", sa.String(length=200), nullable=True))
 
@@ -47,28 +52,23 @@ def upgrade() -> None:
     # cannot be expressed in pure SQL).
     _backfill_slugs()
 
-    # Step 3: enforce NOT NULL + UNIQUE after backfill. Wrapped in batch so
-    # SQLite copy-and-move picks up both changes in one rebuild.
-    with op.batch_alter_table("publications", schema=None) as batch_op:
-        batch_op.alter_column(
-            "slug",
-            existing_type=sa.String(length=200),
-            nullable=False,
-        )
-        batch_op.create_unique_constraint("uq_publications_slug", ["slug"])
-
 
 def downgrade() -> None:
     """Downgrade schema."""
     with op.batch_alter_table("publications", schema=None) as batch_op:
-        batch_op.drop_constraint("uq_publications_slug", type_="unique")
         batch_op.drop_column("slug")
 
 
 def _backfill_slugs() -> None:
     """Walk publications by id ASC. Slugify the headline; if empty/short or
-    collides with already-assigned/reserved slugs, suffix ``-2..-99`` until
-    a free slot is found. Empty/short fallback uses ``publication-{id}``.
+    collides with already-assigned/reserved slugs, suffix ``-2, -3, ...``
+    unboundedly until a free slot is found. Empty/short fallback uses
+    ``publication-{id}``.
+
+    Backfill operates on a fixed snapshot of existing rows, so the suffix
+    loop is unbounded — capping it (the runtime ``generate_slug`` uses 99
+    for operator UX) could abort a deployment on a legitimately
+    collision-heavy dataset.
 
     Constants are duplicated from runtime intentionally per Alembic
     immutability convention: a migration must keep producing the same
@@ -100,12 +100,9 @@ def _generate_slug_for_backfill(
     if base not in blocked:
         return base
 
-    for n in range(2, 100):
+    n = 2
+    while True:
         candidate = f"{base}-{n}"
         if candidate not in blocked:
             return candidate
-
-    raise RuntimeError(
-        f"Slug collision exhausted for id={pub_id}, "
-        f"headline={headline!r}; manual intervention required."
-    )
+        n += 1
