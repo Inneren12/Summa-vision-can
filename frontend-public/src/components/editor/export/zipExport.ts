@@ -4,6 +4,8 @@ import type { PresetId } from '../config/sizes';
 import { renderDocumentToBlob, RenderCapExceededError } from './renderToBlob';
 import { buildManifest, type PresetRenderResult } from './manifest';
 import { buildZipFilename } from './zipFilename';
+import { buildDistributionJson } from '../distribution/distributionJson';
+import { buildPublishKitTxt } from '../distribution/publishKitTxt';
 import { deferRevoke } from '../utils/download';
 import { validatePresetSize } from '../validation/validate';
 
@@ -28,6 +30,12 @@ export interface ZipExportResult {
 export interface ZipExportOptions {
   doc: CanonicalDocument;
   pal: Palette;
+  /** Per-row UUID v7 from backend; populates utm_content in distribution URLs. */
+  lineage_key: string;
+  /** Per-row URL slug from backend; populates canonical_url path /p/{slug}. */
+  slug: string;
+  /** Public site base URL, e.g. https://summa.vision; from NEXT_PUBLIC_SITE_URL. */
+  baseUrl: string;
   onProgress?: (phase: ZipExportPhase) => void;
 }
 
@@ -128,6 +136,19 @@ export async function exportZip(
       }
     }
     zipEntries['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
+
+    const distribution = buildDistributionJson({
+      doc,
+      lineage_key: options.lineage_key,
+      slug: options.slug,
+      baseUrl: options.baseUrl,
+    });
+    zipEntries['distribution.json'] = strToU8(
+      JSON.stringify(distribution, null, 2),
+    );
+    zipEntries['publish_kit.txt'] = strToU8(
+      buildPublishKitTxt({ distribution }),
+    );
 
     const zipBytes = zipSync(zipEntries, { level: 6 });
     const zipBlob = new Blob([zipBytes as BlobPart], { type: 'application/zip' });

@@ -62,6 +62,8 @@ export type ReviewPayload = CanonicalDocument['review'];
  */
 export interface AdminPublicationResponse {
   id: string;
+  slug: string;
+  lineage_key: string;
   headline: string;
   chart_type: string;
   eyebrow?: string | null;

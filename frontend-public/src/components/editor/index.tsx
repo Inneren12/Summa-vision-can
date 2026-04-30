@@ -1235,9 +1235,30 @@ export default function InfographicEditor({
     if (zipExportPhase) return;
 
     try {
+      if (!publicationId) {
+        setZipExportNotice({
+          kind: 'error',
+          message: t('publication.not_found.reload'),
+        });
+        return;
+      }
+
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL;
+      if (!baseUrl) {
+        setZipExportNotice({
+          kind: 'error',
+          message: 'NEXT_PUBLIC_SITE_URL is not configured. Cannot build publish kit.',
+        });
+        return;
+      }
+
+      const publication = await fetchAdminPublication(publicationId);
       const result = await exportZip({
         doc,
         pal,
+        lineage_key: publication.lineage_key,
+        slug: publication.slug,
+        baseUrl,
         onProgress: setZipExportPhase,
       });
 
@@ -1286,7 +1307,7 @@ export default function InfographicEditor({
         }),
       });
     }
-  }, [canExp, fontsReady, doc, pal, zipExportPhase, t]);
+  }, [canExp, fontsReady, doc, pal, publicationId, zipExportPhase, t]);
 
   const canEdit = useCallback(
     (reg: typeof selR, k: string) => (reg ? effectivePerms.editBlock(reg, k) : false),
