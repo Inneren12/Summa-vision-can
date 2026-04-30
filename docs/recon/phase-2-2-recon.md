@@ -396,3 +396,233 @@ existing rules).
    (b) raw + document, or (c) pre-flight validate non-blocking
    (recommended)
 3. Confirm Chunk B can proceed once Q-2.2-7 decision is recorded
+
+## B. templates.ts + builder.ts caption design
+
+**What's here:** design for the two modules that produce per-platform
+caption text strings, plus the validation module for Q-2.2-7 (c)
+pre-flight length checks.
+
+**Founder decisions in scope:**
+- Q-2.2-5 = (a) plain text === separators (publish_kit.txt format
+  assembly is Chunk C; this section ensures templates return raw
+  per-channel strings ready for === wrapping)
+- Q-2.2-7 = (c) pre-flight non-blocking validation (this section
+  designs validation surface; Chunk C wires modal UX)
+
+**Source files cited:** Chunk A §A2 (utm.ts API), pre-recon §A1/§A4
+(zipExport.ts pre-render gate pattern), pre-recon §B3 (block prop
+sources for headline/source/eyebrow), pre-recon §C1 (PlatformId union).
+
+### B1. `distribution/templates.ts` module
+
+**File path:** `frontend-public/src/components/editor/distribution/templates.ts`
+
+**Purpose:** holds per-platform caption template strings. Templates are
+**hardcoded EN** per Q-2.2-6 lock; not in next-intl `messages/*.json`.
+Templates are **content** (editorial voice), not interface labels.
+
+**Imports (no cycles):**
+
+```typescript
+import type { PlatformId } from "../types";
+```
+
+`templates.ts` has no other imports. No `utm.ts`, no React, no API
+clients. Single-responsibility: hold strings.
+
+**Public API:**
+
+```typescript
+/**
+ * Caption template per platform.
+ *
+ * Templates are EN-only per Q-2.2-6 lock (2026-04-28). They are
+ * editorial content, not UI labels — operator's brand voice.
+ *
+ * Variable interpolation is positional, not named, to avoid template
+ * engine dependencies. The {0}/{1}/{2}/{3} placeholders match the
+ * order builder.ts passes them.
+ */
+export interface CaptionTemplate {
+  /**
+   * For Reddit: title (first {0}) and body ({1} headline + {2} source +
+   * {3} URL). Reddit posts are title + selftext.
+   * For X / LinkedIn: single {0} text combining headline/source/URL.
+   */
+  reddit: { title: string; body: string };
+  twitter: string;
+  linkedin: string;
+}
+
+/**
+ * Default caption templates (EN, hardcoded).
+ *
+ * Variable slots:
+ *   {0} = headline
+ *   {1} = source citation (e.g. "Statistics Canada, Apr 2026")
+ *   {2} = URL (full UTM-tagged share URL)
+ *
+ * Reddit body uses 4 slots:
+ *   {0} = headline
+ *   {1} = source
+ *   {2} = description (1-2 sentences from CanonicalDocument)
+ *   {3} = URL
+ *
+ * Multi-line strings use \n. Operator's copy-paste preserves line breaks.
+ */
+export const DEFAULT_TEMPLATES: CaptionTemplate;
+
+/**
+ * Per-platform character limits. Chunk D's validation rule uses this.
+ *
+ * Sources:
+ * - X: 280 free / 4000 paid; we target free tier (B2B audience baseline)
+ * - Reddit: title 300 chars / body 40000; title is the primary risk
+ * - LinkedIn: 3000 chars per post
+ */
+export const PLATFORM_LIMITS: Record<PlatformId, number>;
+
+/**
+ * Reddit-specific subset (title separately tracked since it has its
+ * own limit independent from body).
+ */
+export const REDDIT_TITLE_LIMIT: 300;
+export const REDDIT_BODY_LIMIT: 40000;
+```
+
+### B2. `distribution/builder.ts` module
+
+**File path:** `frontend-public/src/components/editor/distribution/builder.ts`
+
+**Purpose:** assembles per-platform caption strings from
+PublicationResponse + UtmParams + DEFAULT_TEMPLATES. Pure function
+factory; no side effects.
+
+**Imports (no cycles):**
+
+```typescript
+import type { PublicationResponse } from "@/lib/api/admin";
+import type { PlatformId } from "../types";
+import { buildShareUrl, type UtmParams } from "./utm";
+import { DEFAULT_TEMPLATES, type CaptionTemplate } from "./templates";
+```
+
+Layer hierarchy: `templates` (pure data) ← `utm` (URL construction) ←
+`builder` (assembly) ← future `kit` (Chunk C orchestrator).
+`builder` consumes `templates` + `utm`, never the reverse.
+
+**Public API:**
+
+```typescript
+export interface BuiltCaptions {
+  reddit: { title: string; body: string };
+  twitter: string;
+  linkedin: string;
+}
+
+export interface CaptionInput {
+  headline: string;
+  source: string;
+  description: string;
+  lineageKey: string;
+  slug: string;
+}
+
+export function buildCaptions(
+  input: CaptionInput,
+  templates?: CaptionTemplate
+): BuiltCaptions;
+
+export function buildCaptionFor(
+  input: CaptionInput,
+  platform: PlatformId,
+  templates?: CaptionTemplate
+): { title: string; body: string } | string;
+```
+
+**Behaviour notes:**
+
+1. **`templates` parameter is for testing only.** Production code calls
+   `buildCaptions(input)` and gets DEFAULT_TEMPLATES.
+2. **No length validation here.** Q-2.2-7 (c) lock — caption builder is
+   pure.
+3. **Interpolation primitive:** uses local `interpolate(template,
+   ...slots)` helper and `replaceAll`.
+4. **URL construction order:** builder calls `buildShareUrl(slug,
+   lineageKey, platform)` once per platform.
+5. **Reddit special case:** builder produces TWO strings (title + body).
+6. **Field nullability:** non-empty required for all 5 fields.
+7. **No retries, no caching.** Pure synchronous function.
+
+### B3. `validation/captionLength.ts` module — Q-2.2-7 (c) implementation
+
+**File path:** `frontend-public/src/components/editor/validation/captionLength.ts`
+
+**Purpose:** pre-flight check that catches captions exceeding platform
+limits BEFORE export. Per Q-2.2-7 (c) lock: **non-blocking** — surfaces
+warnings, operator can proceed.
+
+**Public API:**
+
+```typescript
+export interface CaptionLengthWarning {
+  platform: PlatformId;
+  field?: "title" | "body";
+  actualLength: number;
+  limit: number;
+  overBy: number;
+  message: string;
+}
+
+export function validateCaptionLengths(
+  captions: BuiltCaptions
+): CaptionLengthWarning[];
+
+export function checkOneCaption(
+  text: string,
+  limit: number,
+  platform: PlatformId,
+  field?: "title" | "body"
+): CaptionLengthWarning | null;
+```
+
+**Behaviour notes:**
+- Pure function, returns warnings array, never raises on overflow.
+- Reddit title/body validated separately.
+- Uses String.length for char counting (DEBT candidate if needed later).
+- No truncation, no blocking, no modal ownership (Chunk C wires UX).
+
+### B4. Module layering (Phase 2.2 distribution + validation)
+
+- `templates.ts`: constants only, EN content + limits.
+- `utm.ts`: URL construction only.
+- `builder.ts`: caption assembly only.
+- `captionLength.ts`: non-blocking validation only.
+- `kit.ts` (Chunk C TBD): orchestration entrypoint.
+
+### B5. Open questions surfaced for impl phase
+
+These are implementation questions, not new founder UX decisions.
+
+- **Q-impl-2.2-1 — Slug source resolution**
+  - Pre-flight outcome in this repo is **SLUG-C** (no `slug` or `public_url`
+    field visible on `PublicationResponse` schema as of 2026-04-30).
+  - Escalate as Q-2.2-9 in impl if schema remains unchanged.
+- **Q-impl-2.2-2 — Empty-headline behaviour**
+  - Recommendation: throw fail-fast; enforce headline before export.
+- **Q-impl-2.2-3 — Reddit description source**
+  - Choose `(b)` computed from existing props or `(d)` headline fallback for v1.
+- **Q-impl-2.2-4 — Interpolation helper test granularity**
+  - Recommendation: small standalone helper tests in Chunk D strategy.
+
+### B6. §B summary
+
+**What this section produced:**
+1. `distribution/templates.ts` API (EN templates + limits)
+2. `distribution/builder.ts` API (pure caption assembly)
+3. `validation/captionLength.ts` API (non-blocking warning surface)
+4. Layering constraints across modules
+5. Impl-phase questions to resolve before coding
+
+**Founder action requested:** none for this chunk.
