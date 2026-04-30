@@ -117,7 +117,7 @@ class PublicationRepository:
         """
         for attempt in range(3):
             try:
-                existing_slugs = await self._get_existing_slugs(self._session)
+                existing_slugs = await self._get_existing_slugs()
                 slug = generate_slug(headline, existing_slugs=existing_slugs)
                 publication = Publication(
                     headline=headline,
@@ -171,7 +171,7 @@ class PublicationRepository:
             The newly created ``Publication`` instance with its ``id``
             populated after flush.
         """
-        existing_slugs = await self._get_existing_slugs(self._session)
+        existing_slugs = await self._get_existing_slugs()
         slug = generate_slug(headline, existing_slugs=existing_slugs)
         publication = Publication(
             headline=headline,
@@ -211,8 +211,8 @@ class PublicationRepository:
                 ``derive_clone_lineage_key(source)`` to inherit the
                 source's lineage_key (clones share with source).
         """
-        existing_slugs = await self._get_existing_slugs(self._session)
-        clone_slug = derive_clone_slug(source, existing_slugs=existing_slugs)
+        existing_slugs = await self._get_existing_slugs()
+        clone_slug = derive_clone_slug(new_headline, existing_slugs=existing_slugs)
         clone = Publication(
             headline=new_headline,
             chart_type=source.chart_type,
@@ -395,15 +395,17 @@ class PublicationRepository:
     # Editor + Gallery extension
     # ------------------------------------------------------------------
 
-    async def _get_existing_slugs(self, session: AsyncSession) -> set[str]:
+    async def _get_existing_slugs(self) -> set[str]:
         """Fetch all publication slugs for collision context.
 
         Performance: full table scan acceptable at <10k rows. Postgres
         index-only scan once UNIQUE migration ships (Chunk 4.5).
 
-        Per ARCH-DPEN-001: session injected, not module-global.
+        TODO: race condition between this read and Publication INSERT can
+        produce duplicate slugs until Chunk 4.5 NOT NULL+UNIQUE migration
+        enforces uniqueness at DB level. Tracked in DEBT-049.
         """
-        result = await session.execute(select(Publication.slug))
+        result = await self._session.execute(select(Publication.slug))
         return {row for row in result.scalars().all() if row is not None}
 
     @staticmethod
@@ -490,7 +492,8 @@ class PublicationRepository:
 
         payload.setdefault("status", PublicationStatus.DRAFT)
 
-        existing_slugs = await self._get_existing_slugs(self._session)
+        existing_slugs = await self._get_existing_slugs()
+        # Slug is backend-owned and immutable; overrides any caller-provided value.
         payload["slug"] = generate_slug(
             payload["headline"], existing_slugs=existing_slugs
         )
