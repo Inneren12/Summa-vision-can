@@ -99,7 +99,7 @@ class PublicationPreconditionFailedError(PublicationApiError):
 class PublicationSlugGenerationError(PublicationApiError):
     """Slug body empty/too short after slugification."""
 
-    status_code_value = status.HTTP_422_UNPROCESSABLE_CONTENT
+    status_code_value = status.HTTP_422_UNPROCESSABLE_ENTITY
     error_code = "PUBLICATION_SLUG_GENERATION_FAILED"
     message = "headline produces empty/short slug body (min=3 chars)."
 
@@ -108,7 +108,7 @@ class PublicationSlugGenerationError(PublicationApiError):
 
 
 class PublicationSlugCollisionError(PublicationApiError):
-    """Slug suffix space -2..-99 exhausted."""
+    """Slug suffix space -2..-99 exhausted (98 attempts)."""
 
     status_code_value = status.HTTP_409_CONFLICT
     error_code = "PUBLICATION_SLUG_COLLISION_EXHAUSTED"

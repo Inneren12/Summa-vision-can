@@ -101,8 +101,7 @@ class Publication(Base):
     slug: Mapped[str | None] = mapped_column(
         String(length=200),
         nullable=True,
-        unique=True,
-        doc="Per-row public URL identity; immutable post-create. Phase 2.2.0.5.",
+        doc="Per-row public URL identity; immutable post-create. Phase 2.2.0.5. UNIQUE enforced by future migration.",
     )
     status: Mapped[PublicationStatus] = mapped_column(
         Enum(PublicationStatus, name="publication_status"),
