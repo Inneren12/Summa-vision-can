@@ -27,7 +27,7 @@ architectural decisions + open founder questions for design ambiguities.
 - Column on Publication, NOT NULL, indexed
 - `generate_lineage_key()` + `derive_clone_lineage_key(source)` in
   `backend/src/services/publications/lineage.py`
-- `lineage_key: str` field on `PublicationResponse`
+- `lineage_key: str` field on `AdminPublicationResponse`
 - All 4 production constructor sites populate it
 
 ## A. Q-2.2 lock-in summary + utm.ts module design
@@ -53,7 +53,7 @@ The following are founder-locked. No re-design surface in this PR.
 | Question | Locked answer | Rationale | Implication for design |
 |---|---|---|---|
 | Q-D | `utm_content = lineage_key` | Per-publication tracking; lineage_key aggregates clones | UTM URL builder reads `publication.lineage_key`, no other UTM source |
-| Q-2.2-1 | (a) explicit column on Publication, split into Phase 2.2.0 sub-PR | Stable cross-version identity per `lineage_key` semantic | Phase 2.2 frontend assumes `lineage_key: string` available in `PublicationResponse` (already shipped) |
+| Q-2.2-1 | (a) explicit column on Publication, split into Phase 2.2.0 sub-PR | Stable cross-version identity per `lineage_key` semantic | Phase 2.2 frontend assumes `lineage_key: string` available in `AdminPublicationResponse` (already shipped) |
 | Q-2.2-2 | (a) UUID v7 | Globally unique + time-sortable | URL aesthetic: 36-char hyphen-segmented; not human-readable but operator-debuggable via timestamp prefix |
 | Q-2.2-3 | (a) `NEXT_PUBLIC_SITE_URL` env var | Deploy-time constant; standard Next.js pattern | Phase 2.2 PR#1 adds env entry; URL builder reads `process.env.NEXT_PUBLIC_SITE_URL` |
 | Q-2.2-4 | (a) Separate `distribution.json` with own `schemaVersion: 1` | Independent evolution from manifest.json | Chunk C designs schema; manifest.json untouched (no schemaVersion bump) |
@@ -71,8 +71,8 @@ surface (e.g. operator copy-button on /jobs page, deferred).
 **Imports (no cycles):**
 
 ```typescript
-// Reads PublicationResponse type — already exists post-Phase-2.2.0
-import type { PublicationResponse } from "@/lib/api/admin";
+// Reads AdminPublicationResponse type — already exists post-Phase-2.2.0
+import type { AdminPublicationResponse } from "@/lib/types/publication";
 // Reads PlatformId for utm_medium/utm_source mapping
 import type { PlatformId } from "@/components/editor/types";
 ```
@@ -113,12 +113,12 @@ export interface UtmParams {
  * Slug derivation: pre-recon §B3 confirms publication has a routable
  * public path. Frontend pattern is `${baseUrl}/p/${slug}` per pre-recon
  * Q-2.2-3 recommendation context. Slug source: TBD in Chunk B (depends
- * on which PublicationResponse field carries the URL slug — pre-recon
+ * on which AdminPublicationResponse field carries the URL slug — pre-recon
  * §B4 noted slug not yet wired). For now utm.ts accepts slug as input
  * to avoid coupling.
  *
  * @param slug - URL slug for the publication path
- * @param lineageKey - publication.lineage_key (from PublicationResponse)
+ * @param lineageKey - publication.lineage_key (from AdminPublicationResponse)
  * @param platform - which platform (reddit/twitter/linkedin)
  * @returns absolute URL with UTM query string
  * @throws ConfigError if NEXT_PUBLIC_SITE_URL not set
@@ -188,7 +188,7 @@ export class UtmConfigError extends Error {
 **What this module does NOT do (out of Chunk A scope, deferred to other chunks):**
 
 - Caption text composition (Chunk B — templates.ts + builder.ts)
-- Slug source resolution (Chunk B — depends on PublicationResponse
+- Slug source resolution (Chunk B — depends on AdminPublicationResponse
   field choice)
 - Bulk URL building for multiple platforms (Chunk B will introduce
   a per-platform iterator that calls `buildShareUrl` 3x)
@@ -496,13 +496,13 @@ export const REDDIT_BODY_LIMIT: 40000;
 **File path:** `frontend-public/src/components/editor/distribution/builder.ts`
 
 **Purpose:** assembles per-platform caption strings from
-PublicationResponse + UtmParams + DEFAULT_TEMPLATES. Pure function
+AdminPublicationResponse + UtmParams + DEFAULT_TEMPLATES. Pure function
 factory; no side effects.
 
 **Imports (no cycles):**
 
 ```typescript
-import type { PublicationResponse } from "@/lib/api/admin";
+import type { AdminPublicationResponse } from "@/lib/types/publication";
 import type { PlatformId } from "../types";
 import { buildShareUrl, type UtmParams } from "./utm";
 import { DEFAULT_TEMPLATES, type CaptionTemplate } from "./templates";
@@ -607,7 +607,7 @@ These are implementation questions, not new founder UX decisions.
 
 - **Q-impl-2.2-1 — Slug source resolution**
   - Pre-flight outcome in this repo is **SLUG-C** (no `slug` or `public_url`
-    field visible on `PublicationResponse` schema as of 2026-04-30).
+    field visible on `AdminPublicationResponse` schema as of 2026-04-30).
   - Escalate as Q-2.2-9 in impl if schema remains unchanged.
 - **Q-impl-2.2-2 — Empty-headline behaviour**
   - Recommendation: throw fail-fast; enforce headline before export.
