@@ -115,10 +115,11 @@ class PublicationRepository:
         Returns:
             The newly created ``Publication`` instance.
         """
+        existing_slugs = await self._get_existing_slugs()
+        slug = generate_slug(headline, existing_slugs=existing_slugs)
+
         for attempt in range(3):
             try:
-                existing_slugs = await self._get_existing_slugs()
-                slug = generate_slug(headline, existing_slugs=existing_slugs)
                 publication = Publication(
                     headline=headline,
                     chart_type=chart_type,
@@ -494,10 +495,10 @@ class PublicationRepository:
 
         existing_slugs = await self._get_existing_slugs()
         # Slug is backend-owned and immutable; overrides any caller-provided value.
-        # `.get(...)` is defensive; if headline missing, generate_slug raises
-        # PublicationSlugGenerationError rather than KeyError.
+        # `payload["headline"]` is required by repo contract; missing key is a
+        # programmer error (schema validation should have caught it upstream).
         payload["slug"] = generate_slug(
-            payload.get("headline") or "", existing_slugs=existing_slugs
+            payload["headline"], existing_slugs=existing_slugs
         )
         publication = Publication(**payload)
         self._session.add(publication)
