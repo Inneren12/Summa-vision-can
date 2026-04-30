@@ -23,6 +23,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.publication import Publication, PublicationStatus
+from src.services.publications.lineage import (
+    derive_clone_slug,
+    generate_slug,
+)
 
 
 class PublicationRepository:
@@ -113,6 +117,8 @@ class PublicationRepository:
         """
         for attempt in range(3):
             try:
+                existing_slugs = await self._get_existing_slugs(self._session)
+                slug = generate_slug(headline, existing_slugs=existing_slugs)
                 publication = Publication(
                     headline=headline,
                     chart_type=chart_type,
@@ -125,6 +131,7 @@ class PublicationRepository:
                     virality_score=virality_score,
                     status=status,
                     lineage_key=lineage_key,
+                    slug=slug,
                 )
                 self._session.add(publication)
                 await self._session.flush()
@@ -164,6 +171,8 @@ class PublicationRepository:
             The newly created ``Publication`` instance with its ``id``
             populated after flush.
         """
+        existing_slugs = await self._get_existing_slugs(self._session)
+        slug = generate_slug(headline, existing_slugs=existing_slugs)
         publication = Publication(
             headline=headline,
             chart_type=chart_type,
@@ -172,6 +181,7 @@ class PublicationRepository:
             virality_score=virality_score,
             status=status,
             lineage_key=lineage_key,
+            slug=slug,
         )
         self._session.add(publication)
         await self._session.flush()
@@ -201,9 +211,12 @@ class PublicationRepository:
                 ``derive_clone_lineage_key(source)`` to inherit the
                 source's lineage_key (clones share with source).
         """
+        existing_slugs = await self._get_existing_slugs(self._session)
+        clone_slug = derive_clone_slug(source, existing_slugs=existing_slugs)
         clone = Publication(
             headline=new_headline,
             chart_type=source.chart_type,
+            slug=clone_slug,
             eyebrow=source.eyebrow,
             description=source.description,
             source_text=source.source_text,
@@ -382,6 +395,17 @@ class PublicationRepository:
     # Editor + Gallery extension
     # ------------------------------------------------------------------
 
+    async def _get_existing_slugs(self, session: AsyncSession) -> set[str]:
+        """Fetch all publication slugs for collision context.
+
+        Performance: full table scan acceptable at <10k rows. Postgres
+        index-only scan once UNIQUE migration ships (Chunk 4.5).
+
+        Per ARCH-DPEN-001: session injected, not module-global.
+        """
+        result = await session.execute(select(Publication.slug))
+        return {row for row in result.scalars().all() if row is not None}
+
     @staticmethod
     def _serialize_visual_config(value: Any) -> str | None:
         """Coerce a visual_config value to a JSON string for storage.
@@ -466,6 +490,10 @@ class PublicationRepository:
 
         payload.setdefault("status", PublicationStatus.DRAFT)
 
+        existing_slugs = await self._get_existing_slugs(self._session)
+        payload["slug"] = generate_slug(
+            payload["headline"], existing_slugs=existing_slugs
+        )
         publication = Publication(**payload)
         self._session.add(publication)
         await self._session.flush()
