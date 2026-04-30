@@ -6,9 +6,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Collection
 from typing import TYPE_CHECKING
 
 import structlog
+from slugify import slugify as _slugify_lib
+
+from src.services.publications.exceptions import (
+    PublicationSlugCollisionError,
+    PublicationSlugGenerationError,
+)
 
 if TYPE_CHECKING:
     from src.models.publication import Publication
@@ -162,3 +169,58 @@ def derive_clone_lineage_key(source: "Publication") -> str:
             "data integrity violation post-Phase-2.2.0 migration"
         )
     return source.lineage_key
+
+
+MAX_SLUG_BODY_LEN: int = 196  # body length; final slug up to 199 with -99 suffix, fits VARCHAR(200)
+MIN_SLUG_BODY_LEN: int = 3
+RESERVED_SLUGS: frozenset[str] = frozenset({
+    "_next", "static", "api", "_error", "404", "500",
+    "admin", "p", "about", "privacy", "terms", "login", "signup", "logout",
+    "health", "robots", "sitemap", "favicon",
+    "summa", "summa-vision",
+    "search", "feed", "rss", "atom", "manifest",
+})
+
+def _slugify_internal(text: str) -> str:
+    """Pure slugify transform (no collision/reserved logic)."""
+    return _slugify_lib(text or "", max_length=MAX_SLUG_BODY_LEN)
+
+
+def generate_slug(headline: str, *, existing_slugs: Collection[str] | None = None) -> str:
+    """Generate slug from headline using slugify + reserved blacklist + collision suffix.
+
+    Pure function: no DB. Caller assembles existing_slugs.
+
+    Raises:
+        PublicationSlugGenerationError: empty/short slug body.
+        PublicationSlugCollisionError: -2..-99 suffix range exhausted (98 attempts).
+    """
+    base = _slugify_internal(headline)
+    if not base or len(base) < MIN_SLUG_BODY_LEN:
+        raise PublicationSlugGenerationError(headline=headline)
+
+    blocked = set(existing_slugs or ()) | RESERVED_SLUGS
+    if base not in blocked:
+        return base
+
+    for n in range(2, 100):
+        candidate = f"{base}-{n}"
+        if candidate not in blocked:
+            return candidate
+
+    raise PublicationSlugCollisionError(base_slug=base, attempts=98)
+
+
+def derive_clone_slug(
+    source: "Publication",
+    *,
+    existing_slugs: Collection[str] | None = None,
+) -> str:
+    """Generate fresh clone slug from source headline.
+
+    Slug is per-row URL identity, not inherited from source. Clone gets
+    its own slug from its own headline (which clone.py prepends
+    ``_COPY_PREFIX`` to before persistence). The "copy-of-" URL prefix is
+    accepted; operator can rename headline post-clone for cleaner URL.
+    """
+    return generate_slug(source.headline or "", existing_slugs=existing_slugs)

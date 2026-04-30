@@ -34,7 +34,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 SLUG_COLUMN_LEN = 200
-MAX_SLUG_LEN = 196
+MAX_SLUG_BODY_LEN = 196
 MIN_SLUG_BODY_LEN = 3
 RESERVED_SLUGS: frozenset[str] = frozenset({
     # Next.js / framework reserved
@@ -98,10 +98,17 @@ def _backfill_slugs() -> None:
         )
 
 
+def _append_suffix_within_column(base: str, n: int) -> str:
+    """Append ``-N`` suffix, truncating base if needed to fit ``SLUG_COLUMN_LEN``."""
+    suffix = f"-{n}"
+    max_base = SLUG_COLUMN_LEN - len(suffix)
+    return f"{base[:max_base]}{suffix}"
+
+
 def _generate_slug_for_backfill(
     pub_id: int, headline: str | None, assigned: set[str]
 ) -> str:
-    base = slugify(headline or "", max_length=MAX_SLUG_LEN)
+    base = slugify(headline or "", max_length=MAX_SLUG_BODY_LEN)
     if not base or len(base) < MIN_SLUG_BODY_LEN:
         base = f"publication-{pub_id}"
 
@@ -115,9 +122,3 @@ def _generate_slug_for_backfill(
         if candidate not in blocked:
             return candidate
         n += 1
-
-
-def _append_suffix_within_column(base: str, n: int) -> str:
-    """Build `{base}-{n}` truncating base if needed to fit SLUG_COLUMN_LEN."""
-    suffix = f"-{n}"
-    return f"{base[: SLUG_COLUMN_LEN - len(suffix)]}{suffix}"

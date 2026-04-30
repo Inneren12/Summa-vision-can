@@ -98,6 +98,14 @@ class Publication(Base):
         index=True,
         doc="UUID v7 lineage identifier; clones share with source",
     )
+    slug: Mapped[str | None] = mapped_column(
+        String(length=200),
+        nullable=True,
+        doc=(
+            "Per-row public URL identity; immutable post-create. "
+            "UNIQUE enforced by future migration."
+        ),
+    )
     status: Mapped[PublicationStatus] = mapped_column(
         Enum(PublicationStatus, name="publication_status"),
         nullable=False,
