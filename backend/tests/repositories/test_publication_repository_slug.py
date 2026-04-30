@@ -33,7 +33,7 @@ class TestGetExistingSlugs:
 
         repo = PublicationRepository(db_session)
         slugs = await repo._get_existing_slugs()
-        assert {"alpha", "beta", "gamma"}.issubset(slugs)
+        assert slugs == {"alpha", "beta", "gamma"}
 
 
 @pytest.mark.asyncio

@@ -82,7 +82,7 @@ async def db_session(
 
 
 def _make_test_slug(headline: str) -> str:
-    """Deterministic-ish test slug with uuid suffix for fixture isolation.
+    """Unique test slug with uuid suffix for fixture isolation.
 
     Mirrors prod slugify but appends ``-<uuid8>`` to avoid collisions
     across multiple ``make_publication()`` calls in the same test

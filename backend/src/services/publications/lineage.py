@@ -218,15 +218,26 @@ def derive_clone_slug(
 ) -> str:
     """Generate fresh clone slug from the clone's actual headline.
 
-    LOCKED CONTRACT: slug is generated from the headline AS-IS. The
-    ``_COPY_PREFIX`` ("Copy of ") is NOT stripped. A clone with headline
-    "Copy of XYZ" gets slug "copy-of-xyz" (or "copy-of-xyz-N" with
-    collision suffix). This is intentional design: operator who wants
-    a cleaner URL renames the headline after cloning.
+    LOCKED CONTRACT (Phase 2.2.0.5): slug is generated from the headline
+    AS-IS. The ``_COPY_PREFIX`` ("Copy of ") is NOT stripped. A clone with
+    headline "Copy of XYZ" gets slug "copy-of-xyz" (or "copy-of-xyz-N"
+    with collision suffix).
+
+    DESIGN RATIONALE (do not revert without revisiting decision):
+    - Stripping creates edge cases: user-authored "Copy of Real Title"
+      gets wrongly collapsed; "Copy of " (prefix only) collapses to empty
+      and raises PublicationSlugGenerationError, blocking clone creation.
+    - Clone slug must match the row's actual headline so URL stays
+      consistent with what operator sees in admin UI.
+    - "copy-of-" URL prefix is an acceptable UX trade-off; operator who
+      wants cleaner URL renames headline post-clone.
+
+    See Phase 2.2.0.5 Chunk 2 fix-prompt + Chunk 3 round 5 for the
+    debate trail. DO NOT change to strip-prefix without re-opening the
+    decision with founder.
 
     ``headline`` MUST be the clone row's final headline (post-prefix
-    application by clone.py), not the source row's headline. The slug
-    must match the headline of the row it is attached to.
+    application by clone.py), not the source row's headline.
 
     Pure function: no DB. Caller assembles existing_slugs from repo.
     """
