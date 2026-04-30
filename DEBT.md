@@ -174,32 +174,6 @@ Rules:
 
 > **Updated 2026-04-26: RESOLVED as UNFOUNDED.** Recon (`docs/debt-033-recon.md`, branch `claude/debt-033-recon-temp-writers`) ran exhaustive `grep -rn "\"temp/\|'temp/" backend/src/ --include="*.py"` and found exactly one writer: `admin_graphics.py:269` writing to `temp/uploads/`, already covered by current cleanup. The original hypothesis ("other temp namespaces may also accumulate") was refuted by code evidence — no additional `temp/*` writer namespaces exist in the current codebase. No work required. Recon also flagged a minor opportunistic improvement (`RETRYING` fallback in `temp_cleanup.py:42,70` is dead code given current `JobStatus` enum); this is queued in founder memory for the next backend PR that touches `JobStatus` or `temp_cleanup`, not as standalone work.
 
-### DEBT-045: `cors_origins` Settings field is declared but unused
-
-- **Source:** PR-D recon (`docs/recon/pr-d-env-ignore-empty-recon.md`)
-- **Added:** 2026-04-29
-- **Severity:** P3
-- **Category:** code-quality
-- **Status:** active
-- **Description:** `Settings.cors_origins` exists with Python default `"*"` and is
-  passed through the compose env block as `CORS_ORIGINS`, but `main.py` CORS
-  middleware uses a hardcoded list of allowed origins gated on environment, not
-  `settings.cors_origins`. The field is effectively orphan — operator-controlled
-  via env but has no runtime effect.
-- **Impact:** Operators cannot tighten or relax CORS via the `CORS_ORIGINS` env
-  var as the surface implies. No current security or correctness bug because
-  the hardcoded middleware list is the actual gate; only an expectation gap.
-- **Resolution:** One of:
-  - (a) Wire `cors_origins` into the CORS middleware config in `main.py`
-    (functional change, requires CORS test coverage).
-  - (b) Remove the field from `Settings` and remove `CORS_ORIGINS` from the
-    compose env block (clean code, but loses operator-control surface for
-    future prod tightening).
-  - (c) Document as intentional placeholder for future use, leave wired.
-- **Target:** Opportunistic — resolve when CORS configuration becomes a real
-  concern (e.g. when admin app needs origin-specific cookies). Not blocking
-  any deploy. Discovered while running PR-D safety audit.
-
 ---
 
 ## Resolved
@@ -231,6 +205,7 @@ Rules:
 | DEBT-023 | `validateImportStrict` does not deep-validate `Comment` entries | Stage 3 PR 2b (`claude/recon-comments-subsystem-HwvB1`) | 2026-04-17 |
 | DEBT-024 | Rename `validateDocumentShape` -> `assertCanonicalDocumentV2Shape` | Stage 3 PR 4 (`claude/reconnaissance-persistence-cleanup-EJ4uX`) | 2026-04-19 |
 | DEBT-026 | Lossy round-trip between `CanonicalDocument` and `AdminPublicationResponse` | Stage 4 Task 0 full close (`claude/close-infographic-blockers-wkjVX`) | 2026-04-19 |
+| DEBT-045 | `cors_origins` Settings field declared but unused | codex/debt-045-cors-origins-remove | 2026-04-30 |
 
 ### DEBT-026: Lossy round-trip between CanonicalDocument and AdminPublicationResponse
 

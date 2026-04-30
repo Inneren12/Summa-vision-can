@@ -18,8 +18,6 @@ class Settings(BaseSettings):
     Attributes:
         app_name: Human-readable service name.
         debug: Enable debug-level logging and stack traces.
-        cors_origins: Comma-separated list of allowed CORS origins.
-            Defaults to ``"*"`` (allow all) for local development.
         storage_backend: Which storage implementation to use.
             ``"local"`` writes to disk (dev); ``"s3"`` uses AWS S3 (prod).
         s3_bucket: Name of the S3 bucket (required when *storage_backend*
@@ -36,7 +34,6 @@ class Settings(BaseSettings):
 
     app_name: str = "Summa Vision API"
     debug: bool = False
-    cors_origins: str = "*"
     environment: str = "development"
 
     # --- Application ---

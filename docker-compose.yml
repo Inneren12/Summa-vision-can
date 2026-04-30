@@ -27,13 +27,8 @@ services:
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       S3_REGION: ${S3_REGION:-us-east-1}
-      # CDN/CORS
+      # CDN
       CDN_BASE_URL: ${CDN_BASE_URL:?CDN_BASE_URL is required (e.g. https://cdn.summa.vision)}
-      # Backend Settings reads CORS_ORIGINS; .env files conventionally use
-      # ALLOWED_ORIGINS. Default mirrors Settings.cors_origins Python default
-      # ("*"). pydantic-settings env_ignore_empty=False — empty env value
-      # WIPES Python default; the explicit fallback prevents that.
-      CORS_ORIGINS: ${ALLOWED_ORIGINS:-*}
       # Public site (required-in-prod, validated by Settings)
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:3000}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}

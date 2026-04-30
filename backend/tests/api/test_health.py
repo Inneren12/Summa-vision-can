@@ -16,7 +16,7 @@ from src.main import app
 
 def _override_settings() -> Settings:
     """Return a deterministic ``Settings`` instance for test isolation."""
-    return Settings(app_name="Test App", debug=True, cors_origins="*", admin_api_key="test-key")
+    return Settings(app_name="Test App", debug=True, admin_api_key="test-key")
 
 
 app.dependency_overrides[get_settings] = _override_settings
@@ -104,4 +104,3 @@ def test_settings_defaults() -> None:
     settings = Settings(_env_file=None, admin_api_key="test-key")
     assert settings.app_name == "Summa Vision API"
     assert settings.debug is False
-    assert settings.cors_origins == "*"
