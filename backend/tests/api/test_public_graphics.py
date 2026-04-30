@@ -49,6 +49,7 @@ class _FakePublication:
         s3_key_highres: str | None,
         created_at: datetime,
         status: str = "PUBLISHED",
+        slug: str | None = None,
     ) -> None:
         self.id = id
         self.headline = headline
@@ -58,6 +59,7 @@ class _FakePublication:
         self.s3_key_highres = s3_key_highres
         self.created_at = created_at
         self.status = status
+        self.slug = slug if slug is not None else f"headline-{id}"
 
 
 def _make_publications(count: int = 3) -> list[_FakePublication]:

@@ -278,6 +278,7 @@ class TestReviewPayloadSchema:
             "status": "DRAFT",
             "created_at": "2026-04-19T00:00:00",
             "lineage_key": _FIXTURE_LINEAGE_KEY,
+            "slug": "h",
         }
         resp = PublicationResponse.model_validate(pub_dict)
         assert resp.review is not None

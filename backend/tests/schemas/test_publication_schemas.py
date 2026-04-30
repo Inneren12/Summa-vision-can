@@ -44,6 +44,7 @@ def _admin_response_payload(**overrides):
         "chart_type": "bar",
         "status": "DRAFT",
         "lineage_key": _VALID_LINEAGE_KEY,
+        "slug": "test-headline",
         "created_at": datetime.now(timezone.utc),
     }
     payload.update(overrides)
@@ -92,6 +93,7 @@ def test_publication_public_response_excludes_lineage_key() -> None:
         "id": 1,
         "headline": "test",
         "chart_type": "bar",
+        "slug": "test",
         "created_at": datetime.now(timezone.utc),
         "lineage_key": _VALID_LINEAGE_KEY,  # admin-only field; must be dropped
     }
