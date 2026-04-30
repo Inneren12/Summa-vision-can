@@ -406,7 +406,7 @@ class PublicationRepository:
         enforces uniqueness at DB level. Tracked in DEBT-049.
         """
         result = await self._session.execute(select(Publication.slug))
-        return {row for row in result.scalars().all() if row is not None}
+        return {slug for slug in result.scalars().all() if slug is not None}
 
     @staticmethod
     def _serialize_visual_config(value: Any) -> str | None:
@@ -494,8 +494,10 @@ class PublicationRepository:
 
         existing_slugs = await self._get_existing_slugs()
         # Slug is backend-owned and immutable; overrides any caller-provided value.
+        # `.get(...)` is defensive; if headline missing, generate_slug raises
+        # PublicationSlugGenerationError rather than KeyError.
         payload["slug"] = generate_slug(
-            payload["headline"], existing_slugs=existing_slugs
+            payload.get("headline") or "", existing_slugs=existing_slugs
         )
         publication = Publication(**payload)
         self._session.add(publication)

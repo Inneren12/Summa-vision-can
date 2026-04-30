@@ -218,9 +218,16 @@ def derive_clone_slug(
 ) -> str:
     """Generate fresh clone slug from the clone's actual headline.
 
-    Slug is per-row URL identity. Caller must pass the clone's final
-    headline (which clone.py builds with ``_COPY_PREFIX`` prepended unless
-    source already starts with it). The "copy-of-" URL prefix is
-    accepted; operator can rename headline post-clone for cleaner URL.
+    LOCKED CONTRACT: slug is generated from the headline AS-IS. The
+    ``_COPY_PREFIX`` ("Copy of ") is NOT stripped. A clone with headline
+    "Copy of XYZ" gets slug "copy-of-xyz" (or "copy-of-xyz-N" with
+    collision suffix). This is intentional design: operator who wants
+    a cleaner URL renames the headline after cloning.
+
+    ``headline`` MUST be the clone row's final headline (post-prefix
+    application by clone.py), not the source row's headline. The slug
+    must match the headline of the row it is attached to.
+
+    Pure function: no DB. Caller assembles existing_slugs from repo.
     """
     return generate_slug(headline or "", existing_slugs=existing_slugs)
