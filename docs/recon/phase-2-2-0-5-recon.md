@@ -26,7 +26,7 @@ Phase 2.2 frontend distribution kit consumes slug as `${PUBLIC_SITE_URL}/p/${slu
 | Field | Decision | Rationale |
 |---|---|---|
 | Name | `slug` | Matches founder Q-2.2-9 contract; matches Next.js `/p/${slug}` route |
-| Type | `String(200)` | `headline` max is 500, but slugification compresses punctuation/spacing. A 5-headline sanity sample yields ~28, 36, 52, 71, 88 chars (avg 55). Budgeting worst-case long headline truncation + reserved/collision suffix overhead (`-99` = 3 chars; reserved disambiguation can start at `-1`) still fits safely with 200. Existing model already uses bounded strings (`lineage_key` 36; hash columns 64 class), so 200 is consistent bounded design. |
+| Type | `String(200)` | `headline` max is 500, but slugification compresses punctuation/spacing. A 5-headline sanity sample yields ~28, 36, 52, 71, 88 chars (avg 55). Budgeting worst-case long headline truncation + reserved/collision suffix overhead (unified `-2..-99` range = up to 4 chars including hyphen, per §A5) still fits safely with 200. Existing model already uses bounded strings (`lineage_key` 36; hash columns 64 class), so 200 is consistent bounded design. |
 | Nullable | `False` post-backfill; `True` during migration window only | Forward contract: every publication has a slug |
 | DB default | None | Generator runs in Python service layer, not SQL function |
 | Index | Implicit via UNIQUE constraint/index (no separate duplicate index) | Slug lookups for `/p/${slug}` are covered by unique index; separate non-unique index would be redundant |
@@ -196,3 +196,178 @@ Pre-recon did not fully inventory current frontend route tree in this chunk’s 
 | ROADMAP_DEPENDENCIES.md row | Chunk D. |
 
 Scope partition lock: Chunk B covers migration/backfill, Chunk C covers schema + service caller wiring + immutability enforcement, Chunk D covers tests + DEBT + roadmap.
+
+
+## B. Migration design
+
+**What's here:** Alembic migration shape, backfill strategy, rollback path, and the `python-slugify` dependency add.
+
+**Source files cited:** pre-recon §A, §B2, §C, §F7; alembic versions dir (`backend/migrations/versions/`); pyproject.toml.
+
+### B1. Dependency addition: `python-slugify`
+
+Inventory confirms `backend/pyproject.toml` uses PEP 621 `[project].dependencies` array (no poetry table), and there are currently zero `slugify`/`unidecode`/transliteration-related entries.
+
+Dependency add (PEP 508 string):
+
+```toml
+    "python-slugify>=8.0.0,<9.0.0",   # backend slug generator for Phase 2.2.0.5; transitively pulls text-unidecode for transliteration
+```
+
+Alphabetical slot: insert between `"pytz>=2024.1",` and `"sqlalchemy>=2.0,<3.0",` so the `py*` dependency cluster remains grouped.
+
+Why `python-slugify`:
+- Ratified in Chunk A §A3 (Q-2.2.0.5-2).
+- Active, deterministic transliteration via transitive `text-unidecode`, and simple API.
+- Avoids hand-rolling transliteration/normalization tables (out of scope).
+
+Import pattern for runtime module (Chunk C implementation):
+
+```python
+from slugify import slugify
+```
+
+No try/except fallback required here (unlike `uuid7` split logic): slugification is dependency-owned for this phase.
+
+Forward-compatibility note: if a stdlib slugifier appears in a future Python release, import policy can evolve then; not relevant for 2.2.0.5.
+
+### B2. Migration shape
+
+`down_revision` for the Chunk B migration is locked to `"a7d6b03efabf"` (current single Alembic head). Shape follows established repo pattern from revision `a7d6b03efabf`: add nullable column, backfill in Python, enforce NOT NULL, then add lookup constraint/index.
+
+```python
+"""add slug to publications
+
+Revision ID: <generated>
+Revises: a7d6b03efabf
+Create Date: 2026-04-30
+
+Phase 2.2.0.5 backend slug infrastructure. Adds nullable column,
+backfills existing rows by slugifying headlines with collision suffixing,
+then enforces NOT NULL + UNIQUE. Atomic within one revision so a
+mid-backfill failure rolls cleanly.
+
+OPS NOTE: once slug URLs are public-facing, do not downgrade this
+migration in production; down->up can change slug paths and break links.
+"""
+from typing import Sequence, Union
+
+import sqlalchemy as sa
+from alembic import op
+from slugify import slugify
+
+revision: str = "<generated>"
+down_revision: Union[str, Sequence[str], None] = "a7d6b03efabf"
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+MAX_SLUG_LEN = 196
+MIN_SLUG_BODY_LEN = 3
+RESERVED_SLUGS: frozenset[str] = frozenset({
+    "_next", "static", "api", "_error", "404", "500",
+    "admin", "p", "about", "privacy", "terms", "login", "signup", "logout",
+    "health", "robots", "sitemap", "favicon",
+    "summa", "summa-vision",
+    "search", "feed", "rss", "atom",
+})
+
+
+def upgrade() -> None:
+    with op.batch_alter_table("publications", schema=None) as batch_op:
+        batch_op.add_column(sa.Column("slug", sa.String(length=200), nullable=True))
+
+    _backfill_slugs()
+
+    with op.batch_alter_table("publications", schema=None) as batch_op:
+        batch_op.alter_column("slug", existing_type=sa.String(length=200), nullable=False)
+        batch_op.create_unique_constraint("uq_publications_slug", ["slug"])
+
+
+def downgrade() -> None:
+    with op.batch_alter_table("publications", schema=None) as batch_op:
+        batch_op.drop_constraint("uq_publications_slug", type_="unique")
+        batch_op.drop_column("slug")
+
+
+def _backfill_slugs() -> None:
+    bind = op.get_bind()
+    rows = bind.execute(sa.text("SELECT id, headline FROM publications ORDER BY id ASC")).fetchall()
+
+    assigned: set[str] = set()
+    for row in rows:
+        slug = _generate_slug_for_backfill(row.id, row.headline, assigned)
+        assigned.add(slug)
+        bind.execute(
+            sa.text("UPDATE publications SET slug = :s WHERE id = :i"),
+            {"s": slug, "i": row.id},
+        )
+
+
+def _generate_slug_for_backfill(pub_id: int, headline: str | None, assigned: set[str]) -> str:
+    base = slugify(headline or "", max_length=MAX_SLUG_LEN)
+    if not base or len(base) < MIN_SLUG_BODY_LEN:
+        return f"publication-{pub_id}"  # id-based fallback (never collides)
+
+    blocked = assigned | RESERVED_SLUGS
+    if base not in blocked:
+        return base
+
+    for n in range(2, 100):
+        candidate = f"{base}-{n}"
+        if candidate not in blocked:
+            return candidate
+
+    raise RuntimeError(
+        f"Slug collision exhausted for id={pub_id}, headline={headline!r}; manual intervention required."
+    )
+```
+
+Locked decisions:
+1. Single revision bundle (add → backfill → enforce) for atomicity and clean rollback behavior.
+2. Python-loop backfill (not pure SQL) because transliteration + normalization + suffix loop are application-level semantics.
+3. `ORDER BY id ASC` for deterministic assignment and deterministic reruns when input headlines are unchanged.
+4. Named unique constraint (`uq_publications_slug`) for explicit downgrade drop path.
+5. Empty/short fallback ratified as `f"publication-{id}"` (Q-2.2.0.5-7 handling choice): globally unique, deterministic, debuggable.
+6. Migration duplicates `MAX_SLUG_LEN`, `MIN_SLUG_BODY_LEN`, `RESERVED_SLUGS` intentionally: Alembic revisions are immutable records and must not import mutable runtime constants.
+
+### B3. Backfill edge cases
+
+| Scenario | Handling |
+|---|---|
+| Empty publications table | Loop is no-op; ALTER NOT NULL + UNIQUE succeed vacuously |
+| Single publication, normal headline | Slug from headline, no collision |
+| Two publications with identical headline | First gets bare slug, second gets `-2` |
+| 99 publications with identical headline | Suffixes `-2` through `-99` exhaust; 99th publication reaches limit |
+| 100 publications with identical headline | Backfill RAISES — manual intervention (founder edits headlines pre-migration) |
+| Publication with empty/null headline | Fallback to `f"publication-{id}"` (per §B2 decision 5) |
+| Publication with only-punctuation headline ("!!!") | After slugify produces "" → fallback to `f"publication-{id}"` |
+| Publication with non-Latin headline (e.g., Ukrainian) | Transliterates via `python-slugify` default (text-unidecode); produces ASCII slug |
+| Publication with reserved-path headline ("Admin") | Slugifies to "admin" → reserved → unified algo returns `admin-2` |
+| Composite uniq `uq_publication_lineage_version` | Untouched — backfill writes only to `slug`, leaves 3-tuple constraint and its columns alone (§A6 scope lock) |
+
+### B4. Rollback safety + ops note
+
+`downgrade()` drops the unique constraint and slug column; data loss is total but recoverable by re-running upgrade. With unchanged headline data and stable id ordering, regenerated slugs are deterministic. If headlines are edited between downgrade and re-upgrade, slug values can differ.
+
+Operationally this is more sensitive than lineage_key rollback. Slug is the URL path itself (`/p/{slug}`), so slug drift after down->up can produce dead inbound links, bookmarks, and SEO breakage. Therefore migration docstring and release ops notes should treat this as one-way in production once slug URLs are public.
+
+Practical rule: downgrade path exists for dev/staging recovery. Production downgrade is discouraged after Phase 2.2 frontend distribution kit exposes slug links.
+
+### B5. What is NOT changed in Chunk B (deferred to C/D)
+
+| Surface | Status |
+|---|---|
+| `Publication` ORM model `slug` field declaration | Chunk C — Chunk B only specifies migration column; ORM declaration is deferred |
+| `services/publications/lineage.py` runtime `generate_slug` / `derive_clone_slug` implementations | Chunk C — Chunk B documents migration semantics only |
+| `services/publications/exceptions.py` new exceptions (`PublicationSlugGenerationError`, `PublicationSlugCollisionError`) | Chunk C — referenced conceptually only |
+| `repositories/publication_repository.py` constructor sites | Chunk C |
+| `services/publications/clone.py` `_COPY_PREFIX` strip integration | Chunk C |
+| `api/routers/admin_publications.py` slug surface in PublicationResponse | Chunk C |
+| `PublicationCreate` / `PublicationUpdate` schema fields | Chunk C (Q-2.2.0.5-9 PublicationUpdate immutability) |
+| `make_publication` factory default | Chunk D (Q-2.2.0.5-8) |
+| Migration tests + backfill regression tests | Chunk D |
+| DEBT.md entry text + ID assignment | Chunk D |
+| ROADMAP_DEPENDENCIES.md Phase 2.2.0.5 row | Chunk D |
+| Frontend `/p/${slug}` route handler verification | Chunk D (per §A5 trailing note) |
+
+Scope lock: Chunk C covers schema + service callers + immutability enforcement. Chunk D covers tests + DEBT + roadmap.
