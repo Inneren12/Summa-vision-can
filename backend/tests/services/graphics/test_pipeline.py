@@ -350,6 +350,10 @@ async def test_repo_create_published_retry_logic():
     mock_session.add = MagicMock()
     repo = PublicationRepository(mock_session)
 
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
     call_count = 0
     def side_effect(*args, **kwargs):
         nonlocal call_count

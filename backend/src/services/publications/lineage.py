@@ -212,15 +212,22 @@ def generate_slug(headline: str, *, existing_slugs: Collection[str] | None = Non
 
 
 def derive_clone_slug(
-    source: "Publication",
+    headline: str,
     *,
     existing_slugs: Collection[str] | None = None,
 ) -> str:
-    """Generate fresh clone slug from source headline.
+    """Generate fresh clone slug from the clone's actual headline.
 
-    Slug is per-row URL identity, not inherited from source. Clone gets
-    its own slug from its own headline (which clone.py prepends
-    ``_COPY_PREFIX`` to before persistence). The "copy-of-" URL prefix is
-    accepted; operator can rename headline post-clone for cleaner URL.
+    LOCKED CONTRACT: slug is generated from the headline AS-IS. The
+    ``_COPY_PREFIX`` ("Copy of ") is NOT stripped. A clone with headline
+    "Copy of XYZ" gets slug "copy-of-xyz" (or "copy-of-xyz-N" with
+    collision suffix). This is intentional design: operator who wants
+    a cleaner URL renames the headline after cloning.
+
+    ``headline`` MUST be the clone row's final headline (post-prefix
+    application by clone.py), not the source row's headline. The slug
+    must match the headline of the row it is attached to.
+
+    Pure function: no DB. Caller assembles existing_slugs from repo.
     """
-    return generate_slug(source.headline or "", existing_slugs=existing_slugs)
+    return generate_slug(headline or "", existing_slugs=existing_slugs)
