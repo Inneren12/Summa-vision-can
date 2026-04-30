@@ -178,51 +178,25 @@ Rules:
 
 - **Source:** VPS Section E.3.5 finding (2026-04-28); pre-recon `docs/recon/debt-046-api-ports-loopback-prerecon.md`
 - **Added:** 2026-04-30
-- **Severity:** P2
-- **Category:** infra-security
-- **Status:** active
-- **Description:** Base `docker-compose.yml` api service exposed `ports: ["8000:8000"]`,
-  which binds to `0.0.0.0:8000` on the host. Docker bypasses UFW via the
-  DOCKER iptables chain, so any fresh deploy without override would expose
-  the API publicly. Production VPS is currently safe via local
-  `docker-compose.override.yml` (with `!override` YAML tag forcing ports
-  replacement) plus Cloudflare in front; base file was unsafe by default.
-- **Resolution (this PR):** Base now binds `127.0.0.1:8000:8000`. Failure
-  mode flipped — missing override = unreachable instead of exposed.
-  Added `docker-compose.override.yml.example` template so operators have
-  a documented starting point. Added `docker-compose.override.yml` to
-  `.gitignore` to prevent accidental commit of environment-specific config.
-- **Related:** DEBT-047 tracks separate concern that production override
-  is not version-controlled.
+- **Severity:** medium
+- **Category:** security
+- **Status:** in-progress
+- **Description:** Base `docker-compose.yml` api service exposed `ports: ["8000:8000"]`, which binds to `0.0.0.0:8000` on the host. Docker bypasses UFW via the DOCKER iptables chain, so any fresh deploy without override would expose the API publicly. Production VPS is currently safe via local `docker-compose.override.yml` (with `!override` YAML tag forcing ports replacement) plus Cloudflare in front; base file was unsafe by default.
+- **Impact:** Any fresh deploy of base compose without the production override exposes the API on `0.0.0.0:8000` past UFW. No current incident; defense-in-depth gap. Future operator deploying without runbook context = public API exposure.
+- **Resolution:** Change base compose to bind `127.0.0.1:8000:8000`. Add `docker-compose.override.yml.example` template documenting the production override pattern (db bind mount + api ports `!override` tag). Add `docker-compose.override.yml` to `.gitignore`. Failure mode flips: missing override = unreachable, not exposed.
+- **Target:** This PR (`codex/debt-046-api-ports-loopback`).
 
 ### DEBT-047: Production `docker-compose.override.yml` not version-controlled
 
-- **Source:** DEBT-046 pre-recon discovery (2026-04-30) — VPS uses local
-  override file not in repo
+- **Source:** DEBT-046 pre-recon discovery (2026-04-30) — VPS uses local override file not in repo
 - **Added:** 2026-04-30
-- **Severity:** P3
-- **Category:** infra-ops
+- **Severity:** low
+- **Category:** ops
 - **Status:** active
-- **Description:** Production deploy on VPS uses `docker-compose.override.yml`
-  (db bind mount + api ports `!override`) created locally on the VPS,
-  not committed to repo. After DEBT-046, missing override = unreachable
-  (safe failure mode), but environment configuration drift between repo
-  and prod is still a concern.
-- **Impact:** If VPS is rebuilt or migrated, override file must be
-  recreated from memory or runbook. No automated guarantee that prod
-  config matches operator intent. Risk: silent omission of intended
-  prod-only tweaks in disaster-recovery scenario.
-- **Resolution options:**
-  - (a) Commit `docker-compose.prod.yml`, deploy via
-    `docker compose -f docker-compose.yml -f docker-compose.prod.yml up`
-    (changes deploy invocation — has CI/runbook implications)
-  - (b) Document override requirement in `OPERATIONS.md` runbook with
-    exact file content; operators recreate from runbook on fresh deploys
-    (cheap, manual, drift-prone)
-  - (c) Move override to `scripts/templates/` committed in repo with
-    deploy procedure that copies it into place on VPS
-- **Target:** Opportunistic. DEBT-046 mitigated immediate exposure risk;
-  this is durability concern, not security.
+- **Description:** Production deploy on VPS uses `docker-compose.override.yml` (db bind mount to `/opt/summa/data/postgres` + api ports `!override` tag) created locally on the VPS, not committed to repo. After DEBT-046, missing override = unreachable (safe failure mode), but environment configuration drift between repo and prod is still a concern. Cross-reference: DEBT-046 fixed the immediate exposure surface; this entry tracks the durability concern.
+- **Impact:** If VPS is rebuilt or migrated, override file must be recreated from memory or runbook. No automated guarantee that prod config matches operator intent. Risk: silent omission of intended prod-only tweaks (db bind mount path, ports replacement) in disaster-recovery scenario. Not a security risk after DEBT-046; durability/operability risk only.
+- **Resolution:** Pick one of: (a) commit `docker-compose.prod.yml` and deploy via explicit `-f` flags (changes CI/runbook), or (b) document override requirement in `OPERATIONS.md` runbook with exact file content for operator recreation, or (c) move template to `scripts/templates/` committed in repo with deploy procedure that copies it into place. No path chosen yet — opportunistic next time deploy hygiene is touched.
+- **Target:** Opportunistic, no specific milestone. Next deploy-hygiene PR or VPS deploy Section J runbook work.
 
 ---
 
