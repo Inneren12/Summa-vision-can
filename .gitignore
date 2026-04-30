@@ -49,3 +49,5 @@ __pycache__/
 backend/.venv312/
 backend/.venv/
 
+# Local Docker Compose overrides — see docker-compose.override.yml.example
+docker-compose.override.yml

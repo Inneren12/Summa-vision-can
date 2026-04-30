@@ -174,6 +174,56 @@ Rules:
 
 > **Updated 2026-04-26: RESOLVED as UNFOUNDED.** Recon (`docs/debt-033-recon.md`, branch `claude/debt-033-recon-temp-writers`) ran exhaustive `grep -rn "\"temp/\|'temp/" backend/src/ --include="*.py"` and found exactly one writer: `admin_graphics.py:269` writing to `temp/uploads/`, already covered by current cleanup. The original hypothesis ("other temp namespaces may also accumulate") was refuted by code evidence — no additional `temp/*` writer namespaces exist in the current codebase. No work required. Recon also flagged a minor opportunistic improvement (`RETRYING` fallback in `temp_cleanup.py:42,70` is dead code given current `JobStatus` enum); this is queued in founder memory for the next backend PR that touches `JobStatus` or `temp_cleanup`, not as standalone work.
 
+### DEBT-046: Base compose binds API port to 0.0.0.0 (defense-in-depth)
+
+- **Source:** VPS Section E.3.5 finding (2026-04-28); pre-recon `docs/recon/debt-046-api-ports-loopback-prerecon.md`
+- **Added:** 2026-04-30
+- **Severity:** P2
+- **Category:** infra-security
+- **Status:** active
+- **Description:** Base `docker-compose.yml` api service exposed `ports: ["8000:8000"]`,
+  which binds to `0.0.0.0:8000` on the host. Docker bypasses UFW via the
+  DOCKER iptables chain, so any fresh deploy without override would expose
+  the API publicly. Production VPS is currently safe via local
+  `docker-compose.override.yml` (with `!override` YAML tag forcing ports
+  replacement) plus Cloudflare in front; base file was unsafe by default.
+- **Resolution (this PR):** Base now binds `127.0.0.1:8000:8000`. Failure
+  mode flipped — missing override = unreachable instead of exposed.
+  Added `docker-compose.override.yml.example` template so operators have
+  a documented starting point. Added `docker-compose.override.yml` to
+  `.gitignore` to prevent accidental commit of environment-specific config.
+- **Related:** DEBT-047 tracks separate concern that production override
+  is not version-controlled.
+
+### DEBT-047: Production `docker-compose.override.yml` not version-controlled
+
+- **Source:** DEBT-046 pre-recon discovery (2026-04-30) — VPS uses local
+  override file not in repo
+- **Added:** 2026-04-30
+- **Severity:** P3
+- **Category:** infra-ops
+- **Status:** active
+- **Description:** Production deploy on VPS uses `docker-compose.override.yml`
+  (db bind mount + api ports `!override`) created locally on the VPS,
+  not committed to repo. After DEBT-046, missing override = unreachable
+  (safe failure mode), but environment configuration drift between repo
+  and prod is still a concern.
+- **Impact:** If VPS is rebuilt or migrated, override file must be
+  recreated from memory or runbook. No automated guarantee that prod
+  config matches operator intent. Risk: silent omission of intended
+  prod-only tweaks in disaster-recovery scenario.
+- **Resolution options:**
+  - (a) Commit `docker-compose.prod.yml`, deploy via
+    `docker compose -f docker-compose.yml -f docker-compose.prod.yml up`
+    (changes deploy invocation — has CI/runbook implications)
+  - (b) Document override requirement in `OPERATIONS.md` runbook with
+    exact file content; operators recreate from runbook on fresh deploys
+    (cheap, manual, drift-prone)
+  - (c) Move override to `scripts/templates/` committed in repo with
+    deploy procedure that copies it into place on VPS
+- **Target:** Opportunistic. DEBT-046 mitigated immediate exposure risk;
+  this is durability concern, not security.
+
 ---
 
 ## Resolved

@@ -1,0 +1,32 @@
+# Production override template — copy to docker-compose.override.yml
+# (which is .gitignored) and customize for your environment.
+#
+# Docker Compose automatically applies docker-compose.override.yml on top
+# of docker-compose.yml when running `docker compose up` without explicit
+# -f flags. This template documents the override the production VPS uses.
+#
+# Two production-specific concerns this override handles:
+#
+# 1. db.volumes — replace the pgdata named volume with a host bind mount
+#    so the backup script can read the data dir directly with standard
+#    file tools. The path /opt/summa/data/postgres is the production
+#    convention; adjust to your environment.
+#
+# 2. api.ports — the !override YAML tag is REQUIRED here. Without it,
+#    Docker Compose APPENDS this list to the base compose ports list
+#    instead of replacing it, which silently re-exposes 0.0.0.0:8000.
+#    The base compose already binds 127.0.0.1:8000 (DEBT-046), so this
+#    override section is shown for documentation completeness; remove
+#    or modify if your reverse-proxy setup differs.
+#
+# Note: docker-compose.override.yml itself is .gitignored to keep
+# environment-specific config out of the repo. See DEBT-047 for the
+# tracked concern that prod override is not version-controlled.
+
+services:
+  db:
+    volumes:
+      - /opt/summa/data/postgres:/var/lib/postgresql/data
+  api:
+    ports: !override
+      - "127.0.0.1:8000:8000"
