@@ -212,27 +212,24 @@ Rules:
 - **Resolution:** Migrate `_summa_vision_exception_handler` to emit nested envelope (one-line change in handler body, but blast radius is every backend route raising `SummaVisionError`). Update all backend tests asserting flat shape. Remove flat branch from `frontend-public/src/lib/api/errorCodes.ts` and narrow `BackendErrorPayload.envelope` enum to `'nested' | 'none'`. Atomic backend + frontend PR per DEBT-034 precedent.
 - **Target:** Opportunistic; before any new admin router is added (each new router compounds the migration scope).
 
-### DEBT-049: Phase 2.2.0.5 follow-ups
+### DEBT-049: Phase 2.2.0.5 slug infrastructure follow-ups
 
-**Status:** Active (recon complete, impl in progress)
-**Created:** 2026-04-30
-**Phase:** 2.2.0.5
-
-**Scope of follow-ups:**
-
-1. **Q-impl-C1** — Verify `create_published` (line ~80 in publication_repository.py) caller does not pre-compute slug; confirm slug-per-retry pattern works correctly for graphics pipeline. Grep audit: `rg "create_published\(" backend/src/`.
-
-2. **Q-impl-C2** — Audit callers of `create()` (line ~139) repo method. May be legacy/test-only. If only tests use it, consider deprecation in a separate cleanup PR.
-
-3. **Q-impl-D1** — Confirm public endpoint path `GET /api/v1/public/p/{slug}`. Recon assumed based on `${PUBLIC_SITE_URL}/p/${slug}` URL contract; backend route may differ.
-
-4. **Chinese transliteration test expectation** — `test_generate_slug_chinese_transliteration` (Chunk 5) records actual python-slugify output as test expectation. Confirm the recorded output matches operator expectations.
-
-5. **Frontend route blacklist verification** — Reserved blacklist (lineage.py `RESERVED_SLUGS`, 25 entries) was not verified against `frontend/app/` routes during recon (frontend dir not present in repo at recon time). Re-verify before Phase 2.2 frontend ships.
-
-6. **Migration downgrade safety** — Slug migration (revision `77889c0ea7e3`) must not be downgraded in production after Phase 2.2 frontend ships, since slug is the public URL path (`/p/{slug}`); down→up regenerates slugs and breaks inbound links. Add to release ops checklist.
-
-7. **NOT NULL + UNIQUE migration (Chunk 4.5)** — Pending. Will run after Chunks 2+3+4 deploy and write paths populate slug. ORM types tighten from `Mapped[str | None]` / `str | None` to `Mapped[str]` / `str` in same PR.
+- **Source:** Phase 2.2.0.5 impl (PR slug column, generators, repo wiring, schemas)
+- **Added:** 2026-04-30
+- **Severity:** medium
+- **Category:** architecture
+- **Status:** active
+- **Description:** Phase 2.2.0.5 ships backend slug infrastructure in expand-contract sequence: Chunk 1 nullable column + backfill, Chunk 2 ORM/exceptions/runtime generators, Chunk 3 repo wiring, Chunk 4 schemas. Several follow-ups remain open after the impl PRs merge:
+  1. `create_published` (publication_repository.py) caller verification — confirm graphics pipeline does not pre-compute slug and slug-per-retry pattern works end-to-end.
+  2. `create()` repo method caller audit — likely legacy/test-only; consider deprecation if no production callers.
+  3. Public endpoint path confirmation — recon assumed `GET /api/v1/public/p/{slug}`; verify against actual backend route.
+  4. Chinese transliteration test expectation — `test_generate_slug_chinese_transliteration` records python-slugify output as expectation; confirm it matches operator expectations.
+  5. Frontend route blacklist verification — `RESERVED_SLUGS` (25 entries) was not verified against `frontend/app/` routes during recon (frontend dir was not present at recon time). Re-verify before Phase 2.2 frontend ships.
+  6. Migration downgrade safety — slug migration `77889c0ea7e3` must not be downgraded after Phase 2.2 frontend ships (slug is public URL path; down→up regenerates slugs and breaks inbound links). Add to release ops checklist.
+  7. NOT NULL + UNIQUE migration (Chunk 4.5) — pending; runs after Chunks 2-4 deploy and write paths populate slug. ORM types tighten from `Mapped[str | None]` / `str | None` to `Mapped[str]` / `str` in same PR.
+- **Impact:** Items 1-2 are audit tasks; if pipeline pre-computes slug or `create()` is legacy, current code may have dead paths or double-compute. Item 5 risk: a frontend route name (e.g. `/admin`) could collide with a slug if blacklist is incomplete, breaking either the route or the publication URL. Item 6 risk: production downgrade after frontend ships breaks all inbound `/p/{slug}` links. Item 7 is required before slug becomes a stable public contract.
+- **Resolution:** Sequential follow-up work post-impl: items 1-4 are grep audits and test fixture confirmations (1-2 hours total); item 5 runs alongside Phase 2.2 frontend dispatch; item 6 added to release checklist before Phase 2.2 frontend deploy; item 7 is the Chunk 4.5 migration PR (separate scope).
+- **Target:** Items 1-4 in next maintenance window; items 5-6 before Phase 2.2 frontend deploy; item 7 as standalone Chunk 4.5 PR after Chunks 2-4 deployed and stable.
 
 ---
 
