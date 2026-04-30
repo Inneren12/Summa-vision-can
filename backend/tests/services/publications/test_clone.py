@@ -54,9 +54,9 @@ async def _make_source(
 
 @pytest.mark.asyncio
 async def test_clone_published_creates_draft_with_copy_prefix(db_session) -> None:
-    src = await _make_source(db_session, headline='X')
+    src = await _make_source(db_session, headline='XYZ')
     clone = await clone_publication(session=db_session, source_id=src.id)
-    assert clone.headline == 'Copy of X'
+    assert clone.headline == 'Copy of XYZ'
     assert clone.status == PublicationStatus.DRAFT
     assert clone.cloned_from_publication_id == src.id
 
@@ -112,7 +112,7 @@ async def test_clone_resets_document_state_to_none(db_session) -> None:
     })
     src = await _make_source(
         db_session,
-        headline='X',
+        headline='XYZ',
         document_state=src_doc_state,
         status=PublicationStatus.PUBLISHED,
     )
