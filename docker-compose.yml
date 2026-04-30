@@ -3,8 +3,13 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # Bind to loopback only. Reverse proxy (Caddy on VPS, dev tools on
+    # localhost) connects via 127.0.0.1:8000. Base 0.0.0.0 binding would
+    # bypass UFW via Docker's iptables DOCKER chain. Operators needing
+    # cross-host dev exposure use docker-compose.override.yml.example
+    # as a template. See DEBT-046 in DEBT.md.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     # NOTE: api.environment is an explicit whitelist — only the vars listed
     # below reach the container. Vars present in .env files but not enumerated
     # here are silently dropped. When backend Settings gains a new field that

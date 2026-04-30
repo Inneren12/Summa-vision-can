@@ -1,0 +1,49 @@
+# Production override template — copy to docker-compose.override.yml
+# (which is .gitignored) and customize for your environment.
+#
+# Docker Compose automatically applies docker-compose.override.yml on top
+# of docker-compose.yml when running `docker compose up` without explicit
+# -f flags. This template documents the override the production VPS uses.
+#
+# Two production-specific concerns this override handles:
+#
+# 1. db.volumes — replace the pgdata named volume with a host bind mount
+#    so the backup script can read the data dir directly with standard
+#    file tools. The path /opt/summa/data/postgres is the production
+#    convention; adjust to your environment.
+#
+# 2. api.ports — the !override YAML tag is REQUIRED here. Without it,
+#    Docker Compose APPENDS this list to the base compose ports list
+#    instead of replacing it, which silently re-exposes 0.0.0.0:8000.
+#    The base compose already binds 127.0.0.1:8000 (DEBT-046), so this
+#    override section is shown for documentation completeness; remove
+#    or modify if your reverse-proxy setup differs.
+#
+# Note: docker-compose.override.yml itself is .gitignored to keep
+# environment-specific config out of the repo. See DEBT-047 for the
+# tracked concern that prod override is not version-controlled.
+#
+# REQUIREMENTS
+#
+# Docker Compose 2.24.4 or newer (Jan 2024 release).
+# The `!override` YAML tag below requires this minimum version. Older
+# Compose versions will either fail to parse the file or silently
+# append the ports list to the base, re-exposing 0.0.0.0:8000.
+#
+# Verify before deploying:
+#   $ docker compose version
+#
+# After copying to docker-compose.override.yml, validate the merged
+# configuration shows only the expected loopback binding:
+#   $ docker compose config | grep -A 3 "ports:"
+# Expected output: single entry with host_ip: 127.0.0.1, target: 8000.
+# If two entries appear, the !override tag is not being honored —
+# upgrade Compose or use explicit -f file invocation as fallback.
+
+services:
+  db:
+    volumes:
+      - /opt/summa/data/postgres:/var/lib/postgresql/data
+  api:
+    ports: !override
+      - "127.0.0.1:8000:8000"
