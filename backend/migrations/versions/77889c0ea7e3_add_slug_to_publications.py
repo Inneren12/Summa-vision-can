@@ -19,6 +19,10 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+# Migration imports python-slugify directly. The dependency MUST remain in
+# backend/pyproject.toml permanently — fresh database bootstrap replays this
+# revision and would fail without it. Do not remove the dependency even if
+# runtime usage of python-slugify ends in the future.
 from slugify import slugify
 
 
@@ -31,12 +35,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 SLUG_COLUMN_LEN = 200
 MAX_SLUG_BODY_LEN = 196
+MAX_SLUG_LEN = 196
 MIN_SLUG_BODY_LEN = 3
 RESERVED_SLUGS: frozenset[str] = frozenset({
+    # Next.js / framework reserved
     "_next", "static", "api", "_error", "404", "500",
+    # App routes that compete with /p/<slug>
     "admin", "p", "about", "privacy", "terms", "login", "signup", "logout",
     "health", "robots", "sitemap", "favicon",
+    # Brand
     "summa", "summa-vision",
+    # Reserved for future
     "search", "feed", "rss", "atom", "manifest",
 })
 
@@ -95,7 +104,7 @@ def _generate_slug_for_backfill(
 ) -> str:
     base = slugify(headline or "", max_length=MAX_SLUG_BODY_LEN)
     if not base or len(base) < MIN_SLUG_BODY_LEN:
-        return f"publication-{pub_id}"
+        base = f"publication-{pub_id}"
 
     blocked = assigned | RESERVED_SLUGS
     if base not in blocked:
@@ -103,7 +112,13 @@ def _generate_slug_for_backfill(
 
     n = 2
     while True:
-        candidate = f"{base}-{n}"
+        candidate = _append_suffix_within_column(base, n)
         if candidate not in blocked:
             return candidate
         n += 1
+
+
+def _append_suffix_within_column(base: str, n: int) -> str:
+    """Build `{base}-{n}` truncating base if needed to fit SLUG_COLUMN_LEN."""
+    suffix = f"-{n}"
+    return f"{base[: SLUG_COLUMN_LEN - len(suffix)]}{suffix}"
