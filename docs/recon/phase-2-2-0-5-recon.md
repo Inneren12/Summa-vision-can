@@ -371,3 +371,124 @@ Practical rule: downgrade path exists for dev/staging recovery. Production downg
 | Frontend `/p/${slug}` route handler verification | Chunk D (per §A5 trailing note) |
 
 Scope lock: Chunk C covers schema + service callers + immutability enforcement. Chunk D covers tests + DEBT + roadmap.
+
+## C. Service layer changes
+
+**What's here:** new exceptions in `exceptions.py`, runtime generators in `lineage.py`, repository-layer slug computation (X2 lock), and service-layer caller integration in `admin_publications.py` and `clone.py`.
+
+**Source files cited:** `lineage.py`, `exceptions.py`, `publication_repository.py`, `clone.py`, `admin_publications.py`, pre-recon §A2/§A3/§B/§D/§E.
+
+### C1. New exceptions in `exceptions.py`
+
+Inventory confirms the base pattern is `PublicationApiError(HTTPException)` with class attributes (`status_code_value`, `error_code`, `message`) and optional `details` payload via base `__init__`. New slug exceptions must inherit this same pattern, not pass `status_code`/`detail` directly.
+
+```python
+from src.services.publications.lineage import MIN_SLUG_BODY_LEN
+
+
+class PublicationSlugGenerationError(PublicationApiError):
+    """Slug body empty/too short after slugification."""
+
+    status_code_value = status.HTTP_422_UNPROCESSABLE_CONTENT
+    error_code = "PUBLICATION_SLUG_GENERATION_FAILED"
+    message = (
+        f"headline produces empty/short slug body "
+        f"(min={MIN_SLUG_BODY_LEN} chars)."
+    )
+
+    def __init__(self, *, headline: str) -> None:
+        super().__init__(details={"headline": headline})
+
+
+class PublicationSlugCollisionError(PublicationApiError):
+    """Slug suffix space -2..-99 exhausted."""
+
+    status_code_value = status.HTTP_409_CONFLICT
+    error_code = "PUBLICATION_SLUG_COLLISION_EXHAUSTED"
+    message = "Slug collision suffix range exhausted; rename headline."
+
+    def __init__(self, *, base_slug: str, attempts: int) -> None:
+        super().__init__(details={"base_slug": base_slug, "attempts": attempts})
+```
+
+Status mapping rationale: 422 matches existing payload-invalid semantics; 409 matches existing conflict semantics (`PublicationCloneNotAllowedError`). `MIN_SLUG_BODY_LEN` source of truth remains runtime constant in `services/publications/lineage.py`.
+
+### C2. ORM model addition in `models/publication.py`
+
+`slug` should be inserted immediately after `lineage_key` and before `status` (identity-related cluster). Locked declaration:
+
+```python
+slug: Mapped[str] = mapped_column(
+    String(length=200),
+    nullable=False,
+    unique=True,
+    doc="Per-row public URL identity; immutable post-create. Phase 2.2.0.5.",
+)
+```
+
+Why both ORM `unique=True` and migration named unique constraint: ORM metadata consistency vs migration-time explicit DB constraint lifecycle (`create_unique_constraint`/drop by name). No explicit `Index(...)` needed because UNIQUE implies index.
+
+### C3. Runtime generators in `services/publications/lineage.py`
+
+Append new slug helpers after existing `derive_clone_lineage_key` (current line ~145). No name clashes in current module.
+
+```python
+from slugify import slugify as _slugify_lib
+
+from src.services.publications.exceptions import (
+    PublicationSlugCollisionError,
+    PublicationSlugGenerationError,
+)
+
+MAX_SLUG_LEN: int = 196
+MIN_SLUG_BODY_LEN: int = 3
+RESERVED_SLUGS: frozenset[str] = frozenset({
+    "_next", "static", "api", "_error", "404", "500",
+    "admin", "p", "about", "privacy", "terms", "login", "signup", "logout",
+    "health", "robots", "sitemap", "favicon",
+    "summa", "summa-vision",
+    "search", "feed", "rss", "atom",
+})
+
+_COPY_PREFIX = "Copy of "  # mirror clone.py:21; keep in sync (Chunk D test gate)
+
+
+def _slugify_internal(text: str) -> str:
+    """Pure slugify transform only (no collision / reserved logic)."""
+    return _slugify_lib(text or "", max_length=MAX_SLUG_LEN)
+
+
+def generate_slug(headline: str, *, existing_slugs: set[str] | None = None) -> str:
+    """Generate final slug from headline using §A3+§A4+§A5 rules.
+
+    Pure function: no DB access; caller injects collision context.
+    """
+    base = _slugify_internal(headline)
+    if not base or len(base) < MIN_SLUG_BODY_LEN:
+        raise PublicationSlugGenerationError(headline=headline)
+
+    blocked = (existing_slugs or set()) | RESERVED_SLUGS
+    if base not in blocked:
+        return base
+
+    for n in range(2, 100):
+        candidate = f"{base}-{n}"
+        if candidate not in blocked:
+            return candidate
+
+    raise PublicationSlugCollisionError(base_slug=base, attempts=99)
+
+
+def derive_clone_slug(
+    source: "Publication",
+    *,
+    existing_slugs: set[str] | None = None,
+) -> str:
+    """Generate fresh clone slug after stripping one `_COPY_PREFIX` if present."""
+    headline = source.headline or ""
+    if headline.startswith(_COPY_PREFIX):
+        headline = headline[len(_COPY_PREFIX):]
+    return generate_slug(headline, existing_slugs=existing_slugs)
+```
+
+Decisions: `_COPY_PREFIX` duplicated intentionally (avoid cross-module coupling; sync test deferred to Chunk D). `_slugify_internal` exists for testability and purity boundary. `existing_slugs` optional supports first-row/test contexts. Forward reference `
