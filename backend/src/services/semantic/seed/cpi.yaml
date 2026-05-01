@@ -1,0 +1,30 @@
+# Phase 3.1a — first semantic mapping seed.
+# StatCan Consumer Price Index, Canada, all-items, monthly.
+# Source: Statistics Canada Table 18-10-0004.
+#
+# Apply via:
+#   cd backend && python scripts/seed_semantic_mappings.py src/services/semantic/seed/cpi.yaml
+
+mappings:
+  - cube_id: "18-10-0004"
+    semantic_key: "cpi.canada.all_items.index"
+    label: "CPI — Canada, all-items"
+    description: |
+      Headline Consumer Price Index for Canada, all-items, monthly.
+      Source: Statistics Canada Table 18-10-0004.
+    config:
+      dimension_filters:
+        Geography: "Canada"
+        Products: "All-items"
+      measure: "Value"
+      unit: "index"
+      frequency: "monthly"
+      supported_metrics:
+        - current_value
+        - year_over_year_change
+        - previous_period_change
+      default_geo: "Canada"
+      notes: |
+        Base year: 2002 = 100. Most viral CPI stories are
+        headline + YoY. dimension_filter values are EN-canonical.
+    is_active: true

@@ -11,6 +11,7 @@ from src.models.publication import Publication, PublicationStatus
 from src.models.audit_event import AuditEvent
 from src.models.job import Job, JobStatus
 from src.models.cube_catalog import CubeCatalog
+from src.models.semantic_mapping import SemanticMapping
 
 __all__ = [
     "Lead",
@@ -20,4 +21,5 @@ __all__ = [
     "JobStatus",
     "AuditEvent",
     "CubeCatalog",
+    "SemanticMapping",
 ]
