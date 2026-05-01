@@ -93,7 +93,7 @@ Sync uses dedupe_key `catalog_sync:{date}` — same-day requests return existing
 - Missing IDs → 404 `{"detail": "Publication not found"}`.
 - Sensitive S3 keys (`s3_key_lowres`, `s3_key_highres`) are **never** included in the admin response — only `cdn_url` (currently always `null` until CDN integration lands).
 - Dependencies: `PublicationRepository` and `AuditWriter` are injected via `_get_repo` / `_get_audit` (ARCH-DPEN-001).
-- **Phase 2.3 — `GET /{publication_id}/leads`.** Returns the leads attributed to this publication via `Lead.utm_content == Publication.lineage_key`. Response is `list[AdminLeadResponse]` (admin-only, includes `utm_*`, `ip_address`-adjacent fields are not returned). Ordered newest-first; `limit` query param defaults to 200 (1–500). 404 if the publication does not exist. The contract relies on the publish-kit lock that `utm_content == lineage_key` (Phase 2.2) — leads with no UTM (organic submissions) are deliberately excluded.
+- **Phase 2.3 — `GET /{publication_id}/leads`.** Returns the leads attributed to this publication via `Lead.utm_content == Publication.lineage_key`. Response is `list[AdminLeadResponse]` and includes UTM attribution fields. It does not return `ip_address`. Ordered newest-first; `limit` query param defaults to 200 (1–500). 404 if the publication does not exist. The contract relies on the publish-kit lock that `utm_content == lineage_key` (Phase 2.2) — leads with no UTM (organic submissions) are deliberately excluded.
 
 ### Admin KPI Router (`routers/admin_kpi.py`)
 

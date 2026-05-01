@@ -9,17 +9,15 @@ import {
 const STORAGE_KEY = 'utm_attribution';
 
 function setLocationSearch(search: string) {
-  const url = new URL(`https://summa-vision.test/page${search}`);
-  Object.defineProperty(window, 'location', {
-    configurable: true,
-    value: url,
-  });
+  // Use pushState — jsdom forbids redefining window.location after first
+  // access, but it does honor history navigation.
+  window.history.pushState({}, '', `/page${search}`);
 }
 
 describe('captureUtmFromUrl', () => {
   beforeEach(() => {
+    window.history.pushState({}, '', '/');
     window.sessionStorage.clear();
-    setLocationSearch('');
   });
 
   it('returns empty object when URL has no UTM params and storage is empty', () => {
@@ -51,17 +49,19 @@ describe('captureUtmFromUrl', () => {
     expect(captureUtmFromUrl()).toEqual({ utm_content: 'ln_persistent' });
   });
 
-  it('merges new URL params with previously stored values', () => {
+  it('replaces stored UTM when new URL params are present', () => {
     window.sessionStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ utm_content: 'ln_old' }),
+      JSON.stringify({ utm_content: 'ln_old', utm_source: 'twitter' }),
     );
-    setLocationSearch('?utm_source=reddit');
-    const utm = captureUtmFromUrl();
-    expect(utm).toEqual({
-      utm_content: 'ln_old',
+
+    setLocationSearch('?utm_source=reddit&utm_content=ln_new');
+
+    expect(captureUtmFromUrl()).toEqual({
       utm_source: 'reddit',
+      utm_content: 'ln_new',
     });
+    // utm_content from old session is GONE — no mixing.
   });
 });
 

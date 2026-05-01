@@ -102,12 +102,21 @@ class LeadRepository:
         same (email, asset_id) pair, the :class:`IntegrityError` is caught,
         the session is rolled back, and the existing row is fetched instead.
 
+        Phase 2.3: when an existing row is returned, its NULL UTM fields
+        are backfilled from the supplied kwargs (first non-null wins;
+        see :meth:`_backfill_utm`).
+
         Args:
             email: Lead's email address.
             ip_address: IP address of the request.
             asset_id: Identifier of the downloaded asset.
             is_b2b: Whether this is a B2B lead.
             company_domain: Extracted company domain (optional).
+            utm_source: UTM source param (Phase 2.3).
+            utm_medium: UTM medium param (Phase 2.3).
+            utm_campaign: UTM campaign param (Phase 2.3).
+            utm_content: UTM content param = publication ``lineage_key``
+                (Phase 2.3).
 
         Returns:
             A ``(lead, created)`` tuple where *created* is ``True`` when a
@@ -134,7 +143,50 @@ class LeadRepository:
             existing = await self.get_by_email_and_asset(email, asset_id)
             if existing is None:
                 raise  # something else went wrong
+            await self._backfill_utm(
+                existing,
+                utm_source=utm_source,
+                utm_medium=utm_medium,
+                utm_campaign=utm_campaign,
+                utm_content=utm_content,
+            )
             return existing, False
+
+    async def _backfill_utm(
+        self,
+        lead: Lead,
+        *,
+        utm_source: str | None,
+        utm_medium: str | None,
+        utm_campaign: str | None,
+        utm_content: str | None,
+    ) -> None:
+        """Phase 2.3: fill missing UTM fields on an existing lead.
+
+        First non-null attribution wins. Already-set UTM values are
+        never overwritten — a lead that first arrived attributed to one
+        publication keeps that attribution forever, even if the same
+        email later submits via a different publish-kit URL.
+
+        A lead that first submitted without any UTM gets attribution
+        recorded the next time the same (email, asset_id) pair re-submits
+        with UTM, so organic-then-attributed flows are not silently lost.
+        """
+        changed = False
+        if lead.utm_source is None and utm_source is not None:
+            lead.utm_source = utm_source
+            changed = True
+        if lead.utm_medium is None and utm_medium is not None:
+            lead.utm_medium = utm_medium
+            changed = True
+        if lead.utm_campaign is None and utm_campaign is not None:
+            lead.utm_campaign = utm_campaign
+            changed = True
+        if lead.utm_content is None and utm_content is not None:
+            lead.utm_content = utm_content
+            changed = True
+        if changed:
+            await self._session.flush()
 
     async def exists(self, email: str, asset_id: str) -> bool:
         """Check whether a lead already exists for a given email + asset.

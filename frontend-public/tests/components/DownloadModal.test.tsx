@@ -28,6 +28,8 @@ const mockCaptureLeadForDownload = api.captureLeadForDownload as jest.MockedFunc
 describe('DownloadModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    window.history.pushState({}, '', '/');
+    window.sessionStorage.clear();
   });
 
   it('renders the trigger button', () => {
@@ -179,50 +181,39 @@ describe('DownloadModal', () => {
     });
 
     // Seed a publish-kit URL: utm_content carries the lineage_key.
-    const originalLocation = window.location;
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: new URL(
-        'https://summa-vision.test/g/123?utm_source=reddit&utm_medium=social&utm_campaign=publish_kit&utm_content=ln_abc123',
-      ),
+    // pushState avoids jsdom's "Cannot redefine window.location" trap.
+    window.history.pushState(
+      {},
+      '',
+      '/g/123?utm_source=reddit&utm_medium=social&utm_campaign=publish_kit&utm_content=ln_abc123',
+    );
+
+    render(<DownloadModal assetId={1} />);
+    await userEvent.click(screen.getByText('Download High-Res'));
+    await userEvent.click(screen.getByTestId('turnstile-widget'));
+    await userEvent.type(
+      screen.getByPlaceholderText('you@company.com'),
+      'user@company.ca',
+    );
+    await userEvent.click(screen.getByText('Get Download Link'));
+
+    await waitFor(() => {
+      expect(mockCaptureLeadForDownload).toHaveBeenCalled();
     });
-    window.sessionStorage.clear();
 
-    try {
-      render(<DownloadModal assetId={1} />);
-      await userEvent.click(screen.getByText('Download High-Res'));
-      await userEvent.click(screen.getByTestId('turnstile-widget'));
-      await userEvent.type(
-        screen.getByPlaceholderText('you@company.com'),
-        'user@company.ca',
-      );
-      await userEvent.click(screen.getByText('Get Download Link'));
-
-      await waitFor(() => {
-        expect(mockCaptureLeadForDownload).toHaveBeenCalled();
-      });
-
-      const utmArg = mockCaptureLeadForDownload.mock.calls[0][3];
-      expect(utmArg).toMatchObject({
-        utm_source: 'reddit',
-        utm_medium: 'social',
-        utm_campaign: 'publish_kit',
-        utm_content: 'ln_abc123',
-      });
-    } finally {
-      Object.defineProperty(window, 'location', {
-        configurable: true,
-        value: originalLocation,
-      });
-      window.sessionStorage.clear();
-    }
+    const utmArg = mockCaptureLeadForDownload.mock.calls[0][3];
+    expect(utmArg).toMatchObject({
+      utm_source: 'reddit',
+      utm_medium: 'social',
+      utm_campaign: 'publish_kit',
+      utm_content: 'ln_abc123',
+    });
   });
 
   it('omits UTM payload when no params present (Phase 2.3)', async () => {
     mockCaptureLeadForDownload.mockResolvedValue({
       message: 'Check your email for the download link',
     });
-    window.sessionStorage.clear();
 
     render(<DownloadModal assetId={1} />);
     await userEvent.click(screen.getByText('Download High-Res'));

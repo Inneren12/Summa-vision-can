@@ -11,6 +11,9 @@
  * - All four params are independently optional; we only persist when at
  *   least one is present so a clean visit does not overwrite a prior
  *   attributed session.
+ * - When a new attributed URL is encountered, the persisted session
+ *   attribution is replaced wholesale (no key-by-key merge) to prevent
+ *   mixing UTM params from different publications.
  */
 
 const STORAGE_KEY = 'utm_attribution';
@@ -38,23 +41,33 @@ function readFromUrl(): UtmAttribution {
 }
 
 /**
- * Capture UTM params from the current URL (if any) and merge into
+ * Capture UTM params from the current URL (if any) and persist to
  * sessionStorage. Safe to call repeatedly; idempotent on a clean URL.
+ *
+ * Replace-on-new-UTM semantics: a fresh attributed landing fully
+ * overwrites prior session attribution. This avoids mixing
+ * ``utm_source`` from one visit with ``utm_content`` from another,
+ * which would otherwise produce wrong cross-publication attribution.
  */
 export function captureUtmFromUrl(): UtmAttribution {
   if (typeof window === 'undefined') return {};
+
   const fromUrl = readFromUrl();
+
   if (Object.keys(fromUrl).length === 0) {
+    // Clean URL — return any previously-stored UTM (survives multi-page nav).
     return getStoredUtm();
   }
-  const merged: UtmAttribution = { ...getStoredUtm(), ...fromUrl };
+
+  // New attributed landing replaces prior session attribution.
   try {
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(fromUrl));
   } catch {
     // sessionStorage may be unavailable (private mode, quota, etc.).
     // Attribution is best-effort; swallow and fall through.
   }
-  return merged;
+
+  return fromUrl;
 }
 
 /**
