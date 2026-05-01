@@ -259,7 +259,8 @@
       "toast": {
         "success": "Экспортировано {count, plural, one {# пресет} few {# пресета} many {# пресетов} other {# пресетов}} + комплект публикации в {filename}",
         "partial": "Экспортировано {passCount, number} из {total, number} пресетов + комплект публикации в {filename}. {skippedCount, plural, one {# пропущен} few {# пропущены} many {# пропущены} other {# пропущены}}.",
-        "error": "Ошибка экспорта. {error}"
+        "error": "Ошибка экспорта. {error}",
+        "site_url_missing": "URL публичного сайта не настроен. Невозможно собрать комплект публикации."
       },
       "skipped": {
         "long_infographic_cap_exceeded": "long_infographic пропущен: высота {measured, number}px превышает максимум 4000px"

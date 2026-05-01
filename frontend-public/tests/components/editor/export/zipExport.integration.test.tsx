@@ -166,10 +166,40 @@ describe('exportZip end-to-end (real-wire)', () => {
     const distribution = JSON.parse(strFromU8(entries['distribution.json']));
     expect(distribution.publication.slug).toBe(publishKitOpts.slug);
     expect(distribution.publication.lineage_key).toBe(publishKitOpts.lineage_key);
+    // Canonical URL composition: baseUrl + /p/{slug}
+    expect(distribution.publication.canonical_url).toBe('https://example.com/p/test-slug');
+
+    // UTM wiring: utm_content === lineage_key on all 3 channels
+    expect(distribution.channels.reddit.share_url).toContain('utm_content=ln_test_123');
+    expect(distribution.channels.twitter.share_url).toContain('utm_content=ln_test_123');
+    expect(distribution.channels.linkedin.share_url).toContain('utm_content=ln_test_123');
 
     const publishKit = strFromU8(entries['publish_kit.txt']);
+    // publish_kit.txt embeds canonical URL
+    expect(publishKit).toContain('https://example.com/p/test-slug');
     expect(publishKit).toContain('=== Reddit ===');
     expect(publishKit).toContain(distribution.channels.reddit.share_url);
+  });
+
+
+  test('baseUrl with trailing slash is normalized in canonical_url', async () => {
+    const optsWithSlash = {
+      lineage_key: 'ln_test_456',
+      slug: 'trail-test',
+      baseUrl: 'https://example.com/',
+    };
+
+    const doc = mkDoc('single_stat_hero', TPLS.single_stat_hero);
+    doc.page.exportPresets = ['instagram_1080'];
+
+    await exportZip({ doc, pal: PALETTES.housing, ...optsWithSlash });
+
+    const zipBytes = new Uint8Array(await capturedBlob!.arrayBuffer());
+    const entries = unzipSync(zipBytes);
+    const distribution = JSON.parse(strFromU8(entries['distribution.json']));
+
+    // Trailing slash on baseUrl must NOT produce double-slash in canonical_url
+    expect(distribution.publication.canonical_url).toBe('https://example.com/p/trail-test');
   });
 
   test('skipped preset → no PNG entry in ZIP, manifest filename=null + skipped_reason (fix1 contract)', async () => {
