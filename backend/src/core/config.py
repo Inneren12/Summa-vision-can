@@ -8,8 +8,8 @@ the parsed, validated configuration — never import a global instance.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings
+from pydantic import AliasChoices, Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -34,7 +34,10 @@ class Settings(BaseSettings):
 
     app_name: str = "Summa Vision API"
     debug: bool = False
-    environment: str = "development"
+    environment: str = Field(
+        default="development",
+        validation_alias=AliasChoices("ENVIRONMENT", "APP_ENV"),
+    )
 
     # --- Application ---
     log_format: str = "console"  # "console" for dev, "json" for production
@@ -165,7 +168,12 @@ class Settings(BaseSettings):
             )
         return self
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
 
 @lru_cache(maxsize=1)

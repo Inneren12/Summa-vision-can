@@ -16,15 +16,18 @@ services:
     # must be runtime-configurable, add it here deliberately.
     environment:
       # Application mode
-      # Backend Settings reads ENVIRONMENT; .env files use APP_ENV by convention.
-      # Do not rename without also updating either side.
+      # Backend Settings accepts both APP_ENV and ENVIRONMENT aliases.
+      APP_ENV: ${APP_ENV:-development}
       ENVIRONMENT: ${APP_ENV:-development}
       DEBUG: ${DEBUG:-false}
       LOG_FORMAT: ${LOG_FORMAT:-console}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Database
       DATABASE_URL: ${DATABASE_URL}
       # Auth
       ADMIN_API_KEY: ${ADMIN_API_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       # Storage
       STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
       S3_BUCKET: ${S3_BUCKET}
