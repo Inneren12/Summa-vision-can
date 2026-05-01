@@ -7,6 +7,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
+    Index,
     Integer,
     String,
     Text,
@@ -58,6 +59,11 @@ class SemanticMapping(Base):
     __table_args__ = (
         UniqueConstraint(
             "cube_id", "semantic_key", name="uq_semantic_mappings_cube_key"
+        ),
+        Index(
+            "ix_semantic_mappings_cube_active",
+            "cube_id",
+            "is_active",
         ),
     )
 
