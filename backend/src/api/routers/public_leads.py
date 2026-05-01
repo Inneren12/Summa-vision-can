@@ -307,6 +307,10 @@ async def capture_lead(
         asset_id=str(payload.asset_id),
         is_b2b=is_b2b,
         company_domain=company_domain,
+        utm_source=payload.utm_source,
+        utm_medium=payload.utm_medium,
+        utm_campaign=payload.utm_campaign,
+        utm_content=payload.utm_content,
     )
 
     if not is_new:

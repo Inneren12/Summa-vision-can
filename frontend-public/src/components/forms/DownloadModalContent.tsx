@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { captureLeadForDownload } from '@/lib/api/client';
+import { getStoredUtm } from '@/lib/attribution/utm';
 import { emailSchema, type EmailFormValues } from '@/lib/schemas';
 import TurnstileWidget from '@/components/forms/TurnstileWidget';
 
@@ -47,7 +48,12 @@ export function DownloadModalContent({ assetId, onClose }: DownloadModalContentP
     setModalState('submitting');
     setServerError(null);
     try {
-      await captureLeadForDownload(values.email, assetId, turnstileToken);
+      // Phase 2.3: UTM was already captured at root layout mount via
+      // UtmCaptureBoundary. Read from sessionStorage at submit time so
+      // we still get attribution after the visitor navigates client-side
+      // away from the original ``?utm_*`` landing URL.
+      const utm = getStoredUtm();
+      await captureLeadForDownload(values.email, assetId, turnstileToken, utm);
       setSubmittedEmail(values.email);
       setModalState('success');
     } catch (err) {

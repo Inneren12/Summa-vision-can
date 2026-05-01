@@ -20,6 +20,44 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.lead import Lead
 
 
+def _is_present(value: str | None) -> bool:
+    """Phase 2.3: empty / whitespace-only strings are NOT attribution.
+
+    The schema's ``_normalize_utm`` validator already strips empty
+    strings to ``None`` before they reach the repository, but the helper
+    must defend in depth: the repository can be called from migrations,
+    one-off scripts, future endpoints, or background backfills that do
+    not flow through ``LeadCaptureRequest``.
+    """
+    return value is not None and value.strip() != ""
+
+
+def _has_any_utm(lead: Lead) -> bool:
+    """Return True if the lead has at least one populated UTM field."""
+    return any(
+        _is_present(value)
+        for value in (
+            lead.utm_source,
+            lead.utm_medium,
+            lead.utm_campaign,
+            lead.utm_content,
+        )
+    )
+
+
+def _has_incoming_utm(
+    utm_source: str | None,
+    utm_medium: str | None,
+    utm_campaign: str | None,
+    utm_content: str | None,
+) -> bool:
+    """Return True if the incoming kwargs include at least one UTM value."""
+    return any(
+        _is_present(v)
+        for v in (utm_source, utm_medium, utm_campaign, utm_content)
+    )
+
+
 class LeadRepository:
     """Encapsulates persistence logic for :class:`Lead`.
 
@@ -43,6 +81,10 @@ class LeadRepository:
         asset_id: str,
         is_b2b: bool = False,
         company_domain: str | None = None,
+        utm_source: str | None = None,
+        utm_medium: str | None = None,
+        utm_campaign: str | None = None,
+        utm_content: str | None = None,
     ) -> Lead:
         """Create a new lead record.
 
@@ -52,6 +94,11 @@ class LeadRepository:
             asset_id: Identifier of the downloaded asset.
             is_b2b: Whether this is a B2B lead.
             company_domain: Extracted company domain (optional).
+            utm_source: UTM source param at submit time (Phase 2.3).
+            utm_medium: UTM medium param (Phase 2.3).
+            utm_campaign: UTM campaign param (Phase 2.3).
+            utm_content: UTM content param = publication lineage_key
+                (Phase 2.3).
 
         Returns:
             The newly created ``Lead`` instance with its ``id`` populated
@@ -63,6 +110,10 @@ class LeadRepository:
             asset_id=asset_id,
             is_b2b=is_b2b,
             company_domain=company_domain,
+            utm_source=utm_source,
+            utm_medium=utm_medium,
+            utm_campaign=utm_campaign,
+            utm_content=utm_content,
         )
         self._session.add(lead)
         await self._session.flush()
@@ -77,6 +128,10 @@ class LeadRepository:
         asset_id: str,
         is_b2b: bool = False,
         company_domain: str | None = None,
+        utm_source: str | None = None,
+        utm_medium: str | None = None,
+        utm_campaign: str | None = None,
+        utm_content: str | None = None,
     ) -> tuple[Lead, bool]:
         """Create a lead or return the existing one.  Race-safe.
 
@@ -85,12 +140,24 @@ class LeadRepository:
         same (email, asset_id) pair, the :class:`IntegrityError` is caught,
         the session is rolled back, and the existing row is fetched instead.
 
+        Phase 2.3 attribution: when an existing row is returned, incoming
+        UTM is applied as a single atomic group. The group is set ONLY
+        if the existing row has no UTM at all (all four fields NULL).
+        If the existing row has any UTM field set, incoming attribution
+        is ignored — this avoids mixing campaign sources across visits.
+        See :meth:`_backfill_utm`.
+
         Args:
             email: Lead's email address.
             ip_address: IP address of the request.
             asset_id: Identifier of the downloaded asset.
             is_b2b: Whether this is a B2B lead.
             company_domain: Extracted company domain (optional).
+            utm_source: UTM source param (Phase 2.3).
+            utm_medium: UTM medium param (Phase 2.3).
+            utm_campaign: UTM campaign param (Phase 2.3).
+            utm_content: UTM content param = publication ``lineage_key``
+                (Phase 2.3).
 
         Returns:
             A ``(lead, created)`` tuple where *created* is ``True`` when a
@@ -103,6 +170,10 @@ class LeadRepository:
                 asset_id=asset_id,
                 is_b2b=is_b2b,
                 company_domain=company_domain,
+                utm_source=utm_source,
+                utm_medium=utm_medium,
+                utm_campaign=utm_campaign,
+                utm_content=utm_content,
             )
             self._session.add(lead)
             await self._session.flush()
@@ -113,7 +184,47 @@ class LeadRepository:
             existing = await self.get_by_email_and_asset(email, asset_id)
             if existing is None:
                 raise  # something else went wrong
+            await self._backfill_utm(
+                existing,
+                utm_source=utm_source,
+                utm_medium=utm_medium,
+                utm_campaign=utm_campaign,
+                utm_content=utm_content,
+            )
             return existing, False
+
+    async def _backfill_utm(
+        self,
+        lead: Lead,
+        *,
+        utm_source: str | None,
+        utm_medium: str | None,
+        utm_campaign: str | None,
+        utm_content: str | None,
+    ) -> None:
+        """Phase 2.3: group-level UTM backfill on an existing lead.
+
+        Semantics (founder-locked):
+
+        * Existing lead with **any** UTM field set is treated as already
+          attributed; incoming UTM is dropped wholesale. Field-by-field
+          backfill would mix ``utm_source`` from one campaign with
+          ``utm_content`` from another, producing wrong attribution.
+        * Only fully anonymous existing leads accept incoming
+          attribution, and they accept the **entire group atomically**.
+        * If incoming UTM is itself empty, no-op.
+        """
+        if not _has_incoming_utm(
+            utm_source, utm_medium, utm_campaign, utm_content
+        ):
+            return
+        if _has_any_utm(lead):
+            return
+        lead.utm_source = utm_source
+        lead.utm_medium = utm_medium
+        lead.utm_campaign = utm_campaign
+        lead.utm_content = utm_content
+        await self._session.flush()
 
     async def exists(self, email: str, asset_id: str) -> bool:
         """Check whether a lead already exists for a given email + asset.
@@ -186,6 +297,31 @@ class LeadRepository:
         )
         result = await self._session.execute(stmt)
         return result.scalar_one()
+
+    async def list_by_utm_content(
+        self, utm_content: str, *, limit: int = 200
+    ) -> Sequence[Lead]:
+        """Return leads attributed to a publication via ``utm_content``.
+
+        Phase 2.3: ``utm_content`` carries the source publication's
+        ``lineage_key``. Ordered newest-first to match admin dashboard
+        consumption.
+
+        Args:
+            utm_content: The publication ``lineage_key`` to filter by.
+            limit: Maximum number of rows to return.
+
+        Returns:
+            A sequence of matching :class:`Lead` rows.
+        """
+        stmt = (
+            select(Lead)
+            .where(Lead.utm_content == utm_content)
+            .order_by(Lead.created_at.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
 
     async def get_unsynced(self, limit: int = 100) -> Sequence[Lead]:
         """Retrieve leads that have not yet been successfully synced to the ESP

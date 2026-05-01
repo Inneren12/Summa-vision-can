@@ -56,6 +56,27 @@ class Lead(Base):
     esp_sync_failed_permanent: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
+    utm_source: Mapped[str | None] = mapped_column(
+        String(length=100),
+        nullable=True,
+        doc="UTM source param at submit time, e.g. 'reddit'. Phase 2.3.",
+    )
+    utm_medium: Mapped[str | None] = mapped_column(
+        String(length=100),
+        nullable=True,
+        doc="UTM medium param, typically 'social'. Phase 2.3.",
+    )
+    utm_campaign: Mapped[str | None] = mapped_column(
+        String(length=200),
+        nullable=True,
+        doc="UTM campaign param, typically 'publish_kit'. Phase 2.3.",
+    )
+    utm_content: Mapped[str | None] = mapped_column(
+        String(length=200),
+        nullable=True,
+        index=True,
+        doc="UTM content param = source publication lineage_key. Phase 2.3.",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

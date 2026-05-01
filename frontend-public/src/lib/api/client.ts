@@ -1,6 +1,7 @@
 // Used ONLY in 'use client' components
 // No next.revalidate — plain browser fetch
 
+import type { UtmAttribution } from '../attribution/utm';
 import type { PaginatedResponse, PublicationResponse } from '../types/publication';
 
 export type { PaginatedResponse, PublicationResponse };
@@ -9,6 +10,33 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 export interface LeadCaptureResponse {
   message: string;
+}
+
+const UTM_KEYS = [
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_content',
+] as const;
+
+/**
+ * Filter a UTM attribution to only the four canonical, non-empty keys.
+ * Stops runtime-only extra keys from leaking into the request body
+ * (the backend rejects unknown keys via ``extra="forbid"``) and drops
+ * empty strings so the backend's whitespace normalizer does not have
+ * to deal with frontend-induced noise.
+ */
+function pickUtm(utm: UtmAttribution | undefined): UtmAttribution {
+  if (!utm) return {};
+  const out: UtmAttribution = {};
+  for (const key of UTM_KEYS) {
+    const value = utm[key];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) out[key] = trimmed;
+    }
+  }
+  return out;
 }
 
 export async function fetchMoreGraphics(
@@ -26,6 +54,7 @@ export async function captureLeadForDownload(
   email: string,
   assetId: number,
   turnstileToken: string,
+  utm: UtmAttribution = {},
 ): Promise<LeadCaptureResponse> {
   const res = await fetch(`${API_URL}/api/v1/public/leads/capture`, {
     method: 'POST',
@@ -34,6 +63,10 @@ export async function captureLeadForDownload(
       email,
       asset_id: assetId,
       turnstile_token: turnstileToken,
+      // Only present, non-empty UTM keys are spread into the request body.
+      // Backend's ``extra="forbid"`` schema rejects unknown keys; whitespace-
+      // only values are normalized server-side via ``field_validator``.
+      ...pickUtm(utm),
     }),
   });
   if (!res.ok) {

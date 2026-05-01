@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DownloadModal from '@/components/forms/DownloadModal';
 import * as api from '@/lib/api/client';
+import { UTM_STORAGE_KEY } from '@/lib/attribution/utm';
 
 jest.mock('@/lib/api/client');
 jest.mock('@/components/forms/TurnstileWidget', () => {
@@ -28,6 +29,8 @@ const mockCaptureLeadForDownload = api.captureLeadForDownload as jest.MockedFunc
 describe('DownloadModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    window.history.pushState({}, '', '/');
+    window.sessionStorage.clear();
   });
 
   it('renders the trigger button', () => {
@@ -171,6 +174,67 @@ describe('DownloadModal', () => {
     expect(screen.getByTestId('server-error')).toHaveTextContent(
       /no longer available/i,
     );
+  });
+
+  it('forwards UTM params from sessionStorage to lead capture (Phase 2.3)', async () => {
+    mockCaptureLeadForDownload.mockResolvedValue({
+      message: 'Check your email for the download link',
+    });
+
+    // Simulate the root-layout UtmCaptureBoundary having already
+    // persisted the publish-kit attribution. The modal itself does not
+    // re-read the URL — it just reads sessionStorage at submit time.
+    window.sessionStorage.setItem(
+      UTM_STORAGE_KEY,
+      JSON.stringify({
+        utm_source: 'reddit',
+        utm_medium: 'social',
+        utm_campaign: 'publish_kit',
+        utm_content: 'ln_abc123',
+      }),
+    );
+
+    render(<DownloadModal assetId={1} />);
+    await userEvent.click(screen.getByText('Download High-Res'));
+    await userEvent.click(screen.getByTestId('turnstile-widget'));
+    await userEvent.type(
+      screen.getByPlaceholderText('you@company.com'),
+      'user@company.ca',
+    );
+    await userEvent.click(screen.getByText('Get Download Link'));
+
+    await waitFor(() => {
+      expect(mockCaptureLeadForDownload).toHaveBeenCalled();
+    });
+
+    const utmArg = mockCaptureLeadForDownload.mock.calls[0][3];
+    expect(utmArg).toMatchObject({
+      utm_source: 'reddit',
+      utm_medium: 'social',
+      utm_campaign: 'publish_kit',
+      utm_content: 'ln_abc123',
+    });
+  });
+
+  it('omits UTM payload when no params present (Phase 2.3)', async () => {
+    mockCaptureLeadForDownload.mockResolvedValue({
+      message: 'Check your email for the download link',
+    });
+
+    render(<DownloadModal assetId={1} />);
+    await userEvent.click(screen.getByText('Download High-Res'));
+    await userEvent.click(screen.getByTestId('turnstile-widget'));
+    await userEvent.type(
+      screen.getByPlaceholderText('you@company.com'),
+      'user@company.ca',
+    );
+    await userEvent.click(screen.getByText('Get Download Link'));
+
+    await waitFor(() => {
+      expect(mockCaptureLeadForDownload).toHaveBeenCalled();
+    });
+
+    expect(mockCaptureLeadForDownload.mock.calls[0][3]).toEqual({});
   });
 
   it('does NOT auto-open URLs on success', async () => {
