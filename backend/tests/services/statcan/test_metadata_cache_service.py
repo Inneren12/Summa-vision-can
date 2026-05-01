@@ -175,6 +175,81 @@ class TestGetOrFetch:
             await service.get_or_fetch("18-10-0004-01", 18100004)
 
     @pytest.mark.asyncio
+    async def test_raises_product_mismatch_after_concurrent_race_with_different_product_id(
+        self, service, session_factory, mock_client
+    ):
+        """Reviewer R3 P1-2: post-rollback path must re-validate product_id.
+
+        Scenario: caller B sees cache miss, fetches StatCan, attempts insert
+        with product_id=222. Between the miss-read and the insert, caller A
+        commits a row with cube_id=X / product_id=111 — caller B's insert
+        hits IntegrityError. The post-rollback re-read returns A's row.
+        Service MUST raise CubeMetadataProductMismatchError, not silently
+        return A's DTO under B's product_id.
+        """
+        from sqlalchemy.exc import IntegrityError
+
+        cube_id = "18-10-0004-01"
+        racing_caller_a_product_id = 111
+        this_caller_b_product_id = 222
+
+        # Caller B's StatCan fetch returns valid metadata.
+        mock_client.get_cube_metadata.return_value = _make_payload(
+            product_id=this_caller_b_product_id
+        )
+
+        # Pre-seed caller A's row to make the post-rollback re-read return it.
+        await _seed(
+            session_factory,
+            cube_id=cube_id,
+            product_id=racing_caller_a_product_id,
+            dimensions={"dimensions": []},
+            frequency_code="6",
+            cube_title_en="A",
+            cube_title_fr="A",
+            fetched_at=_FIXED_NOW,
+        )
+
+        # Force caller B down the IntegrityError branch by making upsert raise
+        # the first time it is invoked. Because get_or_fetch's pre-fetch read
+        # uses a SEPARATE session, we patch repo.upsert directly.
+        original_upsert = CubeMetadataCacheRepository.upsert
+
+        async def fake_upsert(self, **kwargs):
+            # Simulate a UNIQUE-violation race; SQLAlchemy's IntegrityError
+            # ctor accepts (statement, params, orig).
+            raise IntegrityError("INSERT", {}, Exception("uq_cube_metadata_cache_cube_id"))
+
+        # Bypass the pre-fetch product_id guard by ALSO patching the FIRST read
+        # to return None (simulating "row didn't exist when caller B checked").
+        original_get = CubeMetadataCacheRepository.get_by_cube_id
+        call_count = {"n": 0}
+
+        async def fake_get_by_cube_id(self, cid: str):
+            call_count["n"] += 1
+            # First read in get_or_fetch (pre-fetch hit-check): pretend miss.
+            # Second read happens inside _persist after IntegrityError rollback —
+            # delegate to the real implementation so it returns A's seeded row.
+            if call_count["n"] == 1:
+                return None
+            return await original_get(self, cid)
+
+        import src.repositories.cube_metadata_cache_repository as repo_mod
+
+        repo_mod.CubeMetadataCacheRepository.upsert = fake_upsert
+        repo_mod.CubeMetadataCacheRepository.get_by_cube_id = fake_get_by_cube_id
+        try:
+            with pytest.raises(CubeMetadataProductMismatchError) as exc_info:
+                await service.get_or_fetch(cube_id, this_caller_b_product_id)
+        finally:
+            repo_mod.CubeMetadataCacheRepository.upsert = original_upsert
+            repo_mod.CubeMetadataCacheRepository.get_by_cube_id = original_get
+
+        assert exc_info.value.cube_id == cube_id
+        assert exc_info.value.expected_product_id == racing_caller_a_product_id
+        assert exc_info.value.actual_product_id == this_caller_b_product_id
+
+    @pytest.mark.asyncio
     async def test_raises_product_mismatch_when_cached_product_id_differs(
         self, service, session_factory, mock_client
     ):

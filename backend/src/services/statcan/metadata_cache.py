@@ -359,6 +359,15 @@ class StatCanMetadataCacheService:
                 entity = await repo.get_by_cube_id(cube_id)
                 if entity is None:
                     raise
+                # Race-winner may have written with a DIFFERENT product_id.
+                # Mirror the pre-fetch guard: refuse to silently auto-heal a
+                # cache-key integrity conflict.
+                if entity.product_id != product_id:
+                    raise CubeMetadataProductMismatchError(
+                        cube_id=cube_id,
+                        expected_product_id=entity.product_id,
+                        actual_product_id=product_id,
+                    )
 
         return _to_dto(entity)
 

@@ -113,7 +113,26 @@ class StatCanClient:
             _GET_CUBE_METADATA_URL,
             json=[{"productId": product_id}],
         )
-        response.raise_for_status()
+        # ``request`` only retries on {429, 409, 503} and returns any other
+        # non-2xx response unwrapped. A raw ``raise_for_status()`` would leak
+        # ``httpx.HTTPStatusError`` past the StatCan service boundary; cache-
+        # required mode upstream needs to see ``DataSourceError`` only.
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise DataSourceError(
+                message=(
+                    f"StatCan returned HTTP {exc.response.status_code} "
+                    f"for getCubeMetadata"
+                ),
+                error_code="DATASOURCE_HTTP_ERROR",
+                context={
+                    "url": _GET_CUBE_METADATA_URL,
+                    "method": "POST",
+                    "status_code": exc.response.status_code,
+                    "product_id": product_id,
+                },
+            ) from exc
         payload = response.json()
         if not isinstance(payload, list) or not payload:
             return None

@@ -24,7 +24,12 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.create_table(
         "cube_metadata_cache",
-        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column(
+            "id",
+            sa.BigInteger().with_variant(sa.Integer(), "sqlite"),
+            primary_key=True,
+            autoincrement=True,
+        ),
         sa.Column("cube_id", sa.String(length=50), nullable=False),
         sa.Column("product_id", sa.BigInteger(), nullable=False),
         sa.Column(
