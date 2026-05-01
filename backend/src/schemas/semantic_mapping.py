@@ -28,6 +28,7 @@ class SemanticMappingConfig(BaseModel):
 
     dimension_filters: dict[str, str] = Field(
         ...,
+        min_length=1,  # at least one filter — empty cell selection is meaningless
         description=(
             "Fixed filters identifying the specific cube cell. Example: "
             "{'Geography': 'Canada', 'Products': 'All-items'}. "
@@ -36,10 +37,12 @@ class SemanticMappingConfig(BaseModel):
     )
     measure: str = Field(
         ...,
+        min_length=1,
         description="Cube measure column name to read (e.g. 'Value').",
     )
     unit: str = Field(
         ...,
+        min_length=1,
         description="Display unit ('index', 'CAD', '%', 'persons').",
     )
     frequency: Frequency = Field(
@@ -68,9 +71,11 @@ class SemanticMappingConfig(BaseModel):
 
 
 class SemanticMappingCreate(BaseModel):
-    cube_id: str = Field(..., max_length=50)
-    semantic_key: str = Field(..., max_length=200, pattern=r"^[a-z0-9_.-]+$")
-    label: str = Field(..., max_length=200)
+    cube_id: str = Field(..., min_length=1, max_length=50)
+    semantic_key: str = Field(
+        ..., min_length=1, max_length=200, pattern=r"^[a-z0-9_.-]+$"
+    )
+    label: str = Field(..., min_length=1, max_length=200)
     description: str | None = None
     config: SemanticMappingConfig
     is_active: bool = True

@@ -84,19 +84,36 @@ class SemanticMappingRepository:
     ) -> tuple[SemanticMapping, bool]:
         """Idempotent upsert by (cube_id, semantic_key). Used by seed CLI.
 
+        Phase 3.1a contract: re-running the seed CLI on the same YAML must
+        NOT bump version. Comparing normalized payload to existing row
+        guarantees no-op on identical input. Without this guard the
+        before_update event listener increments version on every flush,
+        breaking staleness checks.
+
         Returns ``(mapping, was_created)``.
         """
         existing = await self.get_by_key(payload.cube_id, payload.semantic_key)
-        if existing is not None:
-            existing.label = payload.label
-            existing.description = payload.description
-            existing.config = payload.config.model_dump()
-            existing.is_active = payload.is_active
-            existing.updated_by = updated_by
-            await self._session.flush()
+        if existing is None:
+            created = await self.create(payload, updated_by=updated_by)
+            return created, True
+
+        new_config = payload.config.model_dump()
+        changed = (
+            existing.label != payload.label
+            or existing.description != payload.description
+            or existing.config != new_config
+            or existing.is_active != payload.is_active
+        )
+        if not changed:
             return existing, False
-        created = await self.create(payload, updated_by=updated_by)
-        return created, True
+
+        existing.label = payload.label
+        existing.description = payload.description
+        existing.config = new_config
+        existing.is_active = payload.is_active
+        existing.updated_by = updated_by
+        await self._session.flush()
+        return existing, False
 
     async def update(
         self,
@@ -105,14 +122,28 @@ class SemanticMappingRepository:
         *,
         updated_by: str | None = None,
     ) -> SemanticMapping:
-        if payload.label is not None:
-            mapping.label = payload.label
-        if payload.description is not None:
-            mapping.description = payload.description
-        if payload.config is not None:
+        """PATCH-style update: only fields present in payload are modified.
+
+        Pydantic ``model_dump(exclude_unset=True)`` distinguishes omitted
+        from explicit null. Important for 3.1b admin UI: PATCH with
+        ``description: null`` must clear the field; PATCH without
+        ``description`` must leave it unchanged.
+
+        ``config`` cannot be cleared (NOT NULL). Explicit ``config: null`` is
+        treated as "omitted" — the field stays. Future schema-level rejection
+        of explicit null on config is fine; for 3.1a we tolerate it.
+        """
+        updates = payload.model_dump(exclude_unset=True)
+
+        if "label" in updates:
+            mapping.label = updates["label"]
+        if "description" in updates:
+            mapping.description = updates["description"]  # may be None to clear
+        if "config" in updates and updates["config"] is not None:
             mapping.config = payload.config.model_dump()
-        if payload.is_active is not None:
-            mapping.is_active = payload.is_active
+        if "is_active" in updates:
+            mapping.is_active = updates["is_active"]
+
         mapping.updated_by = updated_by
         await self._session.flush()
         return mapping

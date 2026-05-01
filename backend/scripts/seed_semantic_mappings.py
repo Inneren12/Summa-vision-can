@@ -5,8 +5,15 @@ Usage::
     cd backend
     python scripts/seed_semantic_mappings.py <yaml_path> [<yaml_path> ...]
 
-Idempotent: re-running same YAML upserts based on
-``(cube_id, semantic_key)``.
+Idempotent: re-running the same YAML is a no-op (no version bump, no DB
+write) thanks to ``SemanticMappingRepository.upsert_by_key``
+change-detection.
+
+Commit granularity: each YAML file is committed independently. If multiple
+files are passed and an earlier file succeeds before a later one fails,
+already-committed mappings remain. For all-or-nothing across multiple
+files, pass them in a single YAML or wrap in a transaction at the call
+site.
 
 Phase 3.1a explicitly does NOT validate cube_id existence or dimension
 correctness here. Validation hooks in once SemanticMappingValidator

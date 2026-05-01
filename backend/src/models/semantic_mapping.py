@@ -62,9 +62,11 @@ class SemanticMapping(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    cube_id: Mapped[str] = mapped_column(
-        String(length=50), nullable=False, index=True
-    )
+    # Composite index ix_semantic_mappings_cube_active (cube_id, is_active)
+    # covers the primary access pattern; PostgreSQL uses the leading column
+    # for cube_id-only queries, so a separate single-column index would be
+    # redundant.
+    cube_id: Mapped[str] = mapped_column(String(length=50), nullable=False)
     semantic_key: Mapped[str] = mapped_column(String(length=200), nullable=False)
     label: Mapped[str] = mapped_column(String(length=200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)

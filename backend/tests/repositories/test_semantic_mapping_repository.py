@@ -166,3 +166,79 @@ class TestSemanticMappingRepository:
 
         assert mapping.label == original_label  # unchanged
         assert mapping.description == "new desc"
+
+    async def test_upsert_by_key_same_payload_does_not_increment_version(
+        self, db_session
+    ):
+        """Phase 3.1a contract: re-seeding identical YAML must not bump version.
+
+        Otherwise before_update event listener would mark all existing
+        snapshots stale on every CLI seed run.
+        """
+        repo = SemanticMappingRepository(db_session)
+        payload = _make_create_payload()
+
+        first, was_created = await repo.upsert_by_key(payload)
+        await db_session.commit()
+        assert was_created is True
+        assert first.version == 1
+
+        second, was_created = await repo.upsert_by_key(payload)
+        await db_session.commit()
+        assert was_created is False
+        assert second.id == first.id
+        assert second.version == 1  # NOT bumped — payload unchanged
+
+    async def test_upsert_by_key_changed_payload_increments_version(
+        self, db_session
+    ):
+        """Counterpart: actual changes DO bump version."""
+        repo = SemanticMappingRepository(db_session)
+        payload = _make_create_payload()
+
+        first, _ = await repo.upsert_by_key(payload)
+        await db_session.commit()
+        assert first.version == 1
+
+        # Modify label
+        payload.label = "Different label"
+        second, was_created = await repo.upsert_by_key(payload)
+        await db_session.commit()
+        assert was_created is False
+        assert second.version == 2  # bumped because label changed
+
+    async def test_update_can_clear_description_with_explicit_null(
+        self, db_session
+    ):
+        """3.1b admin UI must be able to clear nullable fields via PATCH."""
+        repo = SemanticMappingRepository(db_session)
+        payload = _make_create_payload()
+        payload.description = "initial description"
+        mapping = await repo.create(payload)
+        await db_session.commit()
+        assert mapping.description == "initial description"
+
+        # Explicit null clears the field
+        await repo.update(
+            mapping,
+            SemanticMappingUpdate(description=None),
+        )
+        await db_session.commit()
+        assert mapping.description is None
+
+    async def test_update_omitted_field_unchanged(self, db_session):
+        """PATCH semantics: fields not in payload stay as-is."""
+        repo = SemanticMappingRepository(db_session)
+        payload = _make_create_payload()
+        payload.description = "keep me"
+        mapping = await repo.create(payload)
+        await db_session.commit()
+
+        # Update only label — description must remain
+        await repo.update(
+            mapping,
+            SemanticMappingUpdate(label="new label"),
+        )
+        await db_session.commit()
+        assert mapping.label == "new label"
+        assert mapping.description == "keep me"  # untouched

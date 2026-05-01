@@ -25,7 +25,7 @@ class TestSemanticMappingConfig:
     def test_invalid_frequency_rejected(self):
         with pytest.raises(ValidationError):
             SemanticMappingConfig(
-                dimension_filters={},
+                dimension_filters={"Geography": "Canada"},
                 measure="Value",
                 unit="index",
                 frequency="weekly",  # not in Literal
@@ -34,7 +34,7 @@ class TestSemanticMappingConfig:
     def test_invalid_metric_rejected(self):
         with pytest.raises(ValidationError):
             SemanticMappingConfig(
-                dimension_filters={},
+                dimension_filters={"Geography": "Canada"},
                 measure="Value",
                 unit="index",
                 frequency="monthly",
@@ -47,7 +47,7 @@ class TestSemanticMappingConfig:
     def test_extra_fields_rejected(self):
         with pytest.raises(ValidationError):
             SemanticMappingConfig(
-                dimension_filters={},
+                dimension_filters={"Geography": "Canada"},
                 measure="Value",
                 unit="index",
                 frequency="monthly",
@@ -89,4 +89,50 @@ class TestSemanticMappingCreate:
                 semantic_key="cpi canada",  # space forbidden
                 label="x",
                 config=self._valid_config(),
+            )
+
+
+class TestStringMinLength:
+    def _valid_config(self) -> SemanticMappingConfig:
+        return SemanticMappingConfig(
+            dimension_filters={"Geography": "Canada"},
+            measure="Value",
+            unit="index",
+            frequency="monthly",
+        )
+
+    def test_empty_cube_id_rejected(self):
+        with pytest.raises(ValidationError):
+            SemanticMappingCreate(
+                cube_id="",
+                semantic_key="x.y",
+                label="x",
+                config=self._valid_config(),
+            )
+
+    def test_empty_label_rejected(self):
+        with pytest.raises(ValidationError):
+            SemanticMappingCreate(
+                cube_id="18-10-0004",
+                semantic_key="x.y",
+                label="",
+                config=self._valid_config(),
+            )
+
+    def test_empty_dimension_filters_rejected(self):
+        with pytest.raises(ValidationError):
+            SemanticMappingConfig(
+                dimension_filters={},  # Phase 3.1a requires at least one filter
+                measure="Value",
+                unit="index",
+                frequency="monthly",
+            )
+
+    def test_empty_measure_rejected(self):
+        with pytest.raises(ValidationError):
+            SemanticMappingConfig(
+                dimension_filters={"Geography": "Canada"},
+                measure="",
+                unit="index",
+                frequency="monthly",
             )
