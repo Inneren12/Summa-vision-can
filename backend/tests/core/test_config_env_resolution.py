@@ -38,6 +38,19 @@ def test_environment_reads_from_app_env_alias(monkeypatch: pytest.MonkeyPatch) -
     assert s.environment == "production"
 
 
+
+
+def test_app_env_takes_precedence_over_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase 2 deploy fix: APP_ENV is canonical; ENVIRONMENT is legacy alias.
+    When both are set with conflicting values, APP_ENV must win.
+    """
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    _set_required(monkeypatch)
+
+    s = Settings(_env_file=None)
+    assert s.environment == "production"
+
 def test_production_requires_prod_secrets_when_resolved_from_app_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

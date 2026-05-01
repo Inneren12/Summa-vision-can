@@ -16,11 +16,10 @@ services:
     # must be runtime-configurable, add it here deliberately.
     environment:
       # Application mode
-      # Backend Settings accepts both APP_ENV and ENVIRONMENT aliases.
-      APP_ENV: ${APP_ENV:-development}
-      ENVIRONMENT: ${APP_ENV:-development}
+      # APP_ENV is required at compose render time (fail-fast).
+      APP_ENV: ${APP_ENV:?APP_ENV is required}
       DEBUG: ${DEBUG:-false}
-      LOG_FORMAT: ${LOG_FORMAT:-console}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Database
       DATABASE_URL: ${DATABASE_URL}

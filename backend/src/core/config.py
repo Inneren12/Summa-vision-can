@@ -36,7 +36,9 @@ class Settings(BaseSettings):
     debug: bool = False
     environment: str = Field(
         default="development",
-        validation_alias=AliasChoices("ENVIRONMENT", "APP_ENV"),
+        validation_alias=AliasChoices("APP_ENV", "ENVIRONMENT"),
+        description="Runtime environment: development | staging | production. "
+        "APP_ENV is canonical; ENVIRONMENT accepted as legacy alias.",
     )
 
     # --- Application ---
