@@ -26,7 +26,7 @@ def upgrade() -> None:
         "cube_metadata_cache",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("cube_id", sa.String(length=50), nullable=False),
-        sa.Column("product_id", sa.Integer(), nullable=False),
+        sa.Column("product_id", sa.BigInteger(), nullable=False),
         sa.Column(
             "dimensions",
             postgresql.JSONB(astext_type=sa.Text()).with_variant(

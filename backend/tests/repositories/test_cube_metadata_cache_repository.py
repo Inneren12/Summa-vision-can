@@ -53,6 +53,13 @@ class TestCubeMetadataCacheRepository:
     async def test_upsert_with_identical_payload_returns_changed_false_and_does_not_bump_updated_at(
         self, db_session
     ):
+        """No-op path: identical content AND identical fetched_at returns changed=False.
+
+        Reviewer P1 note: 'identical payload' here MUST include the
+        ``fetched_at`` timestamp. A successful re-fetch with new
+        ``fetched_at`` advances freshness even when content is byte-equal
+        (see ``test_upsert_same_metadata_new_fetched_at_advances_freshness``).
+        """
         repo = CubeMetadataCacheRepository(db_session)
         entity, _ = await repo.upsert(**_payload())
         await db_session.commit()
@@ -67,6 +74,37 @@ class TestCubeMetadataCacheRepository:
         assert changed is False
         assert entity2.id == entity.id
         assert entity2.updated_at == first_updated_at
+
+    @pytest.mark.asyncio
+    async def test_upsert_same_metadata_new_fetched_at_advances_freshness(
+        self, db_session
+    ):
+        """Reviewer P1: identical content with advanced fetched_at must update the row.
+
+        ``fetched_at`` is the freshness signal used by ``refresh_all_stale``;
+        if a live re-fetch with byte-equal content didn't advance it, the row
+        would forever appear stale and trigger unbounded re-fetching.
+        """
+        repo = CubeMetadataCacheRepository(db_session)
+        initial_fetched_at = _now()
+        later_fetched_at = _now() + timedelta(days=2)
+
+        entity1, changed1 = await repo.upsert(
+            **_payload(fetched_at=initial_fetched_at)
+        )
+        await db_session.commit()
+        assert changed1 is True
+        assert entity1.fetched_at == initial_fetched_at
+        original_id = entity1.id
+
+        entity2, changed2 = await repo.upsert(
+            **_payload(fetched_at=later_fetched_at)
+        )
+        await db_session.commit()
+
+        assert changed2 is True, "freshness advance must count as a change"
+        assert entity2.fetched_at == later_fetched_at, "fetched_at must advance"
+        assert entity2.id == original_id, "same row, not a duplicate insert"
 
     @pytest.mark.asyncio
     async def test_upsert_with_modified_dimensions_returns_changed_true_and_bumps_updated_at(

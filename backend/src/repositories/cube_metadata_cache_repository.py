@@ -47,13 +47,25 @@ class CubeMetadataCacheRepository:
         cube_title_fr: str | None,
         fetched_at: datetime,
     ) -> tuple[CubeMetadataCache, bool]:
-        """Idempotent upsert keyed by ``cube_id``.
+        """Upsert a cube metadata cache row.
 
-        Returns ``(entity, changed)``. ``changed=False`` means the existing
-        row already matched the new payload exactly; the row is returned
-        untouched and ``updated_at`` is NOT bumped. ``dimensions``
-        equality is dict-level — callers MUST pass an already-normalized
-        payload (``normalize_dimensions``) so both sides are comparable.
+        Returns:
+            Tuple of ``(entity, changed)``. ``changed=False`` means the
+            upsert was a true no-op: identical content AND identical
+            ``fetched_at``. ``changed=True`` means either content changed
+            or freshness advanced (or both); the row was written.
+
+        Note:
+            A successful live fetch with unchanged content still advances
+            ``fetched_at`` and returns ``changed=True``. This is intentional
+            — ``fetched_at`` is the cache freshness signal used by
+            ``refresh_all_stale``; if it didn't advance, a row that StatCan
+            re-confirmed as unchanged would forever appear stale and cause
+            unbounded re-fetching (the over-fetching footnote in DEBT-051).
+
+            Callers that compare ``dimensions`` MUST pass an already-
+            normalized payload (``normalize_dimensions``) so both sides are
+            dict-comparable.
         """
         existing = await self.get_by_cube_id(cube_id)
         if existing is None:
@@ -70,16 +82,25 @@ class CubeMetadataCacheRepository:
             await self._session.flush()
             return entity, True
 
-        unchanged = (
+        content_unchanged = (
             existing.product_id == product_id
             and existing.dimensions == dimensions
             and existing.frequency_code == frequency_code
             and existing.cube_title_en == cube_title_en
             and existing.cube_title_fr == cube_title_fr
         )
-        if unchanged:
+
+        if content_unchanged and existing.fetched_at == fetched_at:
+            # True no-op: identical content AND identical freshness timestamp.
+            # Fires when the same payload is re-fetched by the same caller at
+            # the same instant (e.g. concurrent get_or_fetch race winner reads
+            # its own write).
             return existing, False
 
+        # Either content changed OR freshness advanced. Even if content is
+        # identical, fetched_at MUST advance to mark the row as live-verified
+        # so refresh_all_stale stops re-selecting it on every sweep
+        # (DEBT-051: blind nightly refresh footnote).
         existing.product_id = product_id
         existing.dimensions = dimensions
         existing.frequency_code = frequency_code

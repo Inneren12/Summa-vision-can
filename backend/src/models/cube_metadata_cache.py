@@ -48,7 +48,16 @@ class CubeMetadataCache(Base):
         autoincrement=True,
     )
     cube_id: Mapped[str] = mapped_column(String(length=50), nullable=False)
-    product_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    product_id: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        doc=(
+            "StatCan WDS productId (numeric form). BigInt to defensively "
+            "accommodate 10-digit table-id forms (e.g. 1810000401) if seed "
+            "format ever changes; current StatCan WDS productId is 8-digit "
+            "(e.g. 18100004)."
+        ),
+    )
     dimensions: Mapped[dict] = mapped_column(
         JSONB(astext_type=sa.Text()).with_variant(JSON(), "sqlite"),
         nullable=False,

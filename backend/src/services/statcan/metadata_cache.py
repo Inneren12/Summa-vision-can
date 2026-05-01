@@ -94,6 +94,35 @@ class StatCanUnavailableError(MetadataCacheError):
         self.cube_id = cube_id
 
 
+class CubeMetadataProductMismatchError(MetadataCacheError):
+    """Cache row's ``product_id`` conflicts with the caller's request.
+
+    Raised by :meth:`StatCanMetadataCacheService.get_or_fetch` and
+    :meth:`StatCanMetadataCacheService.refresh` when an existing cache
+    row keyed by ``cube_id`` has a different ``product_id`` than the
+    caller is passing. This indicates a cache-key integrity problem:
+    either the seed YAML or the caller is passing the wrong
+    ``product_id`` for this ``cube_id``. Auto-healing (silently
+    overwriting ``product_id``) would mask the upstream bug, so the
+    caller must reconcile the mapping before retrying.
+    """
+
+    def __init__(
+        self,
+        *,
+        cube_id: str,
+        expected_product_id: int,
+        actual_product_id: int,
+    ) -> None:
+        super().__init__(
+            f"product_id mismatch for cube_id={cube_id!r}: "
+            f"cached={expected_product_id}, requested={actual_product_id}"
+        )
+        self.cube_id = cube_id
+        self.expected_product_id = expected_product_id
+        self.actual_product_id = actual_product_id
+
+
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
@@ -177,6 +206,12 @@ class StatCanMetadataCacheService:
             repo = CubeMetadataCacheRepository(session)
             cached = await repo.get_by_cube_id(cube_id)
         if cached is not None:
+            if cached.product_id != product_id:
+                raise CubeMetadataProductMismatchError(
+                    cube_id=cube_id,
+                    expected_product_id=cached.product_id,
+                    actual_product_id=product_id,
+                )
             return _to_dto(cached)
 
         try:
@@ -202,17 +237,33 @@ class StatCanMetadataCacheService:
     ) -> CubeMetadataCacheEntry:
         """Always fetch from StatCan and upsert.
 
-        ``force`` is reserved for future invalidation paths (DEBT-045)
+        ``force`` is reserved for future invalidation paths (DEBT-051)
         and is currently a no-op flag — the method always fetches.
 
         Raises
         ------
+        CubeMetadataProductMismatchError
+            When an existing cache row's ``product_id`` differs from the
+            caller's argument (cache-key integrity error; pre-fetch).
         StatCanUnavailableError
             When the StatCan API is unreachable. No cache fallback.
         CubeNotFoundError
             When StatCan responds without a SUCCESS envelope.
         """
-        del force  # reserved for DEBT-045 (event-driven invalidation)
+        del force  # reserved for DEBT-051 (event-driven invalidation)
+
+        # Pre-fetch integrity check: a refresh that overwrote a cached row's
+        # product_id would silently mask an upstream cube_id↔product_id
+        # mapping bug. Same guard as get_or_fetch — refuse to auto-heal.
+        async with self._session_factory() as session:
+            repo = CubeMetadataCacheRepository(session)
+            cached = await repo.get_by_cube_id(cube_id)
+        if cached is not None and cached.product_id != product_id:
+            raise CubeMetadataProductMismatchError(
+                cube_id=cube_id,
+                expected_product_id=cached.product_id,
+                actual_product_id=product_id,
+            )
 
         try:
             payload = await self._client.get_cube_metadata(product_id)

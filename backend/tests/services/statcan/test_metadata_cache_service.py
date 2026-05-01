@@ -20,6 +20,7 @@ from src.repositories.cube_metadata_cache_repository import (
 )
 from src.services.statcan.client import StatCanClient
 from src.services.statcan.metadata_cache import (
+    CubeMetadataProductMismatchError,
     CubeNotFoundError,
     StatCanMetadataCacheService,
     StatCanUnavailableError,
@@ -173,6 +174,32 @@ class TestGetOrFetch:
         with pytest.raises(CubeNotFoundError):
             await service.get_or_fetch("18-10-0004-01", 18100004)
 
+    @pytest.mark.asyncio
+    async def test_raises_product_mismatch_when_cached_product_id_differs(
+        self, service, session_factory, mock_client
+    ):
+        """Reviewer P2: cache hit with mismatched product_id is a key-integrity error."""
+        await _seed(
+            session_factory,
+            cube_id="18-10-0004-01",
+            product_id=18100004,
+            dimensions=normalize_dimensions(_make_payload()),
+            frequency_code="6",
+            cube_title_en="CPI",
+            cube_title_fr="IPC",
+            fetched_at=_FIXED_NOW,
+        )
+
+        with pytest.raises(CubeMetadataProductMismatchError) as exc_info:
+            await service.get_or_fetch("18-10-0004-01", 99999999)
+
+        assert exc_info.value.cube_id == "18-10-0004-01"
+        assert exc_info.value.expected_product_id == 18100004
+        assert exc_info.value.actual_product_id == 99999999
+
+        # StatCan client must NOT be called — the mismatch is detected pre-fetch.
+        mock_client.get_cube_metadata.assert_not_called()
+
 
 class TestRefresh:
     @pytest.mark.asyncio
@@ -213,6 +240,30 @@ class TestRefresh:
 
         mock_client.get_cube_metadata.assert_awaited_once_with(18100004)
         assert entry.cube_title_en == "CPI v2"
+
+    @pytest.mark.asyncio
+    async def test_refresh_raises_product_mismatch_when_cached_product_id_differs(
+        self, service, session_factory, mock_client
+    ):
+        """Reviewer P2: refresh of cube_id with wrong product_id is the same
+        cache-key integrity error — refuse to auto-heal, refuse to fetch."""
+        await _seed(
+            session_factory,
+            cube_id="18-10-0004-01",
+            product_id=18100004,
+            dimensions=normalize_dimensions(_make_payload()),
+            frequency_code="6",
+            cube_title_en="CPI",
+            cube_title_fr="IPC",
+            fetched_at=_FIXED_NOW,
+        )
+
+        with pytest.raises(CubeMetadataProductMismatchError) as exc_info:
+            await service.refresh("18-10-0004-01", 99999999)
+
+        assert exc_info.value.expected_product_id == 18100004
+        assert exc_info.value.actual_product_id == 99999999
+        mock_client.get_cube_metadata.assert_not_called()
 
 
 class TestRefreshAllStale:
