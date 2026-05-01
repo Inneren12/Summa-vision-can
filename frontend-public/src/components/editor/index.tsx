@@ -1221,6 +1221,10 @@ export default function InfographicEditor({
     message: string;
     details?: string[];
   } | null>(null);
+  // Export-in-flight lock. zipExportPhase is null until exportZip's first
+  // onProgress() fires, so it cannot guard the pre-fetch window. This ref
+  // is set synchronously at exportZipCb entry and released in finally.
+  const exportInFlightRef = useRef(false);
 
   const exportZipCb = useCallback(async () => {
     // QA gate: never produce broken output. ZIP export is blocked when there
@@ -1233,6 +1237,8 @@ export default function InfographicEditor({
     if (!fontsReady) return;
     // Prevent re-entry while a previous export is in progress.
     if (zipExportPhase) return;
+    if (exportInFlightRef.current) return;
+    exportInFlightRef.current = true;
 
     try {
       if (!publicationId) {
@@ -1247,7 +1253,7 @@ export default function InfographicEditor({
       if (!baseUrl) {
         setZipExportNotice({
           kind: 'error',
-          message: 'NEXT_PUBLIC_SITE_URL is not configured. Cannot build publish kit.',
+          message: t('editor.export_zip.toast.site_url_missing'),
         });
         return;
       }
@@ -1306,6 +1312,8 @@ export default function InfographicEditor({
           error: err instanceof Error ? err.message : String(err),
         }),
       });
+    } finally {
+      exportInFlightRef.current = false;
     }
   }, [canExp, fontsReady, doc, pal, publicationId, zipExportPhase, t]);
 
