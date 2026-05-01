@@ -18,6 +18,13 @@
 
 const STORAGE_KEY = 'utm_attribution';
 
+/**
+ * sessionStorage key under which the captured UTM attribution is
+ * persisted. Exported so tests and callers stay in lockstep with the
+ * source of truth — never hardcode this string elsewhere.
+ */
+export const UTM_STORAGE_KEY = STORAGE_KEY;
+
 const UTM_KEYS = [
   'utm_source',
   'utm_medium',

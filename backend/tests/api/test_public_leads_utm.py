@@ -17,6 +17,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -219,7 +220,7 @@ class TestCaptureUtmPersistence:
 
 class TestLeadCaptureRequestSchema:
     def test_extra_forbid_default(self) -> None:
-        with pytest.raises(Exception):  # ValidationError, but cheap import
+        with pytest.raises(ValidationError):
             LeadCaptureRequest(
                 email="user@example.com",
                 asset_id=1,
@@ -235,6 +236,37 @@ class TestLeadCaptureRequestSchema:
         )
         assert req.utm_source is None
         assert req.utm_content is None
+
+    def test_utm_whitespace_normalized_to_none(self) -> None:
+        """Whitespace-only UTM is normalized to None at validation time.
+
+        Prevents the repository's group-level backfill from treating a
+        whitespace-stuffed lead as already attributed (Phase 2.3).
+        """
+        payload = LeadCaptureRequest(
+            email="x@y.com",
+            asset_id=1,
+            turnstile_token="t",
+            utm_source="   ",
+            utm_medium="",
+            utm_campaign="\t\n  ",
+            utm_content="ln_real",
+        )
+        assert payload.utm_source is None
+        assert payload.utm_medium is None
+        assert payload.utm_campaign is None
+        assert payload.utm_content == "ln_real"
+
+    def test_utm_surrounding_whitespace_trimmed(self) -> None:
+        payload = LeadCaptureRequest(
+            email="x@y.com",
+            asset_id=1,
+            turnstile_token="t",
+            utm_source="  reddit  ",
+            utm_content=" ln_abc ",
+        )
+        assert payload.utm_source == "reddit"
+        assert payload.utm_content == "ln_abc"
 
 
 # ---------------------------------------------------------------------------
@@ -326,7 +358,7 @@ async def _seed_publication_with_leads(
         await session.flush()
         pub_id = pub.id
 
-        for i, email in enumerate(matching_emails):
+        for email in matching_emails:
             lead = Lead(
                 email=email,
                 ip_address="127.0.0.1",

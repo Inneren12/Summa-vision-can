@@ -1,14 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { captureLeadForDownload } from '@/lib/api/client';
-import {
-  captureUtmFromUrl,
-  getStoredUtm,
-  type UtmAttribution,
-} from '@/lib/attribution/utm';
+import { getStoredUtm } from '@/lib/attribution/utm';
 import { emailSchema, type EmailFormValues } from '@/lib/schemas';
 import TurnstileWidget from '@/components/forms/TurnstileWidget';
 
@@ -25,14 +21,6 @@ export function DownloadModalContent({ assetId, onClose }: DownloadModalContentP
   const [submittedEmail, setSubmittedEmail] = useState<string>('');
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileRef = useRef<{ reset: () => void } | null>(null);
-  const utmRef = useRef<UtmAttribution>({});
-
-  // Phase 2.3: capture UTM params on mount and stash them in
-  // sessionStorage so they survive a page refresh between landing and
-  // submit. ``captureUtmFromUrl`` is idempotent on a clean URL.
-  useEffect(() => {
-    utmRef.current = captureUtmFromUrl();
-  }, []);
 
   const {
     register,
@@ -60,9 +48,11 @@ export function DownloadModalContent({ assetId, onClose }: DownloadModalContentP
     setModalState('submitting');
     setServerError(null);
     try {
-      const utm = Object.keys(utmRef.current).length > 0
-        ? utmRef.current
-        : getStoredUtm();
+      // Phase 2.3: UTM was already captured at root layout mount via
+      // UtmCaptureBoundary. Read from sessionStorage at submit time so
+      // we still get attribution after the visitor navigates client-side
+      // away from the original ``?utm_*`` landing URL.
+      const utm = getStoredUtm();
       await captureLeadForDownload(values.email, assetId, turnstileToken, utm);
       setSubmittedEmail(values.email);
       setModalState('success');

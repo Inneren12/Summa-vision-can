@@ -20,6 +20,32 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.lead import Lead
 
 
+def _has_any_utm(lead: Lead) -> bool:
+    """Return True if the lead has at least one UTM field populated."""
+    return any(
+        value is not None
+        for value in (
+            lead.utm_source,
+            lead.utm_medium,
+            lead.utm_campaign,
+            lead.utm_content,
+        )
+    )
+
+
+def _has_incoming_utm(
+    utm_source: str | None,
+    utm_medium: str | None,
+    utm_campaign: str | None,
+    utm_content: str | None,
+) -> bool:
+    """Return True if the incoming kwargs include at least one UTM value."""
+    return any(
+        value is not None
+        for value in (utm_source, utm_medium, utm_campaign, utm_content)
+    )
+
+
 class LeadRepository:
     """Encapsulates persistence logic for :class:`Lead`.
 
@@ -161,32 +187,29 @@ class LeadRepository:
         utm_campaign: str | None,
         utm_content: str | None,
     ) -> None:
-        """Phase 2.3: fill missing UTM fields on an existing lead.
+        """Phase 2.3: group-level UTM backfill on an existing lead.
 
-        First non-null attribution wins. Already-set UTM values are
-        never overwritten — a lead that first arrived attributed to one
-        publication keeps that attribution forever, even if the same
-        email later submits via a different publish-kit URL.
+        Semantics (founder-locked):
 
-        A lead that first submitted without any UTM gets attribution
-        recorded the next time the same (email, asset_id) pair re-submits
-        with UTM, so organic-then-attributed flows are not silently lost.
+        * Existing lead with **any** UTM field set is treated as already
+          attributed; incoming UTM is dropped wholesale. Field-by-field
+          backfill would mix ``utm_source`` from one campaign with
+          ``utm_content`` from another, producing wrong attribution.
+        * Only fully anonymous existing leads accept incoming
+          attribution, and they accept the **entire group atomically**.
+        * If incoming UTM is itself empty, no-op.
         """
-        changed = False
-        if lead.utm_source is None and utm_source is not None:
-            lead.utm_source = utm_source
-            changed = True
-        if lead.utm_medium is None and utm_medium is not None:
-            lead.utm_medium = utm_medium
-            changed = True
-        if lead.utm_campaign is None and utm_campaign is not None:
-            lead.utm_campaign = utm_campaign
-            changed = True
-        if lead.utm_content is None and utm_content is not None:
-            lead.utm_content = utm_content
-            changed = True
-        if changed:
-            await self._session.flush()
+        if not _has_incoming_utm(
+            utm_source, utm_medium, utm_campaign, utm_content
+        ):
+            return
+        if _has_any_utm(lead):
+            return
+        lead.utm_source = utm_source
+        lead.utm_medium = utm_medium
+        lead.utm_campaign = utm_campaign
+        lead.utm_content = utm_content
+        await self._session.flush()
 
     async def exists(self, email: str, asset_id: str) -> bool:
         """Check whether a lead already exists for a given email + asset.

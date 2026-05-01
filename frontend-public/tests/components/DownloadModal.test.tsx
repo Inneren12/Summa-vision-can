@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DownloadModal from '@/components/forms/DownloadModal';
 import * as api from '@/lib/api/client';
+import { UTM_STORAGE_KEY } from '@/lib/attribution/utm';
 
 jest.mock('@/lib/api/client');
 jest.mock('@/components/forms/TurnstileWidget', () => {
@@ -175,17 +176,22 @@ describe('DownloadModal', () => {
     );
   });
 
-  it('forwards UTM params from URL to lead capture (Phase 2.3)', async () => {
+  it('forwards UTM params from sessionStorage to lead capture (Phase 2.3)', async () => {
     mockCaptureLeadForDownload.mockResolvedValue({
       message: 'Check your email for the download link',
     });
 
-    // Seed a publish-kit URL: utm_content carries the lineage_key.
-    // pushState avoids jsdom's "Cannot redefine window.location" trap.
-    window.history.pushState(
-      {},
-      '',
-      '/g/123?utm_source=reddit&utm_medium=social&utm_campaign=publish_kit&utm_content=ln_abc123',
+    // Simulate the root-layout UtmCaptureBoundary having already
+    // persisted the publish-kit attribution. The modal itself does not
+    // re-read the URL — it just reads sessionStorage at submit time.
+    window.sessionStorage.setItem(
+      UTM_STORAGE_KEY,
+      JSON.stringify({
+        utm_source: 'reddit',
+        utm_medium: 'social',
+        utm_campaign: 'publish_kit',
+        utm_content: 'ln_abc123',
+      }),
     );
 
     render(<DownloadModal assetId={1} />);

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, DM_Sans, JetBrains_Mono } from "next/font/google";
+import { UtmCaptureBoundary } from "@/components/UtmCaptureBoundary";
 import { WebVitalsReporter } from "@/lib/web-vitals";
 import "./globals.css";
 
@@ -36,7 +37,7 @@ export default function RootLayout({
     <html lang="en" className={`${bricolageGrotesque.variable} ${dmSans.variable} ${jetBrainsMono.variable}`}>
       <body>
         <WebVitalsReporter />
-        {children}
+        <UtmCaptureBoundary>{children}</UtmCaptureBoundary>
       </body>
     </html>
   );

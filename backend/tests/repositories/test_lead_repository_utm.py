@@ -89,15 +89,21 @@ class TestLeadRepositoryUtmPersistence:
 
 @pytest.mark.asyncio
 class TestLeadRepositoryExistingLeadBackfill:
-    """Phase 2.3: organic-then-attributed flows must record UTM.
+    """Phase 2.3 group-level attribution backfill.
 
-    Founder-locked semantics: first non-null attribution wins. Already-
-    set UTM fields are never overwritten on a re-submit.
+    Founder-locked semantics:
+
+    * Existing lead with **any** UTM field set is treated as already
+      attributed — incoming UTM is dropped wholesale to avoid mixing
+      ``utm_source`` from one campaign with ``utm_content`` from another.
+    * Only fully anonymous existing leads accept incoming attribution,
+      and they accept the **entire group atomically**.
     """
 
-    async def test_existing_lead_backfills_missing_utm(
+    async def test_anonymous_existing_lead_accepts_full_utm_group(
         self, db_session: AsyncSession
     ) -> None:
+        """Existing lead with no UTM accepts full group atomically."""
         repo = LeadRepository(db_session)
 
         # First submit: no UTM (organic)
@@ -132,12 +138,51 @@ class TestLeadRepositoryExistingLeadBackfill:
         assert lead2.utm_campaign == "publish_kit"
         assert lead2.utm_content == "ln_abc123"
 
-    async def test_existing_lead_does_not_overwrite_utm(
+    async def test_existing_lead_with_any_utm_does_not_mix_groups(
         self, db_session: AsyncSession
     ) -> None:
+        """Existing lead with partial UTM is treated as attributed; new
+        UTM is dropped to avoid mixing groups."""
         repo = LeadRepository(db_session)
 
-        # First submit: with UTM
+        # First submit: partial UTM (only utm_content set)
+        await repo.get_or_create(
+            email="user@example.com",
+            ip_address="127.0.0.1",
+            asset_id="1",
+            is_b2b=False,
+            company_domain=None,
+            utm_content="ln_pub_A",
+        )
+        await db_session.commit()
+
+        # Second submit from different campaign with different group
+        lead2, _ = await repo.get_or_create(
+            email="user@example.com",
+            ip_address="127.0.0.1",
+            asset_id="1",
+            is_b2b=False,
+            company_domain=None,
+            utm_source="reddit",
+            utm_medium="social",
+            utm_campaign="publish_kit",
+            utm_content="ln_pub_B",
+        )
+        await db_session.commit()
+
+        # First-touch attribution wins atomically: utm_content stays
+        # ln_pub_A, utm_source stays None — NO MIXING.
+        assert lead2.utm_content == "ln_pub_A"
+        assert lead2.utm_source is None
+        assert lead2.utm_medium is None
+        assert lead2.utm_campaign is None
+
+    async def test_fully_attributed_existing_lead_does_not_overwrite(
+        self, db_session: AsyncSession
+    ) -> None:
+        """Existing lead with full UTM does NOT overwrite when new UTM arrives."""
+        repo = LeadRepository(db_session)
+
         await repo.get_or_create(
             email="user@example.com",
             ip_address="127.0.0.1",
@@ -149,8 +194,7 @@ class TestLeadRepositoryExistingLeadBackfill:
         )
         await db_session.commit()
 
-        # Second submit: different UTM
-        lead2, is_new = await repo.get_or_create(
+        lead2, _ = await repo.get_or_create(
             email="user@example.com",
             ip_address="127.0.0.1",
             asset_id="1",
@@ -161,43 +205,34 @@ class TestLeadRepositoryExistingLeadBackfill:
         )
         await db_session.commit()
 
-        # First-touch attribution preserved.
-        assert is_new is False
+        # First attribution preserved.
         assert lead2.utm_source == "reddit"
         assert lead2.utm_content == "ln_first"
 
-    async def test_existing_lead_backfills_only_null_fields(
+    async def test_anonymous_existing_lead_with_no_incoming_utm_noop(
         self, db_session: AsyncSession
     ) -> None:
-        """A partially-attributed lead has its NULL fields filled,
-        but already-set fields keep the original value."""
+        """Re-submit without UTM on anonymous lead is a no-op (still NULL)."""
         repo = LeadRepository(db_session)
 
-        # First submit: only utm_content set (e.g. share URL with just
-        # lineage_key, no other params).
         await repo.get_or_create(
             email="user@example.com",
             ip_address="127.0.0.1",
             asset_id="1",
             is_b2b=False,
             company_domain=None,
-            utm_content="ln_locked",
         )
         await db_session.commit()
 
-        # Second submit: utm_source set + different utm_content.
-        lead2, _ = await repo.get_or_create(
+        lead2, is_new = await repo.get_or_create(
             email="user@example.com",
             ip_address="127.0.0.1",
             asset_id="1",
             is_b2b=False,
             company_domain=None,
-            utm_source="reddit",
-            utm_content="ln_other",
         )
         await db_session.commit()
 
-        # utm_source was NULL → filled. utm_content was already set →
-        # NOT overwritten.
-        assert lead2.utm_source == "reddit"
-        assert lead2.utm_content == "ln_locked"
+        assert is_new is False
+        assert lead2.utm_source is None
+        assert lead2.utm_content is None

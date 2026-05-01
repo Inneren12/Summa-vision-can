@@ -4,9 +4,10 @@
 import {
   captureUtmFromUrl,
   getStoredUtm,
+  UTM_STORAGE_KEY,
 } from '@/lib/attribution/utm';
 
-const STORAGE_KEY = 'utm_attribution';
+const STORAGE_KEY = UTM_STORAGE_KEY;
 
 function setLocationSearch(search: string) {
   // Use pushState — jsdom forbids redefining window.location after first
