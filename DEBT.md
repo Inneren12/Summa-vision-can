@@ -235,6 +235,30 @@ Rules:
 
 ---
 
+### DEBT-050: Phase 3.1 deferred chunks
+
+- **Source:** Phase 3.1a Semantic Mapping foundation
+- **Added:** 2026-04-30
+- **Severity:** medium
+- **Category:** architecture
+- **Status:** active
+- **Description:** Phase 3.1a ships the semantic_mappings DB schema, ORM,
+  repository, and seed CLI. Remaining Phase 3.1 work is split across
+  3.1aa (cube_metadata_cache + StatCanMetadataCacheService),
+  3.1ab (validator using cache), 3.1b (admin CRUD endpoints + minimal
+  Flutter admin UI), 3.1c (semantic discovery + resolve endpoints),
+  and 3.1d (staleness check + hardening).
+- **Impact:** Mappings can only be saved via CLI seed script until 3.1b
+  ships. cube_id existence and dimension correctness are not validated
+  at save time until 3.1ab ships — operator must manually review YAML
+  before seeding. Frontend has no semantic picker until 3.1c ships;
+  legacy copy-paste workflow continues until then.
+- **Resolution:** Ship 3.1aa → 3.1ab → 3.1b → 3.1c → 3.1d in sequence.
+  Each is a separate PR.
+- **Target:** Phase 3.1d closure unblocks Phase 3.2 (frontend hybrid binding).
+
+---
+
 ## Resolved
 
 | ID | Description | Resolved in | Date |
