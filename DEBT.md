@@ -259,6 +259,33 @@ Rules:
 
 ---
 
+### DEBT-051: Event-driven StatCan metadata cache invalidation
+
+- **Source:** Phase 3.1aa recon (`docs/recon/phase-3-1aa.md` §G1)
+- **Added:** 2026-05-01
+- **Severity:** low
+- **Category:** ops
+- **Status:** accepted
+- **Description:** `cube_metadata_cache` is refreshed by a nightly APScheduler
+  cron job (`statcan_metadata_cache_refresh` at 15:00 UTC) using a blind stale
+  sweep over all rows older than 23h. StatCan publishes a `getChangedCubeList`
+  endpoint that returns cubes modified in a given window, but it is not yet
+  consumed by the cache invalidation path.
+- **Impact:** Cube metadata changes published by StatCan during the day are
+  reflected in the cache only after the next nightly run (up to ~24h delay).
+  No correctness impact for the validator (cache-required mode tolerates
+  staleness). Mild over-fetching: nightly job refreshes all rows even when
+  most haven't changed.
+- **Resolution:** Add a delta refresh path keyed by `getChangedCubeList`
+  results. Retain the nightly stale sweep as a safety fallback.
+- **Target:** Opportunistic — post-Phase 3.1 closure, when StatCan ETL
+  pipeline gets next material work.
+
+> Note 2026-05-01: recon proposed this as DEBT-045, but DEBT-045 is already
+> assigned (resolved) — next available ID was DEBT-051.
+
+---
+
 ## Resolved
 
 | ID | Description | Resolved in | Date |

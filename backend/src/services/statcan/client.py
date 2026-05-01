@@ -32,6 +32,11 @@ import structlog
 from src.core.exceptions import DataSourceError
 from src.core.rate_limit import AsyncTokenBucket
 from src.services.statcan.maintenance import StatCanMaintenanceGuard
+from src.services.statcan.schemas import CubeMetadataResponse
+
+_GET_CUBE_METADATA_URL: Final[str] = (
+    "https://www150.statcan.gc.ca/t1/wds/rest/getCubeMetadata"
+)
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(
     module="statcan.client",
@@ -88,6 +93,34 @@ class StatCanClient:
     async def get(self, url: str, **kwargs: Any) -> httpx.Response:
         """Convenience wrapper that delegates to :meth:`request` with ``GET``."""
         return await self.request("GET", url, **kwargs)
+
+    async def get_cube_metadata(
+        self, product_id: int
+    ) -> CubeMetadataResponse | None:
+        """POST to ``getCubeMetadata`` and return the validated envelope.
+
+        Returns ``None`` when StatCan responds with a non-``SUCCESS`` status
+        (e.g. unknown ``productId``).
+
+        Raises
+        ------
+        DataSourceError
+            For maintenance window, network, or retry-exhausted failures
+            (existing :meth:`request` behavior).
+        """
+        response = await self.request(
+            "POST",
+            _GET_CUBE_METADATA_URL,
+            json=[{"productId": product_id}],
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, list) or not payload:
+            return None
+        envelope = payload[0]
+        if envelope.get("status") != "SUCCESS" or "object" not in envelope:
+            return None
+        return CubeMetadataResponse.model_validate(envelope["object"])
 
     async def request(
         self,
