@@ -31,8 +31,9 @@ function pickUtm(utm: UtmAttribution | undefined): UtmAttribution {
   const out: UtmAttribution = {};
   for (const key of UTM_KEYS) {
     const value = utm[key];
-    if (typeof value === 'string' && value.length > 0) {
-      out[key] = value;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) out[key] = trimmed;
     }
   }
   return out;

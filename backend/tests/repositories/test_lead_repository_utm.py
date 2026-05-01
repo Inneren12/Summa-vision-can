@@ -2,7 +2,8 @@
 
 These tests use the in-memory SQLite ``db_session`` fixture so we are
 exercising the real ORM round-trip — they catch column / migration drift
-that the router-level mocks in ``tests/api/test_inquiries_utm.py`` cannot.
+that the router-level mocks in ``tests/api/test_public_leads_utm.py``
+cannot.
 """
 
 from __future__ import annotations

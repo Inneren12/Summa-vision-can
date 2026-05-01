@@ -268,6 +268,38 @@ class TestLeadCaptureRequestSchema:
         assert payload.utm_source == "reddit"
         assert payload.utm_content == "ln_abc"
 
+    def test_utm_non_string_value_rejected(self) -> None:
+        """Public endpoint must not coerce numbers/objects into UTM strings.
+
+        Phase 2.3 R3: the validator deliberately leaves non-strings
+        untouched so Pydantic's ``str | None`` annotation rejects them
+        with HTTP 422 instead of silently producing ``"42"`` or
+        ``"{'reddit': True}"`` as attribution.
+        """
+        with pytest.raises(ValidationError):
+            LeadCaptureRequest(
+                email="x@y.com",
+                asset_id=1,
+                turnstile_token="t",
+                utm_content=42,  # type: ignore[arg-type]
+            )
+
+        with pytest.raises(ValidationError):
+            LeadCaptureRequest(
+                email="x@y.com",
+                asset_id=1,
+                turnstile_token="t",
+                utm_source={"reddit": True},  # type: ignore[arg-type]
+            )
+
+        with pytest.raises(ValidationError):
+            LeadCaptureRequest(
+                email="x@y.com",
+                asset_id=1,
+                turnstile_token="t",
+                utm_medium=True,  # type: ignore[arg-type]
+            )
+
 
 # ---------------------------------------------------------------------------
 # Admin: per-publication leads endpoint

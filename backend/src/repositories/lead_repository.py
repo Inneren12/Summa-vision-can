@@ -20,10 +20,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.lead import Lead
 
 
+def _is_present(value: str | None) -> bool:
+    """Phase 2.3: empty / whitespace-only strings are NOT attribution.
+
+    The schema's ``_normalize_utm`` validator already strips empty
+    strings to ``None`` before they reach the repository, but the helper
+    must defend in depth: the repository can be called from migrations,
+    one-off scripts, future endpoints, or background backfills that do
+    not flow through ``LeadCaptureRequest``.
+    """
+    return value is not None and value.strip() != ""
+
+
 def _has_any_utm(lead: Lead) -> bool:
-    """Return True if the lead has at least one UTM field populated."""
+    """Return True if the lead has at least one populated UTM field."""
     return any(
-        value is not None
+        _is_present(value)
         for value in (
             lead.utm_source,
             lead.utm_medium,
@@ -41,8 +53,8 @@ def _has_incoming_utm(
 ) -> bool:
     """Return True if the incoming kwargs include at least one UTM value."""
     return any(
-        value is not None
-        for value in (utm_source, utm_medium, utm_campaign, utm_content)
+        _is_present(v)
+        for v in (utm_source, utm_medium, utm_campaign, utm_content)
     )
 
 
@@ -128,9 +140,12 @@ class LeadRepository:
         same (email, asset_id) pair, the :class:`IntegrityError` is caught,
         the session is rolled back, and the existing row is fetched instead.
 
-        Phase 2.3: when an existing row is returned, its NULL UTM fields
-        are backfilled from the supplied kwargs (first non-null wins;
-        see :meth:`_backfill_utm`).
+        Phase 2.3 attribution: when an existing row is returned, incoming
+        UTM is applied as a single atomic group. The group is set ONLY
+        if the existing row has no UTM at all (all four fields NULL).
+        If the existing row has any UTM field set, incoming attribution
+        is ignored — this avoids mixing campaign sources across visits.
+        See :meth:`_backfill_utm`.
 
         Args:
             email: Lead's email address.

@@ -64,6 +64,23 @@ describe('captureUtmFromUrl', () => {
     });
     // utm_content from old session is GONE — no mixing.
   });
+
+  it('trims surrounding whitespace from URL UTM values', () => {
+    setLocationSearch(
+      '?utm_source=%20reddit%20&utm_content=%20ln_abc%20',
+    );
+    expect(captureUtmFromUrl()).toEqual({
+      utm_source: 'reddit',
+      utm_content: 'ln_abc',
+    });
+  });
+
+  it('treats whitespace-only URL UTM as absent', () => {
+    setLocationSearch('?utm_source=%20%20&utm_content=ln_real');
+    const utm = captureUtmFromUrl();
+    expect(utm.utm_source).toBeUndefined();
+    expect(utm.utm_content).toBe('ln_real');
+  });
 });
 
 describe('getStoredUtm', () => {
@@ -84,6 +101,14 @@ describe('getStoredUtm', () => {
     window.sessionStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({ utm_source: 'reddit', utm_content: 42 }),
+    );
+    expect(getStoredUtm()).toEqual({ utm_source: 'reddit' });
+  });
+
+  it('trims stored UTM values defensively', () => {
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ utm_source: '  reddit  ', utm_content: '   ' }),
     );
     expect(getStoredUtm()).toEqual({ utm_source: 'reddit' });
   });

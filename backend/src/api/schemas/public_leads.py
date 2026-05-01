@@ -31,10 +31,17 @@ class LeadCaptureRequest(BaseModel):
         whitespace would break group-level backfill semantics in the
         repository, since ``""`` is truthy enough to mark the lead as
         attributed even though it carries no useful campaign data.
+
+        Non-string values pass through unchanged so Pydantic's
+        ``str | None`` type rejects them with HTTP 422 — public
+        endpoint must not silently coerce numbers, booleans, or
+        objects into UTM attribution strings.
         """
         if value is None:
             return None
-        text = str(value).strip()
+        if not isinstance(value, str):
+            return value  # let Pydantic reject non-string with 422
+        text = value.strip()
         return text or None
 
 

@@ -41,8 +41,12 @@ function readFromUrl(): UtmAttribution {
   const params = new URLSearchParams(window.location.search);
   const utm: UtmAttribution = {};
   for (const key of UTM_KEYS) {
-    const value = params.get(key);
-    if (value) utm[key] = value;
+    const raw = params.get(key);
+    if (raw === null) continue;
+    // Trim at the read point so a URL like ``?utm_content=%20%20`` does
+    // not register as attribution. Mirrors the backend schema validator.
+    const value = raw.trim();
+    if (value.length > 0) utm[key] = value;
   }
   return utm;
 }
@@ -91,7 +95,13 @@ export function getStoredUtm(): UtmAttribution {
     const out: UtmAttribution = {};
     for (const key of UTM_KEYS) {
       const value = (parsed as Record<string, unknown>)[key];
-      if (typeof value === 'string' && value.length > 0) out[key] = value;
+      if (typeof value === 'string') {
+        // Defensive trim: any caller that ever wrote untrimmed strings
+        // to sessionStorage outside ``captureUtmFromUrl`` should not
+        // poison the request body.
+        const trimmed = value.trim();
+        if (trimmed.length > 0) out[key] = trimmed;
+      }
     }
     return out;
   } catch {

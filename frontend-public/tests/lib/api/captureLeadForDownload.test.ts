@@ -50,8 +50,8 @@ describe('captureLeadForDownload', () => {
     expect(body.turnstile_token).toBe('token');
     expect(body.utm_source).toBe('reddit');
     expect(body.utm_content).toBe('ln_abc123');
-    // Keys not present in attribution must be absent from the body
-    // (backend rejects extra="" via extra="forbid").
+    // Backend's extra="forbid" rejects unknown keys; absent UTM keys
+    // must not appear in the body.
     expect(body.utm_medium).toBeUndefined();
     expect(body.utm_campaign).toBeUndefined();
   });
@@ -100,6 +100,23 @@ describe('captureLeadForDownload', () => {
     const body = bodyOfFirstCall();
     expect(body.utm_source).toBeUndefined();
     expect(body.utm_content).toBeUndefined();
+  });
+
+  it('trims UTM values and omits whitespace-only ones (Phase 2.3 R3)', async () => {
+    (global.fetch as jest.MockedFunction<typeof global.fetch>).mockResolvedValue(
+      okResponse(),
+    );
+
+    await captureLeadForDownload('user@company.ca', 1, 'token', {
+      utm_source: '  reddit  ',
+      utm_medium: '   ',
+      utm_content: ' ln_xyz ',
+    });
+
+    const body = bodyOfFirstCall();
+    expect(body.utm_source).toBe('reddit');
+    expect(body.utm_content).toBe('ln_xyz');
+    expect(body.utm_medium).toBeUndefined();
   });
 
   it('throws on non-2xx response', async () => {
