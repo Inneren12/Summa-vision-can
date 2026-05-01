@@ -94,12 +94,13 @@ class TestStartShutdown:
         assert scheduler.running
 
         jobs = scheduler.get_jobs()
-        assert len(jobs) == 3
+        assert len(jobs) == 4
 
         job_ids = {j.id for j in jobs}
         assert "fetch_todays_releases" in job_ids
         assert "audit_cleanup" in job_ids
         assert "temp_uploads_cleanup" in job_ids
+        assert "statcan_metadata_cache_refresh" in job_ids
 
         fetch_job = scheduler.get_job("fetch_todays_releases")
         assert fetch_job is not None
@@ -187,7 +188,7 @@ class TestStartShutdown:
         scheduler = get_scheduler()
         assert scheduler is not None
         jobs = scheduler.get_jobs()
-        assert len(jobs) == 3
+        assert len(jobs) == 4
 
 
 class TestScheduledTempUploadsCleanup:

@@ -496,3 +496,24 @@ async def test_rate_limiter_acquire_called(
         await c.get(_TEST_URL)
 
     assert acquire_count == 1
+
+
+@pytest.mark.asyncio
+async def test_get_cube_metadata_wraps_http_status_error_as_datasource_error(
+    client: StatCanClient,
+) -> None:
+    """Reviewer R3 P1/P2: HTTP errors must surface as DataSourceError so cache-
+    required mode upstream can detect them. ``request()`` only retries on
+    {429,409,503} and returns other non-2xx unwrapped, so without the explicit
+    wrap a raw ``httpx.HTTPStatusError`` would leak past the StatCan boundary."""
+    from src.core.exceptions import DataSourceError
+
+    with respx.mock:
+        respx.post("https://www150.statcan.gc.ca/t1/wds/rest/getCubeMetadata").mock(
+            return_value=httpx.Response(500, text="server error"),
+        )
+        with pytest.raises(DataSourceError) as exc_info:
+            await client.get_cube_metadata(18100004)
+
+    assert exc_info.value.error_code == "DATASOURCE_HTTP_ERROR"
+    assert exc_info.value.context.get("status_code") == 500

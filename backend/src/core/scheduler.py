@@ -162,6 +162,65 @@ async def scheduled_audit_cleanup() -> None:
         )
 
 
+async def scheduled_metadata_cache_refresh() -> None:
+    """Wrapper executed by APScheduler to refresh stale cube metadata.
+
+    Constructs :class:`StatCanMetadataCacheService` from app-scoped DI
+    (mirrors :func:`scheduled_fetch_todays_releases`) and runs the
+    nightly stale sweep. All exceptions are caught and logged.
+    """
+    try:
+        logger.info("Scheduled job started: statcan_metadata_cache_refresh")
+
+        from datetime import timedelta  # noqa: PLC0415
+        from src.core.rate_limit import AsyncTokenBucket  # noqa: PLC0415
+        from src.services.statcan.client import StatCanClient  # noqa: PLC0415
+        from src.services.statcan.maintenance import (  # noqa: PLC0415
+            StatCanMaintenanceGuard,
+        )
+        from src.services.statcan.metadata_cache import (  # noqa: PLC0415
+            StatCanMetadataCacheService,
+        )
+
+        if _app_ref is None or not hasattr(_app_ref, "state"):
+            raise RuntimeError(
+                "Scheduler requires app reference for http_client "
+                "(ARCH-DPEN-001: no inline httpx client creation)"
+            )
+        http_client = getattr(_app_ref.state, "http_client", None)
+        if http_client is None:
+            raise RuntimeError(
+                "app.state.http_client not set — ensure lifespan initializes it"
+            )
+
+        client = StatCanClient(
+            http_client,
+            StatCanMaintenanceGuard(),
+            AsyncTokenBucket(),
+        )
+        service = StatCanMetadataCacheService(
+            session_factory=get_session_factory(),
+            client=client,
+            clock=lambda: datetime.now(timezone.utc),
+            logger=get_logger(module="statcan.metadata_cache"),
+        )
+        summary = await service.refresh_all_stale(
+            stale_after=timedelta(hours=23),
+        )
+        logger.info(
+            "Scheduled job completed: statcan_metadata_cache_refresh",
+            refreshed=summary.refreshed,
+            failed=summary.failed,
+            skipped=summary.skipped,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Scheduled job failed: statcan_metadata_cache_refresh",
+            error=str(exc),
+            exc_info=True,
+        )
+
+
 async def scheduled_temp_uploads_cleanup() -> None:
     """Wrapper executed by APScheduler to clean expired temp uploads."""
     try:
@@ -247,6 +306,23 @@ def start_scheduler(settings: Settings | None = None, app: object | None = None)
         minute=0,
         id="audit_cleanup",
         name="Delete expired audit events",
+        replace_existing=True,
+    )
+
+    # Phase 3.1aa: nightly StatCan metadata cache refresh at 15:00 UTC
+    # (10:00 EST / 11:00 EDT) — safely outside the 00:00–08:30 EST
+    # maintenance window.
+    _scheduler.add_job(
+        scheduled_metadata_cache_refresh,
+        trigger="cron",
+        hour=15,
+        minute=0,
+        timezone="UTC",
+        id="statcan_metadata_cache_refresh",
+        name="StatCan metadata cache nightly refresh",
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,
         replace_existing=True,
     )
 

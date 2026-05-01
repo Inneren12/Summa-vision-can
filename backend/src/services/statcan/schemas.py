@@ -38,6 +38,19 @@ class ChangedCubeResponse(StatCanBaseModel):
     subject_code: Optional[str] = None
 
 
+class MemberSchema(StatCanBaseModel):
+    """A single member within a StatCan cube dimension.
+
+    Phase 3.1aa: needed by the metadata cache so that the validator
+    (3.1ab) can verify that mapping ``dimension_filters`` reference
+    real members of the cube.
+    """
+
+    member_id: int
+    member_name_en: str
+    member_name_fr: str
+
+
 class DimensionSchema(StatCanBaseModel):
     """A single dimension within a cube's metadata."""
 
@@ -45,6 +58,11 @@ class DimensionSchema(StatCanBaseModel):
     dimension_name_fr: str
     dimension_position_id: int
     has_uom: bool
+
+    # Phase 3.1aa: members are additive — older callers (e.g. the
+    # ETL service's ``fetch_todays_releases`` flow) do not require
+    # them, so the default empty list keeps existing tests green.
+    members: List[MemberSchema] = Field(default_factory=list, alias="member")
 
 
 class CubeMetadataResponse(StatCanBaseModel):

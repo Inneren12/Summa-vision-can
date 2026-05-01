@@ -12,6 +12,7 @@ services/statcan/
 ├── client.py          ← StatCanClient (httpx wrapper)
 ├── schemas.py         ← Pydantic V2 response models
 ├── service.py         ← StatCanETLService
+├── metadata_cache.py  ← StatCanMetadataCacheService
 └── validators.py      ← DataQualityReport model
 ```
 
@@ -102,6 +103,19 @@ Pure transformation library for StatCan data. No I/O.
 - `merge_cubes(dfs, merge_keys)` — join multiple cubes (R14 validated)
 All functions return NEW DataFrame. Zero side effects.
 
+### `StatCanMetadataCacheService` (metadata_cache.py) — ✅ Complete (Phase 3.1aa)
+Persistent cache of StatCan cube metadata used by the semantic mapping
+validator (3.1ab) in cache-required mode. Populated either on first
+admin save (auto-prime via `get_or_fetch`) or by the nightly
+`statcan_metadata_cache_refresh` scheduler job (15:00 UTC).
+- `__init__(self, session_factory: async_sessionmaker[AsyncSession], client: StatCanClient, clock: Callable[[], datetime], logger: structlog.BoundLogger)` — Full DI constructor (ARCH-DPEN-001).
+- `get_cached(cube_id) -> CubeMetadataCacheEntry | None` — Pure cache read; never calls StatCan.
+- `get_or_fetch(cube_id, product_id) -> CubeMetadataCacheEntry` — Read-through; raises `StatCanUnavailableError` on miss + API failure, `CubeNotFoundError` when StatCan returns no SUCCESS envelope. Concurrent-insert safe via `IntegrityError` rollback + re-read.
+- `refresh(cube_id, product_id, *, force=False) -> CubeMetadataCacheEntry` — Always fetches and upserts. `force` is reserved for DEBT-051 (event-driven invalidation) and currently a no-op flag.
+- `refresh_all_stale(stale_after: timedelta) -> RefreshSummary` — Stale sweep; per-cube errors caught and counted.
+- DTO `CubeMetadataCacheEntry` (frozen dataclass): immutable view of a cache row at the service boundary. Repository returns ORM objects; service converts. This is a deliberate convention extension vs `SemanticMappingRepository`, which returns ORM rows directly.
+- Exceptions: `MetadataCacheError` (base), `CubeNotFoundError`, `StatCanUnavailableError`, `CubeMetadataProductMismatchError` (raised when `get_or_fetch`/`refresh` is called with a `(cube_id, product_id)` pair that conflicts with an existing cache row — cache-key integrity error; not auto-healed). (Validator-side errors `CubeNotInCacheError` / `DimensionMismatchError` ship with 3.1ab.)
+
 ### `DataQualityReport` (validators.py) — ✅ Complete
 Frozen Pydantic model: `total_rows`, `valid_rows`, `nan_rows`, `nan_percentage`.
 
@@ -110,7 +124,7 @@ Frozen Pydantic model: `total_rows`, `valid_rows`, `nan_rows`, `nan_percentage`.
 | This module uses | This module is used by |
 |------------------|----------------------|
 | `core.rate_limit.AsyncTokenBucket` | `api.routers.cmhc` (via future scheduling) |
-| `core.exceptions.DataSourceError` | `core.scheduler` (PR-12, pending) |
+| `core.exceptions.DataSourceError` | `core.scheduler` (`fetch_todays_releases`, `statcan_metadata_cache_refresh`) |
 | `httpx.AsyncClient` | — |
 | `pandas` | — |
 | `pydantic` v2 | — |
