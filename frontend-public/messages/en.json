@@ -687,7 +687,15 @@
         "button_reload": "Reload (lose my changes)",
         "button_save_as_draft": "Save as new draft",
         "fork_partial": "Saved as a new draft, but some changes could not be applied: {detail}"
-      }
+      },
+      "metadata_validation_failed": {
+        "title": "Metadata validation failed",
+        "body": "The mapping does not match StatCan cube metadata."
+      },
+      "dimension_not_found": "Dimension not found in cube metadata.",
+      "member_not_found": "Member not found in dimension.",
+      "cube_product_mismatch": "Cube ID and product ID do not match cached metadata.",
+      "cube_not_in_cache": "Cube metadata is not available — please retry shortly."
     }
   }
 }
