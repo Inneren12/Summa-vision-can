@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.semantic_mapping import SemanticMapping
@@ -155,6 +155,64 @@ class SemanticMappingRepository:
         rows = list(rows_result.scalars().all())
         total = (await self._session.execute(count_stmt)).scalar_one()
         return rows, int(total)
+
+    async def update_with_version_check(
+        self,
+        *,
+        id: int,
+        expected_version: int,
+        label: str,
+        description: str | None,
+        config: dict,
+        is_active: bool,
+        updated_by: str | None,
+    ) -> SemanticMapping | None:
+        """Atomic UPDATE with version check (Phase 3.1b R2 fix).
+
+        Returns the updated row when ``rowcount == 1`` (version matched).
+        Returns ``None`` when ``rowcount == 0`` (version did NOT match —
+        caller decides whether the row exists at a different version or
+        does not exist at all).
+
+        The ``version`` column is bumped as part of the same UPDATE
+        statement. The ORM ``before_update`` event listener does NOT fire
+        for Core-level :func:`update` statements, so the bump is encoded
+        explicitly here (``version = version + 1``) plus an explicit
+        ``updated_at = now()`` to mirror the listener-driven path.
+
+        This is the ONLY safe path for optimistic concurrency on this
+        table. Callers MUST NOT do SELECT-then-UPDATE on the version
+        column; that introduces a TOCTOU race where two writers reading
+        the same version both pass the check and the second silently
+        clobbers the first.
+        """
+        stmt = (
+            update(SemanticMapping)
+            .where(SemanticMapping.id == id)
+            .where(SemanticMapping.version == expected_version)
+            .values(
+                label=label,
+                description=description,
+                config=config,
+                is_active=is_active,
+                updated_by=updated_by,
+                version=SemanticMapping.version + 1,
+                updated_at=func.now(),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        result = await self._session.execute(stmt)
+        if result.rowcount == 0:
+            return None
+        await self._session.flush()
+        # Re-read the row to materialize the new version + updated_at on
+        # an ORM instance the caller can serialize. ``populate_existing``
+        # bypasses the identity-map cache that still holds the pre-UPDATE
+        # row state (synchronize_session=False above means the Core update
+        # did not refresh ORM-attached instances).
+        return await self._session.get(
+            SemanticMapping, id, populate_existing=True
+        )
 
     async def soft_delete(self, id: int) -> SemanticMapping | None:
         """Sets ``is_active=False``. Returns updated row, or ``None`` if id

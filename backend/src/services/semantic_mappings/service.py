@@ -22,7 +22,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.models.semantic_mapping import SemanticMapping
@@ -132,6 +132,141 @@ class SemanticMappingService:
         raise MetadataValidationError(result=result, cube_id=cube_id)
 
     # ------------------------------------------------------------------
+    # Atomic upsert helper (Phase 3.1b R2 — eliminates SELECT-then-UPDATE
+    # TOCTOU on the version column)
+    # ------------------------------------------------------------------
+
+    async def _upsert_atomic(
+        self,
+        session: AsyncSession,
+        repo: SemanticMappingRepository,
+        *,
+        cube_id: str,
+        semantic_key: str,
+        label: str,
+        description: str | None,
+        config_model: SemanticMappingConfig,
+        is_active: bool,
+        updated_by: str | None,
+        if_match_version: int | None,
+    ) -> tuple[SemanticMapping, bool]:
+        """Atomic upsert primitive used by both single + bulk paths.
+
+        Caller manages the session: opens it, flushes nothing of its own
+        between calls, and commits/rolls back when done.
+
+        Concurrency contract:
+            * **CREATE branch:** INSERT inside a SAVEPOINT
+              (``session.begin_nested``). On UniqueConstraint violation
+              the savepoint rolls back automatically and we fall through
+              to the UPDATE branch. The outer transaction is preserved
+              — bulk callers do not lose their other items.
+            * **UPDATE branch:** atomic
+              :meth:`SemanticMappingRepository.update_with_version_check`
+              (single ``UPDATE ... WHERE version = :expected``). When
+              ``if_match_version`` is supplied and the row's current
+              version differs, ``rowcount == 0`` and we re-read the
+              actual version (a benign read for error context only) and
+              raise :class:`VersionConflictError`.
+            * ``if_match_version is None`` semantics: last-write-wins.
+              The UPDATE uses the row's currently-observed version as
+              the ``WHERE`` filter; on rowcount=0 (concurrent writer
+              bumped the version) we retry **once** with the freshest
+              version. After one failed retry we raise
+              ``CONCURRENT_WRITE_RETRY_EXHAUSTED`` rather than spin.
+
+        Returns ``(mapping, was_created)``.
+        """
+        payload = SemanticMappingCreate(
+            cube_id=cube_id,
+            semantic_key=semantic_key,
+            label=label,
+            description=description,
+            config=config_model,
+            is_active=is_active,
+        )
+
+        # ── CREATE branch ────────────────────────────────────────────
+        try:
+            async with session.begin_nested():
+                created = await repo.create(payload, updated_by=updated_by)
+            return created, True
+        except IntegrityError:
+            # Savepoint rolled back; row exists at (cube_id, semantic_key).
+            # Outer transaction is intact — bulk caller's prior items
+            # remain pending. Fall through to UPDATE.
+            pass
+
+        # ── UPDATE branch (atomic version check) ─────────────────────
+        existing = await repo.get_by_key(cube_id, semantic_key)
+        if existing is None:
+            # Row was deleted between INSERT-fail and SELECT. Extremely
+            # rare — only possible under a concurrent DELETE racing the
+            # caller. Surface as a generic validation error so the admin
+            # endpoint maps it to a 400 envelope.
+            raise MetadataValidationError(
+                result=ValidationResult(is_valid=False, errors=[]),
+                cube_id=cube_id,
+                error_code="ROW_VANISHED_DURING_UPSERT",
+            )
+
+        config_dict = config_model.model_dump()
+        expected = (
+            if_match_version
+            if if_match_version is not None
+            else existing.version
+        )
+        updated = await repo.update_with_version_check(
+            id=existing.id,
+            expected_version=expected,
+            label=label,
+            description=description,
+            config=config_dict,
+            is_active=is_active,
+            updated_by=updated_by,
+        )
+
+        if updated is not None:
+            return updated, False
+
+        # rowcount == 0 — version did not match.
+        if if_match_version is not None:
+            current = await repo.get_by_key(cube_id, semantic_key)
+            actual_version = current.version if current is not None else -1
+            raise VersionConflictError(
+                cube_id=cube_id,
+                semantic_key=semantic_key,
+                expected_version=if_match_version,
+                actual_version=actual_version,
+            )
+
+        # if_match_version is None: retry once with whatever the version
+        # is right now. Documented last-write-wins contract.
+        fresh = await repo.get_by_key(cube_id, semantic_key)
+        if fresh is None:
+            raise MetadataValidationError(
+                result=ValidationResult(is_valid=False, errors=[]),
+                cube_id=cube_id,
+                error_code="ROW_VANISHED_DURING_UPSERT",
+            )
+        retried = await repo.update_with_version_check(
+            id=fresh.id,
+            expected_version=fresh.version,
+            label=label,
+            description=description,
+            config=config_dict,
+            is_active=is_active,
+            updated_by=updated_by,
+        )
+        if retried is None:
+            raise MetadataValidationError(
+                result=ValidationResult(is_valid=False, errors=[]),
+                cube_id=cube_id,
+                error_code="CONCURRENT_WRITE_RETRY_EXHAUSTED",
+            )
+        return retried, False
+
+    # ------------------------------------------------------------------
     # Single-row upsert (admin endpoint)
     # ------------------------------------------------------------------
 
@@ -153,14 +288,18 @@ class SemanticMappingService:
         Returns ``(mapping, was_created)`` so callers (admin endpoint) can
         distinguish 201 vs 200.
 
+        Optimistic concurrency (R2): when ``if_match_version`` is
+        provided, the version check happens **inside** the UPDATE
+        statement (``WHERE version = :expected``). No SELECT-then-UPDATE
+        — eliminates the TOCTOU race where two concurrent writers with
+        the same ``if_match_version`` both pass a Python-level check
+        and the second silently overwrites the first.
+
         Raises:
-            pydantic.ValidationError: ``config`` does not satisfy
-                :class:`SemanticMappingConfig`. Raised BEFORE any cache
-                fetch — bad shape never triggers a StatCan call.
-            VersionConflictError: ``if_match_version`` mismatch with the
-                existing row's ``version``.
-            CubeNotInCacheError / DimensionMismatchError / MemberMismatchError /
-            MetadataValidationError: per existing 3.1ab semantics.
+            pydantic.ValidationError: bad ``config`` shape (before cache).
+            VersionConflictError: ``if_match_version`` mismatch.
+            CubeNotInCacheError / DimensionMismatchError /
+            MemberMismatchError / MetadataValidationError: per 3.1ab.
         """
         # 1. Pydantic config validation FIRST.
         config_model = SemanticMappingConfig.model_validate(config)
@@ -182,36 +321,22 @@ class SemanticMappingService:
             cube_id=cube_id, semantic_key=semantic_key, result=result
         )
 
-        # 4. Persist with optimistic concurrency check inside the session.
-        payload = SemanticMappingCreate(
-            cube_id=cube_id,
-            semantic_key=semantic_key,
-            label=label,
-            description=description,
-            config=config_model,
-            is_active=is_active,
-        )
+        # 4. Atomic persist (single session + commit per call).
         async with self._session_factory() as session:
             repo = self._repository_factory(session)
-            existing = await repo.get_by_key(cube_id, semantic_key)
-            if (
-                existing is not None
-                and if_match_version is not None
-                and existing.version != if_match_version
-            ):
-                raise VersionConflictError(
-                    cube_id=cube_id,
-                    semantic_key=semantic_key,
-                    expected_version=if_match_version,
-                    actual_version=existing.version,
-                )
-            mapping, was_created = await repo.upsert_by_key(
-                payload, updated_by=updated_by
+            mapping, was_created = await self._upsert_atomic(
+                session,
+                repo,
+                cube_id=cube_id,
+                semantic_key=semantic_key,
+                label=label,
+                description=description,
+                config_model=config_model,
+                is_active=is_active,
+                updated_by=updated_by,
+                if_match_version=if_match_version,
             )
             await session.commit()
-            # Refresh so the (server-side) ``updated_at`` value is materialized
-            # on the instance before the session closes; otherwise downstream
-            # serialization hits DetachedInstanceError on lazy-loaded columns.
             await session.refresh(mapping)
             session.expunge(mapping)
             return mapping, was_created
@@ -352,39 +477,25 @@ class SemanticMappingService:
         if any_invalid:
             raise BulkValidationError(per_item_results)
 
-        # 3. Single-session, single-commit persist.
+        # 3. Single-session, single-commit persist via the shared atomic
+        #    primitive. Any VersionConflictError raised by an item rolls
+        #    back the whole batch (matches Phase 3.1b §A9 lock).
         created_count = 0
         updated_count = 0
         async with self._session_factory() as session:
             repo = self._repository_factory(session)
             for item, config_model in zip(items, config_models, strict=True):
-                # Optimistic concurrency check, if requested.
-                if item.if_match_version is not None:
-                    existing = await repo.get_by_key(
-                        item.cube_id, item.semantic_key
-                    )
-                    if (
-                        existing is not None
-                        and existing.version != item.if_match_version
-                    ):
-                        # No rows persisted — session will roll back on raise.
-                        await session.rollback()
-                        raise VersionConflictError(
-                            cube_id=item.cube_id,
-                            semantic_key=item.semantic_key,
-                            expected_version=item.if_match_version,
-                            actual_version=existing.version,
-                        )
-                payload = SemanticMappingCreate(
+                _, was_created = await self._upsert_atomic(
+                    session,
+                    repo,
                     cube_id=item.cube_id,
                     semantic_key=item.semantic_key,
                     label=item.label,
                     description=item.description,
-                    config=config_model,
+                    config_model=config_model,
                     is_active=item.is_active,
-                )
-                _, was_created = await repo.upsert_by_key(
-                    payload, updated_by="seed"
+                    updated_by="seed",
+                    if_match_version=item.if_match_version,
                 )
                 if was_created:
                     created_count += 1
