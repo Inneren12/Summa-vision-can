@@ -83,6 +83,7 @@ class SemanticMapping {
   const SemanticMapping({
     required this.id,
     required this.cubeId,
+    required this.productId,
     required this.semanticKey,
     required this.label,
     this.description,
@@ -96,6 +97,7 @@ class SemanticMapping {
 
   final int id;
   final String cubeId;
+  final int productId;
   final String semanticKey;
   final String label;
   final String? description;
@@ -110,6 +112,7 @@ class SemanticMapping {
     return SemanticMapping(
       id: (json['id'] as num).toInt(),
       cubeId: json['cube_id'] as String,
+      productId: (json['product_id'] as num).toInt(),
       semanticKey: json['semantic_key'] as String,
       label: json['label'] as String,
       description: json['description'] as String?,

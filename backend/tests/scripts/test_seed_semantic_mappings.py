@@ -32,6 +32,7 @@ from src.repositories.semantic_mapping_repository import (
 _YAML_BODY = """\
 mappings:
   - cube_id: "18-10-0004"
+    product_id: 18100004
     semantic_key: "cpi.canada.all_items.index"
     label: "CPI — Canada, all-items"
     description: "headline"

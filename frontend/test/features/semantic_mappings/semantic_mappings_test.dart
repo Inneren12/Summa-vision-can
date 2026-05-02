@@ -34,6 +34,7 @@ import '../../helpers/localized_pump.dart';
 SemanticMapping _makeMapping({
   int id = 1,
   String cubeId = '18-10-0004',
+  int productId = 18100004,
   String semanticKey = 'cpi.canada.all_items.index',
   int version = 1,
   bool isActive = true,
@@ -41,6 +42,7 @@ SemanticMapping _makeMapping({
   return SemanticMapping(
     id: id,
     cubeId: cubeId,
+    productId: productId,
     semanticKey: semanticKey,
     label: 'CPI — Canada',
     description: null,
@@ -441,6 +443,27 @@ void main() {
     expect(snapshot, isNotNull);
     expect(sawPrime, isTrue);
     expect(sawProductId, 18100004);
+  });
+
+  testWidgets('9. Form hydrates product_id from existing mapping on edit',
+      (tester) async {
+    final fake = _FakeRepository();
+    await pumpLocalizedWidget(
+      tester,
+      const SemanticMappingFormScreen(mappingId: 1),
+      overrides: [
+        semanticMappingsRepositoryProvider.overrideWithValue(fake),
+      ],
+    );
+    await tester.pumpAndSettle();
+    final productIdField = tester.widget<TextFormField>(
+      find.byKey(const ValueKey('field-product-id')),
+    );
+    expect(
+      productIdField.controller!.text,
+      '18100004',
+      reason: 'product_id field must hydrate from the loaded mapping',
+    );
   });
 }
 

@@ -65,6 +65,7 @@ class SemanticMappingRepository:
     ) -> SemanticMapping:
         mapping = SemanticMapping(
             cube_id=payload.cube_id,
+            product_id=payload.product_id,
             semantic_key=payload.semantic_key,
             label=payload.label,
             description=payload.description,
@@ -100,6 +101,7 @@ class SemanticMappingRepository:
         new_config = payload.config.model_dump()
         changed = (
             existing.label != payload.label
+            or existing.product_id != payload.product_id
             or existing.description != payload.description
             or existing.config != new_config
             or existing.is_active != payload.is_active
@@ -108,6 +110,7 @@ class SemanticMappingRepository:
             return existing, False
 
         existing.label = payload.label
+        existing.product_id = payload.product_id
         existing.description = payload.description
         existing.config = new_config
         existing.is_active = payload.is_active
@@ -161,6 +164,7 @@ class SemanticMappingRepository:
         *,
         id: int,
         expected_version: int,
+        product_id: int,
         label: str,
         description: str | None,
         config: dict,
@@ -191,6 +195,7 @@ class SemanticMappingRepository:
             .where(SemanticMapping.id == id)
             .where(SemanticMapping.version == expected_version)
             .values(
+                product_id=product_id,
                 label=label,
                 description=description,
                 config=config,

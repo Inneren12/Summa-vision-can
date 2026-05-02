@@ -16,11 +16,13 @@ from src.schemas.semantic_mapping import (
 
 def _make_create_payload(
     cube_id: str = "18-10-0004",
+    product_id: int = 18100004,
     semantic_key: str = "test.key",
     is_active: bool = True,
 ) -> SemanticMappingCreate:
     return SemanticMappingCreate(
         cube_id=cube_id,
+        product_id=product_id,
         semantic_key=semantic_key,
         label="Test mapping",
         config=SemanticMappingConfig(

@@ -115,8 +115,3 @@ class SemanticMappingsRepository {
     }
   }
 }
-
-final semanticMappingsRepositoryProvider =
-    Provider<SemanticMappingsRepository>(
-  (ref) => SemanticMappingsRepository(ref.watch(dioProvider)),
-);

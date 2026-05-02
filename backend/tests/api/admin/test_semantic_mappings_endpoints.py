@@ -394,3 +394,40 @@ async def test_post_upsert_resolves_weak_etag_header_w_prefix(client, mock_cache
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["label"] == "updated-via-weak-etag"
+
+
+# ---------------------------------------------------------------------------
+# Phase 3.1b R3 — product_id persisted on row
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_mapping_response_includes_product_id(client, mock_cache):
+    """Reviewer R3 P1: edit flow needs product_id in single-row response."""
+    mock_cache.get_or_fetch.return_value = _cache_entry()
+    created = await client.post(
+        "/api/v1/admin/semantic-mappings/upsert", json=_valid_body()
+    )
+    assert created.status_code == 201
+    mapping_id = created.json()["id"]
+
+    resp = await client.get(f"/api/v1/admin/semantic-mappings/{mapping_id}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["product_id"] == 18100004
+
+
+@pytest.mark.asyncio
+async def test_list_mappings_response_includes_product_id(client, mock_cache):
+    """Reviewer R3 P1: list view must surface product_id for each row."""
+    mock_cache.get_or_fetch.return_value = _cache_entry()
+    await client.post(
+        "/api/v1/admin/semantic-mappings/upsert", json=_valid_body()
+    )
+
+    resp = await client.get("/api/v1/admin/semantic-mappings")
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert items, "expected at least one row"
+    assert all("product_id" in item for item in items)
+    assert all(item["product_id"] == 18100004 for item in items)

@@ -391,6 +391,37 @@ Rules:
   mapper to the full set, add corresponding ARB keys EN+RU.
 - **Target:** Post-Phase 3.1 polish PR.
 
+### DEBT-057: Reviewer P2/P3 polish backlog from PR #274
+
+- **Source:** Phase 3.1b reviewer feedback round 2 (PR #274)
+- **Added:** 2026-05-02
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** accepted
+- **Description:** Three semantic-mapping admin polish items deferred
+  from Phase 3.1b R3:
+  (1) the `IntegrityError` catch in `SemanticMappingService._upsert_atomic`
+      is too broad — should narrow to unique-constraint violation only
+      (`uq_semantic_mappings_cube_key`) so other DB constraint failures
+      are not misinterpreted as "row already exists";
+  (2) `If-Match` against a missing row currently falls through to the
+      CREATE branch — semantically should raise `MappingNotFoundError`
+      so a stale editor cannot silently resurrect a row that was
+      deleted between fetch and save;
+  (3) the Flutter form sends BOTH `If-Match` header AND
+      `if_match_version` body simultaneously. The backend hybrid resolves
+      the header first, so behaviour is correct, but cleaner to send
+      header-only from the form and keep the body field for scripts and
+      tests.
+- **Impact:** (1) misleading 409-via-fall-through under rare non-unique
+  DB violations; (2) stale-editor revive edge case; (3) cosmetic
+  redundancy in admin save requests.
+- **Resolution:** Narrow `except IntegrityError` to inspect
+  `exc.orig.diag.constraint_name` (or driver equivalent); raise
+  `MappingNotFoundError` when `if_match_version` is supplied but the
+  row does not exist; switch the Flutter form to header-only.
+- **Target:** Post-Phase 3.1 polish PR.
+
 ---
 
 ## Resolved

@@ -1,7 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/dio_client.dart';
 import '../models/semantic_mapping.dart';
 import '../repository/semantic_mappings_repository.dart';
+
+/// Riverpod provider for the admin semantic-mappings repository.
+///
+/// Declared here (not in the repository file) so screens that only
+/// import ``providers/...`` can resolve the symbol — Dart does not
+/// re-export across imports. Mirrors the pattern from
+/// ``features/jobs/data/job_dashboard_repository.dart``.
+final semanticMappingsRepositoryProvider =
+    Provider<SemanticMappingsRepository>(
+  (ref) => SemanticMappingsRepository(ref.watch(dioProvider)),
+);
 
 class SemanticMappingsFilter {
   const SemanticMappingsFilter({

@@ -47,6 +47,7 @@ class SemanticMappingListItem(BaseModel):
 
     id: int
     cube_id: str
+    product_id: int
     semantic_key: str
     label: str
     description: str | None

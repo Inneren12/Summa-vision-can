@@ -5,6 +5,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     DateTime,
     Index,
@@ -65,6 +66,9 @@ class SemanticMapping(Base):
             "cube_id",
             "is_active",
         ),
+        # Phase 3.1b R3 — product_id index for future "all mappings for cube
+        # product N" queries; mirrors the migration ddl 1:1 (table_args parity).
+        Index("ix_semantic_mappings_product_id", "product_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -73,6 +77,10 @@ class SemanticMapping(Base):
     # for cube_id-only queries, so a separate single-column index would be
     # redundant.
     cube_id: Mapped[str] = mapped_column(String(length=50), nullable=False)
+    # Phase 3.1b R3 — StatCan WDS productId persisted on the row so admin
+    # edit flows can hydrate the form without a cache round-trip. BigInt
+    # for parity with cube_metadata_cache.product_id.
+    product_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     semantic_key: Mapped[str] = mapped_column(String(length=200), nullable=False)
     label: Mapped[str] = mapped_column(String(length=200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)

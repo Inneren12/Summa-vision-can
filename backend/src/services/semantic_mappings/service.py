@@ -142,6 +142,7 @@ class SemanticMappingService:
         repo: SemanticMappingRepository,
         *,
         cube_id: str,
+        product_id: int,
         semantic_key: str,
         label: str,
         description: str | None,
@@ -179,6 +180,7 @@ class SemanticMappingService:
         """
         payload = SemanticMappingCreate(
             cube_id=cube_id,
+            product_id=product_id,
             semantic_key=semantic_key,
             label=label,
             description=description,
@@ -219,6 +221,7 @@ class SemanticMappingService:
         updated = await repo.update_with_version_check(
             id=existing.id,
             expected_version=expected,
+            product_id=product_id,
             label=label,
             description=description,
             config=config_dict,
@@ -252,6 +255,7 @@ class SemanticMappingService:
         retried = await repo.update_with_version_check(
             id=fresh.id,
             expected_version=fresh.version,
+            product_id=product_id,
             label=label,
             description=description,
             config=config_dict,
@@ -328,6 +332,7 @@ class SemanticMappingService:
                 session,
                 repo,
                 cube_id=cube_id,
+                product_id=product_id,
                 semantic_key=semantic_key,
                 label=label,
                 description=description,
@@ -489,6 +494,7 @@ class SemanticMappingService:
                     session,
                     repo,
                     cube_id=item.cube_id,
+                    product_id=item.product_id,
                     semantic_key=item.semantic_key,
                     label=item.label,
                     description=item.description,

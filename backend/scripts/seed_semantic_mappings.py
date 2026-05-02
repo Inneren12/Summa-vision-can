@@ -79,9 +79,15 @@ async def _seed_one_file_skip_validation(path: Path) -> None:
         repo = SemanticMappingRepository(session)
 
         for raw in data["mappings"]:
-            # product_id is a validation-only sibling key; pop it before
-            # constructing the pydantic payload (which forbids extras).
-            raw = {k: v for k, v in raw.items() if k != "product_id"}
+            # Phase 3.1b R3 — product_id is now a persisted column on
+            # SemanticMapping (and required on SemanticMappingCreate); the
+            # YAML row's ``product_id`` flows straight through.
+            if raw.get("product_id") is None:
+                raise ValueError(
+                    f"{path}: row {raw.get('semantic_key')!r} is missing "
+                    f"'product_id' (required even with --skip-validation since "
+                    f"3.1b R3 added the NOT NULL column)."
+                )
             payload = SemanticMappingCreate(**raw)
             mapping, was_created = await repo.upsert_by_key(
                 payload, updated_by="seed"
@@ -120,14 +126,14 @@ async def _seed_one_file_validated(
                 f"--skip-validation to bypass)."
             )
         # Validate the SemanticMapping shape via pydantic — fail fast on
-        # bad rows BEFORE we hit the network for any item.
-        payload = SemanticMappingCreate(
-            **{k: v for k, v in raw.items() if k != "product_id"}
-        )
+        # bad rows BEFORE we hit the network for any item. Phase 3.1b R3
+        # made product_id a persisted column, so it now flows through the
+        # same payload (no need to strip).
+        payload = SemanticMappingCreate(**raw)
         items.append(
             BulkUpsertItem(
                 cube_id=payload.cube_id,
-                product_id=int(product_id),
+                product_id=payload.product_id,
                 semantic_key=payload.semantic_key,
                 label=payload.label,
                 description=payload.description,

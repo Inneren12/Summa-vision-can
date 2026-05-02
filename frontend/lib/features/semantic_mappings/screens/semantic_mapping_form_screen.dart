@@ -70,6 +70,7 @@ class _SemanticMappingFormScreenState
     if (_hydrated) return;
     _hydrated = true;
     _cubeIdCtrl.text = m.cubeId;
+    _productIdCtrl.text = m.productId.toString();
     _semanticKeyCtrl.text = m.semanticKey;
     _labelCtrl.text = m.label;
     _descriptionCtrl.text = m.description ?? '';

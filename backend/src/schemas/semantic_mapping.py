@@ -72,6 +72,14 @@ class SemanticMappingConfig(BaseModel):
 
 class SemanticMappingCreate(BaseModel):
     cube_id: str = Field(..., min_length=1, max_length=50)
+    product_id: int = Field(
+        ...,
+        ge=1,
+        description=(
+            "StatCan WDS productId. Persisted on the row so admin edit "
+            "flows can hydrate the form without a cache round-trip."
+        ),
+    )
     semantic_key: str = Field(
         ..., min_length=1, max_length=200, pattern=r"^[a-z0-9_.-]+$"
     )
@@ -97,6 +105,7 @@ class SemanticMappingUpdate(BaseModel):
 class SemanticMappingResponse(BaseModel):
     id: int
     cube_id: str
+    product_id: int
     semantic_key: str
     label: str
     description: str | None
