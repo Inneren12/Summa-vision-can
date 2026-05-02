@@ -125,7 +125,7 @@ async def test_upsert_validated_happy_path_calls_cache_validator_and_repo(
 ):
     mock_cache.get_or_fetch.return_value = _cache_entry()
 
-    mapping = await service.upsert_validated(
+    mapping, _was_created = await service.upsert_validated(
         cube_id="18-10-0004",
         product_id=18100004,
         semantic_key="cpi.canada.all_items.index",
@@ -341,3 +341,128 @@ async def test_validation_cube_product_mismatch_takes_precedence_over_dim_or_mem
     assert exc_info.value.error_code == "CUBE_PRODUCT_MISMATCH"
     assert not isinstance(exc_info.value, DimensionMismatchError)
     assert not isinstance(exc_info.value, MemberMismatchError)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3.1b — bulk validated upsert (validate-all-then-decide)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_upsert_many_validated_rolls_back_on_first_invalid_item(
+    service, session_factory, mock_cache
+):
+    """File atomicity regression: when ANY item fails validation, NO rows
+    from the batch are persisted. Compares row count before/after.
+    """
+    from src.services.semantic_mappings.exceptions import (
+        BulkUpsertItem,
+        BulkValidationError,
+    )
+
+    mock_cache.get_or_fetch.return_value = _cache_entry()
+
+    good = BulkUpsertItem(
+        cube_id="18-10-0004",
+        product_id=18100004,
+        semantic_key="cpi.canada.all_items.index",
+        label="good",
+        description=None,
+        config=_valid_config(),
+        is_active=True,
+    )
+    bad_config = _valid_config()
+    bad_config["dimension_filters"] = {"Geography": "Atlantis"}
+    bad = BulkUpsertItem(
+        cube_id="18-10-0004",
+        product_id=18100004,
+        semantic_key="cpi.canada.bad",
+        label="bad",
+        description=None,
+        config=bad_config,
+        is_active=True,
+    )
+
+    async with session_factory() as session:
+        before = (
+            await session.execute(
+                __import__("sqlalchemy").text(
+                    "SELECT COUNT(*) FROM semantic_mappings"
+                )
+            )
+        ).scalar_one()
+    assert before == 0
+
+    with pytest.raises(BulkValidationError) as exc_info:
+        await service.upsert_many_validated([good, bad])
+
+    # Per-item results carry the failure detail.
+    results = exc_info.value.results
+    assert len(results) == 2
+    assert results[0].is_valid is True
+    assert results[1].is_valid is False
+    assert results[1].error_code == "MEMBER_NOT_FOUND"
+
+    async with session_factory() as session:
+        after = (
+            await session.execute(
+                __import__("sqlalchemy").text(
+                    "SELECT COUNT(*) FROM semantic_mappings"
+                )
+            )
+        ).scalar_one()
+    assert after == 0
+
+
+@pytest.mark.asyncio
+async def test_upsert_many_validated_rolls_back_on_cube_not_in_cache(
+    service, session_factory, mock_cache
+):
+    """Whole-batch failure when ANY item raises CubeNotInCacheError —
+    matches founder lock 9 (validate-all-then-decide)."""
+    from src.services.semantic_mappings.exceptions import (
+        BulkUpsertItem,
+        CubeNotInCacheError,
+    )
+
+    # First item resolves; second item is a cache miss.
+    async def fake_get_or_fetch(cube_id, product_id):
+        if cube_id == "18-10-0004":
+            return _cache_entry()
+        raise StatCanUnavailableError(cube_id=cube_id)
+
+    mock_cache.get_or_fetch.side_effect = fake_get_or_fetch
+
+    items = [
+        BulkUpsertItem(
+            cube_id="18-10-0004",
+            product_id=18100004,
+            semantic_key="ok",
+            label="ok",
+            description=None,
+            config=_valid_config(),
+            is_active=True,
+        ),
+        BulkUpsertItem(
+            cube_id="99-99-9999",
+            product_id=99999999,
+            semantic_key="bad",
+            label="bad",
+            description=None,
+            config=_valid_config(),
+            is_active=True,
+        ),
+    ]
+
+    with pytest.raises(CubeNotInCacheError):
+        await service.upsert_many_validated(items)
+
+    async with session_factory() as session:
+        count = (
+            await session.execute(
+                __import__("sqlalchemy").text(
+                    "SELECT COUNT(*) FROM semantic_mappings"
+                )
+            )
+        ).scalar_one()
+    assert count == 0

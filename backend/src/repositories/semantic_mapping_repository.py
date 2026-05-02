@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.semantic_mapping import SemanticMapping
@@ -114,6 +114,65 @@ class SemanticMappingRepository:
         existing.updated_by = updated_by
         await self._session.flush()
         return existing, False
+
+    async def list(
+        self,
+        *,
+        cube_id: str | None = None,
+        semantic_key: str | None = None,
+        is_active: bool | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[SemanticMapping], int]:
+        """Paginated list with filters. Returns ``(rows, total_count)``.
+
+        Phase 3.1b admin list endpoint. ``total_count`` is the unpaginated
+        match count so the operator UI can render pagination controls.
+        """
+        filters = []
+        if cube_id is not None:
+            filters.append(SemanticMapping.cube_id == cube_id)
+        if semantic_key is not None:
+            filters.append(SemanticMapping.semantic_key == semantic_key)
+        if is_active is not None:
+            filters.append(SemanticMapping.is_active.is_(is_active))
+
+        rows_stmt = select(SemanticMapping)
+        count_stmt = select(func.count()).select_from(SemanticMapping)
+        for clause in filters:
+            rows_stmt = rows_stmt.where(clause)
+            count_stmt = count_stmt.where(clause)
+
+        rows_stmt = (
+            rows_stmt.order_by(
+                SemanticMapping.cube_id.asc(), SemanticMapping.label.asc()
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+
+        rows_result = await self._session.execute(rows_stmt)
+        rows = list(rows_result.scalars().all())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+        return rows, int(total)
+
+    async def soft_delete(self, id: int) -> SemanticMapping | None:
+        """Sets ``is_active=False``. Returns updated row, or ``None`` if id
+        not found.
+
+        Idempotent: if the row is already ``is_active=False``, the row is
+        returned unchanged (no version bump, no ``updated_at`` touch).
+        Mirrors the change-detection pattern used by
+        :meth:`upsert_by_key` and the 3.1aa cube_metadata_cache upsert.
+        """
+        mapping = await self._session.get(SemanticMapping, id)
+        if mapping is None:
+            return None
+        if mapping.is_active is False:
+            return mapping
+        mapping.is_active = False
+        await self._session.flush()
+        return mapping
 
     async def update(
         self,

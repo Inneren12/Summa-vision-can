@@ -66,6 +66,12 @@ class AppDrawer extends StatelessWidget {
             selected: currentPath == AppRoutes.exceptions,
           ),
           _NavTile(
+            icon: Icons.dataset_linked,
+            label: loc.navSemanticMappings,
+            route: AppRoutes.semanticMappings,
+            selected: currentPath.startsWith(AppRoutes.semanticMappings),
+          ),
+          _NavTile(
             icon: Icons.bar_chart,
             label: loc.navKpi,
             route: AppRoutes.kpi,

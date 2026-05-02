@@ -20,6 +20,17 @@ String? mapBackendErrorCode(String? errorCode, AppLocalizations l10n) {
     'NO_HANDLER_REGISTERED' => l10n.errorJobNoHandler,
     'INCOMPATIBLE_PAYLOAD_VERSION' => l10n.errorJobIncompatiblePayload,
     'UNKNOWN_JOB_TYPE' => l10n.errorJobUnknownType,
+    // Phase 3.1ab + 3.1b — semantic-mapping admin save flow.
+    // See DEBT-056: this PR backfills only the seven semantic-mapping
+    // codes; a comprehensive sweep over KNOWN_BACKEND_ERROR_CODES (TS)
+    // is deferred work.
+    'METADATA_VALIDATION_FAILED' => l10n.errorBackendMetadataValidationFailed,
+    'DIMENSION_NOT_FOUND' => l10n.errorBackendDimensionNotFound,
+    'MEMBER_NOT_FOUND' => l10n.errorBackendMemberNotFound,
+    'CUBE_PRODUCT_MISMATCH' => l10n.errorBackendCubeProductMismatch,
+    'CUBE_NOT_IN_CACHE' => l10n.errorBackendCubeNotInCache,
+    'VERSION_CONFLICT' => l10n.errorBackendVersionConflict,
+    'BULK_VALIDATION_FAILED' => l10n.errorBackendBulkValidationFailed,
     _ => null,
   };
 }

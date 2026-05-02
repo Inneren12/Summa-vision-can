@@ -29,6 +29,9 @@ export const KNOWN_BACKEND_ERROR_CODES = [
   'MEMBER_NOT_FOUND',
   'CUBE_PRODUCT_MISMATCH',
   'CUBE_NOT_IN_CACHE',
+  // Phase 3.1b: SemanticMapping admin CRUD.
+  'VERSION_CONFLICT',
+  'BULK_VALIDATION_FAILED',
 ] as const;
 
 export type BackendErrorCode = (typeof KNOWN_BACKEND_ERROR_CODES)[number];
@@ -65,6 +68,8 @@ export const BACKEND_ERROR_I18N_KEYS: Record<BackendErrorCode, string> = {
   MEMBER_NOT_FOUND: 'errors.backend.member_not_found',
   CUBE_PRODUCT_MISMATCH: 'errors.backend.cube_product_mismatch',
   CUBE_NOT_IN_CACHE: 'errors.backend.cube_not_in_cache',
+  VERSION_CONFLICT: 'errors.backend.version_conflict',
+  BULK_VALIDATION_FAILED: 'errors.backend.bulk_validation_failed',
 };
 
 /**

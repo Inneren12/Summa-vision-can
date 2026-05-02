@@ -24,6 +24,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navExceptions => 'Exceptions';
 
   @override
+  String get navSemanticMappings => 'Semantic mappings';
+
+  @override
+  String get errorBackendMetadataValidationFailed =>
+      'The mapping does not match StatCan cube metadata.';
+
+  @override
+  String get errorBackendDimensionNotFound =>
+      'Dimension not found in cube metadata.';
+
+  @override
+  String get errorBackendMemberNotFound => 'Member not found in dimension.';
+
+  @override
+  String get errorBackendCubeProductMismatch =>
+      'Cube ID and product ID do not match cached metadata.';
+
+  @override
+  String get errorBackendCubeNotInCache =>
+      'Cube metadata is not available — please retry shortly.';
+
+  @override
+  String get errorBackendVersionConflict =>
+      'Version conflict — this mapping was modified by another user. Reload to see the latest version.';
+
+  @override
+  String get errorBackendBulkValidationFailed =>
+      'Some mappings could not be validated. No changes were saved. Fix the errors below and retry.';
+
+  @override
   String get navKpi => 'KPI';
 
   @override

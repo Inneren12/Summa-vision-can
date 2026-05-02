@@ -695,7 +695,9 @@
       "dimension_not_found": "Dimension not found in cube metadata.",
       "member_not_found": "Member not found in dimension.",
       "cube_product_mismatch": "Cube ID and product ID do not match cached metadata.",
-      "cube_not_in_cache": "Cube metadata is not available — please retry shortly."
+      "cube_not_in_cache": "Cube metadata is not available — please retry shortly.",
+      "version_conflict": "Version conflict — this mapping was modified by another user. Reload to see the latest version.",
+      "bulk_validation_failed": "Some mappings could not be validated. No changes were saved. Fix the errors below and retry."
     }
   }
 }

@@ -11,6 +11,8 @@ import '../../features/graphics/presentation/preview_screen.dart';
 import '../../features/jobs/presentation/jobs_dashboard_screen.dart';
 import '../../features/kpi/presentation/kpi_screen.dart';
 import '../../features/queue/presentation/queue_screen.dart';
+import '../../features/semantic_mappings/screens/semantic_mapping_form_screen.dart';
+import '../../features/semantic_mappings/screens/semantic_mappings_list_screen.dart';
 
 /// Route path constants — single source of truth.
 class AppRoutes {
@@ -26,6 +28,10 @@ class AppRoutes {
   static const kpi             = '/kpi';
   static const jobs            = '/jobs';
   static const exceptions      = '/exceptions';
+  // Phase 3.1b — admin CRUD for semantic mappings.
+  static const semanticMappings    = '/semantic-mappings';
+  static const semanticMappingNew  = '/semantic-mappings/new';
+  static const semanticMappingEdit = '/semantic-mappings/:id';
 }
 
 /// Riverpod provider for the [GoRouter] instance.
@@ -49,6 +55,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         '/kpi',
         '/jobs',
         '/exceptions',
+        '/semantic-mappings',
       ];
       final path = state.matchedLocation;
 
@@ -114,6 +121,25 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.exceptions,
         name: 'exceptions',
         builder: (context, state) => const ExceptionsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.semanticMappings,
+        name: 'semanticMappings',
+        builder: (context, state) => const SemanticMappingsListScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.semanticMappingNew,
+        name: 'semanticMappingNew',
+        builder: (context, state) =>
+            const SemanticMappingFormScreen(mappingId: null),
+      ),
+      GoRoute(
+        path: AppRoutes.semanticMappingEdit,
+        name: 'semanticMappingEdit',
+        builder: (context, state) {
+          final id = int.parse(state.pathParameters['id']!);
+          return SemanticMappingFormScreen(mappingId: id);
+        },
       ),
       GoRoute(
         path: AppRoutes.editor,

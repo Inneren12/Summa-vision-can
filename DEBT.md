@@ -306,6 +306,91 @@ Rules:
 - **Target:** Opportunistic — post-3.1c UX refinement when admin UI
   internationalization is reviewed.
 
+### DEBT-053: cube-metadata read endpoint hybrid prime mode
+
+- **Source:** Phase 3.1b impl (`docs/recon/phase-3-1b.md` §F2)
+- **Added:** 2026-05-02
+- **Severity:** low
+- **Category:** ops
+- **Status:** accepted
+- **Description:** `GET /api/v1/admin/cube-metadata/:cube_id` defaults to
+  read-only (returns 404 on cache miss). Operators must opt-in to a
+  fresh fetch via `?prime=true&product_id=N`. This shifts cache-warming
+  responsibility to the operator workflow rather than the autocomplete
+  read path, keeping the default operator-facing call cheap.
+- **Impact:** Operators editing brand-new cubes will see a 404 +
+  free-text fallback in the form. They can either submit (the save
+  endpoint auto-primes via `service.upsert_validated`) or manually
+  trigger prime via the explicit query param. Mild UX friction for the
+  first-time-cube workflow.
+- **Resolution:** If friction surfaces in operator usage, change the
+  default to `prime=true` or add a Flutter form button "Fetch from
+  StatCan" that calls the prime endpoint before submit.
+- **Target:** Opportunistic post-Phase 3.1.
+
+### DEBT-054: concurrency convention divergence (header AND body)
+
+- **Source:** Phase 3.1b impl (`docs/recon/phase-3-1b.md` §A7)
+- **Added:** 2026-05-02
+- **Severity:** medium
+- **Category:** architecture
+- **Status:** accepted
+- **Description:** `POST /api/v1/admin/semantic-mappings/upsert` accepts
+  the optimistic concurrency token via EITHER `If-Match` request header
+  OR `if_match_version` body field (header takes precedence). Returns
+  `412 PRECONDITION_FAILED` on mismatch with envelope `error_code`
+  `VERSION_CONFLICT`. The existing publications endpoint uses
+  header-only convention. Both forms are accepted for Flutter form
+  ergonomics + future tooling flexibility.
+- **Impact:** API has a hybrid convention specific to semantic mappings.
+  Future endpoints may inherit confusion about which approach to follow.
+- **Resolution:** When adding a 3rd endpoint with optimistic concurrency,
+  decide on a unified standard. Options: deprecate the body field on
+  semantic-mappings (header-only); or migrate publications to also
+  accept a body field; or document the divergence as intentional in
+  `ARCHITECTURE_INVARIANTS.md`.
+- **Target:** Phase 4 architecture review.
+
+### DEBT-055: dimension_filters editor has no row reorder UX
+
+- **Source:** Phase 3.1b impl (`docs/recon/phase-3-1b.md` §B6.4)
+- **Added:** 2026-05-02
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** accepted
+- **Description:** The `DimensionFiltersEditor` widget supports add and
+  remove but no drag-to-reorder. Filters are semantically unordered
+  (dict in storage), but operator workflow may want a stable display
+  order across edits.
+- **Impact:** Minor UX friction when editing mappings with 5+ filter
+  rows.
+- **Resolution:** Use `ReorderableListView` with drag handles. Storage
+  stays a dict (no backend change needed); display order is local-only
+  state.
+- **Target:** Opportunistic UX pass.
+
+### DEBT-056: Flutter backend_errors.dart full backfill needed
+
+- **Source:** Phase 3.1b impl (`docs/recon/phase-3-1b.md` §F9)
+- **Added:** 2026-05-02
+- **Severity:** medium
+- **Category:** code-quality
+- **Status:** accepted
+- **Description:** `frontend/lib/l10n/backend_errors.dart` previously
+  mapped graphics/jobs codes only. Phase 3.1b added the seven
+  semantic-mapping codes (5 from 3.1ab + 2 new in 3.1b:
+  `VERSION_CONFLICT`, `BULK_VALIDATION_FAILED`). However a comprehensive
+  sweep over ALL backend error codes (`KNOWN_BACKEND_ERROR_CODES` in
+  `frontend-public/src/lib/api/errorCodes.ts`) to ensure parity is
+  deferred work — the Dart mapper still has gaps for codes outside
+  graphics, jobs, and semantic mappings.
+- **Impact:** Errors from non-mapped backend modules (e.g. publications
+  validation, statcan ETL) display as raw `error_code` rather than a
+  user-friendly l10n string in the admin Flutter app.
+- **Resolution:** Audit `KNOWN_BACKEND_ERROR_CODES` (TS), sync the Dart
+  mapper to the full set, add corresponding ARB keys EN+RU.
+- **Target:** Post-Phase 3.1 polish PR.
+
 ---
 
 ## Resolved

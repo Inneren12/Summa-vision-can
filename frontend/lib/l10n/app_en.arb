@@ -20,6 +20,38 @@
   "@navExceptions": {
     "description": "AppDrawer navigation label for the /exceptions screen (operator inbox showing failed exports + zombie jobs)."
   },
+  "navSemanticMappings": "Semantic mappings",
+  "@navSemanticMappings": {
+    "description": "AppDrawer navigation label for the /semantic-mappings admin CRUD screen (Phase 3.1b)."
+  },
+  "errorBackendMetadataValidationFailed": "The mapping does not match StatCan cube metadata.",
+  "@errorBackendMetadataValidationFailed": {
+    "description": "Backend error: generic semantic-mapping validation failure."
+  },
+  "errorBackendDimensionNotFound": "Dimension not found in cube metadata.",
+  "@errorBackendDimensionNotFound": {
+    "description": "Backend error: a dimension_filters key does not exist in the cube."
+  },
+  "errorBackendMemberNotFound": "Member not found in dimension.",
+  "@errorBackendMemberNotFound": {
+    "description": "Backend error: a dimension_filters value does not exist for the named dimension."
+  },
+  "errorBackendCubeProductMismatch": "Cube ID and product ID do not match cached metadata.",
+  "@errorBackendCubeProductMismatch": {
+    "description": "Backend error: cube_id and product_id do not match the cached row."
+  },
+  "errorBackendCubeNotInCache": "Cube metadata is not available — please retry shortly.",
+  "@errorBackendCubeNotInCache": {
+    "description": "Backend error: cube metadata not in cache and StatCan unreachable."
+  },
+  "errorBackendVersionConflict": "Version conflict — this mapping was modified by another user. Reload to see the latest version.",
+  "@errorBackendVersionConflict": {
+    "description": "Backend error: optimistic concurrency mismatch on semantic mapping save (412)."
+  },
+  "errorBackendBulkValidationFailed": "Some mappings could not be validated. No changes were saved. Fix the errors below and retry.",
+  "@errorBackendBulkValidationFailed": {
+    "description": "Backend error: at least one item in a bulk semantic-mapping upsert failed validation; no rows persisted."
+  },
   "navKpi": "KPI",
   "@navKpi": {
     "description": "Navigation label for the KPI monitoring screen"
