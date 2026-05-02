@@ -284,6 +284,28 @@ Rules:
 > Note 2026-05-01: recon proposed this as DEBT-045, but DEBT-045 is already
 > assigned (resolved) — next available ID was DEBT-051.
 
+### DEBT-052: EN-only fuzzy member-name suggestion in mapping validator
+
+- **Source:** Phase 3.1ab impl (`docs/recon/phase-3-1ab.md` §B3, founder lock 3)
+- **Added:** 2026-05-02
+- **Severity:** low
+- **Category:** ops
+- **Status:** accepted
+- **Description:** `validate_mapping_against_cache` produces fuzzy hints
+  (`suggested_member_name_en`) using `difflib.get_close_matches` against
+  cached EN member names only. FR member names are not considered. The
+  StatCan metadata cache stores both EN and FR names, but the mapping
+  schema is EN-canonical (project memory: "EN-canonical labels").
+- **Impact:** In bilingual edge cases (e.g. an operator typos a member name
+  in FR while editing an EN-canonical mapping) no fuzzy suggestion is
+  produced. The blocking decision (MEMBER_NOT_FOUND error) is unchanged —
+  no correctness risk; only reduced UX hint quality.
+- **Resolution:** Extend `_maybe_fuzzy_suggest` to also search FR names, or
+  use locale-aware normalization. Surface bilingual hints in the
+  `ValidationResult` (e.g. `suggested_member_name_fr` field).
+- **Target:** Opportunistic — post-3.1c UX refinement when admin UI
+  internationalization is reviewed.
+
 ---
 
 ## Resolved

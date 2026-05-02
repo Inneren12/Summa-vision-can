@@ -23,6 +23,12 @@ export const KNOWN_BACKEND_ERROR_CODES = [
   'AUTH_API_KEY_INVALID',
   'AUTH_ADMIN_RATE_LIMITED',
   'PRECONDITION_FAILED',
+  // Phase 3.1ab: SemanticMapping cache-driven validation (admin save).
+  'METADATA_VALIDATION_FAILED',
+  'DIMENSION_NOT_FOUND',
+  'MEMBER_NOT_FOUND',
+  'CUBE_PRODUCT_MISMATCH',
+  'CUBE_NOT_IN_CACHE',
 ] as const;
 
 export type BackendErrorCode = (typeof KNOWN_BACKEND_ERROR_CODES)[number];
@@ -54,6 +60,11 @@ export const BACKEND_ERROR_I18N_KEYS: Record<BackendErrorCode, string> = {
   AUTH_API_KEY_INVALID: 'errors.backend.auth_api_key_invalid',
   AUTH_ADMIN_RATE_LIMITED: 'errors.backend.auth_admin_rate_limited',
   PRECONDITION_FAILED: 'errors.backend.precondition_failed',
+  METADATA_VALIDATION_FAILED: 'errors.backend.metadata_validation_failed.body',
+  DIMENSION_NOT_FOUND: 'errors.backend.dimension_not_found',
+  MEMBER_NOT_FOUND: 'errors.backend.member_not_found',
+  CUBE_PRODUCT_MISMATCH: 'errors.backend.cube_product_mismatch',
+  CUBE_NOT_IN_CACHE: 'errors.backend.cube_not_in_cache',
 };
 
 /**
