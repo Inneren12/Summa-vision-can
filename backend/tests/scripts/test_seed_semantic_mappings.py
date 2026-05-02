@@ -265,3 +265,55 @@ async def test_seed_cli_default_path_is_file_atomic_on_bulk_validation_error(
             "18-10-0004", "cpi.canada.all_items.index"
         )
     assert fetched is None
+
+
+_YAML_BODY_NO_PRODUCT_ID = """\
+mappings:
+  - cube_id: "18-10-0004"
+    semantic_key: "cpi.canada.all_items.index"
+    label: "CPI"
+    config:
+      dimension_filters:
+        Geography: "Canada"
+      measure: "Value"
+      unit: "index"
+      frequency: "monthly"
+      supported_metrics:
+        - current_value
+    is_active: true
+"""
+
+
+@pytest.mark.asyncio
+async def test_seed_cli_skip_validation_rejects_missing_product_id_with_clear_error(
+    tmp_path: Path, async_engine, monkeypatch
+):
+    """R3 follow-up: --skip-validation must surface a clear ValueError when
+    a YAML row omits ``product_id``, NOT a raw DB IntegrityError after the
+    NOT NULL column landed in migration a1b2c3d4e5f6.
+    """
+    factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
+        bind=async_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    monkeypatch.setattr(
+        seed_semantic_mappings, "get_session_factory", lambda: factory
+    )
+
+    yaml_path = tmp_path / "missing_pid.yaml"
+    yaml_path.write_text(_YAML_BODY_NO_PRODUCT_ID, encoding="utf-8")
+    monkeypatch.setattr(
+        "sys.argv",
+        ["seed_semantic_mappings.py", "--skip-validation", str(yaml_path)],
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        await seed_semantic_mappings._main()
+    assert "product_id" in str(exc_info.value)
+
+    # NO row should have been written.
+    async with factory() as session:
+        repo = SemanticMappingRepository(session)
+        fetched = await repo.get_by_key(
+            "18-10-0004", "cpi.canada.all_items.index"
+        )
+    assert fetched is None
