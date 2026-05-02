@@ -24,13 +24,14 @@ import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.api.dependencies.statcan import get_statcan_metadata_cache_service
 from src.api.schemas.semantic_mapping_admin import (
     SemanticMappingListItem,
     SemanticMappingListResponse,
     SemanticMappingResponse,
     SemanticMappingUpsertRequest,
 )
-from src.core.database import get_db, get_session_factory
+from src.core.database import get_session_factory
 from src.core.logging import get_logger
 from src.repositories.semantic_mapping_repository import (
     SemanticMappingRepository,
@@ -44,8 +45,6 @@ from src.services.semantic_mappings.exceptions import (
     VersionConflictError,
 )
 from src.services.semantic_mappings.service import SemanticMappingService
-from src.services.statcan.client import StatCanClient
-from src.services.statcan.maintenance import StatCanMaintenanceGuard
 from src.services.statcan.metadata_cache import StatCanMetadataCacheService
 
 logger: structlog.stdlib.BoundLogger = get_logger(
@@ -67,38 +66,10 @@ def _get_session_factory() -> async_sessionmaker[AsyncSession]:
     return get_session_factory()
 
 
-def _get_metadata_cache_service(
-    factory: async_sessionmaker[AsyncSession] = Depends(_get_session_factory),
-) -> StatCanMetadataCacheService:
-    """Build a :class:`StatCanMetadataCacheService` per request.
-
-    Tests override this with an :class:`AsyncMock` (or a fully-stubbed
-    instance) so no real StatCan I/O occurs.
-    """
-    from datetime import datetime, timezone
-
-    import httpx
-
-    from src.core.rate_limit import AsyncTokenBucket
-
-    http_client = httpx.AsyncClient(timeout=30.0)
-    client = StatCanClient(
-        http_client,
-        StatCanMaintenanceGuard(),
-        AsyncTokenBucket(capacity=10, refill_rate=10.0),
-    )
-    return StatCanMetadataCacheService(
-        session_factory=factory,
-        client=client,
-        clock=lambda: datetime.now(timezone.utc),
-        logger=structlog.get_logger(module="statcan.metadata_cache"),
-    )
-
-
 def _get_service(
     factory: async_sessionmaker[AsyncSession] = Depends(_get_session_factory),
     metadata_cache: StatCanMetadataCacheService = Depends(
-        _get_metadata_cache_service
+        get_statcan_metadata_cache_service
     ),
 ) -> SemanticMappingService:
     return SemanticMappingService(
@@ -117,10 +88,12 @@ def _get_service(
 def _resolve_if_match(header: str | None, body_field: int | None) -> int | None:
     """Hybrid concurrency: header takes precedence; body fallback.
 
-    Malformed header (non-integer after stripping ``W/`` and quotes) is
-    silently ignored so the body field is consulted. This keeps the form
-    flow forgiving — the operator only sees a 412 when there is a real
-    version mismatch, not when an upstream proxy mangles the header.
+    Strict on header format: if the header is present but cannot be parsed
+    as an integer version (after stripping ``W/`` weak-tag prefix and
+    quotes), raise ``INVALID_IF_MATCH`` 400 — this is a format error, not
+    a precondition failure. The body field is NOT used as a silent
+    fallback when the header is malformed: an explicit broken header
+    should never be silently masked by an unrelated body value.
     See DEBT-054 for the convention divergence vs publications.
     """
     if header is not None:
@@ -130,8 +103,17 @@ def _resolve_if_match(header: str | None, body_field: int | None) -> int | None:
         cleaned = cleaned.strip('"')
         try:
             return int(cleaned)
-        except ValueError:
-            pass
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error_code": "INVALID_IF_MATCH",
+                    "message": (
+                        f"If-Match header must contain an integer version "
+                        f"(received: {header!r})."
+                    ),
+                },
+            ) from exc
     return body_field
 
 
@@ -362,12 +344,6 @@ async def delete_semantic_mapping(
         semantic_key=mapping.semantic_key,
     )
     return SemanticMappingResponse.model_validate(mapping)
-
-
-# Tests / DI ergonomics: keep the unused-import lint suppressed by leaving
-# get_db imported even though the helper deps go through the session
-# factory directly. Tests override _get_service / _get_metadata_cache_service.
-_ = get_db
 
 
 __all__ = ["router"]

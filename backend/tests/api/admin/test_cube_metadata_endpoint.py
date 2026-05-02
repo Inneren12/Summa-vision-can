@@ -15,10 +15,8 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from src.api.routers.admin_cube_metadata import (
-    _get_metadata_cache_service,
-    router,
-)
+from src.api.dependencies.statcan import get_statcan_metadata_cache_service
+from src.api.routers.admin_cube_metadata import router
 from src.services.statcan.metadata_cache import (
     CubeMetadataCacheEntry,
     StatCanMetadataCacheService,
@@ -48,7 +46,9 @@ def mock_cache() -> AsyncMock:
 def app(mock_cache) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[_get_metadata_cache_service] = lambda: mock_cache
+    app.dependency_overrides[get_statcan_metadata_cache_service] = (
+        lambda: mock_cache
+    )
     return app
 
 

@@ -33,8 +33,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from src.api.dependencies.statcan import get_statcan_metadata_cache_service
 from src.api.routers.admin_semantic_mappings import (
-    _get_metadata_cache_service,
     _get_service,
     _get_session_factory,
     router,
@@ -165,7 +165,9 @@ def app(session_factory, mock_cache) -> FastAPI:
         )
 
     app.dependency_overrides[_get_session_factory] = _override_factory
-    app.dependency_overrides[_get_metadata_cache_service] = _override_cache
+    app.dependency_overrides[get_statcan_metadata_cache_service] = (
+        _override_cache
+    )
     app.dependency_overrides[_get_service] = _override_service
     return app
 
@@ -335,3 +337,60 @@ async def test_delete_soft_deletes_idempotently(client, mock_cache):
     assert second_delete.status_code == 200
     assert second_delete.json()["is_active"] is False
     assert second_delete.json()["version"] == version_after_first
+
+
+# ---------------------------------------------------------------------------
+# Phase 3.1b fix R1 — strict INVALID_IF_MATCH on malformed header
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_post_upsert_returns_400_invalid_if_match_when_header_malformed_and_no_body(
+    client, mock_cache,
+):
+    """Reviewer R1 P1: malformed If-Match header is rejected, not silently ignored."""
+    mock_cache.get_or_fetch.return_value = _cache_entry()
+    resp = await client.post(
+        "/api/v1/admin/semantic-mappings/upsert",
+        json=_valid_body(),
+        headers={"If-Match": "abc"},
+    )
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["detail"]["error_code"] == "INVALID_IF_MATCH"
+
+
+@pytest.mark.asyncio
+async def test_post_upsert_returns_400_invalid_if_match_when_header_malformed_even_with_body(
+    client, mock_cache,
+):
+    """Malformed header MUST NOT silently fall through to the body field.
+
+    The header explicitly invokes the concurrency contract; if it cannot be
+    parsed, the request is broken regardless of what the body says.
+    """
+    mock_cache.get_or_fetch.return_value = _cache_entry()
+    resp = await client.post(
+        "/api/v1/admin/semantic-mappings/upsert",
+        json=_valid_body(if_match_version=1),
+        headers={"If-Match": "abc"},
+    )
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["detail"]["error_code"] == "INVALID_IF_MATCH"
+
+
+@pytest.mark.asyncio
+async def test_post_upsert_resolves_weak_etag_header_w_prefix(client, mock_cache):
+    """``W/"1"`` must parse as version 1 — verifies the strip-W/-and-quotes path."""
+    mock_cache.get_or_fetch.return_value = _cache_entry()
+    first = await client.post(
+        "/api/v1/admin/semantic-mappings/upsert", json=_valid_body()
+    )
+    assert first.status_code == 201
+    # Existing version is 1; weak-ETag form ``W/"1"`` should match.
+    resp = await client.post(
+        "/api/v1/admin/semantic-mappings/upsert",
+        json=_valid_body(label="updated-via-weak-etag"),
+        headers={"If-Match": 'W/"1"'},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["label"] == "updated-via-weak-etag"

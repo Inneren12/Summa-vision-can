@@ -13,9 +13,8 @@ from __future__ import annotations
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.core.database import get_db, get_session_factory
+from src.api.dependencies.statcan import get_statcan_metadata_cache_service
 from src.core.logging import get_logger
 from src.services.statcan.metadata_cache import (
     CubeMetadataCacheEntry,
@@ -47,41 +46,6 @@ class CubeMetadataCacheEntryResponse(BaseModel):
     cube_title_fr: str | None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-# ---------------------------------------------------------------------------
-# Dependency helpers (overridable in tests)
-# ---------------------------------------------------------------------------
-
-
-def _get_session_factory() -> async_sessionmaker[AsyncSession]:
-    return get_session_factory()
-
-
-def _get_metadata_cache_service(
-    factory: async_sessionmaker[AsyncSession] = Depends(_get_session_factory),
-) -> StatCanMetadataCacheService:
-    """Per-request cache service. Tests override with an :class:`AsyncMock`."""
-    from datetime import datetime, timezone
-
-    import httpx
-
-    from src.core.rate_limit import AsyncTokenBucket
-    from src.services.statcan.client import StatCanClient
-    from src.services.statcan.maintenance import StatCanMaintenanceGuard
-
-    http_client = httpx.AsyncClient(timeout=30.0)
-    client = StatCanClient(
-        http_client,
-        StatCanMaintenanceGuard(),
-        AsyncTokenBucket(capacity=10, refill_rate=10.0),
-    )
-    return StatCanMetadataCacheService(
-        session_factory=factory,
-        client=client,
-        clock=lambda: datetime.now(timezone.utc),
-        logger=structlog.get_logger(module="statcan.metadata_cache"),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +88,7 @@ async def get_cube_metadata(
             "(option A in the recon § F2 question)."
         ),
     ),
-    service: StatCanMetadataCacheService = Depends(_get_metadata_cache_service),
+    service: StatCanMetadataCacheService = Depends(get_statcan_metadata_cache_service),
 ) -> CubeMetadataCacheEntryResponse:
     if prime:
         if product_id is None:
@@ -195,9 +159,6 @@ def _serialize(entry: CubeMetadataCacheEntry) -> CubeMetadataCacheEntryResponse:
         cube_title_en=entry.cube_title_en,
         cube_title_fr=entry.cube_title_fr,
     )
-
-
-_ = get_db  # keep import used for parity with sibling routers
 
 
 __all__ = ["router", "CubeMetadataCacheEntryResponse"]
