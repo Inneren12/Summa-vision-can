@@ -1,15 +1,21 @@
-"""Phase 3.1ab: seed CLI test.
+"""Phase 3.1ab: seed CLI tests.
 
-Asserts that ``--skip-validation`` reverts to the direct-repo path and
-emits a structlog warning, while bypassing
-:meth:`SemanticMappingService.upsert_validated`. The validated default
-path is exercised end-to-end in the integration test
-(``tests/integration/test_semantic_mapping_service_integration.py``)
-where the StatCan client is mocked but everything else is real.
+Two scenarios:
+* ``--skip-validation`` reverts to the direct-repo path and emits a
+  structlog warning, while bypassing
+  :meth:`SemanticMappingService.upsert_validated`.
+* Default (validated) path constructs a ``SemanticMappingService`` and
+  forwards each YAML row to ``upsert_validated`` with the expected
+  kwargs (smoke test against CLI ↔ service signature drift).
+
+The validated default path is also exercised end-to-end in
+``tests/integration/test_semantic_mapping_service_integration.py`` where
+the StatCan client is mocked but everything else is real.
 """
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -24,6 +30,27 @@ from src.repositories.semantic_mapping_repository import (
 _YAML_BODY = """\
 mappings:
   - cube_id: "18-10-0004"
+    semantic_key: "cpi.canada.all_items.index"
+    label: "CPI — Canada, all-items"
+    description: "headline"
+    config:
+      dimension_filters:
+        Geography: "Canada"
+        Products: "All-items"
+      measure: "Value"
+      unit: "index"
+      frequency: "monthly"
+      supported_metrics:
+        - current_value
+      default_geo: "Canada"
+    is_active: true
+"""
+
+
+_YAML_BODY_WITH_PRODUCT_ID = """\
+mappings:
+  - cube_id: "18-10-0004"
+    product_id: 18100004
     semantic_key: "cpi.canada.all_items.index"
     label: "CPI — Canada, all-items"
     description: "headline"
@@ -100,3 +127,73 @@ async def test_seed_cli_skip_validation_flag_uses_direct_repo_path(
         )
     assert fetched is not None
     assert fetched.label == "CPI — Canada, all-items"
+
+
+@pytest.mark.asyncio
+async def test_seed_cli_default_path_calls_upsert_validated(
+    tmp_path: Path, async_engine, monkeypatch
+):
+    """Reviewer P2: smoke test that the default (validated) path constructs
+    a ``SemanticMappingService`` and forwards each YAML row to
+    ``upsert_validated`` with the expected kwargs. Catches CLI ↔ service
+    signature drift.
+    """
+    factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
+        bind=async_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    monkeypatch.setattr(
+        seed_semantic_mappings, "get_session_factory", lambda: factory
+    )
+
+    yaml_path = tmp_path / "cpi.yaml"
+    yaml_path.write_text(_YAML_BODY_WITH_PRODUCT_ID, encoding="utf-8")
+
+    captured_init: list[dict] = []
+    captured_calls: list[dict] = []
+
+    class _FakeSemanticMappingService:
+        def __init__(self, **kwargs) -> None:
+            captured_init.append(kwargs)
+
+        async def upsert_validated(self, **kwargs):
+            captured_calls.append(kwargs)
+            return SimpleNamespace(
+                id=1, cube_id=kwargs["cube_id"], version=1
+            )
+
+    monkeypatch.setattr(
+        seed_semantic_mappings,
+        "SemanticMappingService",
+        _FakeSemanticMappingService,
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["seed_semantic_mappings.py", str(yaml_path)],
+    )
+
+    rc = await seed_semantic_mappings._main()
+
+    assert rc == 0
+    # Service is constructed once with full DI surface.
+    assert len(captured_init) == 1
+    init_kwargs = captured_init[0]
+    assert set(init_kwargs.keys()) == {
+        "session_factory",
+        "repository_factory",
+        "metadata_cache",
+        "logger",
+    }
+
+    # upsert_validated received the YAML row's flat kwargs.
+    assert len(captured_calls) == 1
+    call = captured_calls[0]
+    assert call["cube_id"] == "18-10-0004"
+    assert call["product_id"] == 18100004
+    assert call["semantic_key"] == "cpi.canada.all_items.index"
+    assert call["label"] == "CPI — Canada, all-items"
+    assert call["is_active"] is True
+    assert call["updated_by"] == "seed"
+    assert call["config"]["dimension_filters"] == {
+        "Geography": "Canada",
+        "Products": "All-items",
+    }

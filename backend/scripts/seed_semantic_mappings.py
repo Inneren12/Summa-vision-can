@@ -27,6 +27,19 @@ emitted whenever the flag is used.
 When validation is on, each mapping row must include a top-level
 ``product_id`` key (StatCan numeric ID) — the row's ``cube_id`` alone is a
 semantic identifier and does not uniquely select cube metadata.
+
+Atomicity (Phase 3.1ab): the validated path is **row-committed, not
+file-atomic**. Each successful row is committed individually inside
+``SemanticMappingService.upsert_validated``. If row N raises (validation
+or transport), rows 1..N-1 stay persisted and the CLI exits non-zero.
+Re-running the same YAML is idempotent on ``(cube_id, semantic_key)``
+(see ``SemanticMappingRepository.upsert_by_key``), so a partial-failure
+recovery is just "fix the bad row and re-run."
+
+The ``--skip-validation`` path uses the legacy direct-repo flow which
+commits once at the end of each YAML file (whole-file atomicity per
+file). A future bulk service with cross-row transactional wrapping for
+the validated path is out of scope for 3.1ab.
 """
 from __future__ import annotations
 
@@ -165,7 +178,7 @@ async def _main() -> int:
         client = StatCanClient(
             http_client,
             StatCanMaintenanceGuard(),
-            AsyncTokenBucket(),
+            AsyncTokenBucket(capacity=10, refill_rate=10.0),
         )
         cache = StatCanMetadataCacheService(
             session_factory=factory,

@@ -80,6 +80,9 @@ class SemanticMappingService:
         """Validate against the cache, then upsert through the repository.
 
         Raises:
+            pydantic.ValidationError: ``config`` does not satisfy
+                :class:`SemanticMappingConfig`. Raised BEFORE any cache
+                fetch — bad shape never triggers a StatCan call.
             CubeNotInCacheError: cache miss + StatCan unreachable, or
                 StatCan has no metadata for ``cube_id``.
             MetadataValidationError: cache row's ``product_id`` differs
@@ -89,6 +92,12 @@ class SemanticMappingService:
             MemberMismatchError: at least one ``MEMBER_NOT_FOUND`` (and no
                 higher-precedence error class).
         """
+        # 1. Pydantic config validation FIRST. Fail fast on bad shape with a
+        #    proper pydantic.ValidationError before paying for a cache fetch.
+        config_model = SemanticMappingConfig.model_validate(config)
+        dimension_filters = config_model.dimension_filters or {}
+
+        # 2. Fetch cache (auto-prime mode).
         try:
             cache_entry = await self._metadata_cache.get_or_fetch(
                 cube_id, product_id
@@ -112,7 +121,7 @@ class SemanticMappingService:
                 error_code="CUBE_PRODUCT_MISMATCH",
             ) from exc
 
-        dimension_filters = config.get("dimension_filters", {}) or {}
+        # 3. Pure validation against cache.
         result = validate_mapping_against_cache(
             cube_id=cube_id,
             product_id=product_id,
@@ -120,6 +129,7 @@ class SemanticMappingService:
             cache_entry=cache_entry,
         )
 
+        # 4. Decide exception class on validation failure.
         if not result.is_valid:
             self._logger.info(
                 "semantic_mapping.validation_failed",
@@ -152,12 +162,13 @@ class SemanticMappingService:
                 )
             raise MetadataValidationError(result=result, cube_id=cube_id)
 
+        # 5. Persist using the validated/normalized config form.
         payload = SemanticMappingCreate(
             cube_id=cube_id,
             semantic_key=semantic_key,
             label=label,
             description=description,
-            config=SemanticMappingConfig.model_validate(config),
+            config=config_model,
             is_active=is_active,
         )
         async with self._session_factory() as session:

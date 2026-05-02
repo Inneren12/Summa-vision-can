@@ -280,6 +280,38 @@ async def test_validation_member_not_found_raises_member_mismatch_error(
 
 
 @pytest.mark.asyncio
+async def test_upsert_validated_bad_config_shape_raises_before_cache_fetch(
+    service, mock_cache
+):
+    """Reviewer P1: config validation must fail BEFORE cache fetch.
+
+    A malformed ``config`` (e.g. ``dimension_filters`` as a list) must raise
+    ``pydantic.ValidationError`` immediately and NOT call ``get_or_fetch``.
+    """
+    from pydantic import ValidationError
+
+    mock_cache.get_or_fetch.side_effect = AssertionError(
+        "cache must NOT be called when config shape is invalid"
+    )
+
+    bad_config = {"dimension_filters": ["Geography", "Canada"]}  # list, not dict
+
+    with pytest.raises(ValidationError):
+        await service.upsert_validated(
+            cube_id="18-10-0004",
+            product_id=18100004,
+            semantic_key="cpi.k",
+            label="L",
+            description=None,
+            config=bad_config,
+            is_active=True,
+            updated_by=None,
+        )
+
+    mock_cache.get_or_fetch.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_validation_cube_product_mismatch_takes_precedence_over_dim_or_member_errors(
     service, mock_cache
 ):

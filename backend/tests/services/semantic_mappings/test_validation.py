@@ -205,6 +205,58 @@ def test_normalization_handles_case_and_whitespace() -> None:
     assert result.resolved_filters[0].member_id == 1
 
 
+def test_validator_does_not_raise_on_malformed_cache_dimensions() -> None:
+    """Reviewer P2: malformed cache rows (missing ``name_en``) are silently
+    skipped. Pure function contract: no exceptions raised. A dimension or
+    member with no ``name_en`` is invisible to the validator — mappings
+    referencing it surface as DIMENSION_NOT_FOUND / MEMBER_NOT_FOUND
+    rather than leaking a ``KeyError``.
+    """
+    cache_entry = CubeMetadataCacheEntry(
+        cube_id="18-10-0004",
+        product_id=18100004,
+        dimensions={
+            "dimensions": [
+                # Dimension missing name_en — must be silently skipped.
+                {
+                    "position_id": 1,
+                    "members": [
+                        {"member_id": 1, "name_en": "Canada"},
+                    ],
+                },
+                # Well-formed dimension; one member is malformed.
+                {
+                    "position_id": 2,
+                    "name_en": "Products",
+                    "members": [
+                        {"member_id": 10, "name_en": "All-items"},
+                        {"member_id": 11},  # missing name_en — skipped
+                    ],
+                },
+            ]
+        },
+        frequency_code="6",
+        cube_title_en="CPI",
+        cube_title_fr="IPC",
+        fetched_at=_FIXED_FETCHED_AT,
+    )
+
+    result = validate_mapping_against_cache(
+        cube_id="18-10-0004",
+        product_id=18100004,
+        dimension_filters={"Geography": "Canada", "Products": "All-items"},
+        cache_entry=cache_entry,
+    )
+
+    # Geography dimension is invisible (no name_en) → DIMENSION_NOT_FOUND.
+    assert result.is_valid is False
+    error_codes = [e.error_code for e in result.errors]
+    assert "DIMENSION_NOT_FOUND" in error_codes
+    # Products → All-items is well-formed and resolves successfully.
+    resolved_dims = [r.dimension_name for r in result.resolved_filters]
+    assert "Products" in resolved_dims
+
+
 def test_fuzzy_suggestion_populated_for_close_member_typo() -> None:
     # "All-iems" is one char off "All-items" — get_close_matches should hit.
     result = validate_mapping_against_cache(

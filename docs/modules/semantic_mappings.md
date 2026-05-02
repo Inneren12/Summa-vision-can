@@ -90,18 +90,21 @@ SemanticMappingService(
 R6 — short-lived sessions; ARCH-DPEN-001 — full DI.
 
 - `upsert_validated(*, cube_id, product_id, semantic_key, label, description, config, is_active, updated_by) -> SemanticMapping`
-  1. Calls `metadata_cache.get_or_fetch(cube_id, product_id)`.
-  2. Re-wraps cache exceptions (`StatCanUnavailableError` /
+  1. **Pydantic validates `config`** as `SemanticMappingConfig` first.
+     A bad shape raises `pydantic.ValidationError` BEFORE any cache fetch
+     — bad input never triggers a StatCan call.
+  2. Calls `metadata_cache.get_or_fetch(cube_id, product_id)`.
+  3. Re-wraps cache exceptions (`StatCanUnavailableError` /
      `CubeNotFoundError` → `CubeNotInCacheError`;
      `CubeMetadataProductMismatchError` →
      `MetadataValidationError(error_code='CUBE_PRODUCT_MISMATCH')`).
-  3. Runs `validate_mapping_against_cache`. On failure, raises the most
+  4. Runs `validate_mapping_against_cache`. On failure, raises the most
      specific exception class (precedence: product-mismatch ⇒ dimension
      ⇒ member). Logs `semantic_mapping.validation_failed` with the full
      error-code list for ops visibility.
-  4. Constructs a `SemanticMappingCreate` payload and calls
-     `repo.upsert_by_key(payload, updated_by=updated_by)` inside a
-     fresh session, commits, and returns the ORM row.
+  5. Constructs a `SemanticMappingCreate` payload from the validated
+     config model and calls `repo.upsert_by_key(payload, updated_by=updated_by)`
+     inside a fresh session, commits, and returns the ORM row.
 
 Per Phase 3.1b admin endpoint wiring: route handlers will go through
 this service. The repository's `upsert_by_key` is no longer called
@@ -117,14 +120,26 @@ key (StatCan numeric ID). `--skip-validation` reverts to the 3.1a
 direct-repo path and emits a structlog warning
 (`seed.skip_validation_enabled`) for offline/dev use.
 
+### Atomicity
+
+Validated seed runs (default) commit per row, not per file. A failure on
+row N does not roll back rows 1..N-1 that already passed validation and
+were committed. To re-run a partially-failed seed, fix the bad row and
+re-apply — `upsert_by_key` is idempotent on `(cube_id, semantic_key)`.
+Operators who need to bypass StatCan checks during recovery can use
+`--skip-validation` (which uses whole-file commit semantics).
+
+A future bulk service with cross-row transactional wrapping for the
+validated path is out of scope for 3.1ab.
+
 ## Tests
 
 | Test file | Count | Strategy |
 |-----------|-------|----------|
-| `tests/services/semantic_mappings/test_validation.py` | 7 | Pure function — no async, no mocks |
-| `tests/services/semantic_mappings/test_service.py` | 7 | In-memory SQLite + `AsyncMock(spec=StatCanMetadataCacheService)` |
+| `tests/services/semantic_mappings/test_validation.py` | 8 | Pure function — no async, no mocks |
+| `tests/services/semantic_mappings/test_service.py` | 8 | In-memory SQLite + `AsyncMock(spec=StatCanMetadataCacheService)` |
 | `tests/integration/test_semantic_mapping_service_integration.py` | 2 | Real Postgres via `pg_session`; StatCan client mocked |
-| `tests/scripts/test_seed_semantic_mappings.py` | 1 | `--skip-validation` flag spy + warning assertion |
+| `tests/scripts/test_seed_semantic_mappings.py` | 2 | `--skip-validation` flag spy; default-path smoke test |
 
 ## Architecture Rules Used
 

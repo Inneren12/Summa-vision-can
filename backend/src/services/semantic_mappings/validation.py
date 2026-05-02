@@ -102,6 +102,16 @@ def validate_mapping_against_cache(
         resolved filters list. ``is_valid=True`` iff ``errors`` is empty.
         Validation does NOT short-circuit on the first error — all errors
         are collected so the operator sees the full picture.
+
+    Pure function guarantees:
+        * No I/O, no clock, no logger.
+        * No exceptions raised, including on malformed cache shapes.
+          Cache rows missing ``name_en`` (dimension or member) are silently
+          skipped during the lookup-table build. A mapping referencing such
+          a row will surface as ``DIMENSION_NOT_FOUND`` or
+          ``MEMBER_NOT_FOUND`` rather than leak a ``KeyError``. This is
+          intentional: the cache layer (3.1aa) controls cache shape; this
+          validator is a defense-in-depth pure function.
     """
     errors: list[ValidationError] = []
     resolved: list[ResolvedDimensionFilter] = []
@@ -128,9 +138,13 @@ def validate_mapping_against_cache(
         if isinstance(cache_entry.dimensions, dict)
         else []
     )
-    dim_by_normalized_name: dict[str, dict] = {
-        _normalize_name(dim["name_en"]): dim for dim in cache_dims
-    }
+    dim_by_normalized_name: dict[str, dict] = {}
+    for dim in cache_dims:
+        dim_name_en = dim.get("name_en")
+        if not dim_name_en:
+            # Malformed cache row — skip silently per docstring guarantee.
+            continue
+        dim_by_normalized_name[_normalize_name(dim_name_en)] = dim
 
     for dim_name, member_name in dimension_filters.items():
         norm_dim = _normalize_name(dim_name)
@@ -151,16 +165,20 @@ def validate_mapping_against_cache(
             continue
 
         matched_dim = dim_by_normalized_name[norm_dim]
-        members = matched_dim.get("members", [])
-        member_by_normalized_name: dict[str, dict] = {
-            _normalize_name(m["name_en"]): m for m in members
-        }
+        members = matched_dim.get("members", []) or []
+        member_by_normalized_name: dict[str, dict] = {}
+        for m in members:
+            m_name_en = m.get("name_en")
+            if not m_name_en:
+                continue
+            member_by_normalized_name[_normalize_name(m_name_en)] = m
 
         norm_member = _normalize_name(member_name)
         if norm_member not in member_by_normalized_name:
-            suggested = _maybe_fuzzy_suggest(
-                member_name, [m["name_en"] for m in members]
-            )
+            candidate_names = [
+                name for m in members if (name := m.get("name_en"))
+            ]
+            suggested = _maybe_fuzzy_suggest(member_name, candidate_names)
             hint = f" (did you mean {suggested!r}?)" if suggested else ""
             errors.append(
                 ValidationError(
@@ -183,8 +201,8 @@ def validate_mapping_against_cache(
             ResolvedDimensionFilter(
                 dimension_name=dim_name,
                 member_name=member_name,
-                dimension_position_id=matched_dim["position_id"],
-                member_id=matched_member["member_id"],
+                dimension_position_id=matched_dim.get("position_id"),
+                member_id=matched_member.get("member_id"),
             )
         )
 
