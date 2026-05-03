@@ -136,9 +136,24 @@ Three new test cases, one per layer, per recon FIX-2 §6 additions. Add these to
 
 Append to the existing test gates section:
 
+**Verification command rules (per Codex review on PR #284):**
+
+1. **Never pipe verification commands to `tail` / `head` / `grep`.** Default Bash
+   without `set -o pipefail` returns the exit code of the LAST command in a
+   pipeline, masking the real status. A pytest invocation piped through
+   `tail` returns 0 even on test failures, regardless of pytest's actual
+   exit status. Run pytest/ruff/mypy directly; full output goes in Summary
+   Report per existing strict-execution rules.
+2. **Use `grep -F` (fixed string) for content match gates.** BRE alternation
+   `\|` expands in non-obvious ways: `"foo\|bar\|baz"` parses as three
+   branches, and patterns like `"value: str | None\|value: str \| None"`
+   accidentally introduce a loose `" None"` branch matching every line with
+   ` None` anywhere. Use `-F` to treat the pattern as literal string with no
+   regex interpretation.
+
 ```bash
 # Missing observation contract
-grep -c "value: str | None\|value: str \| None" backend/src/schemas/resolve.py
+grep -cF "value: str | None" backend/src/schemas/resolve.py
 # Expected: 1
 
 grep -c "^    missing: bool" backend/src/schemas/resolve.py
@@ -147,11 +162,11 @@ grep -c "^    missing: bool" backend/src/schemas/resolve.py
 grep -c "row.value is None\|if row\.value is None" backend/src/services/resolve/service.py
 # Expected: ≥1 (the explicit None-check before stringify)
 
-cd backend && pytest tests/services/resolve/ tests/integration/test_admin_resolve.py -v -k "missing" 2>&1 | tail -10
+cd backend && pytest tests/services/resolve/ tests/integration/test_admin_resolve.py -v -k "missing"
 # Expected: 3 tests pass (one per layer)
 
 # Final defensive: response JSON never contains "None" literal for missing values
-cd backend && pytest tests/integration/test_admin_resolve.py::test_resolve_missing_observation_round_trip -v 2>&1 | tail -10
+cd backend && pytest tests/integration/test_admin_resolve.py::test_resolve_missing_observation_round_trip -v
 # Expected: pass; assertion that '"None"' not in response.text holds
 ```
 
