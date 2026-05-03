@@ -112,7 +112,11 @@ def _get_resolve_service(
 )
 async def resolve_value_handler(
     cube_id: str = Path(..., min_length=1, max_length=50),
-    semantic_key: str = Path(..., min_length=1, max_length=100),
+    # semantic_key: 200 char limit matches SemanticMapping.semantic_key
+    # (String(200)) and SemanticMappingCreate (max_length=200). NOT
+    # cache-table semantic_key (varchar(100)) — see DEBT-063 for the
+    # schema asymmetry.
+    semantic_key: str = Path(..., min_length=1, max_length=200),
     dim: list[int] = Query(default_factory=list),
     member: list[int] = Query(default_factory=list),
     period: str | None = Query(default=None, max_length=20),

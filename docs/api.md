@@ -348,7 +348,7 @@ Phase 3.1c. Singular cache-first resolve endpoint that fronts
 | Param | Type | Constraints |
 |-------|------|-------------|
 | `cube_id` | `str` | 1–50 chars |
-| `semantic_key` | `str` | 1–100 chars |
+| `semantic_key` | `str` | 1–200 chars (matches `SemanticMapping.semantic_key`; cache table is varchar(100), see DEBT-063) |
 
 **Query params (Encoding 1 — repeated pairs):**
 

@@ -417,3 +417,88 @@ async def test_resolve_auth_required(session_factory, http_client_factory):
     full app lives in ``tests/api/test_auth_middleware.py``.
     """
     assert admin_resolve_router.prefix == "/api/v1/admin/resolve"
+
+
+@pytest.mark.asyncio
+async def test_resolve_accepts_semantic_key_up_to_200_chars(
+    session_factory, http_client_factory
+):
+    """Round 3 regression: admin-created mappings with keys up to
+    String(200) must remain reachable through resolve. The original
+    impl used the cache-table limit (100), which silently orphaned
+    long-key mappings from the resolve path.
+    """
+    base = "cpi.canada.all_items.index"
+    long_key = base + "." + "x" * (200 - len(base) - 1)
+    assert len(long_key) == 200
+
+    async with session_factory() as session:
+        m = SemanticMapping(
+            cube_id="18-10-0004",
+            product_id=18100004,
+            semantic_key=long_key,
+            label="Long-key CPI",
+            description=None,
+            config={
+                "dimension_filters": {
+                    "Geography": "Canada",
+                    "Products": "All-items",
+                },
+                "unit": "index",
+                "frequency": "monthly",
+            },
+            is_active=True,
+        )
+        session.add(m)
+        await session.commit()
+
+    long_key_row = ValueCacheRow(
+        id=1,
+        cube_id="18-10-0004",
+        product_id=18100004,
+        semantic_key=long_key,
+        coord="1.10.0.0.0.0.0.0.0.0",
+        ref_period="2025-12",
+        period_start=None,
+        value=Decimal("100.0"),
+        missing=False,
+        decimals=2,
+        scalar_factor_code=0,
+        symbol_code=0,
+        security_level_code=0,
+        status_code=0,
+        frequency_code=6,
+        vector_id=None,
+        response_status_code=None,
+        source_hash="hash-abc",
+        fetched_at=_FIXED_FETCHED_AT,
+        release_time=None,
+        is_stale=False,
+    )
+    app, _ = _build_app(session_factory, get_cached_returns=[[long_key_row]])
+    async with await http_client_factory(app) as client:
+        resp = await client.get(
+            f"/api/v1/admin/resolve/18-10-0004/{long_key}",
+            params=[("dim", 1), ("member", 1), ("dim", 2), ("member", 10)],
+        )
+    # MUST NOT be rejected at path validation (was 422 before round 3).
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["semantic_key"] == long_key
+
+
+@pytest.mark.asyncio
+async def test_resolve_rejects_semantic_key_over_200_chars(
+    session_factory, http_client_factory
+):
+    """Defense: keys longer than the mapping limit MUST still be
+    rejected (FastAPI 422 at path validation). Confirms we widened
+    the constraint, not removed it.
+    """
+    too_long = "x" * 201
+    app, _ = _build_app(session_factory, get_cached_returns=[[]])
+    async with await http_client_factory(app) as client:
+        resp = await client.get(
+            f"/api/v1/admin/resolve/18-10-0004/{too_long}",
+            params=[("dim", 1), ("member", 1)],
+        )
+    assert resp.status_code == 422
