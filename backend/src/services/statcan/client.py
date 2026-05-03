@@ -33,10 +33,21 @@ from src.core.exceptions import DataSourceError
 from src.core.rate_limit import AsyncTokenBucket
 from src.services.statcan.maintenance import StatCanMaintenanceGuard
 from src.services.statcan.schemas import CubeMetadataResponse
+from src.services.statcan.value_cache_schemas import (
+    StatCanDataEnvelope,
+    StatCanDataResponse,
+)
 
 _GET_CUBE_METADATA_URL: Final[str] = (
     "https://www150.statcan.gc.ca/t1/wds/rest/getCubeMetadata"
 )
+_GET_DATA_URL: Final[str] = (
+    "https://www150.statcan.gc.ca/t1/wds/rest/"
+    "getDataFromCubePidCoordAndLatestNPeriods"
+)
+# Phase 3.1aaa Q-impl-1: conservative ceiling on batch size pending
+# explicit StatCan documentation. Tracked under DEBT-058.
+_MAX_BATCH_SIZE: Final[int] = 100
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(
     module="statcan.client",
@@ -140,6 +151,126 @@ class StatCanClient:
         if envelope.get("status") != "SUCCESS" or "object" not in envelope:
             return None
         return CubeMetadataResponse.model_validate(envelope["object"])
+
+    async def get_data_from_cube_pid_coord_and_latest_n_periods(
+        self,
+        *,
+        product_id: int,
+        coord: str,
+        latest_n: int,
+    ) -> StatCanDataResponse | None:
+        """POST to ``getDataFromCubePidCoordAndLatestNPeriods``.
+
+        Phase 3.1aaa: backs the value-cache auto-prime path.
+
+        Returns ``None`` when StatCan responds with a non-``SUCCESS``
+        envelope (e.g. unknown ``coord``). Mirrors
+        :meth:`get_cube_metadata` failure semantics — only network /
+        HTTP / retry-exhausted errors propagate as
+        :class:`DataSourceError`.
+        """
+        response = await self.request(
+            "POST",
+            _GET_DATA_URL,
+            json=[
+                {
+                    "productId": product_id,
+                    "coordinate": coord,
+                    "latestN": latest_n,
+                }
+            ],
+        )
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise DataSourceError(
+                message=(
+                    f"StatCan returned HTTP {exc.response.status_code} "
+                    f"for getDataFromCubePidCoordAndLatestNPeriods"
+                ),
+                error_code="DATASOURCE_HTTP_ERROR",
+                context={
+                    "url": _GET_DATA_URL,
+                    "method": "POST",
+                    "status_code": exc.response.status_code,
+                    "product_id": product_id,
+                    "coord": coord,
+                },
+            ) from exc
+        payload = response.json()
+        if not isinstance(payload, list) or not payload:
+            return None
+        envelope = payload[0]
+        if envelope.get("status") != "SUCCESS" or "object" not in envelope:
+            return None
+        return StatCanDataResponse.model_validate(envelope["object"])
+
+    async def get_data_batch(
+        self,
+        items: list[tuple[int, str, int]],
+    ) -> list[StatCanDataResponse | None]:
+        """Batch ``getDataFromCubePidCoordAndLatestNPeriods``.
+
+        Phase 3.1aaa: nightly refresh fan-out. Caps at ``_MAX_BATCH_SIZE``.
+        Returns a list aligned to the input order; ``None`` for any
+        entry whose envelope was ``FAILED`` or unparseable
+        (mixed-success per recon §A6 / DEBT-059).
+        """
+        if not items:
+            return []
+        if len(items) > _MAX_BATCH_SIZE:
+            raise ValueError(
+                f"batch size exceeds {_MAX_BATCH_SIZE}: got {len(items)}"
+            )
+        request_body = [
+            {"productId": pid, "coordinate": coord, "latestN": n}
+            for pid, coord, n in items
+        ]
+        response = await self.request("POST", _GET_DATA_URL, json=request_body)
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise DataSourceError(
+                message=(
+                    f"StatCan returned HTTP {exc.response.status_code} "
+                    f"for batched getDataFromCubePidCoordAndLatestNPeriods"
+                ),
+                error_code="DATASOURCE_HTTP_ERROR",
+                context={
+                    "url": _GET_DATA_URL,
+                    "method": "POST",
+                    "status_code": exc.response.status_code,
+                    "batch_size": len(items),
+                },
+            ) from exc
+        payload = response.json()
+        if not isinstance(payload, list) or len(payload) != len(items):
+            raise DataSourceError(
+                message="WDS batch response length mismatch",
+                error_code="DATASOURCE_BATCH_LENGTH_MISMATCH",
+                context={
+                    "requested": len(items),
+                    "received": len(payload) if isinstance(payload, list) else 0,
+                },
+            )
+        results: list[StatCanDataResponse | None] = []
+        for envelope in payload:
+            try:
+                parsed = StatCanDataEnvelope.model_validate(envelope)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "WDS batch envelope parse failed",
+                    error=str(exc),
+                )
+                results.append(None)
+                continue
+            if parsed.status != "SUCCESS" or not isinstance(
+                parsed.object, StatCanDataResponse
+            ):
+                results.append(None)
+                continue
+            results.append(parsed.object)
+        return results
 
     async def request(
         self,

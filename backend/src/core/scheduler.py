@@ -221,6 +221,85 @@ async def scheduled_metadata_cache_refresh() -> None:
         )
 
 
+async def scheduled_value_cache_refresh() -> None:
+    """Phase 3.1aaa nightly value cache refresh job.
+
+    Runs at 16:00 UTC — one hour after the metadata cache refresh job
+    so the metadata cache is freshly warm before the value cache fans
+    out per-mapping fetches against StatCan.
+
+    Mirrors :func:`scheduled_metadata_cache_refresh` for DI wiring.
+    All exceptions are caught and logged — a failing job MUST NOT
+    crash the scheduler.
+    """
+    try:
+        logger.info("Scheduled job started: statcan_value_cache_refresh")
+
+        from src.core.rate_limit import AsyncTokenBucket  # noqa: PLC0415
+        from src.repositories.semantic_mapping_repository import (  # noqa: PLC0415
+            SemanticMappingRepository,
+        )
+        from src.repositories.semantic_value_cache_repository import (  # noqa: PLC0415
+            SemanticValueCacheRepository,
+        )
+        from src.services.statcan.client import StatCanClient  # noqa: PLC0415
+        from src.services.statcan.maintenance import (  # noqa: PLC0415
+            StatCanMaintenanceGuard,
+        )
+        from src.services.statcan.metadata_cache import (  # noqa: PLC0415
+            StatCanMetadataCacheService,
+        )
+        from src.services.statcan.value_cache import (  # noqa: PLC0415
+            StatCanValueCacheService,
+        )
+
+        if _app_ref is None or not hasattr(_app_ref, "state"):
+            raise RuntimeError(
+                "Scheduler requires app reference for http_client "
+                "(ARCH-DPEN-001: no inline httpx client creation)"
+            )
+        http_client = getattr(_app_ref.state, "http_client", None)
+        if http_client is None:
+            raise RuntimeError(
+                "app.state.http_client not set — ensure lifespan initializes it"
+            )
+
+        client = StatCanClient(
+            http_client,
+            StatCanMaintenanceGuard(),
+            AsyncTokenBucket(),
+        )
+        metadata_cache = StatCanMetadataCacheService(
+            session_factory=get_session_factory(),
+            client=client,
+            clock=lambda: datetime.now(timezone.utc),
+            logger=get_logger(module="statcan.metadata_cache"),
+        )
+        service = StatCanValueCacheService(
+            session_factory=get_session_factory(),
+            repository_factory=lambda s: SemanticValueCacheRepository(s),
+            mapping_repository_factory=lambda s: SemanticMappingRepository(s),
+            cube_metadata_cache=metadata_cache,
+            statcan_client=client,
+            clock=lambda: datetime.now(timezone.utc),
+            logger=get_logger(module="statcan.value_cache"),
+        )
+        summary = await service.refresh_all()
+        logger.info(
+            "Scheduled job completed: statcan_value_cache_refresh",
+            mappings_processed=summary.mappings_processed,
+            rows_upserted=summary.rows_upserted,
+            rows_marked_stale=summary.rows_marked_stale,
+            errors=len(summary.errors),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Scheduled job failed: statcan_value_cache_refresh",
+            error=str(exc),
+            exc_info=True,
+        )
+
+
 async def scheduled_temp_uploads_cleanup() -> None:
     """Wrapper executed by APScheduler to clean expired temp uploads."""
     try:
@@ -320,6 +399,22 @@ def start_scheduler(settings: Settings | None = None, app: object | None = None)
         timezone="UTC",
         id="statcan_metadata_cache_refresh",
         name="StatCan metadata cache nightly refresh",
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+        replace_existing=True,
+    )
+
+    # Phase 3.1aaa: nightly StatCan value cache refresh at 16:00 UTC
+    # (one hour after the metadata refresh at 15:00 UTC).
+    _scheduler.add_job(
+        scheduled_value_cache_refresh,
+        trigger="cron",
+        hour=16,
+        minute=0,
+        timezone="UTC",
+        id="statcan_value_cache_refresh",
+        name="StatCan value cache nightly refresh",
         coalesce=True,
         max_instances=1,
         misfire_grace_time=3600,

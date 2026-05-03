@@ -424,6 +424,133 @@ Rules:
   row does not exist; switch the Flutter form to header-only.
 - **Target:** Post-Phase 3.1 polish PR.
 
+### DEBT-058: WDS data batch ceiling is a conservative guess
+
+- **Source:** Phase 3.1aaa implementation (recon Q-impl-1)
+- **Added:** 2026-05-03
+- **Severity:** low
+- **Category:** correctness
+- **Status:** accepted
+- **Description:** `StatCanClient.get_data_batch` caps batch size at
+  100 (`_MAX_BATCH_SIZE`) because the StatCan WDS documentation does
+  not publish an explicit ceiling for
+  `getDataFromCubePidCoordAndLatestNPeriods`. 100 was chosen as a
+  generous upper bound that empirically does not hit 413 / payload
+  limits in spot checks, but the real ceiling is unknown.
+- **Impact:** Nightly refresh issues N/100 HTTP requests for N targets.
+  Larger batches would reduce request count and rate-limit pressure.
+  No correctness impact at the current 100 ceiling.
+- **Resolution:** Confirm the actual ceiling with StatCan support OR
+  empirically measure (binary search, fail at 413 or 5xx). Bump
+  `_MAX_BATCH_SIZE` if a higher safe value is found.
+- **Target:** Phase 3.2 polish.
+
+### DEBT-059: WDS batch mixed-success behaviour assumed, not documented
+
+- **Source:** Phase 3.1aaa implementation (recon Q-impl-2)
+- **Added:** 2026-05-03
+- **Severity:** low
+- **Category:** correctness
+- **Status:** accepted
+- **Description:** `StatCanClient.get_data_batch` assumes the WDS
+  endpoint returns one envelope per input item — a per-item
+  `{status: "FAILED"}` for invalid coords interleaved with
+  `{status: "SUCCESS"}` for valid ones. This matches `getCubeMetadata`
+  behaviour but is not explicitly documented for
+  `getDataFromCubePidCoordAndLatestNPeriods`. The implementation logs
+  + tolerates a per-item parse failure and emits `None`; the nightly
+  refresh skips that target.
+- **Impact:** Per-item parse failures are tolerated and emit None,
+  matching observed metadata-endpoint behaviour. If StatCan instead
+  fails the entire batch on a single bad item, all items in that
+  batch lose this refresh cycle and are reported in
+  RefreshSummary.errors. The nightly retry recovers on the next run.
+- **Resolution:** Verify the per-item failure semantics with StatCan
+  support; if confirmed, document in code. If contradicted, switch
+  the batch path to single-item fallback on top-level failure.
+- **Target:** Phase 3.2 polish.
+
+### DEBT-062: Nightly refresh skips active mappings without cached coord
+
+- **Source:** Phase 3.1aaa FIX-R2 (Blocker 2 fix collateral)
+- **Added:** 2026-05-03
+- **Severity:** low
+- **Category:** correctness
+- **Status:** accepted
+- **Description:** ``SemanticValueCacheRepository.list_active_lookup_keys``
+  now LEFT-JOINs ``semantic_value_cache`` so active mappings without
+  any cached row are included. Such mappings have ``coord=None`` in
+  the result tuple. ``StatCanValueCacheService.refresh_all`` skips
+  these (debug-logged) because deriving ``coord`` requires running
+  the validator over the mapping config + cached metadata —
+  duplicate of the auto-prime path.
+- **Impact:** A mapping whose first auto-prime failed (StatCan
+  unavailable at save time) will not be retried by the nightly job
+  until a subsequent successful resolve or a manual re-save primes
+  the cache. Acceptable for the best-effort retry contract; first-
+  resolve will trigger a fresh prime.
+- **Resolution:** Add an explicit prime-on-refresh path that, for
+  ``coord=None`` rows, runs the validator against the latest
+  ``semantic_mappings.config`` + cached cube metadata, derives
+  ``coord``, and primes. Reuse the auto-prime helper.
+- **Target:** Phase 3.1c, alongside the resolve service work.
+
+### DEBT-061: Phase 3.1aaa P2 follow-ups (4 sub-items)
+
+- **Source:** Phase 3.1aaa impl reviewer round 2026-05-03
+- **Added:** 2026-05-03
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** accepted
+- **Description:** Four P2 items from the 3.1aaa impl reviewer not
+  addressed in fix R1:
+  1. ``parse_ref_period_to_date`` is named generically — rename to
+     ``parse_semantic_value_ref_period_to_date`` (or scope via comment)
+     to prevent future migration name collision when another module
+     wants its own period parser with different dialect support.
+  2. Confirm via grep / coverage that every integration test
+     exercising the GENERATED ``period_start`` column, the partial
+     ``ix_semantic_value_cache_is_stale`` index, and the FK CASCADE
+     to ``semantic_mappings`` actually runs against PostgreSQL — the
+     SQLite ``Base.metadata.create_all`` path will silently no-op
+     those features.
+  3. Add an explicit timestamp-exclusion test for
+     :func:`compute_source_hash`: identical data fields with
+     different ``fetched_at`` / ``release_time`` MUST produce the
+     same hash. Today the test suite covers most exclusions but
+     does not pin this guarantee.
+  4. Add a Pydantic test for :class:`StatCanDataPoint`: WDS sometimes
+     serialises ``value`` as a string-encoded numeric (``"165.7"``),
+     and ``missing=true`` accompanies ``value=null``. Pin both
+     branches at the schema layer so downstream consumers never see
+     surprises.
+- **Impact:** Low — cosmetic + test-coverage gaps. No runtime
+  correctness risk.
+- **Resolution:** Single follow-up cleanup PR after 3.1c.
+- **Target:** Post-3.1c, before 3.1d.
+
+### DEBT-060: ResolvedValue.units lacks a canonical mapping source
+
+- **Source:** Phase 3.1aaa implementation (recon Q-impl-4)
+- **Added:** 2026-05-03
+- **Severity:** medium
+- **Category:** product
+- **Status:** accepted
+- **Description:** `ResolvedValue.units` is reserved as a string
+  field for the API boundary but is currently always `None`. The
+  semantic mapping config has `"unit"` operator-typed text; cube
+  metadata exposes `member_uom_code` (a numeric); neither is yet
+  mapped to a canonical units string ("CAD", "%", "index", etc.).
+  3.1c will need this populated to render values usefully.
+- **Impact:** ResolvedValue.units is None for every cached row.
+  3.1c resolve cannot render unit suffixes or perform unit-aware
+  comparisons until a canonical mapping is wired.
+- **Resolution:** Build a canonical units lookup keyed by either
+  `member_uom_code` or the validator-resolved member name; populate
+  `ResolvedValue.units` in 3.1c's resolve service. Document the
+  source-of-truth (cube metadata UOM dimension vs operator config).
+- **Target:** Phase 3.1c.
+
 ---
 
 ## Resolved

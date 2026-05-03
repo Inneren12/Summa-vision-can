@@ -13,6 +13,7 @@ from src.models.job import Job, JobStatus
 from src.models.cube_catalog import CubeCatalog
 from src.models.semantic_mapping import SemanticMapping
 from src.models.cube_metadata_cache import CubeMetadataCache
+from src.models.semantic_value_cache import SemanticValueCache
 
 __all__ = [
     "Lead",
@@ -24,4 +25,5 @@ __all__ = [
     "CubeCatalog",
     "SemanticMapping",
     "CubeMetadataCache",
+    "SemanticValueCache",
 ]

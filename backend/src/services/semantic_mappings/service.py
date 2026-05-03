@@ -56,6 +56,7 @@ from src.services.statcan.metadata_cache import (
     StatCanMetadataCacheService,
     StatCanUnavailableError,
 )
+from src.services.statcan.value_cache import StatCanValueCacheService
 
 
 class SemanticMappingService:
@@ -70,11 +71,16 @@ class SemanticMappingService:
         ],
         metadata_cache: StatCanMetadataCacheService,
         logger: structlog.stdlib.BoundLogger,
+        value_cache_service: StatCanValueCacheService | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._repository_factory = repository_factory
         self._metadata_cache = metadata_cache
         self._logger = logger
+        # Phase 3.1aaa: optional dependency. Constructed sites that wire
+        # the value cache pass it; legacy call sites (older tests) still
+        # work without it — auto-prime is silently skipped.
+        self._value_cache_service = value_cache_service
 
     # ------------------------------------------------------------------
     # Validation helpers (pure path used by both single + bulk upsert)
@@ -344,7 +350,48 @@ class SemanticMappingService:
             await session.commit()
             await session.refresh(mapping)
             session.expunge(mapping)
-            return mapping, was_created
+
+        # 5. Phase 3.1aaa FIX-R1 (Blocker 1): auto-prime POST-COMMIT.
+        # The mapping row MUST be visible to FK constraints in
+        # ``semantic_value_cache`` before auto_prime opens its own
+        # session and tries to insert dependent rows. Pre-commit auto-
+        # prime caused FK violations that the best-effort handler
+        # silently swallowed → no rows were ever primed for new mappings.
+        # Founder lock Q-3 RE-LOCK preserved: failures here MUST NOT
+        # propagate; mapping save is already durable.
+        if self._value_cache_service is not None:
+            freq = cache_entry.frequency_code
+            try:
+                freq_int = int(freq) if freq is not None else None
+            except (TypeError, ValueError):
+                freq_int = None
+            try:
+                auto_prime_result = await self._value_cache_service.auto_prime(
+                    cube_id=cube_id,
+                    semantic_key=semantic_key,
+                    product_id=product_id,
+                    resolved_filters=result.resolved_filters,
+                    frequency_code=freq_int,
+                )
+                if auto_prime_result.error:
+                    self._logger.warning(
+                        "semantic_mapping.value_cache_auto_prime_failed",
+                        cube_id=cube_id,
+                        semantic_key=semantic_key,
+                        error=auto_prime_result.error,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                # Defensive: contract says no-raise. Mapping save already
+                # committed, so any escaping exception here would only
+                # corrupt the API response — never the data.
+                self._logger.error(
+                    "semantic_mapping.value_cache_auto_prime_unexpected",
+                    cube_id=cube_id,
+                    semantic_key=semantic_key,
+                    error=str(exc),
+                )
+
+        return mapping, was_created
 
     # ------------------------------------------------------------------
     # Read / list / soft-delete (admin endpoints)
