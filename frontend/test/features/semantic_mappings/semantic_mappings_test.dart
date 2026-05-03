@@ -216,6 +216,8 @@ void main() {
 
   testWidgets('3. Form submits valid data and pops on success',
       (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final fake = _FakeRepository();
     bool upsertCalled = false;
     fake.onUpsert = ({
@@ -268,12 +270,6 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('dim-add-row')));
     await tester.pump();
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('form-submit')),
-      100.0,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('form-submit')));
     await tester.pumpAndSettle();
     expect(upsertCalled, isTrue);
@@ -282,6 +278,8 @@ void main() {
 
   testWidgets('4. Form renders inline error from MEMBER_NOT_FOUND envelope',
       (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final fake = _FakeRepository();
     fake.onUpsert = ({
       required String cubeId,
@@ -328,12 +326,6 @@ void main() {
         find.byKey(const ValueKey('field-semantic-key')), 'cpi.bad');
     await tester.enterText(find.byKey(const ValueKey('field-label')), 'L');
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('form-submit')),
-      100.0,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('form-submit')));
     await tester.pumpAndSettle();
 
@@ -341,6 +333,8 @@ void main() {
   });
 
   testWidgets('5. Form shows VersionConflictModal on 412', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final fake = _FakeRepository();
     fake.onUpsert = ({
       required String cubeId,
@@ -382,12 +376,6 @@ void main() {
         find.byKey(const ValueKey('field-semantic-key')), 'cpi.k');
     await tester.enterText(find.byKey(const ValueKey('field-label')), 'L');
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('form-submit')),
-      100.0,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('form-submit')));
     await tester.pumpAndSettle();
 
