@@ -67,6 +67,7 @@ class TestSemanticMappingCreate:
     def test_semantic_key_pattern_accepts_dotted(self):
         c = SemanticMappingCreate(
             cube_id="18-10-0004",
+            product_id=18100004,
             semantic_key="cpi.canada.all_items.index",
             label="x",
             config=self._valid_config(),
@@ -77,6 +78,7 @@ class TestSemanticMappingCreate:
         with pytest.raises(ValidationError):
             SemanticMappingCreate(
                 cube_id="18-10-0004",
+                product_id=18100004,
                 semantic_key="CPI.Canada",  # uppercase forbidden
                 label="x",
                 config=self._valid_config(),
@@ -86,6 +88,7 @@ class TestSemanticMappingCreate:
         with pytest.raises(ValidationError):
             SemanticMappingCreate(
                 cube_id="18-10-0004",
+                product_id=18100004,
                 semantic_key="cpi canada",  # space forbidden
                 label="x",
                 config=self._valid_config(),
@@ -105,6 +108,7 @@ class TestStringMinLength:
         with pytest.raises(ValidationError):
             SemanticMappingCreate(
                 cube_id="",
+                product_id=18100004,
                 semantic_key="x.y",
                 label="x",
                 config=self._valid_config(),
@@ -114,6 +118,7 @@ class TestStringMinLength:
         with pytest.raises(ValidationError):
             SemanticMappingCreate(
                 cube_id="18-10-0004",
+                product_id=18100004,
                 semantic_key="x.y",
                 label="",
                 config=self._valid_config(),

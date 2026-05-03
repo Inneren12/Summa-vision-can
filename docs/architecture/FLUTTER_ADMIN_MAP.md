@@ -36,6 +36,24 @@
 | /kpi | `KPIScreen()` | (KPI screen) | `app_router.dart:100-104` |
 | /editor/:briefId | `EditorScreen(briefId: …)` | (editor screen) | `app_router.dart:110-117` |
 | /preview/:taskId | `PreviewScreen(taskId: …)` | (preview screen) | `app_router.dart:118-125` |
+| /semantic-mappings | `SemanticMappingsListScreen()` | `frontend/lib/features/semantic_mappings/screens/semantic_mappings_list_screen.dart` | Phase 3.1b |
+| /semantic-mappings/new | `SemanticMappingFormScreen(mappingId: null)` | `frontend/lib/features/semantic_mappings/screens/semantic_mapping_form_screen.dart` | Phase 3.1b |
+| /semantic-mappings/:id | `SemanticMappingFormScreen(mappingId: int)` | same | Phase 3.1b |
+
+### Phase 3.1b additions
+
+* Drawer tile: `Icons.dataset_linked` → `loc.navSemanticMappings` (`/semantic-mappings`).
+* Repository: `SemanticMappingsRepository` (`frontend/lib/features/semantic_mappings/repository/semantic_mappings_repository.dart`) wraps `Dio` with the four admin endpoints + the cube-metadata read endpoint.
+* Riverpod providers (`providers/semantic_mappings_providers.dart`):
+  * `semanticMappingsRepositoryProvider` (Provider)
+  * `semanticMappingsFilterProvider` (StateProvider for filters)
+  * `semanticMappingsListProvider` (FutureProvider.autoDispose)
+  * `semanticMappingProvider(id)` (FutureProvider.autoDispose.family)
+  * `cubeMetadataProvider(cubeId)` (FutureProvider.autoDispose.family)
+* Widgets: `DimensionFiltersEditor` (key/value editor — see DEBT-055 for missing reorder UX) and `VersionConflictModal` (412 reload prompt).
+* Backend error envelope helper: `frontend/lib/core/network/backend_error_envelope.dart` parses both nested (`{detail: {error_code, ...}}`) and flat envelopes for inline form rendering.
+* `frontend/lib/l10n/backend_errors.dart` now maps the seven semantic-mapping codes (5 from 3.1ab + 2 new in 3.1b: `VERSION_CONFLICT`, `BULK_VALIDATION_FAILED`). DEBT-056 tracks a comprehensive sweep of the rest.
+
 
 Total routes: `9` (flat — no `StatefulShellRoute`, no `ShellRoute`, no nested `routes:` children).
 

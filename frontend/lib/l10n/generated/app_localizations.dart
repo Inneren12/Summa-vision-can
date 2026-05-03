@@ -128,6 +128,54 @@ abstract class AppLocalizations {
   /// **'Exceptions'**
   String get navExceptions;
 
+  /// AppDrawer navigation label for the /semantic-mappings admin CRUD screen (Phase 3.1b).
+  ///
+  /// In en, this message translates to:
+  /// **'Semantic mappings'**
+  String get navSemanticMappings;
+
+  /// Backend error: generic semantic-mapping validation failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The mapping does not match StatCan cube metadata.'**
+  String get errorBackendMetadataValidationFailed;
+
+  /// Backend error: dimension key missing from cube.
+  ///
+  /// In en, this message translates to:
+  /// **'Dimension not found in cube metadata.'**
+  String get errorBackendDimensionNotFound;
+
+  /// Backend error: member missing from dimension.
+  ///
+  /// In en, this message translates to:
+  /// **'Member not found in dimension.'**
+  String get errorBackendMemberNotFound;
+
+  /// Backend error: cube_id ↔ product_id mismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Cube ID and product ID do not match cached metadata.'**
+  String get errorBackendCubeProductMismatch;
+
+  /// Backend error: cube metadata not cached.
+  ///
+  /// In en, this message translates to:
+  /// **'Cube metadata is not available — please retry shortly.'**
+  String get errorBackendCubeNotInCache;
+
+  /// Backend error: optimistic concurrency mismatch on save.
+  ///
+  /// In en, this message translates to:
+  /// **'Version conflict — this mapping was modified by another user. Reload to see the latest version.'**
+  String get errorBackendVersionConflict;
+
+  /// Backend error: bulk semantic-mapping upsert failed validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Some mappings could not be validated. No changes were saved. Fix the errors below and retry.'**
+  String get errorBackendBulkValidationFailed;
+
   /// Navigation label for the KPI monitoring screen
   ///
   /// In en, this message translates to:

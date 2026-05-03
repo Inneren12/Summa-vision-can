@@ -24,6 +24,36 @@ class AppLocalizationsRu extends AppLocalizations {
   String get navExceptions => 'Исключения';
 
   @override
+  String get navSemanticMappings => 'Семантические сопоставления';
+
+  @override
+  String get errorBackendMetadataValidationFailed =>
+      'Сопоставление не соответствует метаданным куба StatCan.';
+
+  @override
+  String get errorBackendDimensionNotFound =>
+      'Измерение не найдено в метаданных куба.';
+
+  @override
+  String get errorBackendMemberNotFound => 'Элемент не найден в измерении.';
+
+  @override
+  String get errorBackendCubeProductMismatch =>
+      'Cube ID и product ID не соответствуют кэшированным метаданным.';
+
+  @override
+  String get errorBackendCubeNotInCache =>
+      'Метаданные куба недоступны — попробуйте позже.';
+
+  @override
+  String get errorBackendVersionConflict =>
+      'Конфликт версий — это сопоставление было изменено другим пользователем. Перезагрузите страницу.';
+
+  @override
+  String get errorBackendBulkValidationFailed =>
+      'Некоторые сопоставления не прошли проверку. Изменения не сохранены. Исправьте ошибки ниже и попробуйте снова.';
+
+  @override
   String get navKpi => 'KPI';
 
   @override

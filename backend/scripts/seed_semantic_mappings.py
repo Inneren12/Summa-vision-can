@@ -1,4 +1,4 @@
-"""Phase 3.1a + 3.1ab: Seed SemanticMapping rows from YAML.
+"""Phase 3.1a + 3.1ab + 3.1b: Seed SemanticMapping rows from YAML.
 
 Usage::
 
@@ -16,30 +16,23 @@ already-committed mappings remain. For all-or-nothing across multiple
 files, pass them in a single YAML or wrap in a transaction at the call
 site.
 
-Phase 3.1ab default: each row goes through
-:class:`SemanticMappingService.upsert_validated`, which fetches cube
-metadata from :class:`StatCanMetadataCacheService` (priming cache on miss
-via the StatCan WDS API) and rejects rows whose ``dimension_filters`` do
-not match the cached cube. ``--skip-validation`` reverts to the 3.1a
-direct-repo path for offline / dev workflows; a structlog warning is
-emitted whenever the flag is used.
+Phase 3.1b atomicity update — the validated path is now **file-atomic**.
+The CLI batches every row from a single YAML and forwards it to
+:meth:`SemanticMappingService.upsert_many_validated`, which uses
+validate-all-then-decide semantics: every row's StatCan cache entry is
+fetched and validated up front; only if every row passes does the
+service open a single session and commit all rows together. If any row
+fails (validation, cube cache miss, or pydantic shape error), NO rows
+from that file are persisted and the CLI exits non-zero. Re-running the
+same YAML after a fix is still idempotent on ``(cube_id, semantic_key)``.
 
 When validation is on, each mapping row must include a top-level
-``product_id`` key (StatCan numeric ID) — the row's ``cube_id`` alone is a
-semantic identifier and does not uniquely select cube metadata.
-
-Atomicity (Phase 3.1ab): the validated path is **row-committed, not
-file-atomic**. Each successful row is committed individually inside
-``SemanticMappingService.upsert_validated``. If row N raises (validation
-or transport), rows 1..N-1 stay persisted and the CLI exits non-zero.
-Re-running the same YAML is idempotent on ``(cube_id, semantic_key)``
-(see ``SemanticMappingRepository.upsert_by_key``), so a partial-failure
-recovery is just "fix the bad row and re-run."
+``product_id`` key (StatCan numeric ID) — the row's ``cube_id`` alone is
+a semantic identifier and does not uniquely select cube metadata.
 
 The ``--skip-validation`` path uses the legacy direct-repo flow which
 commits once at the end of each YAML file (whole-file atomicity per
-file). A future bulk service with cross-row transactional wrapping for
-the validated path is out of scope for 3.1ab.
+file). It bypasses the validated bulk service entirely.
 """
 from __future__ import annotations
 
@@ -59,6 +52,10 @@ from src.repositories.semantic_mapping_repository import (
     SemanticMappingRepository,
 )
 from src.schemas.semantic_mapping import SemanticMappingCreate
+from src.services.semantic_mappings.exceptions import (
+    BulkUpsertItem,
+    BulkValidationError,
+)
 from src.services.semantic_mappings.service import SemanticMappingService
 from src.services.statcan.client import StatCanClient
 from src.services.statcan.maintenance import StatCanMaintenanceGuard
@@ -82,9 +79,15 @@ async def _seed_one_file_skip_validation(path: Path) -> None:
         repo = SemanticMappingRepository(session)
 
         for raw in data["mappings"]:
-            # product_id is a validation-only sibling key; pop it before
-            # constructing the pydantic payload (which forbids extras).
-            raw = {k: v for k, v in raw.items() if k != "product_id"}
+            # Phase 3.1b R3 — product_id is now a persisted column on
+            # SemanticMapping (and required on SemanticMappingCreate); the
+            # YAML row's ``product_id`` flows straight through.
+            if raw.get("product_id") is None:
+                raise ValueError(
+                    f"{path}: row {raw.get('semantic_key')!r} is missing "
+                    f"'product_id' (required even with --skip-validation since "
+                    f"3.1b R3 added the NOT NULL column)."
+                )
             payload = SemanticMappingCreate(**raw)
             mapping, was_created = await repo.upsert_by_key(
                 payload, updated_by="seed"
@@ -101,13 +104,19 @@ async def _seed_one_file_skip_validation(path: Path) -> None:
 async def _seed_one_file_validated(
     path: Path, service: SemanticMappingService
 ) -> None:
-    """Phase 3.1ab validated path. Each row is checked against the cache."""
+    """Phase 3.1b file-atomic validated path.
+
+    Builds a single batch from the YAML and forwards it to
+    :meth:`SemanticMappingService.upsert_many_validated`. NO rows persist
+    if any row fails validation.
+    """
     with path.open("r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
 
     if not isinstance(data, dict) or "mappings" not in data:
         raise ValueError(f"{path}: expected top-level 'mappings' key")
 
+    items: list[BulkUpsertItem] = []
     for raw in data["mappings"]:
         product_id = raw.get("product_id")
         if product_id is None:
@@ -116,26 +125,39 @@ async def _seed_one_file_validated(
                 f"'product_id' (required when validation is on; pass "
                 f"--skip-validation to bypass)."
             )
+        # Validate the SemanticMapping shape via pydantic — fail fast on
+        # bad rows BEFORE we hit the network for any item. Phase 3.1b R3
+        # made product_id a persisted column, so it now flows through the
+        # same payload (no need to strip).
+        payload = SemanticMappingCreate(**raw)
+        items.append(
+            BulkUpsertItem(
+                cube_id=payload.cube_id,
+                product_id=payload.product_id,
+                semantic_key=payload.semantic_key,
+                label=payload.label,
+                description=payload.description,
+                config=payload.config.model_dump(),
+                is_active=payload.is_active,
+            )
+        )
 
-        # Validate the SemanticMapping shape via pydantic, then forward
-        # the flat fields the service expects.
-        payload = SemanticMappingCreate(
-            **{k: v for k, v in raw.items() if k != "product_id"}
-        )
-        mapping = await service.upsert_validated(
-            cube_id=payload.cube_id,
-            product_id=int(product_id),
-            semantic_key=payload.semantic_key,
-            label=payload.label,
-            description=payload.description,
-            config=payload.config.model_dump(),
-            is_active=payload.is_active,
-            updated_by="seed",
-        )
-        print(
-            f"  upserted: {payload.cube_id} / {payload.semantic_key}  "
-            f"(v{mapping.version})"
-        )
+    try:
+        result = await service.upsert_many_validated(items)
+    except BulkValidationError as exc:
+        print(f"  ERROR: {path} — bulk validation failed, NO rows persisted:")
+        for r in exc.results:
+            if not r.is_valid:
+                print(
+                    f"    - {r.cube_id} / {r.semantic_key}: "
+                    f"[{r.error_code}] {r.message}"
+                )
+        raise
+
+    print(
+        f"  ok: {len(result.items)} rows "
+        f"(created={result.created_count}, updated={result.updated_count})"
+    )
 
 
 async def _main() -> int:

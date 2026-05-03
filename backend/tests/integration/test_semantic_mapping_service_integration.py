@@ -113,7 +113,7 @@ def _build_service(pg_session) -> tuple[SemanticMappingService, async_sessionmak
 async def test_upsert_validated_persists_row_when_validation_passes(pg_session):
     service, factory = _build_service(pg_session)
 
-    mapping = await service.upsert_validated(
+    mapping, _was_created = await service.upsert_validated(
         cube_id="18-10-0004",
         product_id=18100004,
         semantic_key="cpi.canada.all_items.index",
