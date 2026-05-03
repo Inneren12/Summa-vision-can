@@ -71,7 +71,13 @@ class ResolvedValueResponse(BaseModel):
     semantic_key: str = Field(description="Semantic mapping key.")
     coord: str = Field(description="Service-derived StatCan coordinate string echoed from cache row.")
     period: str = Field(description="Resolved period token (ref_period).")
-    value: str = Field(description="Canonical stringified numeric value.")
+    value: str | None = Field(
+        default=None,
+        description="Canonical stringified numeric value. None when the observation is suppressed/missing upstream (paired with missing=True).",
+    )
+    missing: bool = Field(
+        description="Raw passthrough from cache row. True when the upstream observation is absent/suppressed; in that case value is None.",
+    )
     resolved_at: datetime = Field(description="Alias of cache row fetched_at timestamp.")
     source_hash: str = Field(description="Opaque cache provenance hash.")
     is_stale: bool = Field(description="Persisted stale marker from cache row.")
@@ -85,6 +91,8 @@ Mapping notes:
 - `resolved_at` maps from `row.fetched_at` (L2). (pre-recon §F2)
 - `units` source is strictly `mapping.config.unit | None` (R1).
 - `cache_status` enum literals: `"hit" | "primed"` only (Literal type-narrowed; no `"stale"`).
+- `value` is `str | None`. Cache row stores `value: numeric(18,6) nullable` per pre-recon §B1; missing observations have `value=NULL, missing=True`. Service maps `row.value` → `None` when null, else canonical string. NEVER stringify `None` → `"None"`.
+- `missing` is RAW PASSTHROUGH from `row.missing` (`bool not null` per pre-recon §B1), parallel to `is_stale`. Frontend uses it to distinguish "observation suppressed at source" (missing=True, expected) from "value present" (missing=False).
 
 ### §2.5 Status codes + error responses
 - 200: `ResolvedValueResponse`.
@@ -98,6 +106,24 @@ Mapping notes:
 
 ### §2.6 Headers
 - No special headers in 3.1c v1.
+
+
+### §F2 Baseline DTO matrix (updated in Fix-2)
+Field table now has **11 rows**.
+
+| DTO field | Source | Rule |
+|---|---|---|
+| `value` | `semantic_value_cache.value` (numeric, nullable) → canonical `str | None` | required, nullable for missing |
+| `missing` | `semantic_value_cache.missing` (bool not null per pre-recon §B1) | required, RAW PASSTHROUGH from persisted column |
+| `cube_id` | row.cube_id | required |
+| `semantic_key` | row.semantic_key | required |
+| `coord` | row.coord | required |
+| `period` | row.ref_period | required |
+| `resolved_at` | row.fetched_at | required |
+| `source_hash` | row.source_hash | required |
+| `is_stale` | row.is_stale | required |
+| `units` | mapping.config.unit if string else null | optional |
+| `cache_status` | endpoint state machine | required |
 
 ## §3. Error code registry additions
 Before adding new constants, audit `backend/src/core/error_codes.py` for existing equivalents (per Appendix B grep D); reuse if present.
@@ -233,6 +259,8 @@ Service invariants:
 - Re-query uses identical lookup args.
 - Prime errors appear only in logs or miss details, never DTO.
 - Coord is service-derived only.
+- `map_to_resolved(row, mapping, *, cache_status)` MUST handle missing observations correctly: if `row.value is None` then DTO `value=None`; else DTO `value=canonical_str(row.value)`. The function NEVER produces the string literal `"None"`.
+- `map_to_resolved` passes `row.missing` to DTO `missing` field unchanged (raw passthrough).
 
 ## §6. Test plan
 ### §6.1 Unit tests
@@ -242,11 +270,13 @@ Service invariants:
 | `test_parse_filters_from_query_malformed` | mismatched or invalid pairs | `RESOLVE_INVALID_FILTERS` | unit |
 | `test_validate_filters_against_mapping_extra_dim` | extra dimension provided | `RESOLVE_INVALID_FILTERS` | unit |
 | `test_pick_row_warns_on_multiple_rows_with_explicit_period` | explicit period + multiple rows | warning + `rows[0]` | unit |
+| `test_map_to_resolved_missing_observation` | row.value=None, row.missing=True | DTO value=None, missing=True; never literal "None" string | unit |
 
 ### §6.2 Service-layer tests
 | test name | scenario | expected outcome | layer |
 |---|---|---|---|
 | `test_resolve_hit_no_prime` | first read returns rows | 200 hit | service |
+| `test_resolve_hit_returns_missing_observation_faithfully` | seeded cache row with value=None, missing=True | 200 with DTO value=null, missing=true | service |
 | `test_resolve_mapping_missing` | no active mapping | 404 mapping not found | service |
 | `test_resolve_invalid_filters_missing_dim` | missing required dim | 400 invalid filters | service |
 | `test_resolve_invalid_filters_extra_dim` | extra dim | 400 invalid filters | service |
@@ -259,6 +289,7 @@ Service invariants:
 | test name | scenario | expected outcome | layer |
 |---|---|---|---|
 | `test_resolve_happy_existing_cache` | seeded row with dim/member query | 200 hit | integration |
+| `test_resolve_missing_observation_round_trip` | end-to-end with null-value row in cache | 200 JSON has `"value": null, "missing": true` | integration |
 | `test_resolve_cold_cache_full_pipeline` | cold cache + successful prime path | 200 primed | integration |
 | `test_resolve_404_mapping_not_found` | absent mapping | 404 | integration |
 | `test_resolve_404_cache_miss_after_prime` | no row after prime | 404 miss | integration |
@@ -304,6 +335,7 @@ def pick_row(rows: list[ValueCacheRow], *, period: str | None) -> ValueCacheRow:
 **Resolved during fix pass (2026-05-03):**
 - **F-fix-1 — coord vs auto_prime contract conflict (BLOCKER-1).** Founder selected Option B: resolve takes semantic filter query params, service derives coord internally.
 - **F-fix-2 — warning DTO field.** Founder selected removal; errors surface via structured logs + `RESOLVE_CACHE_MISS.details` only.
+- **F-fix-3 — value nullability + missing field (Codex auto-review on PR #283).** Cache row `value` is nullable; original DTO declared `value: str` non-optional, which would corrupt suppressed-observation responses. Resolved by making `value: str | None` and adding `missing: bool` raw-passthrough field. Aligns DTO with cache schema per pre-recon §B1.
 
 **No new founder-blockers surfaced during fix pass.**
 
