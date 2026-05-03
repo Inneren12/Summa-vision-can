@@ -6,7 +6,10 @@
 
 > This document intentionally mirrors the 3.1b recon structure and expands pre-recon findings into implementation-ready contracts.
 
-## Evidence snapshot (verbatim command blocks)
+## Evidence commands
+
+> Note: command outputs not pasted in this recon. Future revisions or
+> audits may re-run these to capture exact verbatim output.
 
 ```bash
 $ rg -n "scheduled_metadata_cache_refresh|coalesce|max_instances|misfire_grace_time|hour=15" backend/src/core/scheduler.py -S
@@ -207,6 +210,7 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 CREATE TABLE semantic_value_cache (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     cube_id VARCHAR(50) NOT NULL,
+    product_id BIGINT NOT NULL,
     semantic_key VARCHAR(100) NOT NULL,
     coord VARCHAR(50) NOT NULL,
     ref_period VARCHAR(20) NOT NULL,
@@ -223,17 +227,19 @@ CREATE TABLE semantic_value_cache (
     response_status_code INTEGER,
     source_hash VARCHAR(64) NOT NULL,
     fetched_at TIMESTAMPTZ NOT NULL,
+    release_time TIMESTAMPTZ,
     is_stale BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_semantic_value_cache_mapping
       FOREIGN KEY (cube_id, semantic_key)
       REFERENCES semantic_mappings (cube_id, semantic_key)
-      ON DELETE CASCADE
+      ON DELETE CASCADE,
+    CONSTRAINT uq_semantic_value_cache_lookup
+      UNIQUE (cube_id, semantic_key, coord, ref_period)
 );
-
-CREATE UNIQUE INDEX uq_semantic_value_cache_lookup
-  ON semantic_value_cache (cube_id, semantic_key, coord, ref_period);
+CREATE INDEX ix_semantic_value_cache_product_id
+  ON semantic_value_cache (product_id);
 CREATE INDEX ix_semantic_value_cache_coord
   ON semantic_value_cache (cube_id, semantic_key, coord);
 CREATE INDEX ix_semantic_value_cache_fetched_at
@@ -255,6 +261,38 @@ Store rows even when missing; use `value=NULL` + `missing=true`.
 
 ### C5 — Capacity
 Planning baseline: 7,000 mappings × 12 periods = 84,000 rows initial; monthly growth roughly one period per active mapping frequency cycle. Postgres capacity acceptable.
+
+
+### C6 — `source_hash` canonical derivation
+
+```python
+source_hash = sha256(
+    json.dumps(
+        {
+            "product_id": product_id,
+            "cube_id": cube_id,
+            "semantic_key": semantic_key,
+            "coord": coord,
+            "ref_period": ref_period,
+            "value": str(value) if value is not None else None,
+            "missing": missing,
+            "decimals": decimals,
+            "scalar_factor_code": scalar_factor_code,
+            "symbol_code": symbol_code,
+            "security_level_code": security_level_code,
+            "status_code": status_code,
+            "frequency_code": frequency_code,
+            "vector_id": vector_id,
+            "response_status_code": response_status_code,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    ).encode("utf-8")
+).hexdigest()
+```
+
+Excludes `fetched_at`, `release_time`, `created_at`, `updated_at` to avoid false-stale drift from non-value timestamps.
 
 ---
 
@@ -280,6 +318,7 @@ import sqlalchemy as sa
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Computed,
     Date,
     DateTime,
     ForeignKeyConstraint,
@@ -316,6 +355,7 @@ class SemanticValueCache(Base):
             ondelete="CASCADE",
             name="fk_semantic_value_cache_mapping",
         ),
+        Index("ix_semantic_value_cache_product_id", "product_id"),
         Index(
             "ix_semantic_value_cache_coord",
             "cube_id", "semantic_key", "coord",
@@ -335,14 +375,18 @@ class SemanticValueCache(Base):
         autoincrement=True,
     )
     cube_id: Mapped[str] = mapped_column(String(length=50), nullable=False)
+    product_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     semantic_key: Mapped[str] = mapped_column(String(length=100), nullable=False)
     coord: Mapped[str] = mapped_column(String(length=50), nullable=False)
     ref_period: Mapped[str] = mapped_column(String(length=20), nullable=False)
 
-    # GENERATED ALWAYS AS STORED — Postgres-side parser, see migration.
-    # SQLAlchemy reads but doesn't populate this column.
+    # GENERATED ALWAYS AS STORED via Postgres parser function.
+    # Declared via SQLAlchemy Computed() so Alembic autogenerate sees the
+    # generation expression and doesn't false-flag drift. SQLAlchemy reads
+    # this column; service code MUST NOT set it explicitly.
     period_start: Mapped[date | None] = mapped_column(
         Date,
+        Computed("parse_ref_period_to_date(ref_period)", persisted=True),
         nullable=True,
     )
 
@@ -363,6 +407,10 @@ class SemanticValueCache(Base):
 
     source_hash: Mapped[str] = mapped_column(String(length=64), nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    release_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     is_stale: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -399,7 +447,16 @@ Each method includes async signature + brief behavior contract.
 - `get_cached(...)`
 - `evict_stale(...)`
 
-Flow explicitly mirrors metadata-cache service operational style, including synchronous prime failure propagation (`STATCAN_UNAVAILABLE` behavior parity).
+auto_prime contract (best-effort, NOT blocking):
+- Called synchronously from SemanticMappingService.upsert_validated AFTER metadata validation succeeds.
+- Mapping save MUST NOT fail because the StatCan WDS data endpoint is unavailable, rate-limited, or returns FAILED. Mapping is already valid at this point (metadata validator passed); value cache is a derived read-optimization layer.
+- On failure: log structured warning with reason, optionally write a refresh_failed marker on the mapping (deferred to impl), return control to caller. Caller commits the mapping save normally.
+- Nightly refresh job (refresh_all) retries on subsequent runs.
+- Future explicit admin "Refresh values now" endpoint may surface STATCAN_UNAVAILABLE directly to operator, but THAT is out of 3.1aaa scope.
+
+This is a deliberate divergence from 3.1aa metadata-cache pattern. 3.1aa fails mapping save on metadata cache miss because the validator cannot run without metadata. 3.1aaa's value cache is consumed by 3.1c resolve, not by mapping validation, so its absence does not invalidate the mapping.
+
+**Q-3 RE-LOCKED on reviewer feedback round, 2026-05-03:** auto-prime executes synchronously but failure does not propagate to mapping save; log warning + continue.
 
 ## §H — Scheduler integration
 - Existing metadata refresh cron: 15:00 UTC.
