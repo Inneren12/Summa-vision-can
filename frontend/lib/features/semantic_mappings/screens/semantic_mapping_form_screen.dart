@@ -201,8 +201,16 @@ class _SemanticMappingFormScreenState
           padding: const EdgeInsets.all(16),
           child: Form(
             key: _formKey,
-            child: ListView(
-              children: [
+            // R3.1: SingleChildScrollView + Column eagerly builds every
+            // child so widget tests can locate the submit button below
+            // the default 800x600 test viewport. ``ListView`` here uses
+            // a lazy SliverList that keeps off-screen children out of
+            // the render tree — ``find.byKey('form-submit')`` then
+            // returns 0 even though the Key is correctly attached.
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                 if (_formError != null)
                   Card(
                     color: Theme.of(context).colorScheme.errorContainer,
@@ -295,6 +303,7 @@ class _SemanticMappingFormScreenState
                   child: Text(_saving ? 'Saving…' : 'Save'),
                 ),
               ],
+              ),
             ),
           ),
         ),
