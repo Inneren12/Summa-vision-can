@@ -42,6 +42,8 @@
 | 1.3 Optimistic Concurrency (ETag+412) | IN-PROGRESS — pre-recon | S | 1 | No deps; pre-recon split 11 micro-prompts |
 | 2.5a Exception Inbox v1 (Flutter — failed exports + zombie jobs) | IN-PROGRESS — discovery | M | 2 | No deps; discovery split 5 micro-prompts; blocked on Q-C decision |
 | 2.5b Exception Inbox deferred (stale bindings + missing post URLs + validation blockers) | DEFERRED | S | 1+ | Blocked on Phase 2.3 (post_ledger) + Phase 3 (Binding entity); see DEBT-040 |
+| 3.1c Singular admin resolve endpoint | IN-PROGRESS | S | 1 | Builds on 3.1aaa (value cache) + 3.1b (mappings CRUD); BLOCKER-1 Option B (service-derived coord); F-fix-3 missing-observation contract. Drift docs: `docs/api.md`, `BACKEND_API_INVENTORY.md`. |
+| 3.1d Snapshot persistence + staleness | PENDING | S | 1 | Depends on 3.1c — uses `mapping_version` echo on `ResolvedValueResponse` for staleness comparison on bound publication blocks. |
 
 ### Pending
 

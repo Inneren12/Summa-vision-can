@@ -33,7 +33,7 @@ async def resolve_value_handler(...):
 
 ### §2.2 Path param validation
 - `cube_id: str = Path(..., min_length=1, max_length=50)` (DB cap from `semantic_value_cache.cube_id varchar(50)`). (pre-recon §B1)
-- `semantic_key: str = Path(..., min_length=1, max_length=100)` (DB cap from `semantic_value_cache.semantic_key varchar(100)`). (pre-recon §B1)
+- `semantic_key: str = Path(..., min_length=1, max_length=200)` (matches the **mapping** table limit `SemanticMapping.semantic_key String(200)` and `SemanticMappingCreate.semantic_key max_length=200`). The original recon used the cache-table limit (varchar(100)), which would make admin-created keys of 101..200 chars unreachable through resolve. Cache write may still fail for keys >100 chars at auto_prime time — tracked as DEBT-063. (Round 3 correction; pre-recon §B1 limit applies to cache rows, not endpoint input.)
 - No extra regex in 3.1c (mirrors 3.1b style). (`backend/src/api/routers/admin_semantic_mappings.py:255-259`)
 
 ### §2.3 Query params
@@ -186,7 +186,7 @@ Validation rules (from Appendix B grep B + service references): required dimensi
 @router.get("/{cube_id}/{semantic_key}", response_model=ResolvedValueResponse)
 async def resolve_value_handler(
     cube_id: str = Path(..., min_length=1, max_length=50),
-    semantic_key: str = Path(..., min_length=1, max_length=100),
+    semantic_key: str = Path(..., min_length=1, max_length=200),  # Round 3: matches mapping table; see §2.2 + DEBT-063.
     dim: list[int] = Query(default_factory=list),
     member: list[int] = Query(default_factory=list),
     period: str | None = Query(default=None, max_length=20),

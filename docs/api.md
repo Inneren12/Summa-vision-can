@@ -331,6 +331,73 @@ Returns a single published infographic by its ID.
 
 ---
 
+## Admin Resolve Router
+
+Phase 3.1c. Singular cache-first resolve endpoint that fronts
+`StatCanValueCacheService.get_cached` with auto-prime on miss.
+
+### `GET /api/v1/admin/resolve/{cube_id}/{semantic_key}`
+
+| Property | Value |
+|----------|-------|
+| Auth | Admin (X-API-KEY via `AuthMiddleware`) |
+| Rate Limit | Inherits global/default middleware behavior |
+
+**Path params:**
+
+| Param | Type | Constraints |
+|-------|------|-------------|
+| `cube_id` | `str` | 1–50 chars |
+| `semantic_key` | `str` | 1–200 chars (matches `SemanticMapping.semantic_key`; cache table is varchar(100), see DEBT-063) |
+
+**Query params (Encoding 1 — repeated pairs):**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `dim` | `int` (repeated) | `[]` | Dimension `position_id` values |
+| `member` | `int` (repeated) | `[]` | Corresponding `member_id` values |
+| `period` | `str` (optional) | `null` | Pinned `ref_period` (≤20 chars). Omit for latest. |
+
+The router pairs `dim[i]` with `member[i]` and forwards them to the
+service, which derives the canonical 10-slot StatCan `coord` internally
+via `derive_coord(...)`. Caller-provided `coord` is NOT accepted (BLOCKER-1
+Option B).
+
+**Response (200) — `ResolvedValueResponse`:**
+
+```json
+{
+  "cube_id": "18-10-0004",
+  "semantic_key": "cpi.canada.all_items.index",
+  "coord": "1.10.0.0.0.0.0.0.0.0",
+  "period": "2025-12",
+  "value": "157.4",
+  "missing": false,
+  "resolved_at": "2026-05-01T12:00:00+00:00",
+  "source_hash": "...",
+  "is_stale": false,
+  "units": "index",
+  "cache_status": "hit",
+  "mapping_version": 3
+}
+```
+
+`value` is `string | null`. When the upstream observation is suppressed,
+`value` is `null` and `missing` is `true` (raw passthrough from the
+cache row — F-fix-3 missing-observation contract).
+
+**Errors:**
+
+| Status | `error_code` | Condition |
+|--------|--------------|-----------|
+| 400 | `RESOLVE_INVALID_FILTERS` | Filter set fails parse / mapping-shape validation. Details include derived `expected`/`provided`/`reason`. |
+| 401 | `auth.*` | Missing or invalid `X-API-KEY`. |
+| 404 | `MAPPING_NOT_FOUND` | Mapping is missing or `is_active=false`. |
+| 404 | `RESOLVE_CACHE_MISS` | No cached row after auto-prime + re-query. Details include derived `coord`, `period`, `prime_attempted`, `prime_error_code`. |
+| 422 | (FastAPI) | Path / query parameter validation failure. |
+
+---
+
 ## Maintenance
 
 This file MUST be updated in the same PR that changes the described API.

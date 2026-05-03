@@ -470,6 +470,38 @@ Rules:
   the batch path to single-item fallback on top-level failure.
 - **Target:** Phase 3.2 polish.
 
+### DEBT-063: semantic_key length asymmetry between mapping and cache tables
+
+- **Source:** Phase 3.1c impl Round 3 (Codex auto-review on PR)
+- **Added:** 2026-05-03
+- **Severity:** medium
+- **Category:** architecture
+- **Status:** active
+- **Description:** `semantic_key` length is asymmetric between the
+  mapping table and the cache table. `SemanticMapping.semantic_key`
+  is `String(200)` and `SemanticMappingCreate` accepts
+  `max_length=200`, but `semantic_value_cache.semantic_key` is
+  `varchar(100)`. The 3.1c resolve endpoint accepts up to 200 chars
+  to remain reachable for admin-created mappings, but `auto_prime`
+  writes to the cache will fail at the DB level for keys with
+  101..200 chars (insertion violates length constraint).
+- **Impact:** Mappings with `semantic_key` length 101..200 chars can
+  be created via admin CRUD but cannot be cached. Resolve endpoint
+  accepts the lookup, mapping is found, `auto_prime` triggers, and
+  the cache-write fails. Caller sees `RESOLVE_CACHE_MISS` (or an
+  upstream error envelope) on every miss-then-prime round-trip. The
+  cache will never warm for those keys.
+- **Resolution:** Align both schemas. Recommended: migrate
+  `semantic_value_cache.semantic_key` from `varchar(100)` to
+  `varchar(200)` to match the mapping table. Includes Alembic
+  migration + downgrade path. Coordinate with 3.1aaa scheduler
+  refresh schedule (cache-table column widening is non-destructive
+  — no row-level data change needed).
+- **Target:** Opportunistic — bundle with the next 3.1aaa cache
+  refactor or first operator complaint about long-key resolution
+  failure. Not blocking 3.1c launch since current operator-created
+  mappings observed in production are <100 chars.
+
 ### DEBT-062: Nightly refresh skips active mappings without cached coord
 
 - **Source:** Phase 3.1aaa FIX-R2 (Blocker 2 fix collateral)

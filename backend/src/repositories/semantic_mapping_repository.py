@@ -57,6 +57,29 @@ class SemanticMappingRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_active_by_key(
+        self,
+        cube_id: str,
+        semantic_key: str,
+    ) -> SemanticMapping | None:
+        """Phase 3.1c lock C1: active-mapping lookup for the resolve flow.
+
+        Returns ``None`` when the row is missing OR is soft-deleted
+        (``is_active=False``). The resolve service treats both states
+        identically, surfacing ``MAPPING_NOT_FOUND`` to the caller per
+        recon §3 / §5.2.
+
+        Distinct from :meth:`get_by_key`, which still returns inactive
+        rows for admin CRUD inspection paths (3.1b).
+        """
+        result = await self._session.execute(
+            select(SemanticMapping)
+            .where(SemanticMapping.cube_id == cube_id)
+            .where(SemanticMapping.semantic_key == semantic_key)
+            .where(SemanticMapping.is_active.is_(True))
+        )
+        return result.scalar_one_or_none()
+
     async def create(
         self,
         payload: SemanticMappingCreate,
