@@ -45,7 +45,10 @@ from src.repositories.semantic_mapping_repository import (
     SemanticMappingRepository,
 )
 from src.services.resolve.service import ResolveService
-from src.services.statcan.metadata_cache import StatCanMetadataCacheService
+from src.services.statcan.metadata_cache import (
+    CubeMetadataCacheEntry,
+    StatCanMetadataCacheService,
+)
 from src.services.statcan.value_cache import StatCanValueCacheService
 from src.services.statcan.value_cache_schemas import (
     AutoPrimeResult,
@@ -133,11 +136,42 @@ async def _seed_mapping(
         await session.commit()
 
 
+def _cache_entry() -> CubeMetadataCacheEntry:
+    """Cube metadata entry matching ``_seed_mapping``'s dimension_filters.
+
+    Geography (position 1) → Canada (member_id 1)
+    Products   (position 2) → All-items (member_id 10)
+    """
+    return CubeMetadataCacheEntry(
+        cube_id="18-10-0004",
+        product_id=18100004,
+        dimensions={
+            "dimensions": [
+                {
+                    "position_id": 1,
+                    "name_en": "Geography",
+                    "members": [{"member_id": 1, "name_en": "Canada"}],
+                },
+                {
+                    "position_id": 2,
+                    "name_en": "Products",
+                    "members": [{"member_id": 10, "name_en": "All-items"}],
+                },
+            ]
+        },
+        frequency_code="monthly",
+        cube_title_en="CPI",
+        cube_title_fr=None,
+        fetched_at=_FIXED_FETCHED_AT,
+    )
+
+
 def _build_app(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     get_cached_returns: list,
     auto_prime_result: AutoPrimeResult = AutoPrimeResult(0, 0, 0),
+    cache_entry: CubeMetadataCacheEntry | None = None,
 ) -> tuple[FastAPI, MagicMock]:
     app = FastAPI()
     app.include_router(admin_resolve_router)
@@ -148,6 +182,9 @@ def _build_app(
 
     metadata_cache = MagicMock(spec=StatCanMetadataCacheService)
     metadata_cache.get_cached = AsyncMock(return_value=None)
+    metadata_cache.get_or_fetch = AsyncMock(
+        return_value=cache_entry if cache_entry is not None else _cache_entry()
+    )
 
     def _override_factory():
         return session_factory
@@ -303,6 +340,65 @@ async def test_resolve_filters_validation_400(session_factory, http_client_facto
         )
     assert resp.status_code == 400, resp.text
     assert resp.json()["detail"]["error_code"] == "RESOLVE_INVALID_FILTERS"
+
+
+@pytest.mark.asyncio
+async def test_resolve_filters_more_dims_than_members_400(
+    session_factory, http_client_factory
+):
+    await _seed_mapping(session_factory)
+    app, _ = _build_app(session_factory, get_cached_returns=[[]])
+    async with await http_client_factory(app) as client:
+        # 2 dims, 1 member → length mismatch.
+        resp = await client.get(
+            "/api/v1/admin/resolve/18-10-0004/cpi.canada.all_items.index",
+            params=[("dim", 1), ("dim", 2), ("member", 1)],
+        )
+    assert resp.status_code == 400, resp.text
+    body = resp.json()
+    assert body["detail"]["error_code"] == "RESOLVE_INVALID_FILTERS"
+    assert "dim/member count mismatch" in body["detail"]["details"]["reason"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_filters_more_members_than_dims_400(
+    session_factory, http_client_factory
+):
+    await _seed_mapping(session_factory)
+    app, _ = _build_app(session_factory, get_cached_returns=[[]])
+    async with await http_client_factory(app) as client:
+        # 1 dim, 2 members → length mismatch.
+        resp = await client.get(
+            "/api/v1/admin/resolve/18-10-0004/cpi.canada.all_items.index",
+            params=[("dim", 1), ("member", 1), ("member", 10)],
+        )
+    assert resp.status_code == 400, resp.text
+    body = resp.json()
+    assert body["detail"]["error_code"] == "RESOLVE_INVALID_FILTERS"
+    assert "dim/member count mismatch" in body["detail"]["details"]["reason"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_filters_wrong_positions_400(
+    session_factory, http_client_factory
+):
+    """Caller supplies right COUNT but wrong dimension positions —
+    semantic wrapper validation must reject (was a P0 BLOCKER).
+    """
+    await _seed_mapping(session_factory)
+    app, _ = _build_app(session_factory, get_cached_returns=[[]])
+    async with await http_client_factory(app) as client:
+        resp = await client.get(
+            "/api/v1/admin/resolve/18-10-0004/cpi.canada.all_items.index",
+            params=[("dim", 3), ("member", 1), ("dim", 4), ("member", 10)],
+        )
+    assert resp.status_code == 400, resp.text
+    body = resp.json()
+    assert body["detail"]["error_code"] == "RESOLVE_INVALID_FILTERS"
+    assert (
+        "filter set does not match mapping pins"
+        in body["detail"]["details"]["reason"]
+    )
 
 
 @pytest.mark.asyncio

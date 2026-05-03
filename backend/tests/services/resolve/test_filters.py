@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -18,6 +19,10 @@ from src.services.resolve.filters import (
 )
 from src.services.resolve.period import pick_row
 from src.services.resolve.service import map_to_resolved
+from src.services.statcan.metadata_cache import (
+    CubeMetadataCacheEntry,
+    StatCanMetadataCacheService,
+)
 from src.services.statcan.value_cache_schemas import ValueCacheRow
 
 
@@ -68,9 +73,53 @@ def _row(*, value: Decimal | None, missing: bool) -> ValueCacheRow:
     )
 
 
+def _cache_entry() -> CubeMetadataCacheEntry:
+    """Minimal cache entry matching ``_mapping(dimension_filters=...)``.
+
+    Geography (position 1) → Canada (member_id 1)
+    Products   (position 2) → All-items (member_id 10)
+    """
+    return CubeMetadataCacheEntry(
+        cube_id="18-10-0004",
+        product_id=18100004,
+        dimensions={
+            "dimensions": [
+                {
+                    "position_id": 1,
+                    "name_en": "Geography",
+                    "members": [
+                        {"member_id": 1, "name_en": "Canada"},
+                    ],
+                },
+                {
+                    "position_id": 2,
+                    "name_en": "Products",
+                    "members": [
+                        {"member_id": 10, "name_en": "All-items"},
+                    ],
+                },
+            ]
+        },
+        frequency_code="monthly",
+        cube_title_en="CPI",
+        cube_title_fr=None,
+        fetched_at=_FIXED_FETCHED_AT,
+    )
+
+
+def _metadata_cache_mock(
+    entry: CubeMetadataCacheEntry | None = None,
+) -> MagicMock:
+    cache = MagicMock(spec=StatCanMetadataCacheService)
+    cache.get_or_fetch = AsyncMock(
+        return_value=entry if entry is not None else _cache_entry()
+    )
+    return cache
+
+
 class TestParseFiltersFromQuery:
-    def test_test_parse_filters_from_query_valid(self) -> None:
-        out = parse_filters_from_query(raw_filters=[(1, 1), (2, 10)])
+    def test_parse_filters_from_query_valid(self) -> None:
+        out = parse_filters_from_query(dims=[1, 2], members=[1, 10])
         assert [(f.dimension_position_id, f.member_id) for f in out] == [
             (1, 1),
             (2, 10),
@@ -79,18 +128,94 @@ class TestParseFiltersFromQuery:
     def test_parse_filters_from_query_malformed(self) -> None:
         # duplicate dim
         with pytest.raises(ResolveInvalidFiltersError):
-            parse_filters_from_query(raw_filters=[(1, 1), (1, 2)])
+            parse_filters_from_query(dims=[1, 1], members=[1, 2])
         # out-of-range
         with pytest.raises(ResolveInvalidFiltersError):
-            parse_filters_from_query(raw_filters=[(11, 1)])
+            parse_filters_from_query(dims=[11], members=[1])
+
+    def test_parse_filters_more_dims_than_members(self) -> None:
+        with pytest.raises(ResolveInvalidFiltersError) as info:
+            parse_filters_from_query(dims=[1, 2], members=[1])
+        assert "dim/member count mismatch" in info.value.reason
+
+    def test_parse_filters_more_members_than_dims(self) -> None:
+        with pytest.raises(ResolveInvalidFiltersError) as info:
+            parse_filters_from_query(dims=[1], members=[1, 10])
+        assert "dim/member count mismatch" in info.value.reason
 
 
 class TestValidateFiltersAgainstMapping:
-    def test_validate_filters_against_mapping_extra_dim(self) -> None:
+    @pytest.mark.asyncio
+    async def test_validate_filters_against_mapping_extra_dim(self) -> None:
+        # Mapping pins ONE dim (Geography→Canada at position 1, member 1).
         mapping = _mapping(dimension_filters={"Geography": "Canada"})
-        filters = parse_filters_from_query(raw_filters=[(1, 1), (2, 10)])
+        entry = CubeMetadataCacheEntry(
+            cube_id="18-10-0004",
+            product_id=18100004,
+            dimensions={
+                "dimensions": [
+                    {
+                        "position_id": 1,
+                        "name_en": "Geography",
+                        "members": [{"member_id": 1, "name_en": "Canada"}],
+                    },
+                ]
+            },
+            frequency_code="monthly",
+            cube_title_en=None,
+            cube_title_fr=None,
+            fetched_at=_FIXED_FETCHED_AT,
+        )
+        cache = _metadata_cache_mock(entry)
+        # Caller supplies TWO filters → mismatch with the 1-dim mapping.
+        filters = parse_filters_from_query(dims=[1, 2], members=[1, 10])
         with pytest.raises(ResolveInvalidFiltersError):
-            validate_filters_against_mapping(filters=filters, mapping=mapping)
+            await validate_filters_against_mapping(
+                filters=filters, mapping=mapping, metadata_cache=cache
+            )
+
+    @pytest.mark.asyncio
+    async def test_validate_filters_wrong_member(self) -> None:
+        # Mapping expects (1,1) and (2,10); caller supplies (1,1) and (2,99).
+        mapping = _mapping(
+            dimension_filters={"Geography": "Canada", "Products": "All-items"}
+        )
+        cache = _metadata_cache_mock(_cache_entry())
+        filters = parse_filters_from_query(dims=[1, 2], members=[1, 99])
+        # member 99 doesn't exist on dim 2 in the entry, but parser doesn't
+        # know that — set check happens in the validator wrapper. Add a
+        # cache entry that includes member 99 so we test SET mismatch only.
+        entry = CubeMetadataCacheEntry(
+            cube_id="18-10-0004",
+            product_id=18100004,
+            dimensions={
+                "dimensions": [
+                    {
+                        "position_id": 1,
+                        "name_en": "Geography",
+                        "members": [{"member_id": 1, "name_en": "Canada"}],
+                    },
+                    {
+                        "position_id": 2,
+                        "name_en": "Products",
+                        "members": [
+                            {"member_id": 10, "name_en": "All-items"},
+                            {"member_id": 99, "name_en": "Other"},
+                        ],
+                    },
+                ]
+            },
+            frequency_code="monthly",
+            cube_title_en=None,
+            cube_title_fr=None,
+            fetched_at=_FIXED_FETCHED_AT,
+        )
+        cache = _metadata_cache_mock(entry)
+        with pytest.raises(ResolveInvalidFiltersError) as info:
+            await validate_filters_against_mapping(
+                filters=filters, mapping=mapping, metadata_cache=cache
+            )
+        assert "filter set does not match mapping pins" in info.value.reason
 
 
 class TestPickRow:

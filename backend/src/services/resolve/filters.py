@@ -4,10 +4,12 @@ Pure adapter layer between the HTTP query string and the validator's
 :class:`ResolvedDimensionFilter` DTO that downstream code (``derive_coord``,
 ``StatCanValueCacheService.auto_prime``) already consumes.
 
-ARCH-PURA-001: both functions here are pure — no I/O, no clock, no logger.
-They raise :class:`ResolveInvalidFiltersError` (caught by the router) on
-shape problems; they NEVER raise ``HTTPException`` (R2: HTTP translation
-happens at the router boundary only).
+ARCH-PURA-001: :func:`parse_filters_from_query` is pure (no I/O, no clock,
+no logger). :func:`validate_filters_against_mapping` is async and consults
+the injected metadata cache (read-through) — it remains free of HTTP and
+clock concerns and never raises ``HTTPException`` (R2: HTTP translation
+happens at the router boundary only). It raises
+:class:`ResolveInvalidFiltersError` on shape problems.
 
 Encoding choice (recon §2.3 / Appendix B grep B-C): repeated query pairs
 ``?dim=<position_id>&member=<member_id>`` for FastAPI-native parsing and
@@ -17,21 +19,26 @@ from __future__ import annotations
 
 from src.models.semantic_mapping import SemanticMapping
 from src.services.resolve.exceptions import ResolveInvalidFiltersError
-from src.services.semantic_mappings.validation import ResolvedDimensionFilter
+from src.services.semantic_mappings.validation import (
+    ResolvedDimensionFilter,
+    validate_mapping_against_cache,
+)
+from src.services.statcan.metadata_cache import (
+    CubeNotFoundError,
+    MetadataCacheError,
+    StatCanMetadataCacheService,
+)
 
 
 def parse_filters_from_query(
-    *, raw_filters: list[tuple[int, int]]
+    *, dims: list[int], members: list[int]
 ) -> list[ResolvedDimensionFilter]:
-    """Convert ``[(dim_position_id, member_id), ...]`` to validator DTOs.
+    """Convert parallel ``dims`` / ``members`` query lists to validator DTOs.
 
-    The router supplies the raw pairs by zipping the repeated ``dim`` and
-    ``member`` query params. This helper:
+    The router supplies the raw repeated query parameters as parallel
+    lists. This helper:
 
-    * rejects mismatched pair lengths implicitly (the router uses
-      ``zip(..., strict=False)`` so a length mismatch produces a short
-      list — we DON'T need to re-detect it because the validation step
-      catches resulting missing dimensions);
+    * rejects mismatched list lengths (``dim/member count mismatch``);
     * rejects duplicate ``dimension_position_id`` (each dimension may
       appear at most once);
     * rejects out-of-range positions (the canonical 10-slot encoding in
@@ -40,15 +47,19 @@ def parse_filters_from_query(
     The returned ``ResolvedDimensionFilter`` instances populate
     ``dimension_name`` / ``member_name`` with empty strings — the
     validator dataclass requires them but downstream consumers
-    (``derive_coord``) only read the numeric IDs. This is a deliberate
-    short-circuit: the resolve flow does NOT have access to the cached
-    cube metadata at parse time and re-resolving names would require an
-    extra cache fetch with no benefit (the names are already encoded
-    server-side in ``mapping.config.dimension_filters``).
+    (``derive_coord``) only read the numeric IDs.
     """
+    if len(dims) != len(members):
+        raise ResolveInvalidFiltersError(
+            reason=(
+                f"dim/member count mismatch: got {len(dims)} dim(s) and "
+                f"{len(members)} member(s)"
+            ),
+        )
+
     seen: set[int] = set()
     out: list[ResolvedDimensionFilter] = []
-    for pos, member in raw_filters:
+    for pos, member in zip(dims, members, strict=True):
         if pos < 1 or pos > 10:
             raise ResolveInvalidFiltersError(
                 reason=(
@@ -73,59 +84,93 @@ def parse_filters_from_query(
     return out
 
 
-def validate_filters_against_mapping(
+async def validate_filters_against_mapping(
     *,
     filters: list[ResolvedDimensionFilter],
     mapping: SemanticMapping,
+    metadata_cache: StatCanMetadataCacheService,
 ) -> None:
-    """Ensure the supplied filter set matches the mapping's expected dims.
+    """Validate the supplied filter set against the mapping's pinned cell.
 
-    The mapping ``config.dimension_filters`` is a ``dict[str, str]``
-    keyed by dimension name (Appendix B grep B). For 3.1c we validate
-    on COUNT only — the canonical names are not echoed in the query
-    string and the position-id ↔ name mapping lives in the cube
-    metadata cache (out-of-scope for resolve). A future enhancement
-    can grow this into per-name validation when the resolve service
-    starts hydrating metadata.
+    Strategy (founder-ratified F1, Option A — wrapper):
 
-    Rules enforced:
-    * required dimensions present (count match: every configured
-      filter must be supplied);
-    * no extras (the supplied count must not exceed configured count).
+    1. Fetch the cube metadata cache entry for ``mapping.cube_id`` /
+       ``mapping.product_id``.
+    2. Re-run the pure 3.1ab :func:`validate_mapping_against_cache`
+       against the mapping's ``config.dimension_filters`` (name-based)
+       to obtain the canonical ``(position_id, member_id)`` set the
+       mapping pins.
+    3. Compare that canonical set element-wise to the filter set the
+       caller supplied. Any mismatch (extra, missing, wrong position,
+       or wrong member id) raises ``RESOLVE_INVALID_FILTERS``.
+
+    This guarantees the resolve flow only proceeds when the request's
+    ``(dim, member)`` pairs are *identical* to the cell the mapping
+    canonically points at — preventing silent coord drift.
 
     Raises:
-        ResolveInvalidFiltersError: with a deterministic reason string
-            and the expected/provided dimension lists for the
-            ``RESOLVE_INVALID_FILTERS`` envelope (recon §2.5).
+        ResolveInvalidFiltersError: on cache fetch failure, on broken
+            mapping config, or on filter-set mismatch.
     """
-    config = mapping.config or {}
-    expected_filters: dict[str, str] = {}
-    raw = config.get("dimension_filters") if isinstance(config, dict) else None
-    if isinstance(raw, dict):
-        expected_filters = raw
+    try:
+        cache_entry = await metadata_cache.get_or_fetch(
+            mapping.cube_id, mapping.product_id
+        )
+    except CubeNotFoundError as exc:
+        raise ResolveInvalidFiltersError(
+            reason=(
+                f"cube metadata not found for cube_id={mapping.cube_id!r} "
+                f"product_id={mapping.product_id}"
+            ),
+        ) from exc
+    except MetadataCacheError as exc:
+        raise ResolveInvalidFiltersError(
+            reason=f"cube metadata fetch failed: {exc}",
+        ) from exc
 
-    expected_names: list[str] = sorted(expected_filters.keys())
-    provided_positions: list[str] = sorted(
-        str(f.dimension_position_id) for f in filters
+    config = mapping.config or {}
+    raw = config.get("dimension_filters")
+    dimension_filters_cfg: dict[str, str] = (
+        raw if isinstance(raw, dict) else {}
     )
 
-    if len(filters) < len(expected_filters):
+    result = validate_mapping_against_cache(
+        cube_id=mapping.cube_id,
+        product_id=mapping.product_id,
+        dimension_filters=dimension_filters_cfg,
+        cache_entry=cache_entry,
+    )
+
+    if not result.is_valid:
+        error_messages = "; ".join(e.message for e in result.errors)
         raise ResolveInvalidFiltersError(
             reason=(
-                f"missing required dimension(s): mapping requires "
-                f"{len(expected_filters)} dim(s), got {len(filters)}"
+                "mapping config invalid against cube metadata: "
+                f"{error_messages}"
             ),
-            expected=expected_names,
-            provided=provided_positions,
         )
-    if len(filters) > len(expected_filters):
+
+    expected_set = {
+        (rf.dimension_position_id, rf.member_id)
+        for rf in result.resolved_filters
+    }
+    provided_set = {
+        (f.dimension_position_id, f.member_id) for f in filters
+    }
+
+    if expected_set != provided_set:
+        expected_sorted = sorted(expected_set)
+        provided_sorted = sorted(provided_set)
+        expected_str = [
+            f"({pos},{mid})" for pos, mid in expected_sorted
+        ]
+        provided_str = [
+            f"({pos},{mid})" for pos, mid in provided_sorted
+        ]
         raise ResolveInvalidFiltersError(
-            reason=(
-                f"unexpected extra dimension(s): mapping requires "
-                f"{len(expected_filters)} dim(s), got {len(filters)}"
-            ),
-            expected=expected_names,
-            provided=provided_positions,
+            reason="filter set does not match mapping pins",
+            expected=expected_str,
+            provided=provided_str,
         )
 
 

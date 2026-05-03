@@ -2,7 +2,9 @@
 
 Recon §6.2 (8 tests) + impl-addendum §"ADDITIONS — Phase 1 test
 scaffolding" test 1.2 (``test_resolve_hit_returns_missing_observation_faithfully``
-for F-fix-3) → 9 tests total.
+for F-fix-3) → 9 base tests, plus 3 fix-up tests for 3.1c BLOCKERs:
+wrong-positions semantic rejection, auto_prime exception with row,
+auto_prime exception without row.
 
 Heavy use of :class:`AsyncMock` for collaborators (mapping repo,
 value-cache service, metadata cache) keeps these tests pure-unit:
@@ -25,7 +27,10 @@ from src.services.resolve.exceptions import (
     ResolveInvalidFiltersError,
 )
 from src.services.resolve.service import ResolveService
-from src.services.statcan.metadata_cache import StatCanMetadataCacheService
+from src.services.statcan.metadata_cache import (
+    CubeMetadataCacheEntry,
+    StatCanMetadataCacheService,
+)
 from src.services.statcan.value_cache import StatCanValueCacheService
 from src.services.statcan.value_cache_schemas import (
     AutoPrimeResult,
@@ -83,11 +88,43 @@ def _row(*, value: Decimal | None = Decimal("100.0"), missing: bool = False) -> 
     )
 
 
+def _cache_entry() -> CubeMetadataCacheEntry:
+    """Cube metadata entry matching ``_mapping()``'s dimension_filters.
+
+    Geography (position 1) → Canada (member_id 1)
+    Products   (position 2) → All-items (member_id 10)
+    """
+    return CubeMetadataCacheEntry(
+        cube_id="18-10-0004",
+        product_id=18100004,
+        dimensions={
+            "dimensions": [
+                {
+                    "position_id": 1,
+                    "name_en": "Geography",
+                    "members": [{"member_id": 1, "name_en": "Canada"}],
+                },
+                {
+                    "position_id": 2,
+                    "name_en": "Products",
+                    "members": [{"member_id": 10, "name_en": "All-items"}],
+                },
+            ]
+        },
+        frequency_code="monthly",
+        cube_title_en="CPI",
+        cube_title_fr=None,
+        fetched_at=_FIXED_FETCHED_AT,
+    )
+
+
 def _build_service(
     *,
     mapping: SemanticMapping | None,
     get_cached_returns: list,  # list of returns per call
     auto_prime_result: AutoPrimeResult = AutoPrimeResult(0, 0, 0),
+    auto_prime_side_effect: BaseException | None = None,
+    cache_entry: CubeMetadataCacheEntry | None = None,
 ) -> tuple[ResolveService, MagicMock, MagicMock]:
     # Mapping repo: returns the supplied mapping (None for not-found path).
     mapping_repo = MagicMock()
@@ -104,9 +141,19 @@ def _build_service(
 
     value_cache_service = MagicMock(spec=StatCanValueCacheService)
     value_cache_service.get_cached = AsyncMock(side_effect=get_cached_returns)
-    value_cache_service.auto_prime = AsyncMock(return_value=auto_prime_result)
+    if auto_prime_side_effect is not None:
+        value_cache_service.auto_prime = AsyncMock(
+            side_effect=auto_prime_side_effect
+        )
+    else:
+        value_cache_service.auto_prime = AsyncMock(
+            return_value=auto_prime_result
+        )
 
     metadata_cache = MagicMock(spec=StatCanMetadataCacheService)
+    metadata_cache.get_or_fetch = AsyncMock(
+        return_value=cache_entry if cache_entry is not None else _cache_entry()
+    )
     metadata_cache.get_cached = AsyncMock(return_value=None)
 
     service = ResolveService(
@@ -133,7 +180,8 @@ async def test_resolve_hit_no_prime() -> None:
     dto = await service.resolve_value(
         cube_id="18-10-0004",
         semantic_key="cpi.canada.all_items.index",
-        raw_filters=[(1, 1), (2, 10)],
+        dims=[1, 2],
+        members=[1, 10],
         period=None,
     )
     assert dto.cache_status == "hit"
@@ -150,7 +198,8 @@ async def test_resolve_hit_returns_missing_observation_faithfully() -> None:
     dto = await service.resolve_value(
         cube_id="18-10-0004",
         semantic_key="cpi.canada.all_items.index",
-        raw_filters=[(1, 1), (2, 10)],
+        dims=[1, 2],
+        members=[1, 10],
         period=None,
     )
     assert dto.value is None
@@ -168,7 +217,8 @@ async def test_resolve_mapping_missing() -> None:
         await service.resolve_value(
             cube_id="18-10-0004",
             semantic_key="cpi.canada.all_items.index",
-            raw_filters=[(1, 1), (2, 10)],
+            dims=[1, 2],
+            members=[1, 10],
             period=None,
         )
 
@@ -182,7 +232,8 @@ async def test_resolve_invalid_filters_missing_dim() -> None:
         await service.resolve_value(
             cube_id="18-10-0004",
             semantic_key="cpi.canada.all_items.index",
-            raw_filters=[(1, 1)],  # missing 2nd dim
+            dims=[1],  # missing 2nd dim
+            members=[1],
             period=None,
         )
 
@@ -196,9 +247,29 @@ async def test_resolve_invalid_filters_extra_dim() -> None:
         await service.resolve_value(
             cube_id="18-10-0004",
             semantic_key="cpi.canada.all_items.index",
-            raw_filters=[(1, 1), (2, 10), (3, 7)],  # extra
+            dims=[1, 2, 3],  # extra
+            members=[1, 10, 7],
             period=None,
         )
+
+
+@pytest.mark.asyncio
+async def test_resolve_invalid_filters_wrong_positions() -> None:
+    """Caller supplies the right COUNT but wrong dimension positions —
+    semantic wrapper validation must reject (was a P0 BLOCKER pre-3.1c-fix).
+    """
+    service, _, _ = _build_service(
+        mapping=_mapping(), get_cached_returns=[[]]
+    )
+    with pytest.raises(ResolveInvalidFiltersError) as info:
+        await service.resolve_value(
+            cube_id="18-10-0004",
+            semantic_key="cpi.canada.all_items.index",
+            dims=[3, 4],  # wrong positions
+            members=[1, 10],
+            period=None,
+        )
+    assert "filter set does not match mapping pins" in info.value.reason
 
 
 @pytest.mark.asyncio
@@ -211,7 +282,8 @@ async def test_resolve_cold_cache_auto_prime_success_returns_primed() -> None:
     dto = await service.resolve_value(
         cube_id="18-10-0004",
         semantic_key="cpi.canada.all_items.index",
-        raw_filters=[(1, 1), (2, 10)],
+        dims=[1, 2],
+        members=[1, 10],
         period=None,
     )
     assert dto.cache_status == "primed"
@@ -228,7 +300,8 @@ async def test_resolve_cache_miss_prime_error_but_row_written() -> None:
     dto = await service.resolve_value(
         cube_id="18-10-0004",
         semantic_key="cpi.canada.all_items.index",
-        raw_filters=[(1, 1), (2, 10)],
+        dims=[1, 2],
+        members=[1, 10],
         period=None,
     )
     # Error should NOT surface in DTO (recon §5.2 invariant).
@@ -247,10 +320,56 @@ async def test_resolve_cache_miss_prime_error_no_row() -> None:
         await service.resolve_value(
             cube_id="18-10-0004",
             semantic_key="cpi.canada.all_items.index",
-            raw_filters=[(1, 1), (2, 10)],
+            dims=[1, 2],
+            members=[1, 10],
             period=None,
         )
     assert info.value.prime_error_code == "upstream"
+    assert info.value.prime_attempted is True
+
+
+@pytest.mark.asyncio
+async def test_resolve_auto_prime_raises_but_row_appears() -> None:
+    """auto_prime raises an unexpected exception, yet the C2 re-query
+    finds a row — service must still return ``primed`` (200), with the
+    warning log carrying ``error_code="unexpected"``.
+    """
+    service, vc, _ = _build_service(
+        mapping=_mapping(),
+        get_cached_returns=[[], [_row()]],
+        auto_prime_side_effect=RuntimeError("boom"),
+    )
+    dto = await service.resolve_value(
+        cube_id="18-10-0004",
+        semantic_key="cpi.canada.all_items.index",
+        dims=[1, 2],
+        members=[1, 10],
+        period=None,
+    )
+    assert dto.cache_status == "primed"
+    vc.auto_prime.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_resolve_auto_prime_raises_no_row() -> None:
+    """auto_prime raises an unexpected exception AND the C2 re-query is
+    empty — service must raise ``ResolveCacheMissError`` with
+    ``prime_error_code="unexpected"`` (404 envelope downstream).
+    """
+    service, _, _ = _build_service(
+        mapping=_mapping(),
+        get_cached_returns=[[], []],
+        auto_prime_side_effect=RuntimeError("boom"),
+    )
+    with pytest.raises(ResolveCacheMissError) as info:
+        await service.resolve_value(
+            cube_id="18-10-0004",
+            semantic_key="cpi.canada.all_items.index",
+            dims=[1, 2],
+            members=[1, 10],
+            period=None,
+        )
+    assert info.value.prime_error_code == "unexpected"
     assert info.value.prime_attempted is True
 
 
@@ -265,7 +384,8 @@ async def test_http_to_service_pipeline_wiring() -> None:
     dto = await service.resolve_value(
         cube_id="18-10-0004",
         semantic_key="cpi.canada.all_items.index",
-        raw_filters=[(1, 1), (2, 10)],
+        dims=[1, 2],
+        members=[1, 10],
         period=None,
     )
     # Cache-row coord echoed (the seeded row uses the canonical encoding).

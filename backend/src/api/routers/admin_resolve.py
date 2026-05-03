@@ -127,7 +127,8 @@ async def resolve_value_handler(
         return await service.resolve_value(
             cube_id=cube_id,
             semantic_key=semantic_key,
-            raw_filters=list(zip(dim, member, strict=False)),
+            dims=list(dim),
+            members=list(member),
             period=period,
         )
     except MappingNotFoundForResolveError as exc:

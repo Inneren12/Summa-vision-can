@@ -134,7 +134,8 @@ class ResolveService:
         *,
         cube_id: str,
         semantic_key: str,
-        raw_filters: list[tuple[int, int]],
+        dims: list[int],
+        members: list[int],
         period: str | None,
     ) -> ResolvedValueResponse:
         """Execute the 8-step resolve state machine.
@@ -154,8 +155,12 @@ class ResolveService:
             )
 
         # Step 2 — parse + validate filters.
-        filters = parse_filters_from_query(raw_filters=raw_filters)
-        validate_filters_against_mapping(filters=filters, mapping=mapping)
+        filters = parse_filters_from_query(dims=dims, members=members)
+        await validate_filters_against_mapping(
+            filters=filters,
+            mapping=mapping,
+            metadata_cache=self._metadata_cache,
+        )
 
         # Step 3 — service-derived coord (C3).
         try:
@@ -177,19 +182,35 @@ class ResolveService:
             row = pick_row(rows, period=period)
             return map_to_resolved(row, mapping, cache_status="hit")
 
-        # Step 5 — auto-prime (best-effort; never raises).
+        # Step 5 — auto-prime (best-effort; never raises into the caller).
         frequency_code = await resolve_frequency_code(
             mapping=mapping, metadata_cache=self._metadata_cache
         )
-        prime_result = await self._value_cache_service.auto_prime(
-            cube_id=cube_id,
-            semantic_key=semantic_key,
-            product_id=mapping.product_id,
-            resolved_filters=filters,
-            frequency_code=frequency_code,
-        )
+        prime_result = None
+        prime_error_code: str | None = None
+        try:
+            prime_result = await self._value_cache_service.auto_prime(
+                cube_id=cube_id,
+                semantic_key=semantic_key,
+                product_id=mapping.product_id,
+                resolved_filters=filters,
+                frequency_code=frequency_code,
+            )
+        except Exception:  # noqa: BLE001
+            self._logger.exception(
+                "resolve.auto_prime_unexpected_error",
+                cube_id=cube_id,
+                semantic_key=semantic_key,
+                coord=coord,
+            )
+            prime_error_code = "unexpected"
+        else:
+            if prime_result.error:
+                prime_error_code = sanitize_prime_error(prime_result.error)
 
-        # Step 6 — re-query under identical lookup args.
+        # Step 6 — re-query under identical lookup args (MUST run even if
+        # auto_prime raised: the upstream operation may have partially
+        # succeeded and persisted the row before the failure surfaced).
         rows_after = await self._value_cache_service.get_cached(
             cube_id=cube_id,
             semantic_key=semantic_key,
@@ -199,13 +220,13 @@ class ResolveService:
 
         # Step 7 — primed hit.
         if rows_after:
-            if prime_result.error:
+            if prime_error_code is not None:
                 self._logger.warning(
                     "resolve.prime_succeeded_with_error",
                     cube_id=cube_id,
                     semantic_key=semantic_key,
                     coord=coord,
-                    error_code=sanitize_prime_error(prime_result.error),
+                    error_code=prime_error_code,
                 )
             row = pick_row(rows_after, period=period)
             return map_to_resolved(row, mapping, cache_status="primed")
@@ -217,11 +238,7 @@ class ResolveService:
             coord=coord,
             period=period,
             prime_attempted=True,
-            prime_error_code=(
-                sanitize_prime_error(prime_result.error)
-                if prime_result.error
-                else None
-            ),
+            prime_error_code=prime_error_code,
         )
 
 
