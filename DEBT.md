@@ -497,10 +497,17 @@ Rules:
   migration + downgrade path. Coordinate with 3.1aaa scheduler
   refresh schedule (cache-table column widening is non-destructive
   — no row-level data change needed).
-- **Target:** Opportunistic — bundle with the next 3.1aaa cache
-  refactor or first operator complaint about long-key resolution
-  failure. Not blocking 3.1c launch since current operator-created
-  mappings observed in production are <100 chars.
+- **Target:** Phase 3.1c follow-up — before Phase 3.2 frontend
+  contract hardening. Phase 3.2 frontend will rely on resolve for
+  bound publication blocks; latent cache-write failure for keys
+  101..200 chars becomes user-visible the moment the first long-key
+  mapping ships. Migration:
+  `ALTER TABLE semantic_value_cache ALTER COLUMN semantic_key TYPE varchar(200);`
+  — non-destructive widening, low risk. Coordinate with 3.1aaa
+  scheduler refresh — column widening is metadata-only, no row-level
+  data change. Not blocking 3.1c launch since current
+  operator-created mappings observed in production are <100 chars,
+  but MUST land before 3.2 ships.
 
 ### DEBT-062: Nightly refresh skips active mappings without cached coord
 
