@@ -145,6 +145,18 @@ class TestUpsertPeriod:
         assert e2.is_stale is False
 
 
+    @pytest.mark.asyncio
+    async def test_persists_vector_id_and_response_status_code(self, db_session):
+        """FIX-R1 Blocker 2: response-level metadata flows into the row."""
+        await _seed_mapping(db_session)
+        repo = SemanticValueCacheRepository(db_session)
+        kw = _row_kwargs(vector_id=41690914, response_status_code=7)
+        entity, _ = await repo.upsert_period(source_hash=_hash_of(kw), **kw)
+        await db_session.commit()
+        assert entity.vector_id == 41690914
+        assert entity.response_status_code == 7
+
+
 class TestUpsertPeriodsBatch:
     @pytest.mark.asyncio
     async def test_batch_inserts_multiple_periods(self, db_session):
@@ -168,6 +180,40 @@ class TestUpsertPeriodsBatch:
         counts = await repo.upsert_periods_batch(items)
         await db_session.commit()
         assert counts == {"inserted": 3, "updated": 0, "unchanged": 0}
+
+    @pytest.mark.asyncio
+    async def test_batch_propagates_vector_id_and_response_status_code(
+        self, db_session
+    ):
+        """FIX-R1 Blocker 2: ``ValueCacheUpsertItem`` carries response-
+        level metadata into both ``compute_source_hash`` and the row."""
+        await _seed_mapping(db_session)
+        repo = SemanticValueCacheRepository(db_session)
+        items = [
+            ValueCacheUpsertItem(
+                cube_id="18-10-0004-01",
+                product_id=18100004,
+                semantic_key="cpi.canada.all_items",
+                coord="1.10.0.0.0.0.0.0.0.0",
+                data_point=StatCanDataPoint(
+                    refPer="2026-04",
+                    value=Decimal("123.4"),
+                    decimals=1,
+                ),
+                fetched_at=_FIXED,
+                vector_id=41690914,
+                response_status_code=0,
+            )
+        ]
+        await repo.upsert_periods_batch(items)
+        await db_session.commit()
+        rows = await repo.get_by_lookup(
+            cube_id="18-10-0004-01",
+            semantic_key="cpi.canada.all_items",
+            coord="1.10.0.0.0.0.0.0.0.0",
+        )
+        assert rows[0].vector_id == 41690914
+        assert rows[0].response_status_code == 0
 
 
 class TestGetByLookup:

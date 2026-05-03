@@ -121,7 +121,14 @@ class ValueCacheRow:
 
 @dataclass(frozen=True)
 class ValueCacheUpsertItem:
-    """Input for ``SemanticValueCacheRepository.upsert_periods_batch``."""
+    """Input for ``SemanticValueCacheRepository.upsert_periods_batch``.
+
+    Phase 3.1aaa FIX-R1 (Blocker 2): carries response-level WDS
+    metadata (``vector_id``, ``response_status_code``) alongside the
+    per-period :class:`StatCanDataPoint`. Both feed
+    :func:`compute_source_hash` and the row write so provenance is
+    preserved per recon §C6.
+    """
 
     cube_id: str
     product_id: int
@@ -129,6 +136,8 @@ class ValueCacheUpsertItem:
     coord: str
     data_point: StatCanDataPoint
     fetched_at: datetime
+    vector_id: int | None = None
+    response_status_code: int | None = None
 
 
 # ---------------------------------------------------------------------------

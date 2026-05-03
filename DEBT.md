@@ -469,6 +469,40 @@ Rules:
   the batch path to single-item fallback on top-level failure.
 - **Target:** Phase 3.2 polish.
 
+### DEBT-061: Phase 3.1aaa P2 follow-ups (4 sub-items)
+
+- **Source:** Phase 3.1aaa impl reviewer round 2026-05-03
+- **Added:** 2026-05-03
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** accepted
+- **Description:** Four P2 items from the 3.1aaa impl reviewer not
+  addressed in fix R1:
+  1. ``parse_ref_period_to_date`` is named generically — rename to
+     ``parse_semantic_value_ref_period_to_date`` (or scope via comment)
+     to prevent future migration name collision when another module
+     wants its own period parser with different dialect support.
+  2. Confirm via grep / coverage that every integration test
+     exercising the GENERATED ``period_start`` column, the partial
+     ``ix_semantic_value_cache_is_stale`` index, and the FK CASCADE
+     to ``semantic_mappings`` actually runs against PostgreSQL — the
+     SQLite ``Base.metadata.create_all`` path will silently no-op
+     those features.
+  3. Add an explicit timestamp-exclusion test for
+     :func:`compute_source_hash`: identical data fields with
+     different ``fetched_at`` / ``release_time`` MUST produce the
+     same hash. Today the test suite covers most exclusions but
+     does not pin this guarantee.
+  4. Add a Pydantic test for :class:`StatCanDataPoint`: WDS sometimes
+     serialises ``value`` as a string-encoded numeric (``"165.7"``),
+     and ``missing=true`` accompanies ``value=null``. Pin both
+     branches at the schema layer so downstream consumers never see
+     surprises.
+- **Impact:** Low — cosmetic + test-coverage gaps. No runtime
+  correctness risk.
+- **Resolution:** Single follow-up cleanup PR after 3.1c.
+- **Target:** Post-3.1c, before 3.1d.
+
 ### DEBT-060: ResolvedValue.units lacks a canonical mapping source
 
 - **Source:** Phase 3.1aaa implementation (recon Q-impl-4)

@@ -61,3 +61,16 @@ class TestSourceHash:
         a = compute_source_hash(**_kwargs(value=Decimal("123.4")))
         b = compute_source_hash(**_kwargs(value=Decimal("123.40")))
         assert a != b
+
+    def test_vector_id_change_changes_hash(self) -> None:
+        # FIX-R1 Blocker 2 regression: vector_id is part of canonical
+        # hash payload. Prior to the fix it was always passed as None.
+        a = compute_source_hash(**_kwargs(vector_id=41690914))
+        b = compute_source_hash(**_kwargs(vector_id=99999999))
+        assert a != b
+
+    def test_response_status_code_change_changes_hash(self) -> None:
+        # FIX-R1 Blocker 2 regression: response_status_code part of hash.
+        a = compute_source_hash(**_kwargs(response_status_code=0))
+        b = compute_source_hash(**_kwargs(response_status_code=1))
+        assert a != b

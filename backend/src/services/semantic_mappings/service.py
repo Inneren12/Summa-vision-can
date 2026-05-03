@@ -331,10 +331,34 @@ class SemanticMappingService:
             cube_id=cube_id, semantic_key=semantic_key, result=result
         )
 
-        # 3a. Phase 3.1aaa — best-effort auto-prime of the value cache
-        # BEFORE the mapping commit. Founder lock Q-3 RE-LOCK: failures
-        # here MUST NOT propagate. The defensive try/except is layered
-        # belt-and-braces on top of auto_prime's own no-raise contract.
+        # 4. Atomic persist (single session + commit per call).
+        async with self._session_factory() as session:
+            repo = self._repository_factory(session)
+            mapping, was_created = await self._upsert_atomic(
+                session,
+                repo,
+                cube_id=cube_id,
+                product_id=product_id,
+                semantic_key=semantic_key,
+                label=label,
+                description=description,
+                config_model=config_model,
+                is_active=is_active,
+                updated_by=updated_by,
+                if_match_version=if_match_version,
+            )
+            await session.commit()
+            await session.refresh(mapping)
+            session.expunge(mapping)
+
+        # 5. Phase 3.1aaa FIX-R1 (Blocker 1): auto-prime POST-COMMIT.
+        # The mapping row MUST be visible to FK constraints in
+        # ``semantic_value_cache`` before auto_prime opens its own
+        # session and tries to insert dependent rows. Pre-commit auto-
+        # prime caused FK violations that the best-effort handler
+        # silently swallowed → no rows were ever primed for new mappings.
+        # Founder lock Q-3 RE-LOCK preserved: failures here MUST NOT
+        # propagate; mapping save is already durable.
         if self._value_cache_service is not None:
             freq = cache_entry.frequency_code
             try:
@@ -357,6 +381,9 @@ class SemanticMappingService:
                         error=auto_prime_result.error,
                     )
             except Exception as exc:  # noqa: BLE001
+                # Defensive: contract says no-raise. Mapping save already
+                # committed, so any escaping exception here would only
+                # corrupt the API response — never the data.
                 self._logger.error(
                     "semantic_mapping.value_cache_auto_prime_unexpected",
                     cube_id=cube_id,
@@ -364,26 +391,7 @@ class SemanticMappingService:
                     error=str(exc),
                 )
 
-        # 4. Atomic persist (single session + commit per call).
-        async with self._session_factory() as session:
-            repo = self._repository_factory(session)
-            mapping, was_created = await self._upsert_atomic(
-                session,
-                repo,
-                cube_id=cube_id,
-                product_id=product_id,
-                semantic_key=semantic_key,
-                label=label,
-                description=description,
-                config_model=config_model,
-                is_active=is_active,
-                updated_by=updated_by,
-                if_match_version=if_match_version,
-            )
-            await session.commit()
-            await session.refresh(mapping)
-            session.expunge(mapping)
-            return mapping, was_created
+        return mapping, was_created
 
     # ------------------------------------------------------------------
     # Read / list / soft-delete (admin endpoints)

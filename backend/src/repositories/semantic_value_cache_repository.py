@@ -13,7 +13,9 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import and_, delete, select, update
+import sqlalchemy as sa
+from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.semantic_value_cache import SemanticValueCache
@@ -31,6 +33,13 @@ class SemanticValueCacheRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    def _dialect(self) -> str:
+        """Best-effort dialect lookup for dialect-aware upsert path."""
+        bind = getattr(self._session, "bind", None)
+        if bind is None:
+            return ""
+        return bind.dialect.name
 
     # ------------------------------------------------------------------
     # Writes
@@ -68,7 +77,38 @@ class SemanticValueCacheRepository:
         Lookup is by the ``(cube_id, semantic_key, coord, ref_period)``
         unique key, mirroring the DB constraint
         ``uq_semantic_value_cache_lookup``.
+
+        Phase 3.1aaa FIX-R1 (P1 #4 + #5): on PostgreSQL the upsert is
+        atomic via ``INSERT ... ON CONFLICT DO UPDATE``. The ``WHERE
+        source_hash != excluded.source_hash`` guard turns hash-equal
+        re-writes into no-ops without paying the UPDATE cost, and the
+        UPDATE clause explicitly bumps ``updated_at`` (cannot rely on
+        ORM ``onupdate`` for raw-SQL paths). On SQLite (test fixtures
+        only) we fall back to SELECT-then-write: SQLite supports
+        ``ON CONFLICT`` but lacks ``xmax``, and its FK semantics
+        differ from PG anyway, so the simpler fallback is safer.
         """
+        if self._dialect() == "postgresql":
+            return await self._upsert_period_pg(
+                cube_id=cube_id,
+                product_id=product_id,
+                semantic_key=semantic_key,
+                coord=coord,
+                ref_period=ref_period,
+                value=value,
+                missing=missing,
+                decimals=decimals,
+                scalar_factor_code=scalar_factor_code,
+                symbol_code=symbol_code,
+                security_level_code=security_level_code,
+                status_code=status_code,
+                frequency_code=frequency_code,
+                vector_id=vector_id,
+                response_status_code=response_status_code,
+                source_hash=source_hash,
+                fetched_at=fetched_at,
+                release_time=release_time,
+            )
         existing = await self._get_by_lookup_key(
             cube_id=cube_id,
             semantic_key=semantic_key,
@@ -127,6 +167,116 @@ class SemanticValueCacheRepository:
         await self._session.flush()
         return existing, "updated"
 
+    async def _upsert_period_pg(
+        self,
+        *,
+        cube_id: str,
+        product_id: int,
+        semantic_key: str,
+        coord: str,
+        ref_period: str,
+        value: Decimal | None,
+        missing: bool,
+        decimals: int,
+        scalar_factor_code: int,
+        symbol_code: int,
+        security_level_code: int,
+        status_code: int,
+        frequency_code: int | None,
+        vector_id: int | None,
+        response_status_code: int | None,
+        source_hash: str,
+        fetched_at: datetime,
+        release_time: datetime | None,
+    ) -> tuple[SemanticValueCache, UpsertOutcome]:
+        """PG ``INSERT ... ON CONFLICT DO UPDATE`` path.
+
+        Outcome is derived from ``xmax``: PostgreSQL exposes the row
+        version on RETURNING — ``xmax = 0`` for fresh INSERTs,
+        non-zero for UPDATEs. The conditional ``WHERE`` clause keeps
+        identical-hash writes as no-ops; the second SELECT pulls the
+        existing row in that case to maintain the existing API
+        contract.
+        """
+        stmt = pg_insert(SemanticValueCache).values(
+            cube_id=cube_id,
+            product_id=product_id,
+            semantic_key=semantic_key,
+            coord=coord,
+            ref_period=ref_period,
+            value=value,
+            missing=missing,
+            decimals=decimals,
+            scalar_factor_code=scalar_factor_code,
+            symbol_code=symbol_code,
+            security_level_code=security_level_code,
+            status_code=status_code,
+            frequency_code=frequency_code,
+            vector_id=vector_id,
+            response_status_code=response_status_code,
+            source_hash=source_hash,
+            fetched_at=fetched_at,
+            release_time=release_time,
+            is_stale=False,
+        )
+        excluded = stmt.excluded
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_semantic_value_cache_lookup",
+            set_={
+                "product_id": excluded.product_id,
+                "value": excluded.value,
+                "missing": excluded.missing,
+                "decimals": excluded.decimals,
+                "scalar_factor_code": excluded.scalar_factor_code,
+                "symbol_code": excluded.symbol_code,
+                "security_level_code": excluded.security_level_code,
+                "status_code": excluded.status_code,
+                "frequency_code": excluded.frequency_code,
+                "vector_id": excluded.vector_id,
+                "response_status_code": excluded.response_status_code,
+                "source_hash": excluded.source_hash,
+                "fetched_at": excluded.fetched_at,
+                "release_time": excluded.release_time,
+                "is_stale": False,
+                # P1 #5: explicit updated_at; ORM onupdate doesn't fire
+                # on raw INSERT...ON CONFLICT DO UPDATE.
+                "updated_at": func.now(),
+            },
+            # Avoid spurious UPDATEs when the source_hash is unchanged —
+            # the ON CONFLICT path otherwise rewrites every column on
+            # every refresh, defeating the unchanged outcome.
+            where=(SemanticValueCache.source_hash != excluded.source_hash),
+        ).returning(
+            SemanticValueCache,
+            sa.literal_column("(xmax = 0)").label("was_inserted"),
+        )
+        result = await self._session.execute(stmt)
+        row = result.first()
+        await self._session.flush()
+        if row is None:
+            # WHERE filtered the UPDATE → no row returned. Fetch the
+            # existing row for the unchanged outcome. Refresh
+            # fetched_at + clear is_stale so the row reads as live-
+            # verified (matches SQLite behaviour above).
+            existing = await self._get_by_lookup_key(
+                cube_id=cube_id,
+                semantic_key=semantic_key,
+                coord=coord,
+                ref_period=ref_period,
+            )
+            if existing is not None:
+                existing.fetched_at = fetched_at
+                existing.is_stale = False
+                await self._session.flush()
+                return existing, "unchanged"
+            # Should be unreachable — conflict implies the row exists.
+            raise RuntimeError(
+                "ON CONFLICT path produced no row and no existing match"
+            )
+        entity = row[0]
+        was_inserted = bool(row[1])
+        return entity, "inserted" if was_inserted else "updated"
+
     async def upsert_periods_batch(
         self, items: list[ValueCacheUpsertItem]
     ) -> dict[str, int]:
@@ -152,8 +302,8 @@ class SemanticValueCacheRepository:
                 security_level_code=dp.security_level_code,
                 status_code=dp.status_code,
                 frequency_code=dp.frequency_code,
-                vector_id=None,
-                response_status_code=None,
+                vector_id=item.vector_id,
+                response_status_code=item.response_status_code,
             )
             _, outcome = await self.upsert_period(
                 cube_id=item.cube_id,
@@ -169,8 +319,8 @@ class SemanticValueCacheRepository:
                 security_level_code=dp.security_level_code,
                 status_code=dp.status_code,
                 frequency_code=dp.frequency_code,
-                vector_id=None,
-                response_status_code=None,
+                vector_id=item.vector_id,
+                response_status_code=item.response_status_code,
                 source_hash=source_hash,
                 fetched_at=item.fetched_at,
                 release_time=dp.release_time,

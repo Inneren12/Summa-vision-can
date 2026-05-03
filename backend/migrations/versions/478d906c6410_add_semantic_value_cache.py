@@ -59,7 +59,12 @@ BEGIN
     y := period::int;
     RETURN make_date(y, 1, 1);
   ELSE
-    RAISE EXCEPTION 'Unsupported ref_period format: %', period;
+    -- Phase 3.1aaa FIX-R1 (Blocker 3): tolerant fallback. Unknown
+    -- ref_period formats produce ``period_start = NULL`` rather than
+    -- aborting the row insert. Cache layer must remain tolerant of
+    -- StatCan format drift (Q-impl-3); resolve/sort fallbacks for
+    -- NULL period_start are a downstream concern.
+    RETURN NULL;
   END IF;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
