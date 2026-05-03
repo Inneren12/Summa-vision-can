@@ -14,6 +14,9 @@ from src.api.routers.admin_data import router as admin_data_router
 from src.api.routers.admin_kpi import router as admin_kpi_router
 from src.api.routers.admin_graphics import router as admin_graphics_router
 from src.api.routers.admin_publications import router as admin_publications_router
+from src.api.routers.admin_resolve import (
+    router as admin_resolve_router,
+)
 from src.api.routers.admin_semantic_mappings import (
     router as admin_semantic_mappings_router,
 )
@@ -170,6 +173,7 @@ app.include_router(admin_leads_router)
 app.include_router(admin_graphics_router)
 app.include_router(admin_publications_router)
 app.include_router(admin_semantic_mappings_router)
+app.include_router(admin_resolve_router)
 app.include_router(admin_cube_metadata_router)
 app.include_router(admin_cubes_router)
 app.include_router(admin_data_router)
