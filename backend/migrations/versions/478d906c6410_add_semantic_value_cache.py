@@ -15,7 +15,7 @@ column there (parity is intentional: the GENERATED clause is enforced
 in the live database only).
 
 Revision ID: 478d906c6410
-Revises: 378407da6dfa
+Revises: a1b2c3d4e5f6
 Create Date: 2026-05-03
 """
 from alembic import op
@@ -23,7 +23,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "478d906c6410"
-down_revision = "378407da6dfa"
+down_revision = "a1b2c3d4e5f6"
 branch_labels = None
 depends_on = None
 
