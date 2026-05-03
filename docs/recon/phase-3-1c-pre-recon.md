@@ -139,6 +139,230 @@
 - **H4 `docs/architecture/ROADMAP_DEPENDENCIES.md` — STALE.** Content is older roadmap track list not showing explicit 3.1aaa completed date or 3.1c/3.1d dependency states. (`docs/architecture/ROADMAP_DEPENDENCIES.md:42-59`)
 - **H5 `docs/architecture/DEPLOYMENT_OPERATIONS.md` — STALE (for 3.1aaa specifics).** Generic scheduler section lacks specific 15:00/16:00 UTC metadata/value cache jobs and related env knobs; likely drift. (`docs/architecture/DEPLOYMENT_OPERATIONS.md:125-153`)
 
+## §D4. Active-mapping requirement — REQUIRED FOR 3.1c IMPLEMENTATION
+
+Per §D1, `SemanticMappingRepository.get_by_key(cube_id, semantic_key)`
+returns mappings regardless of `is_active`. `get_active_for_cube(cube_id)`
+filters but is a cube-wide list path, not a composite-key lookup.
+
+**Rule (binding for 3.1c impl):** Resolve endpoint MUST NOT use inactive
+mappings. Inactive lookup → 404 with error_code `SEMANTIC_MAPPING_NOT_FOUND`
+(or whichever code recon-proper assigns). Treat inactive identically to
+"row does not exist" from the consumer's standpoint.
+
+**Two acceptable implementation paths (recon-proper picks one):**
+
+1. **Repository extension:** add `get_active_by_key(cube_id, semantic_key)`
+   to `SemanticMappingRepository`, mirroring the WHERE clause from
+   `get_active_for_cube` plus the composite key predicate. Production
+   callers of `get_by_key` (admin CRUD) keep using `get_by_key` —
+   no breaking change.
+
+2. **Service-level guard:** keep `get_by_key`, branch in resolve service:
+   `if mapping is None or not mapping.is_active: raise NotFound`. Cheaper
+   diff, but the guard is invisible at repo signature; future callers
+   could miss it.
+
+**Rationale for binding rule:** an inactive mapping that still resolves
+data leaks deprecated/wrong semantic shape to consumers. Phase 3.2
+(Zustand frontend) treats resolve responses as authoritative — silent
+inactive-mapping resolution would mean stale bindings ship to operators.
+
+This is a CORRECTNESS rule, not a founder question. Do not relitigate.
+
+## §E5. Resolve cache-miss state machine — REQUIRED FOR 3.1c IMPLEMENTATION
+
+Per §E3, `auto_prime` does NOT raise on `DataSourceError`, parse errors,
+persist errors, or invalid coord errors. It returns
+`AutoPrimeResult(error=...)`. The existing mapping-upsert callsite only
+logs a warning on `auto_prime_result.error` (per §E3) and does not fail
+the parent request. Resolve endpoint MUST NOT inherit that pattern: a
+failed prime on a cache miss is consumer-visible, not a background
+warning.
+
+**Algorithm (binding for 3.1c impl):**
+
+1. Look up active mapping (per §D4 rule). If absent or inactive → 404
+   `SEMANTIC_MAPPING_NOT_FOUND`.
+2. Derive `coord` from query params + mapping config (recon-proper
+   defines exact derivation).
+3. First cache read: `value_cache_service.get_cached(...)`.
+4. If row(s) returned: return ResolvedValue with `cache_status="hit"`.
+   STOP.
+5. If no rows: `await auto_prime(...)`. Capture `AutoPrimeResult` —
+   never discard.
+6. Re-query `get_cached(...)` regardless of whether prime returned
+   error or success (per §E3 the result may be partial; per §E4 the
+   ON CONFLICT upsert may have written the row even if the result
+   object surfaces a downstream warning).
+7. If second query has rows: return ResolvedValue with
+   `cache_status="primed"`. Include sanitized `prime_warning` field if
+   `AutoPrimeResult.error` was present (recon-proper decides exact
+   field name and sanitization rules — at minimum strip stack traces).
+8. If second query still has no rows: return explicit error response
+   with error_code `RESOLVE_CACHE_MISS` (or whichever code recon-proper
+   assigns). Response body MUST surface:
+   - whether auto_prime was attempted (always YES in this branch)
+   - sanitized prime error code/category if present
+   - `cube_id` + `semantic_key` echoed back
+
+**Forbidden patterns:**
+
+- Returning HTTP 200 with `value: null` on miss-after-prime-failure.
+- Returning HTTP 200 with empty list (singular endpoint per lock).
+- Logging the prime error and returning a generic 404 that doesn't
+  distinguish "mapping not found" from "data not yet available."
+- Discarding `AutoPrimeResult.error` after re-query without surfacing
+  it in the error response.
+
+**Why this is binding:** §E3 + §E4 together mean a naïve
+`if not cached: await auto_prime(); return cached or 404` will silently
+return 404 on every transient StatCan failure, indistinguishable from
+"this mapping has never had data." Phase 3.2 frontend cannot show the
+right binding-status dot (yellow vs red vs gray) without that
+distinction. This is a CORRECTNESS rule.
+
+**Concurrency note (informational, not a rule):** per §E4, ON CONFLICT
+upsert prevents duplicate rows but NOT duplicate upstream fetch work.
+Two simultaneous resolve requests for the same cold key may both call
+`auto_prime` against StatCan. This is acceptable for 3.1c v1; tracked
+as P3-related debt if it becomes a load issue.
+
+## §F2. DTO mapping decisions for 3.1c — RECON-READY DEFAULTS
+
+The §F matrix lists field availability. This subsection translates
+availability into the field set 3.1c IS EXPECTED to ship, modulo
+recon-proper revision.
+
+**Field mappings (binding unless recon-proper overrides with rationale):**
+
+| DTO field | Source | Rule |
+|---|---|---|
+| `value` | `semantic_value_cache.value` (numeric → canonical str) | required |
+| `cube_id` | row.cube_id | required, echo |
+| `semantic_key` | row.semantic_key | required, echo |
+| `coord` | row.coord (varchar, not JSON) | required, echo as-is |
+| `period` | row.ref_period (or period_start, recon picks) | required |
+| `resolved_at` | row.fetched_at | required, ALIAS — no new column |
+| `source_hash` | row.source_hash | required, opaque token (see note below) |
+| `is_stale` | row.is_stale | required, RAW PASSTHROUGH from persisted column |
+| `units` | mapping.config.get("unit") if string, else null | optional, mapping-config-only path |
+| `cache_status` | endpoint state machine: "hit" \| "primed" | required, NO "stale" value in 3.1c |
+| `mapping_version` | recon-proper decides if 3.1c surfaces it | optional |
+
+**Critical clarifications:**
+
+1. **`resolved_at` is NOT a new column.** It is a DTO field name that
+   maps to the existing `fetched_at` column. Locked freshness-fields
+   decision does not require schema migration. Per §B3, `fetched_at`
+   semantics = "cache write/verification time," which is the correct
+   frontend-facing meaning of "resolved at."
+
+2. **`cache_status` is endpoint-derived, NOT row-derived.** It reflects
+   the path taken through §E5 state machine: "hit" if step 4 returned,
+   "primed" if step 7 returned. There is no "stale" value because
+   3.1c does NOT compute staleness. 3.1d adds compare logic that may
+   either add a new "stale" cache_status value, or remain a separate
+   flag — recon-3.1d's call.
+
+3. **`is_stale` ships as RAW PASSTHROUGH.** Per §B1, `is_stale` is a
+   `bool not null` persisted column on `semantic_value_cache`. 3.1c
+   surfaces it byte-for-byte without runtime computation. This gives
+   3.1d a starting field to read; 3.1d may then add a separate
+   computed staleness comparison (e.g. age-based) without breaking
+   3.1c's contract.
+
+4. **`source_hash` opaque token contract.** Per §B2, the hash inputs
+   include `vector_id` and `response_status_code`. Frontend should
+   treat the value as an opaque equality token: same hash = same
+   underlying StatCan state. Do NOT decompose into structured fields
+   for the consumer. Phase 3.1d hash compare will be a simple string
+   equality check.
+
+5. **`units` source is `mapping.config.unit` ONLY.** No metadata-cache
+   derivation in 3.1c (DEBT-060 keeps tracking a richer source). If
+   `mapping.config` is missing the key OR the value isn't a string,
+   the DTO field is `null`. No fallback derivation.
+
+**Schema migrations required for 3.1c: NONE.**
+
+## §G2. Founder decision recommendations (strong defaults)
+
+§G enumerates three blockers (GQ-01 units, GQ-02 envelope, GQ-03 auth
+tier). This subsection adds STRONG RECOMMENDATIONS to each so founder
+can ratify with one-line confirmation, override with one-line direction,
+or escalate to deeper discussion.
+
+**GQ-01 units — RECOMMENDATION: option (b) mapping.config.unit only.**
+Per §F2, this requires no new infrastructure and no cross-table joins.
+DEBT-060 continues tracking richer derivation. Override only if the
+mapping-config path is unacceptable; in that case 3.1c ships without
+units and DEBT-060 expands.
+
+**GQ-02 envelope — RECOMMENDATION: option (a) flat handler-detail
+style, matching admin_semantic_mappings precedent (§A2).**
+Rationale: minimum-surprise for impl agents who just shipped 3.1b
+using the same style. DEBT-048 migration to nested envelope is a
+separate, opt-in scope decision; doing it inside 3.1c bundles two
+unrelated changes. Override if founder explicitly wants 3.1c to lead
+DEBT-048 migration — in that case 3.1c becomes the reference impl
+for nested-detail handler errors, and §A2 mixed reality gets one less
+exception.
+
+**GQ-03 auth tier — RECOMMENDATION: option (a) `/api/v1/admin/...`
+with existing X-API-KEY middleware.**
+Rationale: per §A1 the middleware auto-protects `/api/v1/admin/*`,
+no router-level wiring needed. Phase 3.2 (Zustand frontend) will be
+admin-tier consumer. Override only if founder anticipates non-admin
+consumers in near-term — in that case auth strategy needs explicit
+design, blocking recon further.
+
+These are RECOMMENDATIONS, not locks. §G remains the authoritative
+list of founder-blocker questions; this section just makes the
+default path obvious so a one-line "ratify all three" unblocks recon.
+
+## §I. Drift cleanup scope for the 3.1c implementation PR
+
+Per `_DRIFT_DETECTION_TEMPLATE.md`, any PR adding/modifying endpoints
+MUST update related architecture MDs in the same commit. §H found 5
+STALE MDs. This subsection scopes drift cleanup to ONLY what 3.1c
+itself touches; historical drift from earlier phases is explicitly
+NOT in scope.
+
+**REQUIRED in 3.1c impl PR (same commit as endpoint code):**
+
+1. **`docs/api.md`:** add new "Resolve Router" subsection mirroring
+   "Admin Cubes Router" / "Admin Publications Router" structure.
+   Document the new endpoint, query params, response shape, error
+   codes. Do NOT also fix historical drift in this file from §H1.
+
+2. **`docs/architecture/BACKEND_API_INVENTORY.md`:** add new row to §1
+   Endpoints table for the resolve endpoint. Bump "Last updated" date.
+   Do NOT also fix historical drift from §H3 (3.1aaa scheduler row,
+   3.1b admin rows) — those are separate debt.
+
+3. **`docs/architecture/ROADMAP_DEPENDENCIES.md`:** §2 status table —
+   move 3.1c from "blocked" to "in progress" → "completed" on PR
+   merge. Add 3.1d row showing 3.1c as dependency. Do NOT also fix
+   historical drift from §H4 (3.1aaa completion date) — separate debt.
+
+**EXPLICITLY OUT OF SCOPE for 3.1c impl PR:**
+
+- Backfilling 3.1aaa scheduler documentation in `statcan.md` (§H2).
+- Backfilling 3.1aaa env/scheduler section in `DEPLOYMENT_OPERATIONS.md`
+  (§H5).
+- Fixing prior phases' missing inventory rows.
+- DEBT-048 envelope migration (per GQ-02 recommendation).
+
+**Rationale:** drift template requires same-PR updates for what THIS PR
+touches. It does not require fixing every historical gap. Scoping
+prevents 3.1c from accumulating unrelated review surface.
+
+**Tracking:** historical drift items from §H1, §H2, §H4, §H5 should
+be filed as a single follow-up DEBT entry "Architecture MD drift
+backfill — Phase 3.1 series" after 3.1c merges. Recon-proper for
+3.1c may either file this DEBT or defer to founder.
+
 ## Appendix: grep transcript
 
 ```bash
