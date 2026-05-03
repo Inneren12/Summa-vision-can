@@ -67,6 +67,13 @@ Contract:
 - first publish on clone performs first snapshot capture;
 - comparator returns `stale_status="unknown"`, reason `snapshot_missing`, severity `info` until republish capture occurs.
 
+**Verbatim verification (added per Part 3 P2 ask):** `clone_publication` confirmed via Appendix B grep G. Method body shows that clone delegates to `repo.create_clone(...)` (line 62 in clone.py) which:
+- does NOT pass `published_at` argument → SQLAlchemy default (None) applies
+- does NOT touch any related table (no snapshot, no audit — audit emission lives at endpoint layer)
+- explicitly passes `fresh_review_json` with `workflow="draft"`, empty history, empty comments
+
+Therefore §2.2 contract holds: cloned publication has `published_at=None`, no snapshot rows, fresh draft review. First publish on clone executes the standard publish-handler flow including snapshot capture per Part 1.
+
 ### 2.3 Backwards compatibility for pre-3.1d publications
 
 Publications published before snapshot rollout have no snapshot rows. Comparator contract is `unknown + [snapshot_missing] + info`.
@@ -393,12 +400,74 @@ Optional/follow-up after frontend integration:
 
 ## 8) DEBT entries to file
 
-`docs/architecture/DEBT.md` was not found in this repo tree during pre-flight; recon still drafts entries for impl-time insertion into the canonical debt register path used in this repository.
+**Canonical DEBT register path: `DEBT.md` at repo root** (NOT `docs/architecture/DEBT.md`). Pre-flight grep A confirmed: `docs/architecture/DEBT.md` does not exist; `DEBT.md` exists at repo root with the canonical 9-field schema (Source/Added/Severity/Category/Status/Description/Impact/Resolution/Target) per memory rule #21.
 
-- DEBT-NN1: 3.1d-deferred automatic hydrate fanout (low)
-- DEBT-NN2: 3.1d-deferred scheduled background compare (low)
-- DEBT-NN3: 3.1d-deferred public stale display (low)
-- DEBT-NN4: 3.1d-followup coord-vs-dim/member storage (low, required because option (c) locked)
+Next free DEBT-NN per pre-flight grep E: **DEBT-045** (impl-time agent fills in from grep output).
+
+**7 entries to file in `DEBT.md`:**
+
+**DEBT-NN1: 3.1d-deferred automatic hydrate fanout**
+- Source: Phase 3.1d recon §F Q4
+- Added: <YYYY-MM-DD>
+- Severity: low | Category: architecture | Status: active
+- Description: 3.1d v1 ships explicit-action compare only; no automatic compare on document hydrate.
+- Impact: stale data may go undetected if operator doesn't compare before re-publishing.
+- Resolution: add hydrate-time compare in admin editor.
+- Target: Phase 3.2 frontend hardening or operator-feedback driven.
+
+**DEBT-NN2: 3.1d-deferred scheduled background compare**
+- Source: Phase 3.1d recon §F Q4
+- Added: <YYYY-MM-DD>
+- Severity: low | Category: architecture | Status: active
+- Description: No periodic backend job comparing all published publications.
+- Impact: large catalog can drift without operator notice.
+- Resolution: APScheduler job mirroring 3.1aaa pattern, populating cached `staleness_status` on Publication.
+- Target: Phase 3.2 or after >50 publications shipped.
+
+**DEBT-NN3: 3.1d-deferred public stale display**
+- Source: Phase 3.1d recon §F Q7
+- Added: <YYYY-MM-DD>
+- Severity: low | Category: architecture | Status: active
+- Description: Public viewer doesn't show stale state. v1 lock per Q7.
+- Impact: public viewers may render outdated values without indication.
+- Resolution: extend `PublicationPublicResponse` with backend-computed flag (depends on DEBT-NN2).
+- Target: Phase 3.2 frontend hardening, after DEBT-NN2 lands.
+
+**DEBT-NN4: 3.1d-followup coord-vs-dim/member storage**
+- Source: Phase 3.1d recon §4 option (c)
+- Added: <YYYY-MM-DD>
+- Severity: low | Category: architecture | Status: active
+- Description: §4 option (c) stores raw dims/members alongside coord, doubling identity context storage.
+- Impact: ~2 extra columns per snapshot row; minor storage overhead.
+- Resolution: when ResolveService gains a coord-direct entrypoint, drop redundant columns.
+- Target: opportunistic, low priority.
+
+**DEBT-NN5: 3.1d-followup expected-bindings persistence**
+- Source: Phase 3.1d recon BLOCKER-2 Option C (Part 1b)
+- Added: <YYYY-MM-DD>
+- Severity: medium | Category: architecture | Status: active
+- Description: BLOCKER-2 Option C drop. Backend cannot distinguish "publication has 0 bindings" from "publication has bindings but capture failed/omitted." All collapse to synthetic `block_results` entry with `snapshot_missing + info`.
+- Impact: operator sees ambiguous badge for genuinely-empty publications. Edge case.
+- Resolution: persist expected-bindings list either in new `publication_bound_block_reference` table OR JSONB column on `publications`. Compare endpoint reads both expected list and actual snapshot table; difference yields true `snapshot_missing`.
+- Target: when operator reports confusion OR when frontend ships zero-bindings publication type.
+
+**DEBT-NN6: 3.1d-followup orphan snapshot cleanup**
+- Source: Phase 3.1d recon §3.3 P1-c (Part 2)
+- Added: <YYYY-MM-DD>
+- Severity: low | Category: code-quality | Status: active
+- Description: Block removed from publication's bindings leaves orphaned `publication_block_snapshot` row. v1 doesn't clean these up.
+- Impact: minor storage growth, no behavioral effect (compare iterates only what's there).
+- Resolution: cleanup pass on republish — compare current bound_blocks against existing snapshot rows, delete rows for removed blocks.
+- Target: opportunistic, low priority.
+
+**DEBT-NN7: 3.1d-followup dedicated refresh-snapshot action**
+- Source: Phase 3.1d recon §2.3 P1-e (Part 2)
+- Added: <YYYY-MM-DD>
+- Severity: low | Category: architecture | Status: active
+- Description: v1 conflates "refresh snapshot" with "republish" — operator can only refresh by triggering full republish action.
+- Impact: operator must re-confirm publish workflow even if only data refresh is wanted; minor UX friction.
+- Resolution: new `POST /{publication_id}/recapture-snapshots` endpoint that runs capture flow without state transition.
+- Target: Phase 3.2 or operator-feedback-driven.
 
 ## 9) Risk inventory
 
@@ -694,4 +763,102 @@ nl -ba backend/src/api/routers/admin_publications.py | sed -n '470,620p'
    618	    try:
    619	        clone = await clone_publication(session=session, source_id=publication_id)
    620	    except (PublicationNotFoundError, PublicationCloneNotAllowedError) as exc:
+```
+
+```bash
+# Part 3 additions — DEBT path + create_clone evidence
+
+ls -la DEBT.md docs/architecture/DEBT.md 2>&1
+ls: cannot access 'docs/architecture/DEBT.md': No such file or directory
+-rw-r--r-- 1 root root 57932 May  3 17:31 DEBT.md
+
+grep -nE "^### DEBT-[0-9]+|^## DEBT-[0-9]+|^- \*\*DEBT-[0-9]+|^DEBT-[0-9]+:" DEBT.md | tail -10
+571:### DEBT-060: ResolvedValue.units lacks a canonical mapping source
+626:### DEBT-026: Lossy round-trip between CanonicalDocument and AdminPublicationResponse
+640:### DEBT-021: Temp upload Parquet files not cleaned up
+693:### DEBT-035: Parallel config_hash computation in pipeline + lineage helper
+705:### DEBT-036: Verify crop zone dimensions against current platform layouts
+717:### DEBT-040: Phase 2.5b — three deferred Exception Inbox row types
+729:### DEBT-041: PATCH publications has no idempotency-key short-circuit
+741:### DEBT-042: PATCH publications tolerates missing If-Match for v1 deploy compat
+753:### DEBT-043: PATCH publications has narrow TOCTOU window between ETag check and UPDATE
+766:### DEBT-044: Phase 1.6 — multi-block selection + bulk context-menu actions
+
+grep -nE "Source:|Added:|Severity:|Category:|Status:|Description:|Impact:|Resolution:|Target:" DEBT.md | head -20
+38:- **Source:** Phase 3 Slice 3.7 recon (`docs/phase-3-slice-7-recon.md` §4 Decision 4)
+39:- **Added:** 2026-04-24
+40:- **Severity:** low
+41:- **Category:** code-quality
+42:- **Status:** accepted
+43:- **Description:** Two parallel generation notifier stacks exist:
+47:- **Impact:** Minor code duplication in 3.8 impl (2 switch statements, 5-7 lines each). No runtime issue, no user-facing bug.
+48:- **Resolution:** Refactor to a single shared `GenerationPhase` enum used by both notifier stacks. Update all consumers. Delete the duplicate.
+49:- **Target:** Opportunistic — during a future graphics refactor or when the chart config flow is re-architected for backend Phase 2 integration.
+59:- **Source:** Phase 3 Slice 3.11 Consolidation recon
+60:- **Added:** 2026-04-24
+61:- **Severity:** low
+62:- **Category:** code-quality
+63:- **Status:** resolved
+64:- **Description:** Four existing locale-switch smoke tests (queue, editor,
+73:- **Impact:** Minor maintenance overhead; tests remain green; no runtime
+76:- **Resolution:** Refactor all locale-switch smokes to share a common
+80:- **Target:** Opportunistic during future test infrastructure work or
+88:- **Source:** Phase 3 Slice 3.3+3.4 recon (`docs/phase-3-slice-3-recon.md` §6)
+89:- **Added:** 2026-04-23
+
+grep -n "def create_clone" backend/src/repositories/publication_repository.py
+193:    async def create_clone(
+
+sed -n '193,245p' backend/src/repositories/publication_repository.py
+    async def create_clone(
+        self,
+        *,
+        source: Publication,
+        new_headline: str,
+        new_config_hash: str,
+        new_version: int,
+        fresh_review_json: str,
+        lineage_key: str,
+    ) -> Publication:
+        """Create a draft clone of a published publication.
+
+        Args:
+            source: The published publication to clone from.
+            new_headline: Headline for the new clone.
+            new_config_hash: Config hash for the new clone version.
+            new_version: Version number for the new clone.
+            fresh_review_json: JSON-serialised fresh review subtree.
+            lineage_key: UUID v7 lineage identifier; caller computes via
+                ``derive_clone_lineage_key(source)`` to inherit the
+                source's lineage_key (clones share with source).
+        """
+        existing_slugs = await self._get_existing_slugs()
+        clone_slug = derive_clone_slug(new_headline, existing_slugs=existing_slugs)
+        clone = Publication(
+            headline=new_headline,
+            chart_type=source.chart_type,
+            slug=clone_slug,
+            eyebrow=source.eyebrow,
+            description=source.description,
+            source_text=source.source_text,
+            footnote=source.footnote,
+            visual_config=source.visual_config,
+            # document_state intentionally NOT copied — see Phase 1.1 Fix Round 1.
+            # Frontend hydrates from document_state first (DEBT-026), and the
+            # source's embedded review.workflow="published" would cause autosave
+            # to re-publish the clone. Setting None forces frontend hydration
+            # fallback to backend columns (status=DRAFT, fresh review).
+            document_state=None,
+            review=fresh_review_json,
+            source_product_id=source.source_product_id,
+            config_hash=new_config_hash,
+            version=new_version,
+            status=PublicationStatus.DRAFT,
+            cloned_from_publication_id=source.id,
+            lineage_key=lineage_key,
+        )
+        self._session.add(clone)
+        await self._session.flush()
+        await self._session.refresh(clone)
+        return clone
 ```
