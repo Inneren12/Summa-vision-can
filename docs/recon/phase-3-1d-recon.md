@@ -78,7 +78,31 @@ Invocation: called from existing publish handler after successful publish mutati
 
 Failure policy: best-effort capture; publish success is not rolled back on snapshot capture errors.
 
-Bound block extraction verdict (HALT-cleared): existing publish handler currently accepts no body. Therefore recon locks optional body extension on publish endpoint: `bound_blocks: list[BoundBlockReference] | None = Body(default=None)`.
+Bound block extraction verdict (HALT-cleared): existing publish handler currently accepts no body. Recon locks optional **wrapper-object** body extension on the publish endpoint:
+
+```python
+class PublicationPublishRequest(BaseModel):
+    bound_blocks: list[BoundBlockReference] = Field(default_factory=list)
+    # Reserved for future extension (capture_mode, idempotency_key, etc.)
+    # All future fields must default to backward-compatible values.
+
+@router.post("/{publication_id}/publish", ...)
+async def publish_publication(
+    publication_id: int,
+    payload: PublicationPublishRequest | None = Body(default=None),
+    repo: PublicationRepository = Depends(_get_repo),
+    audit: AuditWriter = Depends(_get_audit),
+    staleness: PublicationStalenessService = Depends(_get_staleness_service),
+) -> PublicationResponse:
+    ...
+    bound_blocks = payload.bound_blocks if payload else []
+```
+
+**Backward compatibility contract (locked):**
+- No body, null body, and `{}` body all parse as `payload=None` OR a request with empty `bound_blocks` list. All three paths produce zero snapshot rows; first compare returns `unknown + [snapshot_missing] + info`.
+- A request with `{"bound_blocks": [...]}` parses correctly because the wrapper is a BaseModel (FastAPI auto-embeds object body fields without needing `embed=True`).
+- Bare array body (`[...]`) is NOT accepted — there is no top-level array unwrapping.
+- Future extension fields land on `PublicationPublishRequest`; existing `bound_blocks`-only clients keep working as long as new fields default.
 
 ### 3.3 Repository contract
 
@@ -104,10 +128,105 @@ Statuses: `fresh`, `stale`, `unknown`
 
 Severities: `info`, `warning`, `blocking`
 
-Aggregation:
-- overall status: stale > unknown > fresh
-- overall severity: blocking > warning > info
-- zero bound blocks: fresh/info.
+**Locked Pydantic schema:**
+
+```python
+class StaleStatus(str, Enum):
+    FRESH = "fresh"
+    STALE = "stale"
+    UNKNOWN = "unknown"
+
+class StaleReason(str, Enum):
+    MAPPING_VERSION_CHANGED = "mapping_version_changed"
+    SOURCE_HASH_CHANGED = "source_hash_changed"
+    VALUE_CHANGED = "value_changed"
+    MISSING_STATE_CHANGED = "missing_state_changed"
+    CACHE_ROW_STALE = "cache_row_stale"
+    COMPARE_FAILED = "compare_failed"
+    SNAPSHOT_MISSING = "snapshot_missing"
+
+class Severity(str, Enum):
+    INFO = "info"
+    WARNING = "warning"
+    BLOCKING = "blocking"
+
+class SnapshotFingerprint(BaseModel):
+    mapping_version: int | None
+    source_hash: str
+    value: str | None
+    missing: bool
+    is_stale: bool
+    captured_at: datetime
+
+class ResolveFingerprint(BaseModel):
+    mapping_version: int | None
+    source_hash: str
+    value: str | None
+    missing: bool
+    is_stale: bool
+    resolved_at: datetime
+
+class BlockComparatorResult(BaseModel):
+    block_id: str
+    cube_id: str
+    semantic_key: str
+    stale_status: StaleStatus
+    stale_reasons: list[StaleReason]
+    severity: Severity
+    compared_at: datetime
+    snapshot: SnapshotFingerprint | None     # null when snapshot_missing
+    current: ResolveFingerprint | None       # null when compare_failed pre-resolve
+    compare_basis: dict                       # diagnostic detail; see below
+
+class PublicationComparatorResponse(BaseModel):
+    publication_id: int
+    overall_status: StaleStatus
+    overall_severity: Severity
+    compared_at: datetime
+    block_results: list[BlockComparatorResult]
+```
+
+**`compare_basis` dict (BLOCKER-3 diagnostic surface):**
+
+For each block result, `compare_basis` carries diagnostic detail in one of three forms:
+
+```python
+# 1. Compare ran successfully (stale_status = fresh OR stale):
+compare_basis = {
+    "compare_kind": "drift_check",
+    "matched_fields": ["mapping_version", "source_hash"],   # fields that DIDN'T trigger reasons
+    "drift_fields": ["value", "missing"],                   # fields that DID trigger reasons
+}
+
+# 2. No snapshot row exists (stale_status = unknown, reason = snapshot_missing):
+compare_basis = {
+    "compare_kind": "snapshot_missing",
+    "cause": "no_snapshot_row",
+    # No further detail — service can't distinguish pre-3.1d / clone /
+    # omitted body / failed capture without expected-bindings persistence,
+    # which is deferred per BLOCKER-2 Option C (DEBT-NN5).
+}
+
+# 3. Snapshot exists but resolve failed (stale_status = unknown, reason = compare_failed):
+compare_basis = {
+    "compare_kind": "compare_failed",
+    "resolve_error": "MAPPING_NOT_FOUND" | "RESOLVE_CACHE_MISS" |
+                     "RESOLVE_INVALID_FILTERS" | "UNEXPECTED",
+    "details": {
+        "exception_type": "<class name>",
+        "message": "<sanitized>",
+    },
+}
+```
+
+**Aggregation rules (locked, BLOCKER-2 Option C):**
+- `overall_status`: STALE if any block STALE; else UNKNOWN if any UNKNOWN; else FRESH.
+- `overall_severity`: max(block severities); ordering: blocking > warning > info.
+- **Empty `block_results` list** (no snapshot rows for the publication): `overall_status=UNKNOWN`, `overall_severity=INFO`, `block_results=[]`. This case covers: pre-3.1d publications, fresh clones, publish-without-bound_blocks, and all-blocks-capture-failed. Backend cannot distinguish them in v1.
+
+**This DROPS the prior zero-bindings-fresh rule.** Backend has no way to tell "intentionally zero bindings" from "missing captures" without persisted expected-bindings list. Frontend that needs a true zero-bindings signal must either:
+(a) interpret empty `block_results` + status=UNKNOWN as "needs republish to capture," OR
+(b) wait for future PR (DEBT-NN5) that persists expected-bindings list.
 
 ### 3.5 Severity mapping
 
