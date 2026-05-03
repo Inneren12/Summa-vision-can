@@ -1,4 +1,4 @@
-# Phase 3.1c Recon — Resolve Endpoint Implementation Plan
+# Phase 3.1c Recon — Resolve Endpoint Implementation Plan (Fix Pass)
 
 ## §1. Header + scope summary
 - Branch: `claude/phase-3-1c-recon` (created from current `work` baseline because local `main` branch is absent, matching pre-recon branch note). (pre-recon §A header)
@@ -11,158 +11,158 @@
 - R3: Route lives under `/api/v1/admin/...` and relies on existing `AuthMiddleware` X-API-KEY enforcement. (pre-recon §A1, pre-recon §G2)
 - C1: Inactive mapping must be treated as not found → 404 `SEMANTIC_MAPPING_NOT_FOUND`. (pre-recon §D4)
 - C2: Cache-miss path must execute the 8-step state machine including auto-prime and re-query before terminal miss error. (pre-recon §E5)
+- **C3 (added in fix pass):** Resolve API takes semantic filter query params, not caller-provided coord. Service derives `coord` internally via shared `derive_coord(...)` helper. (BLOCKER-1 founder resolution, fix pass 2026-05-03)
 - In-scope debt continuity: DEBT-060 (units enrichment) and DEBT-062 / P3-024 (prime-on-refresh gap) remain open and unchanged by 3.1c. (pre-recon §B4, pre-recon §E5)
+- **DEBT addition candidate:** if `mapping.config` schema cannot supply the filter shape resolve needs, file a new DEBT entry capturing the gap. Recon records findings; impl PR creates entry if needed (Appendix B grep B/C findings).
 - Explicitly out of scope: DEBT-048 envelope migration, DEBT-058/059 batch resolve tracks.
 
 ## §2. Endpoint contract
 
 ### §2.1 URL pattern
 - **Route:** `GET /api/v1/admin/resolve/{cube_id}/{semantic_key}`.
-- **Trailing slash policy:** follow existing admin convention where collection roots use empty-string route (`""`) and subpaths omit trailing slash (e.g., `/upsert`, `/{mapping_id}`), so resolve path should be declared without trailing slash. (`backend/src/api/routers/admin_semantic_mappings.py:150-152`, `backend/src/api/routers/admin_semantic_mappings.py:247-249`, `backend/src/api/routers/admin_semantic_mappings.py:281-283`)
-- **Auth tier:** `/api/v1/admin/...` ensures middleware protection; no endpoint-local auth wiring. (`backend/src/core/security/auth.py:46-53`, `backend/src/core/security/auth.py:122-166`)
+- **Trailing slash policy:** follow existing admin convention where collection roots use empty-string route and subpaths omit trailing slash. (`backend/src/api/routers/admin_semantic_mappings.py:247-249`, `backend/src/api/routers/admin_semantic_mappings.py:281-283`)
+- **Router declaration (impl pasteable):**
+```python
+router = APIRouter(prefix="/api/v1/admin/resolve", tags=["admin-resolve"])
+
+@router.get("/{cube_id}/{semantic_key}", response_model=ResolvedValueResponse)
+async def resolve_value_handler(...):
+    ...
+```
+- Full path stays `/api/v1/admin/resolve/{cube_id}/{semantic_key}` — prefix + route compose to one path, never doubled.
 
 ### §2.2 Path param validation
 - `cube_id: str = Path(..., min_length=1, max_length=50)` (DB cap from `semantic_value_cache.cube_id varchar(50)`). (pre-recon §B1)
 - `semantic_key: str = Path(..., min_length=1, max_length=100)` (DB cap from `semantic_value_cache.semantic_key varchar(100)`). (pre-recon §B1)
-- Regex/pattern: **no additional regex** in 3.1c; existing 3.1b admin semantic mapping handlers do not enforce regex on `cube_id`/`semantic_key`, only typed fields and length/range validators. (`backend/src/api/routers/admin_semantic_mappings.py:255-259`)
+- No extra regex in 3.1c (mirrors 3.1b style). (`backend/src/api/routers/admin_semantic_mappings.py:255-259`)
 
 ### §2.3 Query params
-Resolve accepts exactly two query inputs:
+Resolve accepts semantic filter inputs that the service translates into a canonical
+`coord` string before cache lookup or auto-prime. There is NO caller-provided `coord`
+parameter in 3.1c (BLOCKER-1 Option B).
 
-1) `coord: str` (required)
-- Type: string, required.
-- Validation: `min_length=1`, `max_length=50`; pattern `^\d+(\.\d+){9}$` (10 dot-separated numeric slots), matching existing coord encoding helper output. (`backend/src/services/semantic/coord.py:22-33`, `backend/src/services/semantic/coord.py:41-61`, pre-recon §B1)
-- Source-of-truth: caller-provided resolved coord string.
-- Rationale: auto_prime writes cache rows using `derive_coord(resolved_filters)` and persists that exact string as `coord`; resolve must query by exact same opaque coord format to hit cache. (`backend/src/services/statcan/value_cache.py:111-112`, `backend/src/services/statcan/value_cache.py:408-413`)
+**Filter shape (picked): Encoding 1 — repeated query pairs.**
+- `?dim={dimension_position_id}&member={member_id}` repeated per dimension.
+- Example: `GET /api/v1/admin/resolve/14-10-0287-03/unemployment-rate?dim=1&member=10&dim=2&member=2`
+- Choice rationale: Appendix B grep B shows existing mapping config references `dimension_filters` and validator pipeline outputs `resolved_filters`; no JSON-query precedent found. Encoding 1 stays FastAPI-native and aligns with integer dim/member pairing.
 
-2) `period: str | None = Query(default=None, max_length=20, alias="period")`
-- Type: optional string.
-- Validation: max length 20 (DB cap for `ref_period`), no regex hardening in 3.1c to avoid rejecting valid StatCan period formats not currently enumerated. (pre-recon §B1)
-- Source-of-truth: caller-specified StatCan `ref_period` token when present; otherwise endpoint selects latest row from returned set.
-- Default behavior when omitted: use latest cached row for `(cube_id, semantic_key, coord)` by sorting returned rows and picking newest (see §8 contract).
+**Period:**
+- `period: str | None = Query(default=None, max_length=20)`.
+- Source-of-truth: caller-specified `ref_period` when present; otherwise latest row after service-derived coord lookup.
+
+**Service-internal coord derivation:**
+1. Parse raw dim/member input into `list[ResolvedDimensionFilter]` (Appendix B grep A).
+2. Validate filter set against mapping config contract (`dimension_filters` expectations from Appendix B grep B).
+3. `coord = derive_coord(filters)` using shared helper. (`backend/src/services/semantic/coord.py:19-61`)
+4. Use identical `coord` for `get_cached(...)` and `auto_prime(resolved_filters=filters, ...)`.
+
+This removes caller/mapping coord divergence entirely.
 
 ### §2.4 Response shape — ResolvedValue DTO
-Final schema (Pydantic V2) for route response:
-
 ```python
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 
 class ResolvedValueResponse(BaseModel):
     cube_id: str = Field(description="Cube identifier.")
     semantic_key: str = Field(description="Semantic mapping key.")
-    coord: str = Field(description="StatCan 10-slot coordinate string echoed from cache row.")
+    coord: str = Field(description="Service-derived StatCan coordinate string echoed from cache row.")
     period: str = Field(description="Resolved period token (ref_period).")
     value: str = Field(description="Canonical stringified numeric value.")
     resolved_at: datetime = Field(description="Alias of cache row fetched_at timestamp.")
     source_hash: str = Field(description="Opaque cache provenance hash.")
     is_stale: bool = Field(description="Persisted stale marker from cache row.")
-    units: str | None = Field(
-        default=None,
-        description="Unit from mapping.config.unit if string, else null.",
-    )
-    cache_status: str = Field(description='"hit" or "primed" based on resolve state machine.')
-    mapping_version: int | None = Field(
-        default=None,
-        description="Optional semantic mapping version echoed for client observability.",
-    )
-    prime_warning: str | None = Field(
-        default=None,
-        description="Sanitized prime warning code/category if auto_prime reported error but row was returned.",
-    )
-
-    model_config = ConfigDict(populate_by_name=True)
+    units: str | None = Field(default=None, description="Unit from mapping.config.unit if string, else null.")
+    cache_status: Literal["hit", "primed"] = Field(description="Resolve status.")
+    mapping_version: int | None = Field(default=None, description="Optional semantic mapping version.")
 ```
 
 Mapping notes:
-- `period` maps from `row.ref_period` (not `period_start`) for stable caller echo and query parity. (pre-recon §F2)
-- `resolved_at` maps from `row.fetched_at` (L2 lock). (pre-recon §F2)
+- `period` maps from `row.ref_period` (not `period_start`). (pre-recon §F2)
+- `resolved_at` maps from `row.fetched_at` (L2). (pre-recon §F2)
 - `units` source is strictly `mapping.config.unit | None` (R1).
-- `cache_status` enum literals in 3.1c: `"hit" | "primed"` only (no `"stale"` literal; staleness remains separate `is_stale`). (pre-recon §F2)
+- `cache_status` enum literals: `"hit" | "primed"` only (Literal type-narrowed; no `"stale"`).
 
 ### §2.5 Status codes + error responses
-- **200 OK**: returns `ResolvedValueResponse` with no custom headers.
-- **404 `SEMANTIC_MAPPING_NOT_FOUND`**: mapping absent OR `is_active=False` (C1).
-  - `detail = {"error_code": "SEMANTIC_MAPPING_NOT_FOUND", "message": "...", "details": {"cube_id": ..., "semantic_key": ...}}`
-- **404 `RESOLVE_CACHE_MISS`**: cache still empty after auto-prime + re-query (C2 step 8).
-  - `detail = {"error_code":"RESOLVE_CACHE_MISS","message":"...","details":{"cube_id":...,"semantic_key":...,"coord":...,"period":...,"prime_attempted":true,"prime_error_code":<sanitized|None>}}`
-- **400 `RESOLVE_INVALID_COORD`**: service-level rejection when `coord` fails semantic validation that passes shape checks (e.g., non-canonical or all-zero forbidden rule if adopted in helper). FastAPI handles basic shape/length as 422.
-- **422 Unprocessable Entity**: FastAPI validation for path/query bounds/pattern/type.
-- **401 Unauthorized**: emitted by `AuthMiddleware`, not route handler.
-- **500 `RESOLVE_INTERNAL_ERROR`**: defensive handler catch for unexpected programmer/runtime failures outside expected state machine; returns flat envelope and logs error. `auto_prime` swallows expected data-source/parse/persist failures into result.error, but other exceptions (e.g., mapping serialization bug) can still leak and should be normalized at handler boundary. (`backend/src/services/statcan/value_cache.py:110-173`)
+- 200: `ResolvedValueResponse`.
+- 404 `SEMANTIC_MAPPING_NOT_FOUND`: mapping missing or inactive (C1).
+- 404 `RESOLVE_CACHE_MISS`: miss after prime + re-query (C2).
+  - `details = {"cube_id":...,"semantic_key":...,"coord":...,"period":...,"prime_attempted":true,"prime_error_code":<sanitized|None>}` (coord is service-derived for ops visibility).
+- 400 `RESOLVE_INVALID_FILTERS`: `Invalid filter set: <reason>. Mapping requires dimensions {expected}; got {provided}.`
+- 422: FastAPI path/query validation.
+- 401: AuthMiddleware.
+- 500 note: Appendix B grep E found no existing admin-router `*_INTERNAL_ERROR` constants; use generic 500 handler response shape (flat envelope) without adding resolve-specific internal code.
 
 ### §2.6 Headers
-- No special response headers in 3.1c v1 (no ETag, no Cache-Control override).
-- Justification: existing semantic mapping admin routes do not set custom headers except publication concurrency paths in another router; resolve follows semantic-mappings shape. (`backend/src/api/routers/admin_semantic_mappings.py:150-253`)
+- No special headers in 3.1c v1.
 
 ## §3. Error code registry additions
-Add constants in `backend/src/core/error_codes.py` (flat code registry path used by admin handlers and DEBT-030 conventions). (pre-recon §A2)
+Before adding new constants, audit `backend/src/core/error_codes.py` for existing equivalents (per Appendix B grep D); reuse if present.
 
-| error_code | HTTP | when raised | message template (EN) |
-|---|---:|---|---|
-| `SEMANTIC_MAPPING_NOT_FOUND` | 404 | Active mapping lookup misses or mapping is inactive (C1) | `Semantic mapping not found for cube_id='{cube_id}' and semantic_key='{semantic_key}'.` |
-| `RESOLVE_CACHE_MISS` | 404 | After auto-prime attempt + mandatory re-query still no rows (C2 step 8) | `No cached value available for requested lookup after prime attempt.` |
-| `RESOLVE_INVALID_COORD` | 400 | Caller-provided `coord` is syntactically/semantically invalid for resolve contract | `Invalid coord format; expected 10 dot-separated numeric positions.` |
-| `RESOLVE_INTERNAL_ERROR` | 500 | Unexpected unclassified exception in resolve handler/service | `Internal resolve error. Please retry or contact support.` |
+| error_code | HTTP | action | when raised | message template |
+|---|---:|---|---|---|
+| `MAPPING_NOT_FOUND` | 404 | **REUSE existing constant/name** | mapping missing/inactive in resolve | `Semantic mapping not found for cube_id='{cube_id}' and semantic_key='{semantic_key}'.` |
+| `RESOLVE_CACHE_MISS` | 404 | ADD | no row after prime + re-query | `No cached value available for requested lookup after prime attempt.` |
+| `RESOLVE_INVALID_FILTERS` | 400 | ADD | filter parse/validation fails | `Invalid filter set: <reason>. Mapping requires dimensions {expected}; got {provided}.` |
 
-i18n: Yes, frontend Phase 3.2 should map wire error codes to display keys per DEBT-030 code→i18n mapping pattern; impl PR should ensure new codes are added to whichever translation mapping layer currently consumes error codes.
+i18n mapping still required for Phase 3.2 (DEBT-030 pattern).
 
 ## §4. Repository / service surface changes
+### §4.1 Active mapping lookup path (C1)
+- Keep repo-extension choice.
+- File: `backend/src/repositories/semantic_mapping_repository.py`
+- Signature: `async def get_active_by_key(self, cube_id: str, semantic_key: str) -> SemanticMapping | None`
 
-### 4.1 Active mapping lookup path (C1 decision)
-- **Pick:** repository extension path (preferred over service-only guard for explicitness and reuse).
-- **File:** `backend/src/repositories/semantic_mapping_repository.py`
-- **Signature:**
-  ```python
-  async def get_active_by_key(self, cube_id: str, semantic_key: str) -> SemanticMapping | None:
-      ...
-  ```
-- **Justification:** pre-recon §D4 allows both paths; explicit repo contract reduces future caller mistakes vs hidden service guard.
+### §4.2 Resolve service
+- File: `backend/src/services/resolve/service.py`
+- Signature:
+```python
+async def resolve_value(
+    self,
+    *,
+    cube_id: str,
+    semantic_key: str,
+    raw_filters: list[tuple[int, int]],
+    period: str | None,
+) -> ResolvedValueResponse: ...
+```
+- Session ownership mirrors pre-recon §A5.
 
-### 4.2 Resolve service
-- **File:** `backend/src/services/resolve/service.py` (new module under services).
-- **Class + signatures:**
-  ```python
-  class ResolveService:
-      def __init__(
-          self,
-          *,
-          mapping_session_factory: async_sessionmaker[AsyncSession],
-          mapping_repository_factory: type[SemanticMappingRepository],
-          value_cache_service: StatCanValueCacheService,
-          logger: structlog.stdlib.BoundLogger,
-      ) -> None: ...
+### §4.3 Coord helper reuse
+- Reuse `derive_coord(resolved_filters)` as sole coord encoder. (`backend/src/services/semantic/coord.py:19-61`)
 
-      async def resolve_value(
-          self,
-          *,
-          cube_id: str,
-          semantic_key: str,
-          coord: str,
-          period: str | None,
-      ) -> ResolvedValueResponse: ...
-  ```
-- **DI/session ownership:** match §A5 pattern — `StatCanValueCacheService` keeps owning its internal short-lived sessions; resolve service opens a separate short-lived mapping session via session factory for mapping lookup only. (pre-recon §A5)
+### §4.4 Mapping config → ResolvedDimensionFilter adapter — REQUIRED FOR 3.1c IMPLEMENTATION
+**Status:** Hard prerequisite for §5.2 algorithm. Appendix B grep C found no existing config→resolved-filter helper, so this is genuinely new surface.
 
-### 4.3 Coord helper reuse/extension
-- **File:** `backend/src/services/semantic/coord.py` (reuse existing pure helper + add parser/validator helper if needed).
-- **Signature additions:**
-  ```python
-  def validate_coord(coord: str) -> str: ...
-  ```
-- **Rationale:** auto_prime already uses `derive_coord(...)` from this module; keeping resolve coord contract here centralizes encoding semantics and avoids drift. (`backend/src/services/statcan/value_cache.py:38`, `backend/src/services/statcan/value_cache.py:111`)
+**File:** `backend/src/services/resolve/filters.py`.
+
+**Signatures:**
+```python
+def parse_filters_from_query(*, raw_filters: list[tuple[int, int]]) -> list[ResolvedDimensionFilter]:
+    ...
+
+
+def validate_filters_against_mapping(
+    *,
+    filters: list[ResolvedDimensionFilter],
+    mapping: SemanticMapping,
+) -> None:
+    ...
+```
+Validation rules (from Appendix B grep B + service references): required dimensions present, no extras, dimension/member validity delegated to existing semantic validator if reusable.
 
 ## §5. Resolve flow pseudocode
-
-### §5.1 Handler pseudocode
+### §5.1 Handler block
 ```python
-@router.get("/resolve/{cube_id}/{semantic_key}", response_model=ResolvedValueResponse)
+@router.get("/{cube_id}/{semantic_key}", response_model=ResolvedValueResponse)
 async def resolve_value_handler(
     cube_id: str = Path(..., min_length=1, max_length=50),
     semantic_key: str = Path(..., min_length=1, max_length=100),
-    coord: str = Query(..., min_length=1, max_length=50, pattern=r"^\d+(\.\d+){9}$"),
+    dim: list[int] = Query(default_factory=list),
+    member: list[int] = Query(default_factory=list),
     period: str | None = Query(default=None, max_length=20),
     service: ResolveService = Depends(_get_resolve_service),
 ):
@@ -170,198 +170,276 @@ async def resolve_value_handler(
         return await service.resolve_value(
             cube_id=cube_id,
             semantic_key=semantic_key,
-            coord=coord,
+            raw_filters=list(zip(dim, member, strict=False)),
             period=period,
         )
-    except MappingNotFoundForResolveError as exc:
-        raise HTTPException(404, detail={...SEMANTIC_MAPPING_NOT_FOUND flat envelope...})
+    except MappingNotFoundForResolveError:
+        raise HTTPException(404, detail={...MAPPING_NOT_FOUND...})
+    except ResolveInvalidFiltersError as exc:
+        raise HTTPException(400, detail={...RESOLVE_INVALID_FILTERS...})
     except ResolveCacheMissError as exc:
-        raise HTTPException(404, detail={...RESOLVE_CACHE_MISS flat envelope...})
-    except ResolveInvalidCoordError as exc:
-        raise HTTPException(400, detail={...RESOLVE_INVALID_COORD flat envelope...})
-    except Exception as exc:
+        raise HTTPException(404, detail={...RESOLVE_CACHE_MISS with details...})
+    except Exception:
         logger.exception("resolve.internal_error", cube_id=cube_id, semantic_key=semantic_key)
-        raise HTTPException(500, detail={...RESOLVE_INTERNAL_ERROR flat envelope...})
+        raise HTTPException(500, detail={...generic internal envelope...})
 ```
-
 Handler invariants:
-- Must preserve flat envelope style (R2).
-- Must not implement auth checks directly; middleware handles 401 (R3).
-- Must pass `cube_id`, `semantic_key`, `coord`, `period` unchanged into service for deterministic re-query.
+- Handler forwards raw filters only; **must not call `derive_coord`**.
+- Flat envelope style preserved (R2).
 
-### §5.2 Service pseudocode (C2 expansion)
+### §5.2 Service block
 ```python
-async def resolve_value(...):
-    # 1) active mapping lookup (C1)
+async def resolve_value(self, *, cube_id, semantic_key, raw_filters, period):
     mapping = await repo.get_active_by_key(cube_id, semantic_key)
     if mapping is None:
         raise MappingNotFoundForResolveError(...)
 
-    # 2) coord derivation/validation (locked concrete shape is coord query param)
-    coord_norm = validate_coord(coord)
+    filters = parse_filters_from_query(raw_filters=raw_filters)  # per §4.4
+    validate_filters_against_mapping(filters=filters, mapping=mapping)  # per §4.4
 
-    # derive shared args once to prevent drift
-    lookup = dict(cube_id=cube_id, semantic_key=semantic_key, coord=coord_norm, ref_period=period)
+    coord = derive_coord(filters)
+    lookup = dict(cube_id=cube_id, semantic_key=semantic_key, coord=coord, ref_period=period)
 
-    # 3) first cache read
     rows = await value_cache_service.get_cached(**lookup)
-
-    # 4) immediate hit
     if rows:
-        row = select_latest(rows) if period is None else rows[-1]  # deterministic
-        return map_to_resolved(row, mapping, cache_status="hit", prime_warning=None)
+        row = pick_row(rows, period=period)
+        return map_to_resolved(row, mapping, cache_status="hit")
 
-    # 5) auto-prime attempt
     prime_result = await value_cache_service.auto_prime(
         cube_id=cube_id,
         semantic_key=semantic_key,
         product_id=mapping.product_id,
-        resolved_filters=resolve_filters_from_mapping_config(mapping.config),
-        frequency_code=None,
+        resolved_filters=filters,
+        frequency_code=resolve_frequency_code(mapping=mapping, metadata_cache=...),
     )
 
-    # 6) mandatory re-query using IDENTICAL args
     rows_after = await value_cache_service.get_cached(**lookup)
-
-    # 7) return primed if row now exists; include sanitized warning if any
     if rows_after:
-        row = select_latest(rows_after) if period is None else rows_after[-1]
-        warning = sanitize_prime_error(prime_result.error) if prime_result.error else None
-        return map_to_resolved(row, mapping, cache_status="primed", prime_warning=warning)
+        if prime_result.error:
+            logger.warning("resolve.prime_succeeded_with_error", cube_id=cube_id, semantic_key=semantic_key, coord=coord, error_code=sanitize_prime_error(prime_result.error))
+        row = pick_row(rows_after, period=period)
+        return map_to_resolved(row, mapping, cache_status="primed")
 
-    # 8) terminal miss with surfaced prime attempt metadata
     raise ResolveCacheMissError(
         cube_id=cube_id,
         semantic_key=semantic_key,
-        coord=coord_norm,
+        coord=coord,
         period=period,
         prime_attempted=True,
         prime_error_code=sanitize_prime_error(prime_result.error) if prime_result.error else None,
     )
 ```
-
 Service invariants:
-- Step 6 re-query MUST use exactly same lookup args as step 3 (C2).
-- Prime errors must never be dropped; they must surface either as `prime_warning` on success-after-prime or in cache-miss error details.
-- Mapping inactive and mapping missing must be indistinguishable to caller (single 404 code).
+- Re-query uses identical lookup args.
+- Prime errors appear only in logs or miss details, never DTO.
+- Coord is service-derived only.
 
 ## §6. Test plan
-
 ### §6.1 Unit tests
-
 | test name | scenario | expected outcome | layer |
 |---|---|---|---|
-| `test_validate_coord_accepts_10_slot_numeric` | valid coord string | same coord returned | unit |
-| `test_validate_coord_rejects_bad_slot_count` | coord has <10 or >10 slots | `ResolveInvalidCoordError`/ValueError mapped | unit |
-| `test_units_extraction_from_mapping_config_string_only` | config.unit string vs non-string | string passes; non-string→None | unit |
-| `test_prime_warning_sanitization_strips_trace_content` | prime error raw text contains stack-ish content | sanitized code/category only | unit |
+| `test_parse_filters_from_query_valid` | valid dim/member pairs | list[ResolvedDimensionFilter] | unit |
+| `test_parse_filters_from_query_malformed` | mismatched or invalid pairs | `RESOLVE_INVALID_FILTERS` | unit |
+| `test_validate_filters_against_mapping_extra_dim` | extra dimension provided | `RESOLVE_INVALID_FILTERS` | unit |
+| `test_pick_row_warns_on_multiple_rows_with_explicit_period` | explicit period + multiple rows | warning + `rows[0]` | unit |
 
 ### §6.2 Service-layer tests
-
 | test name | scenario | expected outcome | layer |
 |---|---|---|---|
-| `test_resolve_hit_no_prime` | mapping active + first get_cached returns rows | 200 DTO w `cache_status="hit"`; auto_prime not called | service |
-| `test_resolve_mapping_missing` | repo returns None | mapping-not-found exception -> 404 mapping code | service |
-| `test_resolve_mapping_inactive_filtered` | inactive row not returned by active lookup | same as missing | service |
-| `test_resolve_cache_miss_prime_success_row_written` | first miss, prime success, second read rows | DTO w `cache_status="primed"` | service |
-| `test_resolve_cache_miss_prime_error_but_row_written` | prime_result.error set, second read rows | DTO includes sanitized `prime_warning` + `cache_status="primed"` | service |
-| `test_resolve_cache_miss_prime_error_no_row` | prime error and second read empty | `RESOLVE_CACHE_MISS` details include prime_error_code | service |
-| `test_resolve_cache_miss_prime_no_error_no_row` | prime no-op and second read empty | `RESOLVE_CACHE_MISS` with prime_attempted=true | service |
-| `test_resolve_invalid_coord` | coord fails validator | `RESOLVE_INVALID_COORD` path | service |
-| `test_http_to_service_pipeline_wiring` | mocked HTTP request through FastAPI test client into handler/service mocks | full request→state transition→response body assertion; ensures wiring, not mapper-only | service/pipeline |
-
-Mandates:
-- All async collaborators use `AsyncMock`.
-- Explicitly include pipeline integration scenario (mocked HTTP → handler → service transition → response assertion), not only function-level mapper tests.
+| `test_resolve_hit_no_prime` | first read returns rows | 200 hit | service |
+| `test_resolve_mapping_missing` | no active mapping | 404 mapping not found | service |
+| `test_resolve_invalid_filters_missing_dim` | missing required dim | 400 invalid filters | service |
+| `test_resolve_invalid_filters_extra_dim` | extra dim | 400 invalid filters | service |
+| `test_resolve_cold_cache_auto_prime_success_returns_primed` | cold cache, prime success, second read row | 200 primed | service |
+| `test_resolve_cache_miss_prime_error_but_row_written` | prime error + row appears | 200 primed; error in structured logs only | service |
+| `test_resolve_cache_miss_prime_error_no_row` | prime error + no row | 404 miss + prime_error_code | service |
+| `test_http_to_service_pipeline_wiring` | mocked HTTP→handler→service | full pipeline assertion | service/pipeline |
 
 ### §6.3 Integration tests
-
 | test name | scenario | expected outcome | layer |
 |---|---|---|---|
-| `test_resolve_happy_existing_cache` | seeded mapping + cache row | 200 with hit | integration |
-| `test_resolve_404_mapping_not_found` | no mapping | 404 `SEMANTIC_MAPPING_NOT_FOUND` | integration |
-| `test_resolve_404_mapping_inactive` | mapping inactive | same 404 code | integration |
-| `test_resolve_404_cache_miss_after_prime` | cold cache + prime unable to populate | 404 `RESOLVE_CACHE_MISS` with details | integration |
-| `test_resolve_query_validation` | invalid coord/period length | 422 | integration |
-| `test_resolve_auth_required` | missing X-API-KEY | 401 from middleware | integration |
-| `test_resolve_auth_success` | valid X-API-KEY | non-401 response path | integration |
-
-Fixture note: follow existing integration infra pattern (Testcontainers Postgres + alembic upgrade/downgrade lifecycle) per team memory and `TEST_INFRASTRUCTURE.md` guidance.
+| `test_resolve_happy_existing_cache` | seeded row with dim/member query | 200 hit | integration |
+| `test_resolve_cold_cache_full_pipeline` | cold cache + successful prime path | 200 primed | integration |
+| `test_resolve_404_mapping_not_found` | absent mapping | 404 | integration |
+| `test_resolve_404_cache_miss_after_prime` | no row after prime | 404 miss | integration |
+| `test_resolve_filters_validation_400` | malformed dim/member input | 400 invalid filters | integration |
+| `test_resolve_auth_required` | missing API key | 401 | integration |
 
 ## §7. Coord derivation contract
-- **What auto_prime writes:** `coord` is produced by `derive_coord(resolved_filters)` then passed unchanged to persistence writes:
-  - `coord = derive_coord(resolved_filters)` and later `_persist_response(..., coord=coord, ...)`. (`backend/src/services/statcan/value_cache.py:111`, `backend/src/services/statcan/value_cache.py:162-163`)
-  - Each row upsert includes `coord=coord` at repository callsite. (`backend/src/services/statcan/value_cache.py:412`)
-- **Existing shared function already exists:** `derive_coord(resolved_filters)` in `backend/src/services/semantic/coord.py`; this MUST remain single encoding authority for mapping-derived coord generation. (`backend/src/services/semantic/coord.py:19-61`)
-- **Actual encoding:** 10-position dot-separated numeric string; slots default to `"0"`; each resolved filter sets `slots[dimension_position_id-1] = str(member_id)`; final coord is `".".join(slots)`. (`backend/src/services/semantic/coord.py:41-61`)
-- **Ordering/canonicalization:** canonical by dimension-position slot indexing, not caller order; function comment explicitly states input order does not matter. (`backend/src/services/semantic/coord.py:27-33`, `backend/src/services/semantic/coord.py:44-60`)
-- **Resolve contract decision:** use required `coord` query param in this exact 10-slot format for 3.1c. Re-deriving from ad-hoc dim query params is out of scope because no existing parser from external params to `ResolvedDimensionFilter` exists in resolve path, and drift risk is high.
+Coord is service-derived from query filters per BLOCKER-1 resolution; caller never supplies it. The contract below documents the SHARED encoding used by both auto_prime and resolve.
+- auto_prime derives coord through `derive_coord(resolved_filters)` and persists exactly that value. (`backend/src/services/statcan/value_cache.py:111`, `backend/src/services/statcan/value_cache.py:162-163`, `backend/src/services/statcan/value_cache.py:412`)
+- derive_coord encoding is canonical 10-slot dot-separated string; order-independent input due to slot assignment by `dimension_position_id`. (`backend/src/services/semantic/coord.py:19-61`)
 
 ## §8. Period selection contract
-- **What auto_prime writes into period fields:** in persistence loop, each data point uses `ref_period=dp.ref_per`; `period_start` is generated/maintained at DB layer (model shows generated column) and returned in rows. (`backend/src/services/statcan/value_cache.py:413`, `backend/src/models/semantic_value_cache.py:100-105`)
-- **get_cached ordering reality:** repository `get_by_lookup` orders ascending by `period_start` then ascending `ref_period`. (`backend/src/repositories/semantic_value_cache_repository.py:357-363`)
-- **Default resolve behavior when `period` omitted:** service must select latest entry from returned list by taking last item of ascending-ordered results (`rows[-1]`) OR re-sorting DESC explicitly; chosen rule: `rows[-1]` for deterministic latest.
-- **When `period` provided:** pass it as `ref_period` filter into `get_cached`; if rows returned, use first/last equivalently (single period expected) and echo `row.ref_period` into DTO `period`.
-- **If multiple rows for same lookup without period filter:** pick latest by period chronology as above; never return an array (L1 singular endpoint).
+- auto_prime persists `ref_period=dp.ref_per`; read DTO period echoes `ref_period`. (`backend/src/services/statcan/value_cache.py:413`)
+- repository ordering is ascending `period_start`, then ascending `ref_period`. (`backend/src/repositories/semantic_value_cache_repository.py:360-363`)
+- default when `period` omitted: latest is `rows[-1]` via helper.
+- explicit `period`: expected single row; if multiple, warn and return `rows[0]`.
+
+```python
+def pick_row(rows: list[ValueCacheRow], *, period: str | None) -> ValueCacheRow:
+    if period is None:
+        return rows[-1]
+    if len(rows) > 1:
+        logger.warning("resolve.unexpected_multiple_rows_for_explicit_period", count=len(rows))
+    return rows[0]
+```
 
 ## §9. Drift updates required by 3.1c impl PR
+- `docs/api.md` draft updates:
+  - Query params table uses `dim` + `member` repeated rows (no caller coord).
+  - Errors use `RESOLVE_INVALID_FILTERS`; `RESOLVE_CACHE_MISS` row notes details include derived coord + prime_error_code.
+  - Rate Limit cell: `Inherits global/default middleware behavior`.
+- `BACKEND_API_INVENTORY.md` row update: query contract becomes filter-based (`dim/member` + optional `period`).
+- `ROADMAP_DEPENDENCIES.md` delta unchanged from prior recon.
+- DEBT-060 remains unchanged.
 
-### 9.1 `docs/api.md` draft subsection (verbatim)
-```md
-### `GET /api/v1/admin/resolve/{cube_id}/{semantic_key}`
-
-Resolve a semantic mapping to a cached value for a caller-supplied StatCan coordinate.
-
-| Property | Value |
-|----------|-------|
-| Auth | Admin (`X-API-KEY`, enforced by `AuthMiddleware`) |
-| Rate Limit | None (inherits global/default middleware behavior) |
-
-**Path Parameters:**
-
-| Param | Type | Description |
-|-------|------|-------------|
-| `cube_id` | `str` | StatCan cube id (max 50 chars) |
-| `semantic_key` | `str` | Semantic mapping key (max 100 chars) |
-
-**Query Parameters:**
-
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `coord` | `str` | yes | 10-slot dot-separated StatCan coord (e.g. `1.10.0.0.0.0.0.0.0.0`) |
-| `period` | `str` | no | Optional `ref_period`; when omitted, resolves latest cached period |
-
-**Response (200):** `ResolvedValueResponse`
-
-**Errors:**
-
-| Status | error_code | Condition |
-|--------|------------|-----------|
-| 401 | `AUTH_INVALID_API_KEY` / `AUTH_MISSING_API_KEY` | Missing/invalid API key |
-| 404 | `SEMANTIC_MAPPING_NOT_FOUND` | Mapping missing or inactive |
-| 404 | `RESOLVE_CACHE_MISS` | No cached row after auto-prime + re-query |
-| 400 | `RESOLVE_INVALID_COORD` | Coord fails contract |
-| 422 | — | FastAPI validation failure |
-| 500 | `RESOLVE_INTERNAL_ERROR` | Unexpected server error |
-```
-
-### 9.2 `docs/architecture/BACKEND_API_INVENTORY.md` row draft (verbatim)
-```md
-| GET | `/api/v1/admin/resolve/{cube_id}/{semantic_key}` | `backend/src/api/routers/admin_resolve.py` | `_get_resolve_service` (`ResolveService`) | n/a (path/query params) | 200 → `ResolvedValueResponse`; 401 (middleware); 404 → `SEMANTIC_MAPPING_NOT_FOUND` or `RESOLVE_CACHE_MISS`; 400 → `RESOLVE_INVALID_COORD`; 422 validation | Phase 3.1c singular resolve endpoint. Query: required `coord`, optional `period` (`ref_period` filter). Cache miss path performs auto-prime + mandatory re-query before terminal 404. |
-```
-
-### 9.3 `docs/architecture/ROADMAP_DEPENDENCIES.md` §2 delta draft (verbatim)
-```md
-| 3.1c Resolve endpoint (singular admin) | IN-PROGRESS (or COMPLETE once merged) | S | 1 | Depends on 3.1b semantic mapping CRUD + 3.1aaa value cache services |
-| 3.1d Batch resolve / multi-key hydration | PENDING | M | 1-2 | Depends on 3.1c contract stabilization; DEBT-058/059 scope |
-```
-
-DEBT-060 handling in impl PR: **leave unchanged** (status/scope persists; do not edit DEBT.md as part of 3.1c).
-
-## §10. Open questions for recon-impl handoff (non-founder)
-1. `ResolveService` placement: `services/resolve/service.py` (recommended) vs colocating under `services/statcan/` for proximity to value-cache; recon recommends dedicated `services/resolve/` to keep API orchestration separate from low-level StatCan cache engine.
-2. `prime_warning` payload format: recon recommends sanitized short code/category string (e.g., `"datasource_unavailable"`) instead of raw message to avoid leaking internals; impl should finalize exact sanitizer mapping utility.
-3. Mapping config→resolved_filters conversion reuse: confirm existing semantic mapping validation output object can be re-used to reconstruct `ResolvedDimensionFilter` for auto-prime in resolve flow; if no direct helper exists, impl should add one thin adapter with tests.
+## §10. Open questions for recon-impl handoff
+1. ResolveService placement (`services/resolve/` recommended).
+2. `sanitize_prime_error` output format: short code/category string for logs + `RESOLVE_CACHE_MISS.details` only.
+3. Encoding choice documentation: Encoding 1 is selected in this recon based on Appendix B grep B/C; impl should preserve rationale in code comments.
+4. `resolve_frequency_code` helper source order: prefer mapping field if present, then metadata cache lookup, then `None` fallback; impl to finalize helper signature in service module.
 
 ## §11. Founder questions surfaced during recon (escalation)
-- None. Pre-recon founder blocker set (GQ-01/02/03) is already ratified and no new founder-tier tradeoff emerged.
+**Resolved during fix pass (2026-05-03):**
+- **F-fix-1 — coord vs auto_prime contract conflict (BLOCKER-1).** Founder selected Option B: resolve takes semantic filter query params, service derives coord internally.
+- **F-fix-2 — warning DTO field.** Founder selected removal; errors surface via structured logs + `RESOLVE_CACHE_MISS.details` only.
+
+**No new founder-blockers surfaced during fix pass.**
+
+## Appendix B: Fix-pass grep transcript
+
+### A. ResolvedDimensionFilter shape
+Command:
+`rg -n "class ResolvedDimensionFilter\b|^ResolvedDimensionFilter\b" backend/src`
+Output:
+```
+backend/src/services/semantic_mappings/validation.py:49:class ResolvedDimensionFilter:
+```
+
+Command:
+`rg -n "ResolvedDimensionFilter" backend/src/services/statcan/value_cache.py`
+Output:
+```
+39:from src.services.semantic_mappings.validation import ResolvedDimensionFilter
+100:        resolved_filters: list[ResolvedDimensionFilter],
+```
+
+Command:
+`rg -n "ResolvedDimensionFilter" backend/src/services/semantic`
+Output:
+```
+backend/src/services/semantic/coord.py:14:from src.services.semantic_mappings.validation import ResolvedDimensionFilter
+backend/src/services/semantic/coord.py:19:def derive_coord(resolved_filters: list[ResolvedDimensionFilter]) -> str:
+```
+
+### B. Mapping config schema clues
+Command:
+`rg -n "config\[" backend/src/services/semantic_mappings backend/src/models/semantic_mapping.py`
+Output:
+```
+(no matches)
+```
+
+Command:
+`rg -n "filters|dimensions" backend/src/services/semantic_mappings/service.py`
+Output:
+```
+316:        dimension_filters = config_model.dimension_filters or {}
+327:            dimension_filters=dimension_filters,
+373:                    resolved_filters=result.resolved_filters,
+492:                dimension_filters=config_model.dimension_filters or {},
+```
+
+### C. Existing config→filter helper
+Command:
+`rg -n "def.*config.*filter|def.*filter.*config|build_resolved_filter|resolve_filters" backend/src`
+Output:
+```
+(no matches)
+```
+
+### D. Existing semantic-mapping-not-found error code
+Command:
+`rg -n "SEMANTIC_MAPPING_NOT_FOUND|MAPPING_NOT_FOUND|semantic_mapping.*not_found" backend/src`
+Output:
+```
+backend/src/api/routers/admin_semantic_mappings.py:302:                "error_code": "MAPPING_NOT_FOUND",
+backend/src/api/routers/admin_semantic_mappings.py:336:                "error_code": "MAPPING_NOT_FOUND",
+```
+
+### E. Internal-error code precedent in admin routers
+Command:
+`rg -n "INTERNAL_ERROR" backend/src/api/routers backend/src/core/error_codes.py`
+Output:
+```
+(no matches)
+```
+
+### F. derive_coord signature
+Command:
+`sed -n '1,80p' backend/src/services/semantic/coord.py`
+Output:
+```python
+"""Phase 3.1aaa: StatCan ``coord`` derivation from validator output.
+
+Pure helper: takes ``ValidationResult.resolved_filters`` from the
+3.1ab validator and produces the StatCan native ``coord`` string used
+by the WDS data API (e.g.
+``getDataFromCubePidCoordAndLatestNPeriods``).
+
+Per founder lock Q-6 (recon §B): validator output reuse is mandatory.
+This module deliberately performs no name-matching of its own — it
+trusts the (position_id, member_id) pairs already resolved by 3.1ab.
+"""
+from __future__ import annotations
+
+from src.services.semantic_mappings.validation import ResolvedDimensionFilter
+
+_MAX_DIMENSIONS = 10
+
+
+def derive_coord(resolved_filters: list[ResolvedDimensionFilter]) -> str:
+    """Convert validator-resolved (position_id, member_id) pairs to a coord.
+
+    StatCan's ``coordinate`` argument is a 10-position dot-separated
+    string. Each position corresponds to a dimension (1-indexed); a
+    value of ``0`` means "all members" / unset. Validator-resolved
+    pairs populate the slots their ``dimension_position_id`` indexes.
+
+    Args:
+        resolved_filters: Successfully matched (dimension, member) pairs
+            from a :class:`ValidationResult`. Order does not matter.
+
+    Returns:
+        A 10-position dot-separated string (e.g.
+        ``"1.10.0.0.0.0.0.0.0.0"`` for two filtered dimensions).
+
+    Raises:
+        ValueError: If a ``dimension_position_id`` is outside ``[1, 10]``
+            or if two filters target the same position.
+
+    Pure function — no I/O, no clock, no logger.
+    """
+    slots = ["0"] * _MAX_DIMENSIONS
+    seen_positions: set[int] = set()
+
+    for item in resolved_filters:
+        pos = item.dimension_position_id
+        member = item.member_id
+
+        if pos < 1 or pos > _MAX_DIMENSIONS:
+            raise ValueError(
+                f"dimension_position_id out of range: {pos} "
+                f"(must be 1..{_MAX_DIMENSIONS})"
+            )
+        if pos in seen_positions:
+            raise ValueError(
+                f"duplicate dimension_position_id in resolved_filters: {pos}"
+            )
+
+        seen_positions.add(pos)
+        slots[pos - 1] = str(member)
+
+    return ".".join(slots)
+```
