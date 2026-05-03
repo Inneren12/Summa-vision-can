@@ -268,6 +268,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('dim-add-row')));
     await tester.pump();
 
+    await tester.ensureVisible(find.byKey(const ValueKey('form-submit')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('form-submit')));
     await tester.pumpAndSettle();
     expect(upsertCalled, isTrue);
@@ -322,6 +324,8 @@ void main() {
         find.byKey(const ValueKey('field-semantic-key')), 'cpi.bad');
     await tester.enterText(find.byKey(const ValueKey('field-label')), 'L');
 
+    await tester.ensureVisible(find.byKey(const ValueKey('form-submit')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('form-submit')));
     await tester.pumpAndSettle();
 
@@ -370,6 +374,8 @@ void main() {
         find.byKey(const ValueKey('field-semantic-key')), 'cpi.k');
     await tester.enterText(find.byKey(const ValueKey('field-label')), 'L');
 
+    await tester.ensureVisible(find.byKey(const ValueKey('form-submit')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('form-submit')));
     await tester.pumpAndSettle();
 
