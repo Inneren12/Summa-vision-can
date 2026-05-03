@@ -28,6 +28,34 @@ Required columns and constraints are locked exactly as ratified, plus two justif
 - Index: `ix_publication_block_snapshot_publication_id`
 - Column order in migration: `id, publication_id, block_id, cube_id, semantic_key, coord, period, dims_json, members_json, mapping_version_at_publish, source_hash_at_publish, value_at_publish, missing_at_publish, is_stale_at_publish, captured_at, created_at, updated_at`
 
+**Locked column types (P1-a, P1-d):**
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `Integer` | PK autoincrement |
+| `publication_id` | `Integer` | FK → `publications.id` ON DELETE CASCADE, NOT NULL |
+| `block_id` | `String(128)` | NOT NULL — covers nanoid/uuid block id formats with headroom |
+| `cube_id` | `String(50)` | NOT NULL — matches `semantic_value_cache.cube_id` |
+| `semantic_key` | `String(200)` | NOT NULL — matches `semantic_mappings.semantic_key`. NOT 100. See DEBT-063. |
+| `coord` | `String(40)` | NOT NULL — 10-slot canonical encoding |
+| `period` | `String(20)` | nullable — null = "latest at capture time" |
+| `dims_json` | `JSONB` | NOT NULL — list[int] with service invariants below |
+| `members_json` | `JSONB` | NOT NULL — list[int] with service invariants below |
+| `mapping_version_at_publish` | `Integer` | nullable |
+| `source_hash_at_publish` | `String(64)` | NOT NULL |
+| `value_at_publish` | `Text` | nullable — string per 3.1c canonical_str (no length cap для long Decimals) |
+| `missing_at_publish` | `Boolean` | NOT NULL |
+| `is_stale_at_publish` | `Boolean` | NOT NULL |
+| `captured_at` | `DateTime(timezone=True)` | NOT NULL — publish action timestamp |
+| `created_at` | `DateTime(timezone=True)` | NOT NULL, server_default `now()` |
+| `updated_at` | `DateTime(timezone=True)` | NOT NULL, onupdate `now()` |
+
+**Service-level validation invariants (P1-d, enforced before upsert):**
+- `len(dims_json) == len(members_json)` — empty arrays valid (block with no dim filters)
+- All `dims_json` elements are integers in 1..10 range (matches 3.1c BLOCKERS-1 fix)
+- All `members_json` elements are non-negative integers
+- Order is preserved (positional pairing — dims_json[i] pairs with members_json[i])
+
 Alembic naming convention: mirror existing phase pattern with next timestamped file under `backend/alembic/versions/` using slug format like `YYYYMMDD_HHMM_phase_3_1d_publication_block_snapshot.py`; upgrade creates table+constraints+index, downgrade drops index then table.
 
 ### 2.2 Clone semantics
@@ -48,7 +76,12 @@ Operator path:
 - compare endpoint is diagnostic/read-only and does not recapture.
 - explicit refresh flow in Q5 maps to republish action (`POST /{publication_id}/publish`) in v1.
 
-Ambiguity surfaced for founder sign-off: whether future UX introduces a dedicated “refresh snapshot without status transition” action; recon locks v1 to republish-only refresh.
+**Refresh flow lock (Q5, P1-e):** "Explicit refresh" in v1 maps to **republish via the existing `POST /{publication_id}/publish` endpoint**. NO dedicated "refresh snapshot without status transition" action in 3.1d. Operator workflow:
+1. Operator sees stale badge in admin editor.
+2. Operator triggers republish (existing UI action; body extended with `bound_blocks` per Part 1).
+3. Publish handler captures fresh snapshots; subsequent compare returns FRESH.
+
+A dedicated "recapture without state transition" action is DEFERRED — see DEBT-NN7 in §8.
 
 ## 3) API surface (Q4-endpoint, Q8)
 
@@ -61,6 +94,14 @@ Ambiguity surfaced for founder sign-off: whether future UX introduces a dedicate
 - 404: `PUBLICATION_NOT_FOUND`
 - 401: middleware
 - No-compare-possible cases still return 200 with `overall_status=unknown` and typed reasons (`snapshot_missing`, `compare_failed`).
+
+**Side-effect contract (locked, P1-b):** `POST /compare` is side-effect-free in v1 except for structured logs and metrics. The endpoint MUST NOT:
+- Write to `publication_block_snapshot` (no recapture during compare)
+- Mutate `publications.published_at` or any other field
+- Trigger auto_prime on the value cache (resolve calls flow through 3.1c's normal cache-miss handling, which itself may auto-prime; compare adds no separate trigger)
+- Emit AuditEvent rows (compare is diagnostic, not audit-worthy in v1)
+
+Rationale: v1 has no result caching layer, so caching the compare result is not a side effect anyone needs. A future PR adding result caching MUST update this contract explicitly.
 
 ### 3.2 Service contract (direct `ResolveService` reuse)
 
@@ -112,6 +153,14 @@ async def publish_publication(
 - `delete_for_publication(publication_id)`
 
 Upsert semantics locked: overwrite by `(publication_id, block_id)`, preserve `created_at`, bump `updated_at`, refresh all snapshot fields, set `captured_at` to publish action timestamp.
+
+**`delete_for_publication` usage rule (locked, P1-c):**
+- Used ONLY for hard-delete cleanup (FK CASCADE handles publication deletion automatically; this method exists for explicit testing scenarios + future cleanup workflows).
+- NEVER called in normal publish flow. Normal publish capture is per-block upsert.
+- Stale snapshot rows (block removed from publication's bindings) are LEFT AS ORPHANS in v1. Cleanup deferred — see DEBT-NN6 in §8.
+- Tests that need to reset state between cases MAY call `delete_for_publication` directly.
+
+**Upsert semantics (locked):** Same `(publication_id, block_id)` writes a fresh row; previous row is overwritten in place, `created_at` preserved, `updated_at` bumped, all `*_at_publish` fields refreshed, `captured_at` set to current publish action timestamp.
 
 ### 3.4 Response schema
 
@@ -313,7 +362,18 @@ Required: upsert overwrite semantics, list retrieval behavior, FK cascade, uniqu
 Required endpoint tests: 404, fresh/stale paths, pre-3.1d missing snapshots, clone missing snapshots, capture-failure non-blocking publish, severity aggregation, auth enforcement.
 
 ### 6.4 Pipeline test
-Required end-to-end: publish with `bound_blocks` then compare over HTTP with real DB-backed resolve path (no mocks).
+
+Required end-to-end: `test_publish_then_compare_full_pipeline`. Executes:
+1. Seed `semantic_mappings` row + `semantic_value_cache` row in test DB (no external StatCan calls).
+2. POST publish with `{"bound_blocks": [...]}` body via httpx + AsyncClient.
+3. Assert publish 200, publication has captured snapshot rows.
+4. POST compare via httpx; assert response shape, status=fresh.
+5. Mutate cache row in DB (simulate value drift).
+6. POST compare again; assert status=stale, reasons include `value_changed`.
+
+**Scope clarification (P1-f):** "real DB-backed resolve path" means `ResolveService.resolve_value` is invoked through the live DI graph against seeded DB rows. NO mocking of `ResolveService`. NO external network — `auto_prime` is not exercised because seeded cache rows are present (cache-hit path). If the test triggers `auto_prime` (cache-miss path), the test is structurally wrong — re-seed.
+
+This avoids flakiness from external StatCan dependencies while still proving the pipeline isn't dead-mapper-style broken.
 
 ## 7) Drift detection touch list
 
