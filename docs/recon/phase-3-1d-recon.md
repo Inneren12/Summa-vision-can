@@ -166,6 +166,35 @@ class ResolveFingerprint(BaseModel):
     is_stale: bool
     resolved_at: datetime
 
+class CompareKind(str, Enum):
+    DRIFT_CHECK = "drift_check"
+    SNAPSHOT_MISSING = "snapshot_missing"
+    COMPARE_FAILED = "compare_failed"
+
+class DriftCheckBasis(BaseModel):
+    compare_kind: Literal[CompareKind.DRIFT_CHECK]
+    matched_fields: list[str]
+    drift_fields: list[str]
+
+class SnapshotMissingBasis(BaseModel):
+    compare_kind: Literal[CompareKind.SNAPSHOT_MISSING]
+    cause: Literal["no_snapshot_row"]
+
+class CompareFailedBasis(BaseModel):
+    compare_kind: Literal[CompareKind.COMPARE_FAILED]
+    resolve_error: Literal[
+        "MAPPING_NOT_FOUND",
+        "RESOLVE_CACHE_MISS",
+        "RESOLVE_INVALID_FILTERS",
+        "UNEXPECTED",
+    ]
+    details: dict  # {exception_type: str, message: str}
+
+CompareBasis = Annotated[
+    DriftCheckBasis | SnapshotMissingBasis | CompareFailedBasis,
+    Field(discriminator="compare_kind"),
+]
+
 class BlockComparatorResult(BaseModel):
     block_id: str
     cube_id: str
@@ -176,7 +205,7 @@ class BlockComparatorResult(BaseModel):
     compared_at: datetime
     snapshot: SnapshotFingerprint | None     # null when snapshot_missing
     current: ResolveFingerprint | None       # null when compare_failed pre-resolve
-    compare_basis: dict                       # diagnostic detail; see below
+    compare_basis: CompareBasis              # discriminated union; FastAPI validates per variant
 
 class PublicationComparatorResponse(BaseModel):
     publication_id: int
@@ -222,7 +251,7 @@ compare_basis = {
 **Aggregation rules (locked, BLOCKER-2 Option C):**
 - `overall_status`: STALE if any block STALE; else UNKNOWN if any UNKNOWN; else FRESH.
 - `overall_severity`: max(block severities); ordering: blocking > warning > info.
-- **Empty `block_results` list** (no snapshot rows for the publication): `overall_status=UNKNOWN`, `overall_severity=INFO`, `block_results=[]`. This case covers: pre-3.1d publications, fresh clones, publish-without-bound_blocks, and all-blocks-capture-failed. Backend cannot distinguish them in v1.
+- **No-snapshot-rows case** (covers pre-3.1d publications, fresh clones, publish-without-bound_blocks, and all-blocks-capture-failed): comparator returns a single synthetic `BlockComparatorResult` with `block_id=""`, `cube_id=""`, `semantic_key=""`, `stale_status=UNKNOWN`, `stale_reasons=[SNAPSHOT_MISSING]`, `severity=INFO`, `snapshot=None`, `current=None`, `compare_basis=SnapshotMissingBasis(compare_kind="snapshot_missing", cause="no_snapshot_row")`. The aggregate then yields `overall_status=UNKNOWN`, `overall_severity=INFO`. Backend cannot distinguish the four sub-causes in v1; all collapse to the same synthetic entry. This unifies the contract: every published publication ALWAYS produces non-empty `block_results` with at least one entry carrying `stale_reasons`.
 
 **This DROPS the prior zero-bindings-fresh rule.** Backend has no way to tell "intentionally zero bindings" from "missing captures" without persisted expected-bindings list. Frontend that needs a true zero-bindings signal must either:
 (a) interpret empty `block_results` + status=UNKNOWN as "needs republish to capture," OR
