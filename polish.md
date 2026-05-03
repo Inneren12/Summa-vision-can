@@ -630,6 +630,280 @@ enough to justify a sprint slot.
 
 ---
 
+## P3-020 — `parse_ref_period_to_date` function naming is generic
+
+- **Source:** Phase 3.1aaa impl reviewer round 2026-05-03
+- **Added:** 2026-05-03
+- **Severity:** P3
+- **Category:** architecture
+- **File:** `backend/migrations/versions/478d906c6410_add_semantic_value_cache.py`
+- **Description:** PL/pgSQL function name does not scope to its
+  semantic-value-cache use. A future migration creating a similar parser
+  with different format support would collide on this name.
+- **Fix sketch:** rename to `parse_semantic_value_ref_period_to_date`
+  in the migration + matching `Computed()` expression in the ORM.
+  Requires migration revision bump (rename function + drop old one in
+  upgrade), so park until next 3.1 polish PR.
+- **Status:** pending
+- **Note:** tracked under DEBT-061 sub-item 1 — do NOT close that DEBT
+  entry until this polish item ships.
+
+---
+
+## P3-021 — Verify PG integration tests actually exercise generated column
+
+- **Source:** Phase 3.1aaa impl reviewer round 2026-05-03
+- **Added:** 2026-05-03
+- **Severity:** P3
+- **Category:** test-coverage
+- **File:** `backend/tests/integration/test_semantic_value_cache_migration.py`
+- **Description:** Integration tests skip on non-PostgreSQL via
+  `Base.metadata.create_all` fallback. Unclear whether all assertions
+  exercising GENERATED `period_start`, partial `is_stale` index, and
+  FK CASCADE actually run against PG in CI vs falling through to
+  SQLite no-op paths.
+- **Fix sketch:** add a CI-gated assertion at module level —
+  ```python
+  pytestmark = pytest.mark.skipif(
+      os.getenv("TEST_DATABASE_URL") is None,
+      reason="PG-only integration tests",
+  )
+  ```
+  Then verify the GitHub Actions matrix sets `TEST_DATABASE_URL` for
+  the relevant job. Confirm via single failing run if `TEST_DATABASE_URL`
+  is unset.
+- **Status:** pending
+- **Note:** tracked under DEBT-061 sub-item 2.
+
+---
+
+## P3-022 — Pin source_hash timestamp exclusion as explicit test
+
+- **Source:** Phase 3.1aaa impl reviewer round 2026-05-03
+- **Added:** 2026-05-03
+- **Severity:** P3
+- **Category:** test-coverage
+- **File:** `backend/tests/services/statcan/test_value_cache_hash.py`
+- **Description:** `compute_source_hash` excludes `fetched_at`,
+  `release_time`, `created_at`, `updated_at` by contract (recon §C6).
+  Existing tests cover field changes individually but no test asserts
+  the timestamp-exclusion invariant directly.
+- **Fix sketch:**
+  ```python
+  def test_source_hash_excludes_timestamps():
+      """fetched_at / release_time / created_at / updated_at are NOT inputs."""
+      base = _kwargs(value=Decimal("100.0"))
+      h1 = compute_source_hash(**base)
+      h2 = compute_source_hash(**base)  # identical inputs at different
+                                         # call times must produce
+                                         # identical hashes
+      assert h1 == h2
+      # Sanity: hash function does not accept timestamp kwargs at all
+      import inspect
+      sig = inspect.signature(compute_source_hash)
+      timestamp_params = {p for p in sig.parameters if "_at" in p or "_time" in p}
+      assert not timestamp_params, f"Unexpected timestamp params: {timestamp_params}"
+  ```
+- **Status:** pending
+- **Note:** tracked under DEBT-061 sub-item 3.
+
+---
+
+## P3-023 — Pin StatCanDataPoint.value Decimal parsing branches
+
+- **Source:** Phase 3.1aaa impl reviewer round 2026-05-03
+- **Added:** 2026-05-03
+- **Severity:** P3
+- **Category:** test-coverage
+- **File:** `backend/tests/services/statcan/test_value_cache_schemas.py`
+  (new file or appended to existing schema tests)
+- **Description:** WDS serializes `value` as string (`"165.7"`) for
+  numeric data and `null` paired with `missing=true`. Pydantic V2's
+  `Decimal` coercion handles both, but the contract is not pinned by
+  test. A future Pydantic upgrade or schema config change could
+  silently break parsing.
+- **Fix sketch:**
+  ```python
+  def test_string_numeric_value_parses_to_decimal():
+      dp = StatCanDataPoint.model_validate({
+          "refPer": "2026-04",
+          "value": "165.7",   # string, not float
+          "decimals": 1,
+          "scalarFactorCode": 0,
+          "symbolCode": 0,
+          "securityLevelCode": 0,
+          "statusCode": 0,
+          "frequencyCode": 6,
+          "missing": False,
+      })
+      assert dp.value == Decimal("165.7")
+      assert isinstance(dp.value, Decimal)
+
+  def test_null_value_with_missing_flag():
+      dp = StatCanDataPoint.model_validate({
+          "refPer": "2026-04",
+          "value": None,
+          "decimals": 0,
+          "scalarFactorCode": 0,
+          "symbolCode": 0,
+          "securityLevelCode": 0,
+          "statusCode": 0,
+          "frequencyCode": 6,
+          "missing": True,
+      })
+      assert dp.value is None
+      assert dp.missing is True
+  ```
+- **Status:** pending
+- **Note:** tracked under DEBT-061 sub-item 4.
+
+---
+
+## P3-024 — Prime-on-refresh path for active mappings without cached coord
+
+- **Source:** Phase 3.1aaa impl FIX-R2 (Blocker 2 collateral)
+- **Added:** 2026-05-03
+- **Severity:** P2
+- **Category:** correctness
+- **File:** `backend/src/services/statcan/value_cache.py`
+- **Description:** `refresh_all` skips mappings whose value cache is
+  empty (no cached coord to drive WDS request). Such mappings stay
+  uncached until first resolve OR next manual mapping save. The
+  best-effort retry contract should cover this case.
+- **Fix sketch:** for `coord=None` rows in the refresh fan-out:
+  ```python
+  for cube_id, semantic_key, coord, product_id in keys:
+      if coord is None:
+          # Re-derive coord from latest mapping config + cached metadata
+          mapping = await mapping_repo.get_by_key(cube_id, semantic_key)
+          cache_entry = await metadata_cache.get_cached(cube_id)
+          if mapping is None or cache_entry is None:
+              continue  # skip — DEBT-062 normal path
+          validation_result = validate_mapping_against_cache(
+              mapping_config=mapping.config,
+              cache_entry=cache_entry,
+          )
+          if not validation_result.valid:
+              continue  # mapping became invalid; nightly is not
+                        # the right place to flag this
+          coord = derive_coord(validation_result.resolved_filters)
+          # then proceed with normal refresh path
+  ```
+  Add unit test: `test_refresh_all_primes_uncached_active_mapping`.
+- **Status:** pending
+- **Note:** Phase 3.1c will likely consume this code path (resolve
+  service triggers prime on first access). Coordinate with 3.1c work
+  to avoid duplicate logic. Tracked under DEBT-062.
+
+---
+
+## P3-025 — Phase 3.1b reviewer P2/P3 cluster (3 items)
+
+- **Source:** Phase 3.1b PR #274 reviewer round 2026-04-30
+- **Added:** 2026-05-03 (logged from memory after 3.1aaa cycle)
+- **Severity:** P2 (mixed — narrowest item is P3)
+- **Category:** mixed (correctness + UX consistency)
+- **Files:**
+  - `backend/src/api/admin/semantic_mappings.py`
+  - `backend/src/repositories/semantic_mapping_repository.py`
+  - `flutter_admin/lib/features/semantic_mappings/data/admin_repository.dart`
+- **Description:** 3 distinct items deferred from 3.1b merge:
+  1. **IntegrityError narrow path** — current handler catches generic
+     `IntegrityError` and surfaces as `MAPPING_CONFLICT`. Should narrow
+     to specific constraint name (`uq_semantic_mappings_cube_key`) to
+     distinguish from FK / unique violations on other tables.
+  2. **If-Match-on-missing semantics** — request with `If-Match: <etag>`
+     against a non-existent mapping currently returns 404. Spec
+     ambiguity: should it be 412 Precondition Failed (preserves
+     resource-version contract) OR 404 (resource lookup convention)?
+     Founder pinned 404 in 3.1b but reviewer P3 noted RFC 7232
+     leaves room for either.
+  3. **Flutter dual auth** — Flutter admin sends auth as both header
+     (`X-API-KEY`) AND body (`api_key`). Backend accepts either. Reviewer
+     P3 flagged the body path as defense-in-depth that may obscure
+     CSRF surface. Drop body path; header-only.
+- **Fix sketch:**
+  - Item 1: `except IntegrityError as exc: if "uq_semantic_mappings_cube_key" in str(exc.orig): raise MappingConflictError(...) else: raise`
+  - Item 2: revisit if 3.1c resolve surfaces user-visible
+    `If-Match` flow; document as 404 explicitly in `BACKEND_API_INVENTORY.md`
+    if no change needed
+  - Item 3: remove `api_key` body field from Flutter admin requests +
+    Pydantic schemas; verify Postman / curl flows still work header-only
+- **Status:** pending
+- **Note:** tracked under DEBT-057. Combine with P3-026 (3.1ab carryovers)
+  if same polish PR.
+
+---
+
+## P3-026 — Phase 3.1ab validator P2/P3 cluster (3 items)
+
+- **Source:** Phase 3.1ab impl reviewer round (carried through 3.1b/3.1aaa)
+- **Added:** 2026-05-03
+- **Severity:** P2 / P3 mixed
+- **Category:** code-quality + test-coverage
+- **Files:** `backend/src/services/semantic_mappings/validation.py`
+- **Description:** 3 items deferred from 3.1ab merge:
+  1. **isinstance guards in pure validator** — config payload comes
+     from JSON; defensive `isinstance(filters, dict)` checks before
+     `.items()` would prevent surprising `AttributeError` on
+     malformed input. Currently relies on Pydantic schema validation
+     upstream.
+  2. **Non-null guard for resolved IDs** — when validator produces
+     `ResolvedDimensionFilter(dimension_position_id=None, member_id=None)`
+     for unresolved filters, downstream `derive_coord` will raise
+     `ValueError`. Add explicit non-null guard at the end of validation
+     so the failure mode is `ValidationResult.valid=False` instead of
+     `ValueError` surfacing later in coord derivation.
+  3. **`CubeNotInCacheError` default code** — error class doesn't set
+     `error_code` by default; callers must pass it explicitly. Set
+     `error_code = "CUBE_METADATA_NOT_CACHED"` as class attribute
+     for consistency with other domain exceptions.
+- **Fix sketch:**
+  - Item 1: add `isinstance` guards before each `.items()` / `.get()`
+    on config sub-dicts
+  - Item 2: filter `resolved_filters` for non-None pairs at end of
+    `validate_mapping_against_cache`; if any expected resolution is
+    missing, mark `valid=False` with reason `RESOLUTION_INCOMPLETE`
+  - Item 3: `class CubeNotInCacheError(DomainError): error_code = "CUBE_METADATA_NOT_CACHED"`
+- **Status:** pending
+- **Note:** combine with P3-025 (DEBT-057 cluster) for single 3.1
+  polish PR. Net ~30 minutes total work.
+
+---
+
+## P3-027 — Tighten generic Exception handlers in 3.1aaa value cache service
+
+- **Source:** Phase 3.1aaa Codex bot review 2026-05-03
+- **Added:** 2026-05-03
+- **Severity:** P3
+- **Category:** code-quality
+- **File:** `backend/src/services/statcan/value_cache.py`
+- **Description:** `auto_prime` and `_persist_response` use bare
+  `except Exception as exc: # noqa: BLE001` to honor Q-3 RE-LOCK
+  best-effort contract. Per project linting baseline, BLE001 noqa
+  suppressions should be reviewed every 6 months — narrow to specific
+  expected exceptions where possible.
+- **Fix sketch:** audit each `except Exception` site:
+  ```python
+  # Before:
+  except Exception as exc:  # noqa: BLE001
+      ...
+
+  # Where applicable, narrow:
+  except (ValidationError, DataSourceError, IntegrityError) as exc:
+      ...
+  except Exception as exc:  # noqa: BLE001 — best-effort retry contract
+      ...
+  ```
+  Document why generic catch is required (best-effort) in inline
+  comment for sites that legitimately need it. Drop `noqa` for sites
+  that can be narrowed.
+- **Status:** pending
+- **Note:** standalone item; not blocking other polish work. Can ship
+  in any cosmetic backend batch.
+
+---
+
 ## Batch dispatch policy
 
 When 3+ items accumulate in same category, OR 5+ items total:
@@ -663,3 +937,10 @@ Current batch candidates:
   (per its note). P3-019 is mechanical (single `black` run).
 - **Compose infrastructure batch**: P2-003 alone for now. Defer until
   multi-tenant requirement surfaces or another compose nit accumulates.
+- **Phase 3.1 closure batch (3.1ab + 3.1b + 3.1aaa carryovers)**:
+  P3-020 (function naming), P3-021 (PG test gate), P3-022 (timestamp
+  exclusion test), P3-023 (Pydantic value parsing), P3-024 (prime-on-
+  refresh), P3-025 (DEBT-057 cluster — 3 items), P3-026 (3.1ab cluster
+  — 3 items), P3-027 (BLE001 audit). Spans backend/, migrations/, and
+  flutter_admin/. ~2 hours total. Dispatch after Phase 3.1d closes,
+  before Phase 3.2 starts. Single PR, single review pass.
