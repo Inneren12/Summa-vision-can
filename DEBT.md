@@ -424,6 +424,73 @@ Rules:
   row does not exist; switch the Flutter form to header-only.
 - **Target:** Post-Phase 3.1 polish PR.
 
+### DEBT-058: WDS data batch ceiling is a conservative guess
+
+- **Source:** Phase 3.1aaa implementation (recon Q-impl-1)
+- **Added:** 2026-05-03
+- **Severity:** low
+- **Category:** correctness
+- **Status:** accepted
+- **Description:** `StatCanClient.get_data_batch` caps batch size at
+  100 (`_MAX_BATCH_SIZE`) because the StatCan WDS documentation does
+  not publish an explicit ceiling for
+  `getDataFromCubePidCoordAndLatestNPeriods`. 100 was chosen as a
+  generous upper bound that empirically does not hit 413 / payload
+  limits in spot checks, but the real ceiling is unknown.
+- **Impact:** Nightly value-cache refresh fan-out is slower than it
+  could be (more HTTP round trips than strictly necessary). No
+  correctness impact unless StatCan changes the ceiling silently.
+- **Resolution:** Confirm the actual ceiling with StatCan support OR
+  empirically measure (binary search, fail at 413 or 5xx). Bump
+  `_MAX_BATCH_SIZE` if a higher safe value is found.
+- **Target:** Phase 3.2 polish.
+
+### DEBT-059: WDS batch mixed-success behaviour assumed, not documented
+
+- **Source:** Phase 3.1aaa implementation (recon Q-impl-2)
+- **Added:** 2026-05-03
+- **Severity:** low
+- **Category:** correctness
+- **Status:** accepted
+- **Description:** `StatCanClient.get_data_batch` assumes the WDS
+  endpoint returns one envelope per input item — a per-item
+  `{status: "FAILED"}` for invalid coords interleaved with
+  `{status: "SUCCESS"}` for valid ones. This matches `getCubeMetadata`
+  behaviour but is not explicitly documented for
+  `getDataFromCubePidCoordAndLatestNPeriods`. The implementation logs
+  + tolerates a per-item parse failure and emits `None`; the nightly
+  refresh skips that target.
+- **Impact:** If WDS ever fails the entire batch on any single bad
+  item (no per-item envelope), one bad coord could silently drop a
+  whole batch's worth of refreshes. Errors would surface in the
+  refresh summary's `errors` list, but symptom-only.
+- **Resolution:** Verify the per-item failure semantics with StatCan
+  support; if confirmed, document in code. If contradicted, switch
+  the batch path to single-item fallback on top-level failure.
+- **Target:** Phase 3.2 polish.
+
+### DEBT-060: ResolvedValue.units lacks a canonical mapping source
+
+- **Source:** Phase 3.1aaa implementation (recon Q-impl-4)
+- **Added:** 2026-05-03
+- **Severity:** medium
+- **Category:** product
+- **Status:** accepted
+- **Description:** `ResolvedValue.units` is reserved as a string
+  field for the API boundary but is currently always `None`. The
+  semantic mapping config has `"unit"` operator-typed text; cube
+  metadata exposes `member_uom_code` (a numeric); neither is yet
+  mapped to a canonical units string ("CAD", "%", "index", etc.).
+  3.1c will need this populated to render values usefully.
+- **Impact:** Front-end consumers of resolved values cannot
+  display unit suffixes or perform unit-aware comparisons until
+  this is wired.
+- **Resolution:** Build a canonical units lookup keyed by either
+  `member_uom_code` or the validator-resolved member name; populate
+  `ResolvedValue.units` in 3.1c's resolve service. Document the
+  source-of-truth (cube metadata UOM dimension vs operator config).
+- **Target:** Phase 3.1c.
+
 ---
 
 ## Resolved

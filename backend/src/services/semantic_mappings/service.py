@@ -56,6 +56,7 @@ from src.services.statcan.metadata_cache import (
     StatCanMetadataCacheService,
     StatCanUnavailableError,
 )
+from src.services.statcan.value_cache import StatCanValueCacheService
 
 
 class SemanticMappingService:
@@ -70,11 +71,16 @@ class SemanticMappingService:
         ],
         metadata_cache: StatCanMetadataCacheService,
         logger: structlog.stdlib.BoundLogger,
+        value_cache_service: StatCanValueCacheService | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._repository_factory = repository_factory
         self._metadata_cache = metadata_cache
         self._logger = logger
+        # Phase 3.1aaa: optional dependency. Constructed sites that wire
+        # the value cache pass it; legacy call sites (older tests) still
+        # work without it — auto-prime is silently skipped.
+        self._value_cache_service = value_cache_service
 
     # ------------------------------------------------------------------
     # Validation helpers (pure path used by both single + bulk upsert)
@@ -324,6 +330,39 @@ class SemanticMappingService:
         self._raise_for_validation_result(
             cube_id=cube_id, semantic_key=semantic_key, result=result
         )
+
+        # 3a. Phase 3.1aaa — best-effort auto-prime of the value cache
+        # BEFORE the mapping commit. Founder lock Q-3 RE-LOCK: failures
+        # here MUST NOT propagate. The defensive try/except is layered
+        # belt-and-braces on top of auto_prime's own no-raise contract.
+        if self._value_cache_service is not None:
+            freq = cache_entry.frequency_code
+            try:
+                freq_int = int(freq) if freq is not None else None
+            except (TypeError, ValueError):
+                freq_int = None
+            try:
+                auto_prime_result = await self._value_cache_service.auto_prime(
+                    cube_id=cube_id,
+                    semantic_key=semantic_key,
+                    product_id=product_id,
+                    resolved_filters=result.resolved_filters,
+                    frequency_code=freq_int,
+                )
+                if auto_prime_result.error:
+                    self._logger.warning(
+                        "semantic_mapping.value_cache_auto_prime_failed",
+                        cube_id=cube_id,
+                        semantic_key=semantic_key,
+                        error=auto_prime_result.error,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                self._logger.error(
+                    "semantic_mapping.value_cache_auto_prime_unexpected",
+                    cube_id=cube_id,
+                    semantic_key=semantic_key,
+                    error=str(exc),
+                )
 
         # 4. Atomic persist (single session + commit per call).
         async with self._session_factory() as session:

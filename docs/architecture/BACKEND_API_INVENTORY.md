@@ -336,3 +336,33 @@ If a new endpoint dep isn't in the override list, integration tests will pass wh
 |---|---|---|---|
 | 2026-04-26 | initial | all | Created from Phase 1.3 Part A (`docs/recon/phase-1-3-A-backend-inventory.md`) + Phase 2.5 Part B (`docs/discovery/phase-2-5-B-model.md` §1.4 + §1.5) inputs |
 | 2026-04-27 | Phase 1.3 impl | §1 PATCH row, §2 Publication gloss, §4 handler registration, §5 error-code table | Added 412 `PRECONDITION_FAILED` row; PATCH now consumes `If-Match` and emits `ETag` on success; GET-single + POST-clone also emit `ETag`. |
+
+---
+
+## Phase 3.1aaa: SemanticValueCache infrastructure
+
+No HTTP endpoints in 3.1aaa. Internal services consumed by Phase 3.1c (resolve).
+
+**Services:**
+- `StatCanValueCacheService.auto_prime` — sync best-effort prime invoked from
+  `SemanticMappingService.upsert_validated`. Q-3 RE-LOCK: failures here MUST NOT
+  propagate to mapping save.
+- `StatCanValueCacheService.refresh_all` — nightly scheduler entry
+  (`statcan_value_cache_refresh`, cron 16:00 UTC).
+- `StatCanValueCacheService.get_cached` — read-only cache lookup; consumed by
+  3.1c resolve.
+- `StatCanValueCacheService.evict_stale` — hard-delete by `fetched_at` cutoff.
+
+**Repositories:**
+- `SemanticValueCacheRepository` — `upsert_period`, `upsert_periods_batch`,
+  `get_by_lookup`, `get_latest_by_lookup`, `list_active_lookup_keys`,
+  `mark_stale_outside_window`, `delete_older_than`.
+
+**Scheduled jobs:**
+- `statcan_value_cache_refresh` — cron 16:00 UTC daily (one hour after the
+  metadata cache refresh at 15:00 UTC).
+
+**Dependencies:**
+- `get_statcan_value_cache_service` — yields a service with managed
+  `httpx.AsyncClient`, mirroring `get_statcan_metadata_cache_service`.
+
