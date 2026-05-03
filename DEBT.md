@@ -469,6 +469,31 @@ Rules:
   the batch path to single-item fallback on top-level failure.
 - **Target:** Phase 3.2 polish.
 
+### DEBT-062: Nightly refresh skips active mappings without cached coord
+
+- **Source:** Phase 3.1aaa FIX-R2 (Blocker 2 fix collateral)
+- **Added:** 2026-05-03
+- **Severity:** low
+- **Category:** correctness
+- **Status:** accepted
+- **Description:** ``SemanticValueCacheRepository.list_active_lookup_keys``
+  now LEFT-JOINs ``semantic_value_cache`` so active mappings without
+  any cached row are included. Such mappings have ``coord=None`` in
+  the result tuple. ``StatCanValueCacheService.refresh_all`` skips
+  these (debug-logged) because deriving ``coord`` requires running
+  the validator over the mapping config + cached metadata —
+  duplicate of the auto-prime path.
+- **Impact:** A mapping whose first auto-prime failed (StatCan
+  unavailable at save time) will not be retried by the nightly job
+  until a subsequent successful resolve or a manual re-save primes
+  the cache. Acceptable for the best-effort retry contract; first-
+  resolve will trigger a fresh prime.
+- **Resolution:** Add an explicit prime-on-refresh path that, for
+  ``coord=None`` rows, runs the validator against the latest
+  ``semantic_mappings.config`` + cached cube metadata, derives
+  ``coord``, and primes. Reuse the auto-prime helper.
+- **Target:** Phase 3.1c, alongside the resolve service work.
+
 ### DEBT-061: Phase 3.1aaa P2 follow-ups (4 sub-items)
 
 - **Source:** Phase 3.1aaa impl reviewer round 2026-05-03

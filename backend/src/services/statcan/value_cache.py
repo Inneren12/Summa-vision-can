@@ -215,10 +215,25 @@ class StatCanValueCacheService:
             repo = self._repository_factory(session)
             existing_keys = await repo.list_active_lookup_keys()
 
+        # FIX-R2 (Blocker 2): existing_keys now sources from
+        # ``semantic_mappings`` (active rows) joined to value cache.
+        # Mappings with no cached coord yet appear with ``coord=None``
+        # — skip those and rely on first-resolve / next-mapping-upsert
+        # to prime the cache. DEBT-062 tracks an explicit prime-on-
+        # refresh follow-up.
+        skipped_uncached = 0
         refresh_jobs: list[
             tuple[str, str, str, int, int]  # cube_id, sk, coord, pid, n
         ] = []
         for cube_id, semantic_key, coord, product_id in existing_keys:
+            if coord is None:
+                skipped_uncached += 1
+                self._logger.debug(
+                    "value_cache.refresh_all.skipped_uncached",
+                    cube_id=cube_id,
+                    semantic_key=semantic_key,
+                )
+                continue
             freq = freq_map.get((cube_id, semantic_key))
             n = self._n_for_frequency(freq)
             refresh_jobs.append(
@@ -229,6 +244,7 @@ class StatCanValueCacheService:
             "value_cache.refresh_all.started",
             mappings_processed=len(active_mappings),
             refresh_targets=len(refresh_jobs),
+            skipped_uncached=skipped_uncached,
         )
 
         rows_upserted = 0

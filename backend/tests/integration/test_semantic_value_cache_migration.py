@@ -496,3 +496,74 @@ async def test_upsert_validated_primes_value_cache_for_new_mapping(pg_session):
         assert len(rows) == 1, "auto-prime did not insert post-commit"
         assert rows[0].vector_id == 41690914
         assert rows[0].response_status_code == 0
+
+
+@pytest.mark.asyncio
+async def test_get_latest_by_lookup_orders_by_period_start_not_string(
+    pg_session,
+):
+    """FIX-R2 (P2): rank by GENERATED ``period_start`` DATE, not string.
+
+    Mixed ref_period formats: ``"2025-Q4"`` (period_start = 2025-10-01)
+    vs ``"2025-12"`` (period_start = 2025-12-01). String sort would put
+    ``"2025-Q4"`` after ``"2025-12"`` lexically — actual chronology has
+    ``"2025-12"`` later. This test would fail with a pure string sort.
+    """
+    factory = async_sessionmaker(
+        bind=pg_session.bind, class_=AsyncSession, expire_on_commit=False
+    )
+    await _seed_mapping(factory)
+    async with factory() as session:
+        repo = SemanticValueCacheRepository(session)
+        for rp, value in [
+            ("2025-01-15", Decimal("1.0")),
+            ("2025-Q4", Decimal("2.0")),
+            ("2025-12", Decimal("3.0")),
+        ]:
+            kw = dict(
+                cube_id="18-10-0004-01",
+                product_id=18100004,
+                semantic_key="cpi.canada.all_items",
+                coord="1.10.0.0.0.0.0.0.0.0",
+                ref_period=rp,
+                value=value,
+                missing=False,
+                decimals=1,
+                scalar_factor_code=0,
+                symbol_code=0,
+                security_level_code=0,
+                status_code=0,
+                frequency_code=6,
+                vector_id=42,
+                response_status_code=0,
+                fetched_at=_FIXED,
+                release_time=None,
+            )
+            sh = compute_source_hash(
+                product_id=kw["product_id"],
+                cube_id=kw["cube_id"],
+                semantic_key=kw["semantic_key"],
+                coord=kw["coord"],
+                ref_period=kw["ref_period"],
+                value=kw["value"],
+                missing=kw["missing"],
+                decimals=kw["decimals"],
+                scalar_factor_code=kw["scalar_factor_code"],
+                symbol_code=kw["symbol_code"],
+                security_level_code=kw["security_level_code"],
+                status_code=kw["status_code"],
+                frequency_code=kw["frequency_code"],
+                vector_id=kw["vector_id"],
+                response_status_code=kw["response_status_code"],
+            )
+            await repo.upsert_period(source_hash=sh, **kw)
+        await session.commit()
+
+        latest = await repo.get_latest_by_lookup(
+            cube_id="18-10-0004-01",
+            semantic_key="cpi.canada.all_items",
+            coord="1.10.0.0.0.0.0.0.0.0",
+        )
+        assert latest is not None
+        # period_start ordering: 2025-12 (Dec 1) > 2025-Q4 (Oct 1) > 2025-01-15
+        assert latest.ref_period == "2025-12"

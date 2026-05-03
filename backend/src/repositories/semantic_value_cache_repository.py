@@ -18,6 +18,7 @@ from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.models.semantic_mapping import SemanticMapping
 from src.models.semantic_value_cache import SemanticValueCache
 from src.services.statcan.value_cache_hash import compute_source_hash
 from src.services.statcan.value_cache_schemas import ValueCacheUpsertItem
@@ -353,7 +354,13 @@ class SemanticValueCacheRepository:
         )
         if ref_period is not None:
             stmt = stmt.where(SemanticValueCache.ref_period == ref_period)
-        stmt = stmt.order_by(SemanticValueCache.ref_period.asc())
+        # FIX-R2 (P2): order by parsed ``period_start`` ASC primarily,
+        # with ``ref_period`` ASC as a tiebreaker. Avoids string sort
+        # putting ``"2025-Q4"`` before ``"2025-12"``.
+        stmt = stmt.order_by(
+            SemanticValueCache.period_start.asc().nulls_last(),
+            SemanticValueCache.ref_period.asc(),
+        )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
@@ -386,19 +393,49 @@ class SemanticValueCacheRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_active_lookup_keys(self) -> list[tuple[str, str, str, int]]:
-        """Distinct (cube_id, semantic_key, coord, product_id) tuples.
+    async def list_active_lookup_keys(
+        self,
+    ) -> list[tuple[str, str, str | None, int]]:
+        """List ``(cube_id, semantic_key, coord, product_id)`` for every
+        ACTIVE :class:`SemanticMapping` row.
 
-        Source of fan-out for the nightly refresh job.
+        Phase 3.1aaa FIX-R2 (Blocker 2): the source of truth for the
+        nightly refresh fan-out is ``semantic_mappings.is_active=true``
+        — NOT distinct rows in ``semantic_value_cache``. A mapping
+        whose auto-prime never succeeded must still be revisited by
+        the nightly job (best-effort retry contract); the prior
+        cache-only query silently dropped exactly those mappings.
+
+        ``coord`` is ``None`` for mappings that have no cached row
+        yet. The caller (refresh service) is expected to skip those
+        with a debug log; first-resolve / next-mapping-upsert paths
+        will prime the cache. Tracked under DEBT-062 for an explicit
+        prime-on-refresh path.
+
+        Inactive mappings (soft-deleted via ``is_active=false``) are
+        excluded.
         """
-        stmt = select(
-            SemanticValueCache.cube_id,
-            SemanticValueCache.semantic_key,
-            SemanticValueCache.coord,
-            SemanticValueCache.product_id,
-        ).distinct()
+        stmt = (
+            select(
+                SemanticMapping.cube_id,
+                SemanticMapping.semantic_key,
+                SemanticValueCache.coord,
+                SemanticMapping.product_id,
+            )
+            .select_from(SemanticMapping)
+            .outerjoin(
+                SemanticValueCache,
+                and_(
+                    SemanticValueCache.cube_id == SemanticMapping.cube_id,
+                    SemanticValueCache.semantic_key
+                    == SemanticMapping.semantic_key,
+                ),
+            )
+            .where(SemanticMapping.is_active.is_(True))
+            .distinct()
+        )
         result = await self._session.execute(stmt)
-        return [tuple(row) for row in result.all()]
+        return [(row[0], row[1], row[2], row[3]) for row in result.all()]
 
     # ------------------------------------------------------------------
     # Maintenance
@@ -419,6 +456,14 @@ class SemanticValueCacheRepository:
         defined by ``ref_period`` ordering, descending, since
         ``period_start`` may be NULL on SQLite test fixtures.
         """
+        # FIX-R2 (P2): rank by ``period_start`` DATE, falling back to
+        # ``ref_period`` only as a tiebreaker. Mixed token formats
+        # (YYYY, YYYY-MM, YYYY-Qn, YYYY-MM-DD) sort incorrectly as
+        # strings — e.g. ``"2025-Q4"`` > ``"2025-12"`` lexically but
+        # represents an earlier date. ``nulls_last()`` keeps rows
+        # with unparseable ``ref_period`` (null period_start, per
+        # Blocker 3 tolerant parser) at the end of the ranking so
+        # they are NOT in the keep window.
         stmt = (
             select(SemanticValueCache.ref_period)
             .where(
@@ -426,7 +471,10 @@ class SemanticValueCacheRepository:
                 SemanticValueCache.semantic_key == semantic_key,
                 SemanticValueCache.coord == coord,
             )
-            .order_by(SemanticValueCache.ref_period.desc())
+            .order_by(
+                SemanticValueCache.period_start.desc().nulls_last(),
+                SemanticValueCache.ref_period.desc(),
+            )
             .limit(retention_count)
         )
         result = await self._session.execute(stmt)

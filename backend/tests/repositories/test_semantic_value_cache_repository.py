@@ -310,3 +310,96 @@ class TestDeleteOlderThan:
         deleted = await repo.delete_older_than(_FIXED - timedelta(days=1))
         await db_session.commit()
         assert deleted == 1
+
+
+class TestListActiveLookupKeys:
+    """FIX-R2 (Blocker 2) regressions: source from semantic_mappings."""
+
+    @pytest.mark.asyncio
+    async def test_includes_active_mapping_with_no_cache_rows(self, db_session):
+        """Active mapping must appear with ``coord=None`` even when no
+        value-cache row exists for it (best-effort retry contract)."""
+        await _seed_mapping(
+            db_session,
+            cube_id="11-10-0001-01",
+            semantic_key="empty_cache_mapping",
+        )
+        repo = SemanticValueCacheRepository(db_session)
+        keys = await repo.list_active_lookup_keys()
+        match = [
+            k for k in keys
+            if k[0] == "11-10-0001-01" and k[1] == "empty_cache_mapping"
+        ]
+        assert len(match) == 1
+        assert match[0][2] is None  # coord
+        assert match[0][3] == 18100004  # product_id from _seed_mapping default
+
+    @pytest.mark.asyncio
+    async def test_excludes_inactive_mapping(self, db_session):
+        """Soft-deleted mapping (``is_active=False``) must NOT appear."""
+        mapping = SemanticMapping(
+            cube_id="34-10-0001-01",
+            product_id=34100001,
+            semantic_key="inactive_test",
+            label="lbl",
+            description=None,
+            config={"dimension_filters": {}},
+            is_active=False,
+            version=1,
+        )
+        db_session.add(mapping)
+        await db_session.commit()
+        repo = SemanticValueCacheRepository(db_session)
+        keys = await repo.list_active_lookup_keys()
+        assert not any(
+            k[0] == "34-10-0001-01" and k[1] == "inactive_test" for k in keys
+        )
+
+    @pytest.mark.asyncio
+    async def test_includes_active_mapping_with_cached_coord(self, db_session):
+        """Mapping with cached row(s) appears once per (mapping, coord)."""
+        await _seed_mapping(db_session)
+        repo = SemanticValueCacheRepository(db_session)
+        kw = _row_kwargs(coord="1.10.0.0.0.0.0.0.0.0")
+        await repo.upsert_period(source_hash=_hash_of(kw), **kw)
+        await db_session.commit()
+
+        keys = await repo.list_active_lookup_keys()
+        primed = [
+            k for k in keys
+            if k[0] == "18-10-0004-01"
+            and k[1] == "cpi.canada.all_items"
+            and k[2] == "1.10.0.0.0.0.0.0.0.0"
+        ]
+        assert len(primed) == 1
+
+
+class TestSortByPeriodStart:
+    """FIX-R2 (P2) regression: sort by period_start DATE, not string."""
+
+    @pytest.mark.asyncio
+    async def test_get_by_lookup_orders_by_period_start_asc(self, db_session):
+        """Mixed-format ref_periods must order by period_start, not string.
+
+        On SQLite (test fixture) ``period_start`` is always NULL — the
+        ``nulls_last()`` clause in the query causes the ``ref_period``
+        tiebreaker to drive the order. The test asserts the sort is
+        stable and reasonable for the SQLite path; full PG semantic
+        coverage lives in the integration tests.
+        """
+        await _seed_mapping(db_session)
+        repo = SemanticValueCacheRepository(db_session)
+        for rp in ("2025-12", "2025-01-15", "2025-Q4"):
+            kw = _row_kwargs(ref_period=rp)
+            await repo.upsert_period(source_hash=_hash_of(kw), **kw)
+        await db_session.commit()
+
+        rows = await repo.get_by_lookup(
+            cube_id="18-10-0004-01",
+            semantic_key="cpi.canada.all_items",
+            coord="1.10.0.0.0.0.0.0.0.0",
+        )
+        # All NULL period_start on SQLite → ref_period asc tiebreaker.
+        assert [r.ref_period for r in rows] == sorted(
+            r.ref_period for r in rows
+        )
