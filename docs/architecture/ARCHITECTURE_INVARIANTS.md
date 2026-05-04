@@ -50,6 +50,26 @@ No global state. Dependencies passed via constructor, not imported at module lev
 - `from app.core.db import async_session` at module top, used inside class methods → use constructor `__init__(self, session_factory)` instead
 - Job handlers creating httpx clients inline (DEBT-017 — known violation, tracked for refactor)
 
+### ARCH-CACHED-ONLY-RESOLVE-001 — Compare path uses cached-only resolve
+
+The Phase 3.1d staleness compare endpoint (`POST /api/v1/admin/publications/{id}/compare`)
+MUST invoke `ResolveService.resolve_value` with `allow_auto_prime=False`. This
+guarantees the compare operation is strictly side-effect-free at the storage
+layer: a cache miss surfaces as `compare_failed(resolve_error="RESOLVE_CACHE_MISS")`
+instead of triggering the auto-prime + re-query workflow that the interactive
+resolve endpoint uses.
+
+The capture path (publish-time, `PublicationStalenessService.capture_for_publication`)
+uses default `allow_auto_prime=True` per recon §5.3 — capture intentionally
+seeds the cache so subsequent compares have a reference point to drift against.
+
+**Enforced by:**
+- `PublicationStalenessService._compare_one_snapshot` (passes `allow_auto_prime=False`)
+- `ResolveService.resolve_value` short-circuit (raises `ResolveCacheMissError` before step 5 when `allow_auto_prime=False`)
+- `backend/tests/api/test_publication_compare.py::test_compare_returns_fresh_when_snapshot_matches_current_cache` (asserts `fake.calls[0]["allow_auto_prime"] is False`)
+- `backend/tests/api/test_publication_compare.py::test_compare_returns_compare_failed_when_cache_row_missing`
+- `backend/tests/api/test_publish_then_compare_pipeline.py::test_publish_then_compare_full_pipeline` (real ResolveService composition; asserts cache-hit path produces `fresh` then `value_changed` after upstream drift)
+
 ### R6 — Short-lived DB sessions
 
 Request-scoped DB sessions live only for the duration of a single request. Background tasks MUST NOT hold a session across long-running operations.
