@@ -8,6 +8,7 @@ import type {
   VisualConfig,
   ReviewPayload,
 } from '@/lib/types/publication';
+import type { CompareResponse, PublishPayload } from '@/lib/types/compare';
 import { extractBackendErrorPayload } from './errorCodes';
 
 const PROXY_BASE = '/api/admin/publications';
@@ -194,6 +195,97 @@ export async function updateAdminPublication(
   }
   const publication = (await res.json()) as AdminPublicationResponse;
   return { ...publication, etag: readEtag(res) };
+}
+
+/**
+ * Phase 3.1d — Compare publication snapshots against current resolve state.
+ * Backend route: POST /api/v1/admin/publications/{id}/compare
+ * Side-effect-free; route declares no body parameter, so we POST with
+ * no body to avoid unnecessary content-type negotiation surface.
+ */
+export async function comparePublication(
+  id: number,
+  options: { signal?: AbortSignal } = {},
+): Promise<CompareResponse> {
+  const res = await fetch(`${PROXY_BASE}/${encodeURIComponent(String(id))}/compare`, {
+    method: 'POST',
+    signal: options.signal,
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const payload = extractBackendErrorPayload(body);
+
+    if (payload.code === 'PUBLICATION_NOT_FOUND') {
+      throw new AdminPublicationNotFoundError(String(id));
+    }
+    if (!payload.code && res.status === 404) {
+      throw new AdminPublicationNotFoundError(String(id));
+    }
+
+    throw new BackendApiError({
+      status: res.status,
+      code: payload.code,
+      message:
+        payload.message ??
+        (typeof body?.detail === 'string' ? body.detail : null) ??
+        `Publication compare failed: ${res.status}`,
+      details: payload.details,
+    });
+  }
+
+  return (await res.json()) as CompareResponse;
+}
+
+/**
+ * Phase 3.1d — Publish publication, optionally capturing snapshots for bound blocks.
+ * Backend route: POST /api/v1/admin/publications/{id}/publish
+ * Body: PublishPayload (optional bound_blocks list).
+ * Supports If-Match for ETag concurrency (Phase 1.3 pattern).
+ */
+export async function publishAdminPublication(
+  id: number,
+  payload: PublishPayload,
+  options: { signal?: AbortSignal; ifMatch?: string | null } = {},
+): Promise<{ etag: string | null; document: AdminPublicationResponse }> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (options.ifMatch) {
+    headers['If-Match'] = options.ifMatch;
+  }
+
+  const res = await fetch(`${PROXY_BASE}/${encodeURIComponent(String(id))}/publish`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    signal: options.signal,
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const errorPayload = extractBackendErrorPayload(body);
+
+    if (errorPayload.code === 'PUBLICATION_NOT_FOUND') {
+      throw new AdminPublicationNotFoundError(String(id));
+    }
+    if (!errorPayload.code && res.status === 404) {
+      throw new AdminPublicationNotFoundError(String(id));
+    }
+
+    throw new BackendApiError({
+      status: res.status,
+      code: errorPayload.code,
+      message:
+        errorPayload.message ??
+        (typeof body?.detail === 'string' ? body.detail : null) ??
+        `Publication publish failed: ${res.status}`,
+      details: errorPayload.details,
+    });
+  }
+
+  const document = (await res.json()) as AdminPublicationResponse;
+  return { etag: readEtag(res), document };
 }
 
 

@@ -32,6 +32,10 @@ export const KNOWN_BACKEND_ERROR_CODES = [
   // Phase 3.1b: SemanticMapping admin CRUD.
   'VERSION_CONFLICT',
   'BULK_VALIDATION_FAILED',
+  // Phase 3.1d: resolver error codes surfaced via binding preview / compare paths.
+  'MAPPING_NOT_FOUND',
+  'RESOLVE_INVALID_FILTERS',
+  'RESOLVE_CACHE_MISS',
 ] as const;
 
 export type BackendErrorCode = (typeof KNOWN_BACKEND_ERROR_CODES)[number];
@@ -70,6 +74,9 @@ export const BACKEND_ERROR_I18N_KEYS: Record<BackendErrorCode, string> = {
   CUBE_NOT_IN_CACHE: 'errors.backend.cube_not_in_cache',
   VERSION_CONFLICT: 'errors.backend.version_conflict',
   BULK_VALIDATION_FAILED: 'errors.backend.bulk_validation_failed',
+  MAPPING_NOT_FOUND: 'publication.binding.resolve.mapping_not_found',
+  RESOLVE_INVALID_FILTERS: 'publication.binding.resolve.invalid_filters',
+  RESOLVE_CACHE_MISS: 'publication.binding.resolve.cache_miss',
 };
 
 /**

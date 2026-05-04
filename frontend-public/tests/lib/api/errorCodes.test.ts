@@ -122,6 +122,26 @@ describe('getBackendErrorI18nKey', () => {
   });
 });
 
+describe('Phase 3.1d resolver error codes', () => {
+  it('maps MAPPING_NOT_FOUND to binding.resolve.mapping_not_found', () => {
+    expect(getBackendErrorI18nKey('MAPPING_NOT_FOUND')).toBe(
+      'publication.binding.resolve.mapping_not_found',
+    );
+  });
+
+  it('maps RESOLVE_INVALID_FILTERS to binding.resolve.invalid_filters', () => {
+    expect(getBackendErrorI18nKey('RESOLVE_INVALID_FILTERS')).toBe(
+      'publication.binding.resolve.invalid_filters',
+    );
+  });
+
+  it('maps RESOLVE_CACHE_MISS to binding.resolve.cache_miss', () => {
+    expect(getBackendErrorI18nKey('RESOLVE_CACHE_MISS')).toBe(
+      'publication.binding.resolve.cache_miss',
+    );
+  });
+});
+
 describe('nested envelope (auth middleware, DEBT-034)', () => {
   it('extracts auth.missing_api_key from nested envelope', () => {
     const body = {
