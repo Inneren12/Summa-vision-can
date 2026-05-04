@@ -24,6 +24,13 @@
     },
     "serialization_error": {
       "message": "Publication could not be saved due to a server data format issue."
+    },
+    "binding": {
+      "resolve": {
+        "mapping_not_found": "Mapping not found for selected filters",
+        "invalid_filters": "Invalid filter set",
+        "cache_miss": "Cache miss (no row after prime)"
+      }
     }
   },
   "import": {

@@ -904,6 +904,180 @@ enough to justify a sprint slot.
 
 ---
 
+## P3-032 — Extract shared `parseAdminPublicationError` helper
+
+- **Source:** Phase 3.1d Slice 1a PR review (post-merge)
+- **Added:** 2026-05-04
+- **Severity:** P2
+- **Category:** code-quality / DRY
+- **File:** `frontend-public/src/lib/api/admin.ts`
+- **Description:** `comparePublication` and `publishAdminPublication`
+  duplicate error parsing logic (parse envelope → throw
+  `AdminPublicationNotFoundError` for code/status 404, else throw
+  `BackendApiError`). Slice 1b (compare badge) and Slice 4 (publish
+  flow with conflict modal) will add more callers. Extract once
+  after 3+ callers exist.
+- **Fix sketch:**
+  ```ts
+  async function parseAdminPublicationError(
+    res: Response,
+    publicationId: string,
+    fallback: string,
+  ): Promise<never> {
+    const body = await res.json().catch(() => null);
+    const payload = extractBackendErrorPayload(body) ?? {};
+    if (payload.code === 'PUBLICATION_NOT_FOUND' ||
+        (!payload.code && res.status === 404)) {
+      throw new AdminPublicationNotFoundError(publicationId);
+    }
+    throw new BackendApiError({
+      status: res.status,
+      code: payload.code,
+      message: payload.message ??
+        (typeof body?.detail === 'string' ? body.detail : null) ?? fallback,
+      details: payload.details,
+    });
+  }
+  ```
+- **Status:** pending
+- **Note:** defer trigger — wait until Slice 1b OR Slice 4 lands
+  (3rd caller). Premature extraction with only 2 callers is
+  over-abstraction.
+
+---
+
+## P3-033 — Split `Binding` union out of `compare.ts`
+
+- **Source:** Phase 3.1d Slice 1a PR review (post-merge)
+- **Added:** 2026-05-04
+- **Severity:** P2
+- **Category:** architecture / domain separation
+- **Files:**
+  - `frontend-public/src/lib/types/compare.ts` (remove Binding types)
+  - `frontend-public/src/components/editor/binding/types.ts` (NEW —
+    Binding union)
+- **Description:** Slice 1a placed `Binding` discriminated union
+  (5 kinds) in `lib/types/compare.ts` alongside backend wire types
+  (`CompareResponse`, `BoundBlockReference`, etc.). Long-term,
+  `Binding` is editor-domain concern (consumed by Inspector,
+  ResolvePreview, walker), not API-wire concern. Split improves
+  layer hygiene.
+- **Fix sketch:** move `SingleValueBinding`, `TimeSeriesBinding`,
+  `CategoricalSeriesBinding`, `MultiMetricBinding`, `TabularBinding`,
+  and `Binding` union to `components/editor/binding/types.ts`.
+  Update Slice 1a imports. Keep `BoundBlockReference` in
+  `compare.ts` (it IS wire-type).
+- **Status:** pending
+- **Note:** fix trigger — ship in Slice 2 (Block schema extension)
+  when `Block.binding` field lands and `validateBinding` consumes
+  the union — natural co-location point.
+
+---
+
+## P3-035 — Hallucinated "publish action wired" anti-pattern in agent prompts
+
+- **Source:** Phase 3.1d frontend pre-recon round 1 review (BLOCKER caught + fixed)
+- **Added:** 2026-05-04
+- **Severity:** P3
+- **Category:** process / agent-prompt-template
+- **File:** N/A (process improvement, not a code file)
+- **Description:** Pre-recon agent emitted a finding "publish action
+  wired" while a different section of the same doc said
+  "publishAdminPublication not found in admin.ts." Self-contradiction
+  within a single recon doc. Pattern: agent state-shifts
+  mid-document and doesn't sweep for consistency before commit.
+- **Fix sketch:** add a mandatory consistency-sweep gate to all
+  recon prompt templates:
+  ```
+  GATE-X — Self-consistency sweep
+  Before committing the doc, grep for contradictory claims:
+  - Search for any "X exists" / "X is wired" / "X works" claims.
+  - For each, verify the prerequisite findings elsewhere in the doc agree.
+  - If inconsistent, fix BEFORE commit. Honest stop if cannot resolve.
+  ```
+  Apply to: all future recon prompt templates (pre-recon,
+  recon-proper Parts 1/2/3, fix prompts).
+- **Status:** pending
+
+---
+
+## P3-036 — Shallow grep `head -30` blind spots in agent prompts
+
+- **Source:** Phase 3.1d frontend pre-recon round 1 review §D (caught + fixed in §D2)
+- **Added:** 2026-05-04
+- **Severity:** P3
+- **Category:** process / agent-prompt-template
+- **File:** N/A (process improvement)
+- **Description:** Agent piped grep through `head -30` to limit
+  output, missed critical matches beyond first 30 lines. Specific
+  case: scanning `admin.ts` for existing API client functions,
+  missed `BackendApiError` definition because it appeared at line 58.
+  Founder caught and required full unfiltered grep in §D2 redraft.
+- **Fix sketch:** add to recon prompt templates a GATE rule:
+  ```
+  GATE-X — No grep truncation
+  Discovery greps must NOT pipe through `head`, `tail`, or
+  `awk 'NR<=N'` unless explicitly justified (e.g. grep returns
+  >1000 lines and only count is needed — but use `grep -c` instead).
+  Default: full grep output captured for analysis.
+  ```
+  Apply to: all recon and impl agent prompts.
+- **Status:** pending
+
+---
+
+## P3-037 — "Bonus" assertions get skipped — make REQUIRED
+
+- **Source:** Phase 3.1d agent prompt observation (cross-cutting across multiple slices)
+- **Added:** 2026-05-04
+- **Severity:** P3
+- **Category:** process / agent-prompt-template
+- **File:** N/A (process improvement)
+- **Description:** Phrasing like "Bonus: also verify X" or
+  "Optional: assert Y" in agent prompts gets treated as truly
+  optional and skipped, even when X/Y is critical for review-quality
+  output. Observed in pre-recon §F, recon-proper Part 1 §B (test
+  surface bullets called "bonus").
+- **Fix sketch:** ban "bonus" / "optional" / "if time permits"
+  framing in agent prompts. Items are either:
+  - REQUIRED (default — agent must do)
+  - OUT OF SCOPE (explicit — agent must NOT do)
+  - DEFERRED (explicit — flag for later phase, do not do now)
+
+  No middle category. Apply to: all agent prompt templates and
+  individual prompts.
+- **Status:** pending
+
+---
+
+## P3-038 — Sandbox-only file output without repo-commit pairing
+
+- **Source:** Phase 3.1d session communication review (cross-cutting, observed multiple times)
+- **Added:** 2026-05-04
+- **Severity:** P3 (process discipline; failure mode = silent loss of work)
+- **Category:** process / claude-self-discipline
+- **File:** N/A (process improvement)
+- **Description:** Pattern: claude updates a file in
+  `/mnt/user-data/outputs/` (sandbox) and treats work as done,
+  without pairing the change with an agent prompt that commits the
+  file to repo. Observed during multiple polish updates (3.1a/3.1b/
+  3.1c potentially affected — never audited). Failure mode: founder
+  thinks update landed; repo doesn't reflect it; subsequent work
+  drifts from sandbox state.
+- **Fix sketch:** every file-update task must result in EITHER:
+  1. An agent prompt that commits the file to repo with an explicit
+     branch + commit message, OR
+  2. A clear statement to founder: "drafted but NOT shipped — needs
+     dispatch to land in repo."
+
+  Never both ambiguous. Apply to: claude self-instructions for every
+  multi-turn chat involving file outputs.
+- **Status:** pending
+- **Note:** partially behavioral; partially structural (every output
+  should be classified before next message).
+
+---
+
 ## Batch dispatch policy
 
 When 3+ items accumulate in same category, OR 5+ items total:
@@ -944,3 +1118,20 @@ Current batch candidates:
   — 3 items), P3-027 (BLE001 audit). Spans backend/, migrations/, and
   flutter_admin/. ~2 hours total. Dispatch after Phase 3.1d closes,
   before Phase 3.2 starts. Single PR, single review pass.
+- **Phase 3.1d Slice 1a closeout batch (residual)**: P3-032, P3-033 —
+  both `frontend-public/` items. P3-032 (`parseAdminPublicationError`
+  helper extraction) defer until 3rd error-helper caller exists
+  (Slice 1b adds compare badge state, Slice 4 adds publish flow —
+  natural batch trigger). P3-033 (`Binding` union split out of
+  `compare.ts` into `editor/binding/types.ts`) bundles naturally with
+  Slice 2 (Block.binding schema extension) review-fix round.
+  Note: P3-028, P3-029, P3-030, P3-031, P3-034 (originally part of
+  this batch) were closed inline in Slice 1a fix round (PR #<TBD>).
+- **Phase 3.1d agent-prompt-template improvements**: P3-035, P3-036,
+  P3-037 — meta-process items. Apply to template files (if formalized)
+  or as claude self-instruction updates. Single review pass when
+  ≥1 new recon prompt template gets drafted (e.g. Phase 3.1e backend
+  recon Part 2, Phase 3.2 onward).
+- **Process discipline**: P3-038 — single-item, behavioral. Address
+  via claude self-instruction at every file-output decision point.
+  No batch dispatch; always-on discipline.
