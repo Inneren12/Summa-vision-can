@@ -23,14 +23,18 @@ from datetime import datetime, timezone
 from typing import Literal
 
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.routers.admin_resolve import _get_resolve_service
 from src.api.schemas.admin_leads import AdminLeadResponse
 from src.core.database import get_db
 from src.core.logging import get_logger
 from src.models.publication import Publication, PublicationStatus
 from src.repositories.lead_repository import LeadRepository
+from src.repositories.publication_block_snapshot_repository import (
+    PublicationBlockSnapshotRepository,
+)
 from src.repositories.publication_repository import PublicationRepository
 from src.schemas.events import EventType
 from src.schemas.publication import (
@@ -39,6 +43,10 @@ from src.schemas.publication import (
     PublicationUpdate,
     ReviewPayload,
     VisualConfig,
+)
+from src.schemas.staleness import (
+    PublicationComparatorResponse,
+    PublicationPublishRequest,
 )
 from src.services.audit import AuditWriter
 from src.services.publications.clone import clone_publication
@@ -49,6 +57,8 @@ from src.services.publications.exceptions import (
     PublicationPreconditionFailedError,
 )
 from src.services.publications.lineage import generate_lineage_key
+from src.services.publications.staleness import PublicationStalenessService
+from src.services.resolve.service import ResolveService
 
 
 def _classify_workflow_event(
@@ -107,6 +117,31 @@ def _get_repo(session: AsyncSession = Depends(get_db)) -> PublicationRepository:
 def _get_audit(session: AsyncSession = Depends(get_db)) -> AuditWriter:
     """Provide an :class:`AuditWriter` via DI."""
     return AuditWriter(session)
+
+
+def _get_snapshot_repo(
+    session: AsyncSession = Depends(get_db),
+) -> PublicationBlockSnapshotRepository:
+    """Provide a :class:`PublicationBlockSnapshotRepository` via DI."""
+    return PublicationBlockSnapshotRepository(session)
+
+
+def _get_staleness_service(
+    snapshot_repo: PublicationBlockSnapshotRepository = Depends(_get_snapshot_repo),
+    publication_repo: PublicationRepository = Depends(_get_repo),
+    resolve_service: ResolveService = Depends(_get_resolve_service),
+) -> PublicationStalenessService:
+    """Provide a :class:`PublicationStalenessService` via DI.
+
+    Reuses ``_get_resolve_service`` from ``admin_resolve`` so the cached-only
+    compare path runs through the same composed ResolveService that the
+    interactive resolve endpoint uses (ARCH-DPEN-001).
+    """
+    return PublicationStalenessService(
+        snapshot_repository=snapshot_repo,
+        publication_repository=publication_repo,
+        resolve_service=resolve_service,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -509,16 +544,25 @@ async def update_publication(
 )
 async def publish_publication(
     publication_id: int,
+    payload: PublicationPublishRequest | None = Body(default=None),
     repo: PublicationRepository = Depends(_get_repo),
     audit: AuditWriter = Depends(_get_audit),
+    staleness: PublicationStalenessService = Depends(_get_staleness_service),
 ) -> PublicationResponse:
-    """Set status to PUBLISHED, stamp ``published_at``, and audit.
+    """Set status to PUBLISHED, stamp ``published_at``, audit, and capture snapshots.
 
     If the row already carries a ``review`` payload the endpoint also
     mirrors ``review.workflow = "published"`` and appends a history
     entry authored as ``"system"`` so the frontend can render the
     transition in its timeline. Rows without a ``review`` payload are
     published by status alone (no review sync is attempted).
+
+    Phase 3.1d: optional ``payload.bound_blocks`` triggers publish-time
+    snapshot capture per recon §5. Backward-compat: no body / null /
+    ``{}`` / object body all parse to empty bound_blocks. Bare array
+    body is NOT accepted. Capture is best-effort — per-block resolve or
+    upsert failures are logged inside the service and never raise into
+    the caller, so publish success is not rolled back.
     """
     publication = await repo.publish(publication_id)
     if publication is None:
@@ -540,8 +584,74 @@ async def publish_publication(
         metadata={"headline": publication.headline},
         actor="admin_api",
     )
+
+    # Phase 3.1d snapshot capture (recon §5). Best-effort: capture
+    # failures are logged inside the service and never raise into the
+    # caller, so publish success is not rolled back.
+    bound_blocks = payload.bound_blocks if payload else []
+    if bound_blocks:
+        captured = await staleness.capture_for_publication(
+            publication_id=publication.id,
+            bound_blocks=bound_blocks,
+        )
+        logger.info(
+            "publication_snapshots_captured",
+            publication_id=publication.id,
+            bound_count=len(bound_blocks),
+            captured_count=captured,
+        )
+
     logger.info("publication_published", publication_id=publication.id)
     return _serialize(publication)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/admin/publications/{publication_id}/compare
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{publication_id}/compare",
+    response_model=PublicationComparatorResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Compare publication snapshot fingerprint vs current cache",
+    responses={
+        404: {"description": "Publication not found."},
+    },
+)
+async def compare_publication(
+    publication_id: int,
+    staleness: PublicationStalenessService = Depends(_get_staleness_service),
+) -> PublicationComparatorResponse:
+    """Phase 3.1d staleness comparator endpoint.
+
+    Per recon §3.1: side-effect-free except for structured logs and
+    metrics. The endpoint never writes to ``publication_block_snapshot``,
+    never mutates publications, never auto-primes the cache, never
+    emits AuditEvent rows.
+
+    Per §3.2 BLOCKER-1: cached-only resolve mode is enforced inside
+    :class:`PublicationStalenessService` — cache miss surfaces as
+    ``compare_failed(resolve_error="RESOLVE_CACHE_MISS")``, never as a
+    write to ``semantic_value_cache``.
+
+    Per §3.4 BLOCKER-2 Option C: when no snapshot rows exist for a
+    published publication, returns a single synthetic
+    publication-level :class:`BlockComparatorResult` with
+    ``stale_reasons=[snapshot_missing]`` and
+    ``overall_status=unknown``.
+    """
+    response = await staleness.compare_for_publication(
+        publication_id=publication_id,
+    )
+    logger.info(
+        "publication_staleness_compared",
+        publication_id=publication_id,
+        overall_status=response.overall_status.value,
+        overall_severity=response.overall_severity.value,
+        block_count=len(response.block_results),
+    )
+    return response
 
 
 # ---------------------------------------------------------------------------
