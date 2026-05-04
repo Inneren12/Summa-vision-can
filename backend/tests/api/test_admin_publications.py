@@ -35,6 +35,7 @@ from sqlalchemy import select
 from src.api.routers.admin_publications import (
     _get_audit,
     _get_repo,
+    _get_staleness_service,
     router,
 )
 from src.api.routers.public_graphics import (
@@ -108,6 +109,22 @@ def _make_app(session_factory) -> FastAPI:
 
     app.dependency_overrides[_get_repo] = _override_repo
     app.dependency_overrides[_get_audit] = _override_audit
+
+    # Phase 3.1d: publish endpoint now depends on PublicationStalenessService.
+    # Existing tests do not exercise capture, so override with a no-op stub
+    # that satisfies the dependency without requiring the full ResolveService
+    # composition (which would touch PostgreSQL via get_session_factory()).
+    class _NoopStalenessService:
+        async def capture_for_publication(self, *, publication_id, bound_blocks):
+            return 0
+
+        async def compare_for_publication(self, *, publication_id):  # pragma: no cover
+            raise NotImplementedError
+
+    def _override_staleness() -> _NoopStalenessService:
+        return _NoopStalenessService()
+
+    app.dependency_overrides[_get_staleness_service] = _override_staleness
 
     app.add_middleware(AuthMiddleware, admin_api_key="test-admin-key")
     return app
@@ -667,6 +684,16 @@ def _make_admin_and_public_app(session_factory):
 
     app.dependency_overrides[_get_repo] = _override_repo
     app.dependency_overrides[_get_audit] = _override_audit
+
+    class _NoopStalenessService:
+        async def capture_for_publication(self, *, publication_id, bound_blocks):
+            return 0
+
+        async def compare_for_publication(self, *, publication_id):  # pragma: no cover
+            raise NotImplementedError
+
+    app.dependency_overrides[_get_staleness_service] = lambda: _NoopStalenessService()
+
     # Public router uses its own dependency symbols — override them too so
     # requests hit the same per-test DB / session factory.
     app.dependency_overrides[_get_public_repo] = _override_repo

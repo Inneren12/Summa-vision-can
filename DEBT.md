@@ -780,3 +780,94 @@ Rules:
   - Bulk Duplicate inserts copies after each source preserving relative order
   - The reducer's per-block `TOGGLE_LOCK` / `DUPLICATE_BLOCK` / `REMOVE_BLOCK` already form the underlying primitives; multi-select is a UI layer on top, not a refactor of state shape.
 - **Target:** post-Phase-3 polish — operator productivity refinement after the binding system ships. Not roadmap-critical for Phase 2.
+
+
+### DEBT-064: Phase 3.1d — automatic hydrate fanout for compare
+
+- **Source:** Phase 3.1d recon §F Q4 (`docs/recon/phase-3-1d-recon.md`)
+- **Added:** 2026-05-04
+- **Severity:** low
+- **Category:** architecture
+- **Status:** active
+- **Description:** 3.1d v1 ships explicit-action compare only; no automatic compare on document hydrate.
+- **Impact:** Stale data goes undetected when an operator does not compare before re-publishing.
+- **Resolution:** Add hydrate-time compare in admin editor.
+- **Target:** Phase 3.2 frontend hardening or operator-feedback driven.
+
+
+### DEBT-065: Phase 3.1d — scheduled background staleness compare
+
+- **Source:** Phase 3.1d recon §F Q4 (`docs/recon/phase-3-1d-recon.md`)
+- **Added:** 2026-05-04
+- **Severity:** low
+- **Category:** architecture
+- **Status:** active
+- **Description:** No periodic backend job comparing all published publications.
+- **Impact:** Large catalog drifts without operator notice.
+- **Resolution:** APScheduler job mirroring 3.1aaa pattern, populating cached `staleness_status` on Publication.
+- **Target:** Phase 3.2 or after >50 publications shipped.
+
+
+### DEBT-066: Phase 3.1d — public viewer staleness display
+
+- **Source:** Phase 3.1d recon §F Q7 (`docs/recon/phase-3-1d-recon.md`)
+- **Added:** 2026-05-04
+- **Severity:** low
+- **Category:** architecture
+- **Status:** active
+- **Description:** Public viewer does not show stale state. v1 lock per Q7.
+- **Impact:** Public viewers render outdated values without indication.
+- **Resolution:** Extend `PublicationPublicResponse` with backend-computed flag (depends on DEBT-046).
+- **Target:** Phase 3.2 frontend hardening, after DEBT-046 lands.
+
+
+### DEBT-067: Phase 3.1d — coord-vs-dim/member redundant storage
+
+- **Source:** Phase 3.1d recon §4 option (c) (`docs/recon/phase-3-1d-recon.md`)
+- **Added:** 2026-05-04
+- **Severity:** low
+- **Category:** architecture
+- **Status:** active
+- **Description:** §4 option (c) stores raw dims/members alongside coord, doubling identity context storage.
+- **Impact:** Two extra columns per snapshot row produce minor storage overhead.
+- **Resolution:** When ResolveService gains a coord-direct entrypoint, drop redundant columns.
+- **Target:** Opportunistic, low priority.
+
+
+### DEBT-068: Phase 3.1d — expected-bindings persistence
+
+- **Source:** Phase 3.1d recon BLOCKER-2 Option C (`docs/recon/phase-3-1d-recon.md`)
+- **Added:** 2026-05-04
+- **Severity:** medium
+- **Category:** architecture
+- **Status:** active
+- **Description:** BLOCKER-2 Option C drop. Backend cannot distinguish "publication has 0 bindings" from "publication has bindings but capture failed/omitted." All collapse to a synthetic block_results entry with `snapshot_missing + info`.
+- **Impact:** Operators see an ambiguous badge for genuinely-empty publications. Edge case.
+- **Resolution:** Persist expected-bindings list either in a new `publication_bound_block_reference` table OR a JSONB column on `publications`. Compare endpoint reads both expected list and actual snapshot table; difference yields true `snapshot_missing`.
+- **Target:** When operator reports confusion OR when frontend ships zero-bindings publication type.
+
+
+### DEBT-069: Phase 3.1d — orphan snapshot cleanup
+
+- **Source:** Phase 3.1d recon §3.3 P1-c (`docs/recon/phase-3-1d-recon.md`)
+- **Added:** 2026-05-04
+- **Severity:** low
+- **Category:** code-quality
+- **Status:** active
+- **Description:** A block removed from a publication's bindings leaves an orphaned `publication_block_snapshot` row. v1 does not clean these up.
+- **Impact:** Minor storage growth with no behavioral effect (compare iterates only what is present).
+- **Resolution:** Cleanup pass on republish — compare current bound_blocks against existing snapshot rows, delete rows for removed blocks.
+- **Target:** Opportunistic, low priority.
+
+
+### DEBT-070: Phase 3.1d — dedicated refresh-snapshot action
+
+- **Source:** Phase 3.1d recon §2.3 P1-e (`docs/recon/phase-3-1d-recon.md`)
+- **Added:** 2026-05-04
+- **Severity:** low
+- **Category:** architecture
+- **Status:** active
+- **Description:** v1 conflates "refresh snapshot" with "republish" — operator can only refresh by triggering full republish action.
+- **Impact:** Operator must re-confirm publish workflow even when only data refresh is wanted; minor UX friction.
+- **Resolution:** New `POST /{publication_id}/recapture-snapshots` endpoint that runs capture flow without state transition.
+- **Target:** Phase 3.2 or operator-feedback-driven.
