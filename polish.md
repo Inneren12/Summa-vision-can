@@ -904,6 +904,195 @@ enough to justify a sprint slot.
 
 ---
 
+## P3-028 — Rename `test_publish_capture_db_upsert_failure_does_not_fail_publish` → `test_publish_capture_validation_failure_does_not_fail_publish`
+
+- **Source:** Phase 3.1d PR 2 Part 1 reviewer flag (post-fix-round)
+- **Added:** 2026-05-04
+- **Severity:** P2
+- **Category:** test-naming
+- **File:** `backend/tests/api/test_publication_[compare.py](http://compare.py)`
+- **Description:** Test name claims "DB upsert failure" but the
+  mechanism it exercises is `validate_snapshot_dims_members`
+  raising `ValueError` (negative member) — fires BEFORE any DB
+  write. The service-level swallow contract is identical for shape-
+  validation and DB-upsert failures, so the test does cover the
+  correct surface; only the name is misleading. Reviewer accepted
+  the test for merge but flagged the name as misleading future
+  readers.
+- **Fix sketch:** rename to
+  `test_publish_capture_validation_failure_does_not_fail_publish`.
+  Update docstring comment likewise. Optionally add a sibling test
+  that injects a broken repo via dependency override to exercise a
+  literal upsert raise — but only if a fake/broken repo helper
+  already exists, otherwise that's net-new infrastructure for
+  redundant coverage.
+- **Status:** pending
+
+---
+
+## P3-029 — Optional route-level guard around `staleness.capture_for_publication`
+
+- **Source:** Phase 3.1d PR 2 Part 1 reviewer suggestion
+- **Added:** 2026-05-04
+- **Severity:** P3
+- **Category:** code-quality (defense-in-depth)
+- **File:** `backend/src/api/routers/admin_[publications.py](http://publications.py)`
+  (`publish_publication` handler)
+- **Description:** `publish_publication` calls
+  `staleness.capture_for_publication(...)` without a route-level
+  try/except. Service contract guarantees per-block swallow inside
+  the loop, so any single block's failure cannot escape. But if a
+  future regression in the service raises OUTSIDE the per-block
+  loop (e.g. before-loop setup, after-loop aggregation, an unhandled
+  validation in the wrapper), publish would 500 even though the
+  publication mutation already committed. Belt-and-suspenders fix
+  is route-level catch.
+- **Fix sketch:**
+  ```python
+  bound_blocks = payload.bound_blocks if payload else []
+  if bound_blocks:
+      try:
+          captured = await staleness.capture_for_publication(
+              publication_id=[publication.id](http://publication.id),
+              bound_blocks=bound_blocks,
+          )
+      except Exception:  # noqa: BLE001 — defense-in-depth
+          logger.exception(
+              "publication_snapshot_capture_failed",
+              publication_id=[publication.id](http://publication.id),
+              bound_count=len(bound_blocks),
+          )
+          captured = 0
+      [logger.info](http://logger.info)(
+          "publication_snapshots_captured",
+          publication_id=[publication.id](http://publication.id),
+          bound_count=len(bound_blocks),
+          captured_count=captured,
+      )
+  ```
+  Add corresponding integration test that injects an exploding
+  StalenessService stub and verifies publish returns 200 anyway.
+- **Status:** pending
+- **Note:** trade-off — this duplicates the service contract and
+  obscures regressions in the per-block swallow path. Recon §5 had
+  service-level best-effort as the locked contract. Discuss before
+  shipping.
+
+---
+
+## P3-030 — DEBT-066 references DEBT-046, but DEBT-046 may be stale
+
+- **Source:** Phase 3.1d PR 2 Part 1 reviewer flag
+- **Added:** 2026-05-04
+- **Severity:** P3
+- **Category:** documentation
+- **File:** `[DEBT.md](http://DEBT.md)`
+- **Description:** DEBT-066 (Phase 3.1d — public viewer staleness
+  display) reads `Resolution: Extend PublicationPublicResponse with
+  backend-computed flag (depends on DEBT-046).` The reference to
+  DEBT-046 was carried over from an earlier draft of the recon doc
+  where DEBT numbering started at 045. After the actual [DEBT.md](http://DEBT.md)
+  insertion landed at DEBT-064..070, the cross-reference inside
+  DEBT-066's Resolution field was not updated to point at the new
+  number for the scheduled-background-compare entry (which is now
+  DEBT-065).
+- **Fix sketch:** verify what DEBT-046 currently is in `[DEBT.md](http://DEBT.md)` (if
+  it exists at all), and what DEBT-066 actually depends on. The
+  intent in the recon was "depends on the scheduled background
+  compare entry" (now DEBT-065). Update DEBT-066:
+  ```markdown
+  - **Resolution:** Extend `PublicationPublicResponse` with
+    backend-computed flag (depends on DEBT-065).
+  ```
+- **Status:** pending
+
+---
+
+## P3-031 — Router-to-router DI factory import smell
+
+- **Source:** Phase 3.1d PR 2 Part 1 reviewer flag (P2 in original
+  review, downgraded to P3 polish)
+- **Added:** 2026-05-04
+- **Severity:** P3
+- **Category:** architecture
+- **Files:**
+  - `backend/src/api/routers/admin_[publications.py](http://publications.py)`
+    (imports `_get_resolve_service` from `admin_[resolve.py](http://resolve.py)`)
+  - `backend/src/api/routers/admin_[resolve.py](http://resolve.py)`
+    (defines `_get_resolve_service`)
+- **Description:** `admin_[publications.py](http://publications.py)` reaches into a sibling
+  router module to grab `_get_resolve_service`. Works (no cycle), but
+  creates structural coupling between unrelated endpoint modules.
+  Same DI factory will likely be needed by future routers (e.g.
+  `admin_validate`, `admin_freshness`, hypothetical scheduler
+  endpoints). Cleaner placement: shared `dependencies/` module that
+  every router imports without coupling to peer-router internals.
+- **Fix sketch:**
+  1. Create `backend/src/api/dependencies/[resolve.py](http://resolve.py)` exporting
+     `get_resolve_service` (drop the private-prefix underscore for
+     the moved factory).
+  2. `admin_[resolve.py](http://resolve.py)` re-imports from there and uses as its own
+     dependency factory (or re-exports `_get_resolve_service` as
+     alias for back-compat).
+  3. `admin_[publications.py](http://publications.py)` imports from `dependencies/resolve`
+     directly; remove the `from src.api.routers.admin_resolve`
+     import.
+  4. While at it, audit other router-to-router DI imports
+     (`grep -rn "from src.api.routers." backend/src/api/routers/`).
+- **Status:** pending
+- **Note:** straightforward refactor, ~30 min if no other smell
+  routers; longer if grep finds 3+ similar imports.
+
+---
+
+## P3-032 — Phase 3.1d docs polish (line numbers + wording)
+
+- **Source:** Phase 3.1d PR 2 Part 2 reviewer flags (P2 cosmetic)
+- **Added:** 2026-05-04
+- **Severity:** P3
+- **Category:** documentation
+- **Files:**
+  - `docs/architecture/BACKEND_API_[INVENTORY.md](http://INVENTORY.md)`
+  - `docs/[api.md](http://api.md)`
+  - `docs/architecture/ROADMAP_[DEPENDENCIES.md](http://DEPENDENCIES.md)`
+- **Description:** Three small wording/format issues in Phase 3.1d
+  drift docs:
+  1. **Line numbers brittle** in BACKEND_API_[INVENTORY.md](http://INVENTORY.md) —
+     references like `admin_publications.py:545`,
+     `admin_publications.py:622`, `staleness.py:173`,
+     `staleness.py:148` will drift on next refactor.
+  2. **`docs/[api.md](http://api.md)` "never raise" wording** — current text says
+     "per-block resolve or shape-validation failures are logged
+     inside `PublicationStalenessService.capture_for_publication`
+     and never raise into the caller." The "never" is stronger than
+     route-level enforcement guarantees today (linked to P3-029 —
+     if route-level guard added, "never" becomes accurate; until
+     then, prefer "should not raise").
+  3. **ROADMAP_[DEPENDENCIES.md](http://DEPENDENCIES.md) SHIPPED timestamp** — Phase 3.1d
+     entry says `SHIPPED (2026-05)` which is correct after this PR
+     lands but was technically premature during PR review window.
+     Already merged so this is informational; future closeout PRs
+     should phrase as `READY TO SHIP` until merge confirmed.
+- **Fix sketch:**
+  1. Replace line-number suffixes with symbol references:
+     ```diff
+     - admin_publications.py:545
+     + admin_[publications.py](http://publications.py)::publish_publication
+     ```
+     Same for `compare_publication`, `PublicationPublishRequest`,
+     `PublicationComparatorResponse`. Audit other entries in the
+     inventory for the same pattern.
+  2. In `docs/[api.md](http://api.md)`, change "and never raise into the caller" to
+     "and should not raise into the caller" (or upgrade to "and
+     never raise" once P3-029 ships).
+  3. ROADMAP wording — leave as-is (already merged correctly), but
+     adopt `READY TO SHIP` convention in future closeout PRs.
+- **Status:** pending
+- **Note:** combine with P3-031 in a Phase 3.1d closeout polish
+  batch — both touch related surface (router DI + drift docs).
+
+---
+
 ## Batch dispatch policy
 
 When 3+ items accumulate in same category, OR 5+ items total:
@@ -944,3 +1133,14 @@ Current batch candidates:
   — 3 items), P3-027 (BLE001 audit). Spans backend/, migrations/, and
   flutter_admin/. ~2 hours total. Dispatch after Phase 3.1d closes,
   before Phase 3.2 starts. Single PR, single review pass.
+- **Phase 3.1d closeout batch**: P3-028 (test rename), P3-029 (optional
+  route-level capture guard), P3-030 (DEBT-066 → DEBT-065 reference
+  fix), P3-031 (router-to-router DI smell), P3-032 (docs line numbers
+  + wording). Mixed surface: backend tests, router code, [DEBT.md](http://DEBT.md),
+  drift docs. P3-029 is the most substantive (~30 min + integration
+  test); rest are mechanical polish (~5-10 min each). Total ~1 hour.
+  Sequencing: ship P3-030 (DEBT reference) and P3-032 (docs) first as
+  pure docs PR; ship P3-028 (rename) standalone or with P3-029
+  (route guard) which adds the integration test that justifies the
+  rename's name being canonical. P3-031 is independent — can ship
+  with the Phase 3.1 closure batch above if surface overlaps.
