@@ -38,7 +38,7 @@ Required columns and constraints are locked exactly as ratified, plus two justif
 | `cube_id` | `String(50)` | NOT NULL — matches `semantic_value_cache.cube_id` |
 | `semantic_key` | `String(200)` | NOT NULL — matches `semantic_mappings.semantic_key`. NOT 100. See DEBT-063. |
 | `coord` | `String(40)` | NOT NULL — 10-slot canonical encoding |
-| `period` | `String(20)` | nullable — null = "latest at capture time" |
+| `period` | `String(20)` | nullable — null = "latest at capture time" (see compare semantics note below) |
 | `dims_json` | `JSONB` | NOT NULL — list[int] with service invariants below |
 | `members_json` | `JSONB` | NOT NULL — list[int] with service invariants below |
 | `mapping_version_at_publish` | `Integer` | nullable |
@@ -55,6 +55,10 @@ Required columns and constraints are locked exactly as ratified, plus two justif
 - All `dims_json` elements are integers in 1..10 range (matches 3.1c BLOCKERS-1 fix)
 - All `members_json` elements are non-negative integers
 - Order is preserved (positional pairing — dims_json[i] pairs with members_json[i])
+
+**period=null semantics (locked, P2):** when `period` is null, snapshot means "latest series value as of capture time." On compare, ResolveService is called with `period=None` and returns the latest value at compare time. Snapshot's captured `value_at_publish` is compared against the current latest. This is the desired behavior for "latest" bindings — not a bug. Drift in latest-period values surfaces as `value_changed` reason. Future PR may add an alternative "frozen-period" binding mode if needed.
+
+**members_json semantic validation note (locked, P2):** `non-negative integers` in service invariants is the DB/service shape minimum. Capture flow MUST additionally route `BoundBlockReference` through the same 3.1c filter validation path (`validate_dims_members` or equivalent) before snapshot upsert. Non-negative check alone does NOT replace 3.1c semantic validation.
 
 Alembic naming convention: mirror existing phase pattern with next timestamped file under `backend/alembic/versions/` using slug format like `YYYYMMDD_HHMM_phase_3_1d_publication_block_snapshot.py`; upgrade creates table+constraints+index, downgrade drops index then table.
 
@@ -105,7 +109,7 @@ A dedicated "recapture without state transition" action is DEFERRED — see DEBT
 **Side-effect contract (locked, P1-b):** `POST /compare` is side-effect-free in v1 except for structured logs and metrics. The endpoint MUST NOT:
 - Write to `publication_block_snapshot` (no recapture during compare)
 - Mutate `publications.published_at` or any other field
-- Trigger auto_prime on the value cache (resolve calls flow through 3.1c's normal cache-miss handling, which itself may auto-prime; compare adds no separate trigger)
+- Trigger auto_prime on the value cache. Compare uses cached-only resolve (see §3.2 below); cache-miss does NOT trigger auto-prime during compare. If the current cache row is absent for a snapshot identity, comparator emits `compare_failed` with `resolve_error="RESOLVE_CACHE_MISS"` instead of priming.
 - Emit AuditEvent rows (compare is diagnostic, not audit-worthy in v1)
 
 Rationale: v1 has no result caching layer, so caching the compare result is not a side effect anyone needs. A future PR adding result caching MUST update this contract explicitly.
@@ -113,6 +117,15 @@ Rationale: v1 has no result caching layer, so caching the compare result is not 
 ### 3.2 Service contract (direct `ResolveService` reuse)
 
 `PublicationStalenessService` injected with direct `ResolveService` instance via DI. No internal HTTP calls.
+
+**Cached-only resolve mode (locked, BLOCKER-1):** Compare path MUST use a cached-only resolve API that does NOT trigger auto-prime on cache miss. Two implementation options for impl agent — pick one in impl PR:
+
+- Option 1: extend `ResolveService.resolve_value(..., allow_auto_prime: bool = True)` and pass `False` from compare path.
+- Option 2: add `ResolveService.resolve_cached_value_only(...)` that returns a domain error on cache miss without writing.
+
+Either way the contract from compare's perspective is: cache miss → `compare_failed` with `resolve_error="RESOLVE_CACHE_MISS"`, NO write to `semantic_value_cache`. This makes POST /compare strictly side-effect-free at the storage layer.
+
+Capture path (publish-time) keeps default auto-prime behavior — capture intentionally seeds the cache when ingesting fresh data.
 
 `BoundBlockReference` contract for publish-time capture:
 - `block_id: str`
@@ -227,24 +240,28 @@ class CompareKind(str, Enum):
     SNAPSHOT_MISSING = "snapshot_missing"
     COMPARE_FAILED = "compare_failed"
 
+class CompareFailedDetails(BaseModel):
+    exception_type: str
+    message: str  # MUST be sanitized — no stack traces, SQL, API keys, or raw upstream payloads
+
 class DriftCheckBasis(BaseModel):
-    compare_kind: Literal[CompareKind.DRIFT_CHECK]
+    compare_kind: Literal["drift_check"]
     matched_fields: list[str]
     drift_fields: list[str]
 
 class SnapshotMissingBasis(BaseModel):
-    compare_kind: Literal[CompareKind.SNAPSHOT_MISSING]
+    compare_kind: Literal["snapshot_missing"]
     cause: Literal["no_snapshot_row"]
 
 class CompareFailedBasis(BaseModel):
-    compare_kind: Literal[CompareKind.COMPARE_FAILED]
+    compare_kind: Literal["compare_failed"]
     resolve_error: Literal[
         "MAPPING_NOT_FOUND",
         "RESOLVE_CACHE_MISS",
         "RESOLVE_INVALID_FILTERS",
         "UNEXPECTED",
     ]
-    details: dict  # {exception_type: str, message: str}
+    details: CompareFailedDetails
 
 CompareBasis = Annotated[
     DriftCheckBasis | SnapshotMissingBasis | CompareFailedBasis,
@@ -307,7 +324,7 @@ compare_basis = {
 **Aggregation rules (locked, BLOCKER-2 Option C):**
 - `overall_status`: STALE if any block STALE; else UNKNOWN if any UNKNOWN; else FRESH.
 - `overall_severity`: max(block severities); ordering: blocking > warning > info.
-- **No-snapshot-rows case** (covers pre-3.1d publications, fresh clones, publish-without-bound_blocks, and all-blocks-capture-failed): comparator returns a single synthetic `BlockComparatorResult` with `block_id=""`, `cube_id=""`, `semantic_key=""`, `stale_status=UNKNOWN`, `stale_reasons=[SNAPSHOT_MISSING]`, `severity=INFO`, `snapshot=None`, `current=None`, `compare_basis=SnapshotMissingBasis(compare_kind="snapshot_missing", cause="no_snapshot_row")`. The aggregate then yields `overall_status=UNKNOWN`, `overall_severity=INFO`. Backend cannot distinguish the four sub-causes in v1; all collapse to the same synthetic entry. This unifies the contract: every published publication ALWAYS produces non-empty `block_results` with at least one entry carrying `stale_reasons`.
+- **No-snapshot-rows case** (covers pre-3.1d publications, fresh clones, publish-without-bound_blocks, and all-blocks-capture-failed): comparator returns a single synthetic `BlockComparatorResult` with `block_id=""`, `cube_id=""`, `semantic_key=""`, `stale_status=UNKNOWN`, `stale_reasons=[SNAPSHOT_MISSING]`, `severity=INFO`, `snapshot=None`, `current=None`, `compare_basis=SnapshotMissingBasis(compare_kind="snapshot_missing", cause="no_snapshot_row")`. **Sentinel rule (locked, P1):** empty `block_id` / `cube_id` / `semantic_key` are intentional sentinel values marking a publication-level synthetic result. UI MUST key this entry as a publication-level result, not as a real block — discriminate via `compare_basis.compare_kind == "snapshot_missing"` AND empty `block_id`. Test required: `test_compare_no_snapshot_rows_returns_single_synthetic_publication_result` The aggregate then yields `overall_status=UNKNOWN`, `overall_severity=INFO`. Backend cannot distinguish the four sub-causes in v1; all collapse to the same synthetic entry. This unifies the contract: every published publication ALWAYS produces non-empty `block_results` with at least one entry carrying `stale_reasons`.
 
 **This DROPS the prior zero-bindings-fresh rule.** Backend has no way to tell "intentionally zero bindings" from "missing captures" without persisted expected-bindings list. Frontend that needs a true zero-bindings signal must either:
 (a) interpret empty `block_results` + status=UNKNOWN as "needs republish to capture," OR
@@ -333,7 +350,8 @@ Locked compare behavior:
 3. On resolve exceptions (`MappingNotFound...`, cache miss, invalid filters, unexpected), emit `compare_failed`.
 4. On success, evaluate drift reasons: mapping version, source hash, value, missing state, current is_stale.
 5. Compute stale status + severity from reason set.
-6. For expected bound blocks absent in snapshot table, emit `snapshot_missing` with `unknown/info`.
+6. If snapshot row list is empty for the publication, emit one synthetic `BlockComparatorResult` with `snapshot_missing` reason and `unknown/info` per §3.4 aggregation rules.
+v1 does NOT detect per-block missing snapshots for expected-but-absent bound blocks because the expected-bindings list is not persisted (see DEBT-NN5). Per-block missing detection is deferred until DEBT-NN5 lands.
 
 Value comparison for `value_changed` is byte-equal string compare (canonical-string contract).
 
