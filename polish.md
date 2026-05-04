@@ -904,105 +904,6 @@ enough to justify a sprint slot.
 
 ---
 
-## P3-028 — `publishAdminPublication` payload ergonomic default
-
-- **Source:** Phase 3.1d Slice 1a PR review (post-merge)
-- **Added:** 2026-05-04
-- **Severity:** P2
-- **Category:** code-quality / API ergonomics
-- **File:** `frontend-public/src/lib/api/admin.ts`
-- **Description:** `publishAdminPublication(id, payload, options?)`
-  requires explicit payload arg. For no-binding call sites (most
-  pre-3.1e v1 publishes will pass empty `bound_blocks`), this means
-  writing `publishAdminPublication(id, {})`. Default-arg syntax
-  `payload: PublishPayload = {}` would let callers write
-  `publishAdminPublication(id)`.
-- **Fix sketch:**
-  ```ts
-  export async function publishAdminPublication(
-    id: number,
-    payload: PublishPayload = {},
-    options: { signal?: AbortSignal; ifMatch?: string | null } = {},
-  ): Promise<{ etag: string | null; document: AdminPublicationResponse }>
-  ```
-  Test addition: add a test calling `publishAdminPublication(id)` with
-  no payload arg, assert request body is `'{}'`.
-- **Status:** pending
-
----
-
-## P3-029 — `publishAdminPublication` AbortSignal test
-
-- **Source:** Phase 3.1d Slice 1a PR review (post-merge)
-- **Added:** 2026-05-04
-- **Severity:** P2
-- **Category:** test-coverage
-- **File:** `frontend-public/tests/lib/api/publishAdminPublication.test.ts`
-- **Description:** `comparePublication` test suite has an AbortSignal
-  cancellation test for hook-cleanup forward compatibility. Symmetric
-  `publishAdminPublication` test is missing.
-- **Fix sketch:**
-  ```ts
-  it('forwards AbortSignal to fetch', async () => {
-    const controller = new AbortController();
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true, status: 200,
-      headers: { get: () => null },
-      json: async () => ({ id: '42' }),
-    });
-    await publishAdminPublication(42, {}, { signal: controller.signal });
-    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
-    expect(init.signal).toBe(controller.signal);
-  });
-  ```
-- **Status:** pending
-
----
-
-## P3-030 — Assert `Content-Type` header in `publishAdminPublication` test
-
-- **Source:** Phase 3.1d Slice 1a PR review (post-merge)
-- **Added:** 2026-05-04
-- **Severity:** P2
-- **Category:** test-coverage / regression-shield
-- **File:** `frontend-public/tests/lib/api/publishAdminPublication.test.ts`
-- **Description:** Existing publish JSON-body test verifies request
-  body shape but not `Content-Type` header. Without explicit
-  assertion, accidentally dropping the header in a future refactor
-  would not fail tests.
-- **Fix sketch:**
-  ```ts
-  expect((init.headers as Record<string, string>)['Content-Type'])
-    .toBe('application/json');
-  ```
-  Add to the existing JSON-body success test.
-- **Status:** pending
-
----
-
-## P3-031 — Assert NO body/headers in `comparePublication` test
-
-- **Source:** Phase 3.1d Slice 1a PR review (post-merge)
-- **Added:** 2026-05-04
-- **Severity:** P2
-- **Category:** test-coverage / regression-shield
-- **File:** `frontend-public/tests/lib/api/comparePublication.test.ts`
-- **Description:** Existing test asserts `init.body` undefined.
-  Should also assert `init.headers` undefined (or specifically: no
-  `Content-Type: application/json`). Compare endpoint accepts no
-  body; accidental Content-Type stamping by a future refactor is a
-  regression that current test won't catch.
-- **Fix sketch:**
-  ```ts
-  expect(init.body).toBeUndefined();
-  expect(init.headers).toBeUndefined();
-  // or stricter:
-  // expect((init.headers as any)?.['Content-Type']).toBeUndefined();
-  ```
-- **Status:** pending
-
----
-
 ## P3-032 — Extract shared `parseAdminPublicationError` helper
 
 - **Source:** Phase 3.1d Slice 1a PR review (post-merge)
@@ -1070,36 +971,6 @@ enough to justify a sprint slot.
 - **Note:** fix trigger — ship in Slice 2 (Block schema extension)
   when `Block.binding` field lands and `validateBinding` consumes
   the union — natural co-location point.
-
----
-
-## P3-034 — Locale keys for resolver error codes (rendering blocker)
-
-- **Source:** Phase 3.1d Slice 1a PR review (post-merge)
-- **Added:** 2026-05-04
-- **Severity:** P2 (becomes blocking when binding editor renders these)
-- **Category:** i18n
-- **Files:**
-  - `frontend-public/messages/en.json` (or wherever locale files live)
-  - `frontend-public/messages/ru.json`
-- **Description:** Slice 1a registered 3 resolver error codes
-  (`MAPPING_NOT_FOUND`, `RESOLVE_INVALID_FILTERS`,
-  `RESOLVE_CACHE_MISS`) in `errorCodes.ts` with i18n keys
-  `publication.binding.resolve.*`. Locale JSON does not yet have
-  these keys. Slice 1a doesn't render them, so non-blocking now.
-  Slice 3b (binding editor + resolve preview) is the first
-  renderer — add keys before that slice ships, OR include in
-  Slice 1b's locale-add batch alongside `publication.compare.*`.
-- **Fix sketch:** add to en.json and ru.json:
-  ```json
-  "publication.binding.resolve.mapping_not_found": "Mapping not found for selected filters",
-  "publication.binding.resolve.invalid_filters": "Invalid filter set",
-  "publication.binding.resolve.cache_miss": "Cache miss (no row after prime)"
-  ```
-  Plus RU translations from recon-proper Part 3 §I.4.
-- **Status:** pending
-- **Note:** defer trigger — Slice 1b OR Slice 3b, whichever ships
-  first.
 
 ---
 
@@ -1247,14 +1118,15 @@ Current batch candidates:
   — 3 items), P3-027 (BLE001 audit). Spans backend/, migrations/, and
   flutter_admin/. ~2 hours total. Dispatch after Phase 3.1d closes,
   before Phase 3.2 starts. Single PR, single review pass.
-- **Phase 3.1d Slice 1a closeout batch**: P3-028 through P3-034 — all
-  in `frontend-public/` (lib/api + lib/types + locale + tests). Mix of
-  test-coverage, regression-shield, code-quality, architecture, and
-  i18n categories. ~45 minutes total. Dispatch when Slice 1b lands
-  (natural locale-add coupling for P3-034) OR when 3rd error-helper
-  caller exists (unlocks P3-032). P3-033 (Binding split) bundles
-  naturally with Slice 2 (Block.binding schema extension) — defer
-  that one specifically to Slice 2 review-fix round.
+- **Phase 3.1d Slice 1a closeout batch (residual)**: P3-032, P3-033 —
+  both `frontend-public/` items. P3-032 (`parseAdminPublicationError`
+  helper extraction) defer until 3rd error-helper caller exists
+  (Slice 1b adds compare badge state, Slice 4 adds publish flow —
+  natural batch trigger). P3-033 (`Binding` union split out of
+  `compare.ts` into `editor/binding/types.ts`) bundles naturally with
+  Slice 2 (Block.binding schema extension) review-fix round.
+  Note: P3-028, P3-029, P3-030, P3-031, P3-034 (originally part of
+  this batch) were closed inline in Slice 1a fix round (PR #<TBD>).
 - **Phase 3.1d agent-prompt-template improvements**: P3-035, P3-036,
   P3-037 — meta-process items. Apply to template files (if formalized)
   or as claude self-instruction updates. Single review pass when
