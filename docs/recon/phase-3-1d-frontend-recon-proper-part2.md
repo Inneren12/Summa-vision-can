@@ -137,7 +137,7 @@ export async function publishAdminPublication(
 ```
 
 Request/response notes:
-- `comparePublication` should POST empty `{}` for explicit JSON body consistency (route has no body param; body is ignored safely in FastAPI) and parse `CompareResponse` from JSON.
+- `comparePublication` POSTs with no body (`body: undefined`); the route declares no body parameter, and sending an empty `{}` is unnecessary surface area (CORS preflight, content-type negotiation, future route signature drift). Parse `CompareResponse` from JSON response.
 - `publishAdminPublication` should POST JSON body; if no bindings are present send `{}` (or omitted `bound_blocks`), because backend wrapper defaults to empty list and treats `null`/no body/object body as back-compatible empty state.【F:backend/src/api/routers/admin_publications.py†L560-L563】【F:backend/src/schemas/staleness.py†L176-L183】
 - ETag handling should mirror `updateAdminPublication`: optional `If-Match` request header + `readEtag(res)` response capture.【F:frontend-public/src/lib/api/admin.ts†L33-L37】【F:frontend-public/src/lib/api/admin.ts†L155-L197】
 
@@ -211,8 +211,14 @@ Use backend payload-first precedence:
 This aligns with backend not having literal `missing` stale_status while still supporting founder’s desired missing UI bucket via stale reasons.【F:backend/src/schemas/staleness.py†L27-L41】【F:backend/src/schemas/staleness.py†L149-L155】
 
 ### §E.5 Per-block decision (Q7)
-**Decision: Option 2 (subtle per-block tint, no drilldown).**
-Rationale: gives immediate visual alignment in-canvas while preserving aggregate-only interactivity boundary. Implementation touchpoint should be render wrapper/overlay (not each renderer function) to avoid high diff-risk across all block functions.
+
+**Decision: aggregate only in v1.** No per-block tint, no inline annotations, no drilldown in Phase 3.1d v1.
+
+Rationale: Q7 founder decision = aggregate-only v1. A per-block tint, even subtle and non-interactive, is a per-block visual surface that contradicts the aggregate-only constraint and expands v1 with renderer wrapper, block status mapping, canvas overlay logic, edge cases for selected/locked/hidden states, and visual regression tests.
+
+**Deferred to post-v1:**
+- Subtle per-block tint wrapper → Phase 3.1e or UX polish milestone
+- Point/block drilldown → after backend point-level response shape stabilizes
 
 ### §E.6 Partial retry CTA (Q8)
 - If partial detected, show “Retry failed blocks” button near compare badge.
@@ -237,6 +243,27 @@ When `block.binding` absent:
 - Body: static explanatory text
 - CTA button: Add binding
 - Inline expansion (not modal) to match existing inspector edit rhythm and reduce context switching.
+
+### §F.3.0 Preflight Gate — Binding discovery endpoints
+
+**This is a HALT condition for Slice 3a, NOT a routine debt.** Without discovery endpoints, the picker chain cannot be implemented at all.
+
+Before Slice 3a implementation can begin, ALL of the following must be verified to exist on the backend:
+1. Endpoint listing all available cubes (e.g. `GET /admin/cubes`)
+2. Endpoint listing semantic keys / mappings per cube (e.g. `GET /admin/cubes/{cube_id}/semantic-keys` or equivalent)
+3. Endpoint or metadata source returning dimensions and members for a given semantic key
+4. Auth path supports browser→Next-route-handler proxy (server-only admin key), not browser-direct admin secret
+
+If any endpoint is absent:
+- **STOP frontend Slice 3a implementation.**
+- File a backend implementation slice as Phase 3.1d prerequisite (or document as Phase 3.1e dependency if scope expansion preferred).
+- Resume Slice 3a only after backend endpoints land.
+
+If all endpoints are present:
+- Add `listCubes`, `listSemanticKeys`, `listSemanticKeyDimensions` (or equivalent) to `frontend-public/src/lib/api/admin.ts` as part of Slice 3a.
+- Wire pickers to these clients.
+
+The verification gate is run by the founder/agent driving Slice 3a; outcome is recorded in the Slice 3a kickoff prompt as a pre-implementation gate result.
 
 ### §F.3 Picker chain (v1 single-value)
 1. **Cube picker** (`cube_id`): currently no confirmed frontend client call under `lib/api/admin.ts`; Part 3 should add list-cubes admin client if backend endpoint exists.
@@ -274,7 +301,20 @@ type ResolvePreviewState =
 - Remove binding confirmation sets `binding` undefined and keeps static prop rendering.
 
 ### §F.6 Validation + sanitization integration
-`validateImportStrict` pipeline in `guards.ts` currently validates canonical document shape and block props; Part 3 should extend block validation pass to include optional top-level `binding` with kind-discriminated schema guard and silent-drop invalid binding behavior (warn in dev). Integration point is in block loop inside shape assertion / hydration path where per-block props are validated now.【F:frontend-public/src/components/editor/registry/guards.ts†L187-L240】
+`validateImportStrict` pipeline in `guards.ts` currently validates canonical document shape and block props. Part 3 extends block validation to include optional top-level `binding` with kind-discriminated schema guard.
+
+**Invalid binding policy (explicit, NOT silent-drop):**
+
+| Scenario | Behavior |
+|---|---|
+| External import (e.g. paste from foreign doc, JSON import) | Strip invalid binding, emit diagnostic warning to console + import warnings collection. Document loads without binding. |
+| Internal saved-doc round-trip (autosave reload) | Test must FAIL if a previously valid binding is lost or mutated. Implementation: compare pre-save and post-hydrate binding fields for equality. |
+| Publish walker (see §G.6) | Skip invalid binding, surface in confirm modal warnings list. User sees explicit count before publish. |
+| Dev mode | Loud warning (console.error) + dev-only banner if invalid binding detected during hydration. |
+
+This avoids the silent-drop failure mode where operator-configured bindings disappear without trace. Round-trip integrity is enforced at the test level.
+
+Integration point: `frontend-public/src/components/editor/registry/guards.ts:187-240` (block loop in shape assertion / hydration path).
 
 ### §F.7 Visibility matrix (13 rows)
 | Block type | Data binding section visible | Editable in v1 | Reason |

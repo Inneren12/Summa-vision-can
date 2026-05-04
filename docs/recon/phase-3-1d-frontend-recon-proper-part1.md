@@ -346,13 +346,21 @@ CREATE INDEX ix_pbps_pub_block ON publication_block_point_snapshot(publication_i
 
 ---
 
-### §B1 Recommendation
+### §B1 Recommendation — Provisional (founder gate required)
 
-**RECOMMENDED — Option B (JSONB points array), pending founder approval at final gate.**
+This recon presents two viable architectural directions. Founder must choose ONE at the consolidated approval gate.
 
-Rationale: Option B best balances constraints **(1)** backward compatibility with shipped single-value identity, **(4)** block-oriented publish walker flow, and **(7)** reasonable migration risk by avoiding unique-key rewrites. It also satisfies **(2)** multi-point capture and supports **(3)/(5)** point-level compare with block-level aggregate in service code while retaining future per-point API detail output.
+**Provisional recommendation — Option B (JSONB points array)** if founder prioritizes low-risk migration, short rollout, and preserving the shipped single-value `UNIQUE(publication_id, block_id)` identity. Option B aligns with constraints (1), (4), and (7) by avoiding unique-key rewrites and keeping publish capture block-centric.
 
-Secondary driver is founder rollout strategy (sliced, low-risk progression) plus existing 3.1d backend stability lock. Option B avoids introducing permanent dual-path complexity of Option C while avoiding the heavier identity migration burden of Option A.
+**Architecture-preferred alternative — Option C (new point table)** if founder prioritizes long-term point-level relational integrity, queryable per-point diagnostics, and clean future drilldown. Option C keeps single-value snapshots on the legacy summary table untouched and gives multi-value first-class point identity. Trade-off: dual storage paths in compare/publish service logic until eventual consolidation.
+
+**Founder decision required at merge gate:**
+- Choose Option B (low-risk JSONB block-level points) — implementation simpler, rollout faster, future drilldown reads/writes JSON arrays.
+- Choose Option C (first-class point table) — implementation more complex up-front, stronger DB invariants, easier per-point analytics.
+
+Option A (composite key on existing table) remains analyzed for completeness but is not the active candidate due to the heavier identity migration burden flagged in §B1 Option A subsection.
+
+The downstream §B2 multi-value binding shapes are storage-shape-agnostic at the TypeScript level — both Option B and Option C can carry the same `time_series` / `multi_metric` / `tabular` discriminated kinds without frontend schema changes.
 
 ---
 
@@ -388,7 +396,7 @@ Resolver contract alignment inputs:
 
 ### §B2.3 Multi-value binding shapes
 
-Given §B1 recommendation (Option B), v1 frontend schema should define explicit multi-value kinds now, with one deferred for staged rollout:
+Independent of the §B1 storage choice (Option B or Option C), v1 frontend schema defines explicit multi-value kinds now. Frontend binding shapes are storage-agnostic at the TypeScript level.
 
 ```ts
 interface TimeSeriesBinding {
@@ -408,6 +416,18 @@ interface MultiMetricBinding {
   filters: Record<string, string>;
   period: string;
   format?: string;
+}
+
+
+interface CategoricalSeriesBinding {
+  kind: 'categorical_series';
+  cube_id: string;
+  semantic_key: string;
+  category_dim: string;          // dim_id whose members become x-axis categories
+  filters: Record<string, string>; // remaining dim filters (excluding category_dim)
+  period: string;
+  sort?: 'value_desc' | 'value_asc' | 'source_order';
+  limit?: number;                // top-N truncation
 }
 
 interface TabularBinding {
@@ -432,6 +452,7 @@ Decision:
 type Binding =
   | SingleValueBinding
   | TimeSeriesBinding
+  | CategoricalSeriesBinding
   | MultiMetricBinding
   | TabularBinding;
 
@@ -478,12 +499,12 @@ Dependency note:
 | Block type | In scope? | Binding kind | Rationale |
 |---|---|---|---|
 | `hero_stat` | Yes | `single` | Canonical single-value hero metric; maps directly to existing 3.1d snapshot model. |
-| `delta_badge` | Yes | `single` | Single derived/comparison display value; can bind one resolved numeric then format for delta text. |
+| `delta_badge` | Yes (restricted) | `single` | Binds ONLY to precomputed semantic delta values from cube (e.g. a "delta_bps_since_2022" semantic_key). Does NOT compute current-vs-baseline deltas client-side from one resolved point. If cube does not expose precomputed delta semantics, defer this block type to a future `DerivedDeltaBinding` kind. |
 | `comparison_kpi` | Yes (phase-gated) | `multi_metric` | Natural fit for multiple KPI cards from one cube context with metric list. |
-| `bar_horizontal` | Yes (phase-gated) | `time_series` | Represents repeated point set by category/period; requires N-point capture. |
+| `bar_horizontal` | Yes (phase-gated) | `categorical_series` | Ranking/categorical (city × value, country × value, etc.); not time-indexed. Requires `categorical_series` kind, NOT `time_series`. |
 | `line_editorial` | Yes (phase-gated) | `time_series` | Multi-point temporal series; core 3.1e candidate. |
 | `table_enriched` | Yes (phase-gated) | `tabular` | Table semantics are clearer as rows/columns contract than forced time-series encoding. |
-| `small_multiple` | Yes (phase-gated) | `time_series` | Multiple panels from grouped dimension with shared period range. |
+| `small_multiple` | Yes (phase-gated) | `time_series` (with `series_dim`) | Multiple panels from grouped dimension; each panel is time-indexed. Different from `bar_horizontal` (categorical). |
 
 Block definitions source: (`frontend-public/src/components/editor/registry/blocks.ts:17-47`)
 
@@ -524,13 +545,13 @@ Block definitions source: (`frontend-public/src/components/editor/registry/block
 - **Phase 3.1d v1 frontend ships:** `hero_stat`, `delta_badge` only (single-value path on shipped backend snapshot design).
 - **Phase 3.1e dependency phase (or 3.1d v2 + backend dep):** `comparison_kpi`, `bar_horizontal`, `line_editorial`, `table_enriched`, `small_multiple`.
 
-This split aligns with §B1 recommendation because Option B can onboard multi-value incrementally without altering shipped 3.1d single-value identity semantics.
+This split is compatible with both §B1 candidate options (Option B or Option C). Multi-value onboarding timing depends on Phase 3.1e backend storage decision, but the frontend phase split itself does not change.
 
 ---
 
 ## Cross-reference check (GATE-F)
 
-- §B1 storage pick (Option B) aligns with §B2.3 by carrying multi-value point collections naturally in block-level payloads.
+- §B1 storage candidates (Option B or Option C) are both compatible with §B2.3 multi-value kinds; frontend binding TypeScript is storage-agnostic.
 - §B2.1 binding location (`Block.binding`) aligns with §C.4 sanitizer impact (no `dp` mutation burden).
 - §C.3 Q3 (`table_enriched`) introduced `TabularBinding`, and §B2.3 includes it.
 - §C.5 phase split matches §B1 migration-cost framing (low-risk additive path first, multi-value later).

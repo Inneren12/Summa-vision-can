@@ -10,64 +10,75 @@
 Recommend a pure helper at `frontend-public/src/lib/publication/walker.ts`:
 
 ```ts
-export interface WalkerWarning {
-  blockId: string;
-  reason: 'unsupported_kind' | 'invalid_filters' | 'invalid_binding_shape';
-}
+const SINGLE_BINDING_BLOCK_TYPES = new Set(['hero_stat', 'delta_badge']);
 
-export interface WalkBoundBlocksResult {
+type WalkerWarning = {
+  block_id: string;
+  reason:
+    | 'unsupported_block_type'
+    | 'unsupported_kind'
+    | 'invalid_filters'
+    | 'invalid_binding_shape';
+};
+
+interface WalkerResult {
   refs: BoundBlockReference[];
-  skipped: WalkerWarning[];
+  warnings: WalkerWarning[];
 }
 
-export function walkBoundBlocks(doc: CanonicalDocument): WalkBoundBlocksResult {
+function walkBoundBlocks(doc: CanonicalDocument): WalkerResult {
   const refs: BoundBlockReference[] = [];
-  const skipped: WalkerWarning[] = [];
+  const warnings: WalkerWarning[] = [];
 
   for (const [blockId, block] of Object.entries(doc.blocks)) {
-    const binding = block.binding;
-    if (!binding) continue;
+    if (!block.binding) continue;
 
-    if (binding.kind !== 'single') {
-      skipped.push({ blockId, reason: 'unsupported_kind' });
+    // v1 only supports single-value bindings
+    if (block.binding.kind !== 'single') {
+      warnings.push({ block_id: blockId, reason: 'unsupported_kind' });
       continue;
     }
 
-    const ref = bindingToBoundBlockRef(blockId, binding);
+    // v1 only supports a fixed allowlist of block types
+    if (!SINGLE_BINDING_BLOCK_TYPES.has(block.type)) {
+      warnings.push({ block_id: blockId, reason: 'unsupported_block_type' });
+      continue;
+    }
+
+    const ref = bindingToBoundBlockRef(block, block.binding);
     if (!ref) {
-      skipped.push({ blockId, reason: 'invalid_filters' });
+      warnings.push({ block_id: blockId, reason: 'invalid_filters' });
       continue;
     }
-
     refs.push(ref);
   }
 
-  return { refs, skipped };
+  return { refs, warnings };
 }
 
-export function bindingToBoundBlockRef(
-  blockId: string,
+function bindingToBoundBlockRef(
+  block: Block,
   binding: SingleValueBinding,
 ): BoundBlockReference | null {
-  if (!binding.cube_id || !binding.semantic_key || !binding.period) return null;
+  // Sort filter pairs by numeric dim_id for deterministic snapshot identity.
+  // Object.entries() iteration order is implementation-defined for mixed keys;
+  // explicit numeric sort ensures stable dims[]/members[] ordering across
+  // platforms, JS engines, and document round-trips.
+  const pairs = Object.entries(binding.filters ?? {})
+    .map(([dimId, memberId]) => [Number(dimId), Number(memberId)] as const)
+    .sort(([a], [b]) => a - b);
 
-  const dims: number[] = [];
-  const members: number[] = [];
-
-  for (const [dimId, memberId] of Object.entries(binding.filters ?? {})) {
-    const dimNum = Number(dimId);
-    const memberNum = Number(memberId);
-    if (!Number.isFinite(dimNum) || !Number.isFinite(memberNum)) return null;
-    dims.push(dimNum);
-    members.push(memberNum);
+  if (pairs.length === 0) return null;
+  if (pairs.some(([d, m]) => !Number.isInteger(d) || !Number.isInteger(m))) {
+    return null;
   }
 
   return {
-    block_id: blockId,
+    block_id: block.id,
     cube_id: binding.cube_id,
     semantic_key: binding.semantic_key,
-    dims,
-    members,
+    dims: pairs.map(([d]) => d),
+    members: pairs.map(([, m]) => m),
     period: binding.period,
   };
 }
@@ -115,10 +126,10 @@ type PublishState =
       kind: 'modal_open';
       refs: BoundBlockReference[];
       skipped: WalkerWarning[];
-      lastCompare?: ComparePublicationResponse;
+      lastCompare?: CompareResponse;
     }
   | { kind: 'publishing'; refs: BoundBlockReference[]; startedAt: number }
-  | { kind: 'success'; document: AdminPublication; etag: string }
+  | { kind: 'success'; document: AdminPublicationResponse; etag: string }
   | { kind: 'conflict'; serverEtag: string }
   | { kind: 'error'; error: BackendApiError | Error };
 ```
@@ -152,14 +163,29 @@ If exact modal cannot be shared without prop mismatch, factor a shared `Conflict
 ## §H — Pre-3.1d “Refresh required” CTA flow
 
 ### §H.1 Detection logic
-Decision: **Option A** (compare-response based) for v1.
+Decision: **Option A** (compare-response based) for v1, with revised detection logic.
 
-Rule:
-- Compute set of bindable blocks in doc.
-- If set non-empty and all corresponding compare `block_results` include `snapshot_missing` in `stale_reasons`, classify publication as `pre31d_refresh_required`.
-- If any bindable block has non-`snapshot_missing` result, use normal compare aggregate logic.
+**Backend reality check (verified Part 2):** Compare endpoint `POST /admin/publications/{id}/compare` operates on existing `publication_block_snapshot` rows. Pre-3.1d publications have ZERO snapshot rows, so backend compare returns `block_results: []` (empty array), NOT a list of `snapshot_missing` per expected binding. Backend does not currently know which blocks the document has bindings for — the compare endpoint accepts no `bound_blocks` body.
 
-Rationale: no backend metadata extension required; relies on already-shipping compare envelope.
+**Detection rule (v1):**
+1. Compute set of bindable block IDs from `document.blocks` (filter by `block.binding` present + `block.binding.kind === 'single'` + block type in v1 allowlist).
+2. After running compare, classify publication as `pre31d_refresh_required` if BOTH:
+   - Local bindable set is non-empty (publication has at least one valid v1 binding), AND
+   - Compare response satisfies one of:
+     - `block_results.length === 0` (zero snapshot rows on backend), OR
+     - Every local bindable block ID is either absent from `block_results` entirely, or present with `stale_reasons` containing `snapshot_missing`.
+3. If any local bindable block has a `block_results` entry with `stale_reasons` NOT including `snapshot_missing`, use normal compare aggregate logic from §E.4.
+
+**Rationale:** No backend extension required. Frontend computes bindable set from local document; matches against compare response, treating both "absent from response" and "explicit snapshot_missing" as equivalent missing-snapshot signals. The empty `block_results` case (zero rows on backend) is the most common pre-3.1d signal.
+
+**Test surface explicit:**
+- `block_results: []` + local bindable set non-empty → `pre31d_refresh_required`
+- `block_results: []` + local bindable set empty → `unknown` (editorial-only publication, no refresh needed)
+- `block_results` with all local IDs absent → `pre31d_refresh_required`
+- `block_results` with mix of `snapshot_missing` and present → use partial-coverage logic (see §H.4)
+- Standard fresh/stale results → normal compare aggregate
+
+**Future improvement (NOT v1):** Backend extension to accept `bound_blocks` body on compare endpoint, returning explicit `snapshot_missing` per expected binding. Tracked as separate future improvement; not required for v1.
 
 ### §H.2 CTA presentation
 When `pre31d_refresh_required`:
@@ -223,11 +249,11 @@ Error mapping pattern (hybrid, consistent with DEBT-030 direction):
 - `publication.compare.button.compare` — Compare / Сравнить
 - `publication.compare.button.comparing` — Comparing… / Сравнение…
 - `publication.compare.button.retry` — Retry failed blocks / Повторить
-- `publication.compare.badge.fresh` — Fresh / Свежие
-- `publication.compare.badge.stale` — Stale / Устарели
-- `publication.compare.badge.missing` — Missing / Отсутствуют
+- `publication.compare.badge.fresh` — Fresh / Актуально
+- `publication.compare.badge.stale` — Stale / Устарело
+- `publication.compare.badge.missing` — Missing / Нет снимка
 - `publication.compare.badge.unknown` — Unknown / Не проверено
-- `publication.compare.badge.partial` — Partial / Частично
+- `publication.compare.badge.partial` — Partial / Частично проверено
 - `publication.compare.badge.not_compared` — Not compared / Не проверялось
 - `publication.compare.timestamp.compared_relative` — Compared {time} ago / Проверено {time} назад
 - `publication.compare.partial.toast` — Some blocks could not be compared / Не удалось проверить часть блоков
@@ -343,7 +369,9 @@ Any new user-visible copy in these namespaces requires glossary + recon delta be
 - Risk: medium.
 
 ### §J.3 Merge order + parallelism
-No practical parallelism for v1 due to hook/state coupling; maintain strict dependency order above.
+**Implementation may parallelize low-coupling pieces** (e.g. Slice 1a TypeScript types can be drafted alongside Slice 2 schema validation; i18n keys can be added in parallel with badge visual component prototyping). **Merge order remains strict** — slices merge in dependency order to avoid integration drift.
+
+For Phase 3.1e onward, multi-value slices can parallelize per-block-type once Phase 3.1e backend storage shape lands.
 
 ### §J.4 Out of scope
 - Multi-value binding kinds (`time_series`, `multi_metric`, `tabular`) interactive editing.
@@ -403,16 +431,16 @@ Next available ID verified as **DEBT-071**.
 - **Resolution:** Slice 1b chooses minimal local SVG set or introduces `lucide-react` if dependency review approves.
 - **Target:** Phase 3.1d Slice 1b
 
-### DEBT-075: Per-block tint wrapper integration
+### DEBT-075: Per-block tint wrapper integration (deferred post-v1)
 - **Source:** `docs/recon/phase-3-1d-frontend-recon-proper-part2.md` §E.5
 - **Added:** 2026-05-04
 - **Severity:** low
 - **Category:** architecture
 - **Status:** active
-- **Description:** Option 2 tint requires a wrapper layer around block render output rather than changing each renderer.
-- **Impact:** Without wrapper, per-renderer edits increase regression/diff risk.
-- **Resolution:** Add wrapper component in Slice 1b and keep renderer internals untouched.
-- **Target:** Phase 3.1d Slice 1b
+- **Description:** Per-block visual tint based on compare result is deferred to post-v1 per Q7 aggregate-only constraint. When implemented, requires a wrapper layer around block render output rather than changing each renderer function.
+- **Impact:** No v1 impact. Future implementation needs wrapper to avoid high diff-risk across all 13 block renderers.
+- **Resolution:** Post-v1 milestone (Phase 3.1e or UX polish): add `BlockRenderWrapper` accepting compare result, inject subtle tint via CSS variable + opacity, no border change to avoid layout shift.
+- **Target:** Phase 3.1e or UX polish milestone (NOT Phase 3.1d Slice 1b)
 
 ### DEBT-076: Conflict modal factoring for publish reuse
 - **Source:** `docs/recon/phase-3-1d-frontend-recon-proper-part3.md` §G.5
