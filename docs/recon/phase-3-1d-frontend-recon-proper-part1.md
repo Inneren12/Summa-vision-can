@@ -385,7 +385,7 @@ interface SingleValueBinding {
   cube_id: string;
   semantic_key: string;
   filters: Record<string, string>; // dim_id -> member_id
-  period: string; // e.g. '2024-Q3' or 'latest'
+  period: string; // explicit backend-supported period, e.g. '2024-Q3' (symbolic 'latest' out of scope until backend semantics locked)
   format?: string;
 }
 ```
@@ -442,7 +442,7 @@ interface TabularBinding {
 ```
 
 Decision:
-- Define all three (`time_series`, `multi_metric`, `tabular`) in schema now.
+- Define all four (`time_series`, `categorical_series`, `multi_metric`, `tabular`) in schema now.
 - Ship only `single` in 3.1d v1 frontend behavior.
 - Activate multi-value kinds in 3.1e dependency phase.
 
@@ -488,7 +488,7 @@ Canonical transport transformation proposal:
 3. Publish capture adapter maps same binding to `BoundBlockReference` (`dims[]`, `members[]`, `period`) per backend schema. (`backend/src/schemas/staleness.py:162-170`)
 
 Dependency note:
-- Current resolver is singular-value oriented; multi-value bindings (`time_series`, `multi_metric`, `tabular`) will require either resolver iteration strategy client/server-side or a new batch resolve contract in 3.1e. Track as Part 3 DEBT candidate (backend dependency), not a 3.1d v1 blocker.
+- Current resolver is singular-value oriented; multi-value bindings (`time_series`, `categorical_series`, `multi_metric`, `tabular`) will require either resolver iteration strategy client/server-side or a new batch resolve contract in 3.1e. Track as Part 3 DEBT candidate (backend dependency), not a 3.1d v1 blocker.
 
 ---
 
