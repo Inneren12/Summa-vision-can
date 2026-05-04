@@ -13,7 +13,7 @@
 - Flutter source exists (`frontend/test/helpers/pump_localized_router.dart`), but grep and feature-tree discovery found no dedicated publications CRUD feature directory.
 - Flutter has **no** concrete call-site to `POST /api/v1/admin/publications/{id}/publish` in `frontend/lib/`.
 - Next.js admin surface contains admin publication proxy/client modules and the admin editor route under `/admin/editor/[id]`.
-- The publish action is wired in Next.js editor UI flow (publication editor is in Next.js, not Flutter).
+- Publication edit/save (`PATCH /admin/publications/{id}`) is wired in Next.js editor (`updateAdminPublication` callsite at `frontend-public/src/components/editor/index.tsx:655`). Explicit publish action wiring (`POST /publish`) was NOT confirmed in this pre-recon — `publishAdminPublication` is absent from `admin.ts` exports and no publish-button handler was located. Recon-proper must locate or add the publish action helper.
 
 ### Verbatim discovery evidence
 
@@ -86,7 +86,7 @@ frontend-public/src/app/admin/editor/[id]
 ### Required answers (§A)
 - Does Flutter today have ANY publication-related screen? **No dedicated publications CRUD/edit screen found** (only references in job detail/chart config text/UI labels).
 - Does Flutter today call POST /publish? **No callsite found in `frontend/lib/` grep outputs.**
-- Where in Next.js is publish action wired? **In admin editor surface (`frontend-public/src/components/editor/index.tsx`) via admin API client; publication admin API in `frontend-public/src/lib/api/admin.ts`.**
+- Where in Next.js is publish action wired? **NOT CONFIRMED. Edit/save wired via `updateAdminPublication`; clone wired via `cloneAdminPublication`; publish-specific wiring (helper or button handler) was not found in this pre-recon's grep coverage. Recon-proper must locate the publish action surface or confirm it does not yet exist in this frontend.**
 - Where in Next.js is publication detail/edit UI? **Route: `frontend-public/src/app/admin/editor/[id]/page.tsx`; page component `AdminEditorPage` hydrating `AdminEditorClient`.**
 - Is there a `frontend/lib/features/publications/` directory at all? **No.**
 
@@ -108,7 +108,7 @@ frontend-public/src/app/admin/editor/[id]
 - Publication screens in Flutter today: **none found**.
 - Publication providers in Flutter today: **none found**.
 - `Publication` freezed model in Flutter: **none found**.
-- Conclusion: Flutter compare badge work is **greenfield feature scope**.
+- Conclusion: Flutter publication CRUD/editor is **greenfield**. Adjacent publication references exist (`features/queue/domain/content_brief.dart` matches `PublicationResponse` schema; `jobs/widgets/job_detail_sheet.dart` has "View Publication" button; `graphics/chart_config_screen.dart` has Publication chip; `core/network/mock_interceptor.dart` carries publication payloads). No dedicated admin publication workflow/provider was found.
 
 ## §C — Next.js publication editor surface
 
@@ -172,7 +172,78 @@ frontend-public/src/components/editor/utils/block-label.ts
 - How bindings are stored in document state: **not located with provided grep probes (needs deeper recon-proper follow-up scan of editor types/schema).**
 - Which block types have bindings: **not established from this pre-recon grep slice.**
 - Existing code that walks doc collecting bound blocks: **no evidence found.**
-- Can `bound_blocks` payload be built without backend changes? **Potentially yes if binding metadata exists in document model, but this pre-recon slice did not locate the schema path; treat as recon-proper verification gate before implementation.**
+- Can `bound_blocks` payload be built without backend changes? **See §D2 for the inventory result.**
+
+## §D2 — Canonical document / block schema inventory
+
+Real schema discovery — files actually viewed, not just grepped.
+
+### Files viewed
+- `frontend-public/src/lib/types/publication.ts` — admin/public API shapes plus `VisualConfig` and `AdminPublicationResponse` (includes `document_state?: string | null`).
+- `frontend-public/src/components/editor/registry/guards.ts` — schema migration/validation entry points (`validateImportStrict`, `sanitizeBlockProps`) and block sanitization behavior.
+- `frontend-public/src/components/editor/utils/persistence.ts` — `buildUpdatePayload(doc)` serialization path and `hydrateDoc` parse/validate flow.
+- `frontend-public/src/components/editor/index.tsx` — save pipeline (`const payload = buildUpdatePayload(snapshotDoc)`) proving full canonical doc is persisted through PATCH.
+- `frontend-public/src/components/editor/types.ts` — canonical editor schema (`CanonicalDocument`, `Block`, `BlockProps`) where block IDs and props are defined.
+
+### CanonicalDocument / VisualConfig type
+```ts
+export interface CanonicalDocument {
+  schemaVersion: number;
+  templateId: string;
+  page: PageConfig;
+  sections: Section[];
+  blocks: Record<string, Block>;
+  meta: DocMeta;
+  review: Review;
+}
+
+export interface VisualConfig {
+  layout: string;
+  palette: string;
+  background: string;
+  size: string;
+  custom_primary?: string | null;
+  branding: BrandingConfig;
+}
+```
+
+### Block type / BlockProps shape
+```ts
+export interface BlockProps {
+  [key: string]: any;
+}
+
+export interface Block {
+  id: string;
+  type: string;
+  props: BlockProps;
+  visible: boolean;
+  locked?: boolean;
+}
+```
+
+### Block id field
+- Field name: `Block.id: string` with document-level container `blocks: Record<string, Block>`.
+- Stable across edits: **yes (within normal edit flow)** — `sections[].blockIds` references block IDs, and no sanitizer rewrites IDs in persistence/guards; IDs are validated/checked for consistency instead of regenerated in `validateImportStrict` path.
+
+### Binding fields per block — does the doc model carry cube_id / semantic_key / dims / members / period?
+- **Partial / unconstrained:** there are no strongly-typed canonical fields named `cube_id`, `semantic_key`, `dims`, `members`, or `period` in `Block`/`CanonicalDocument` types.
+- `Block.props` is an open dictionary (`[key: string]: any`), so binding metadata *can* be stored there by convention, but current pre-recon evidence does not show a typed canonical binding contract.
+
+### `buildUpdatePayload(snapshotDoc)` output shape
+```ts
+export function buildUpdatePayload(
+  doc: CanonicalDocument,
+): UpdateAdminPublicationPayload
+```
+- Output includes `document_state: JSON.stringify(doc)` plus derived columns (`chart_type`, `visual_config`, `review`, optional headline/eyebrow/source_text/footnote/description).
+
+### Unknown-prop survival through persistence
+- **Yes, with constraints.** `document_state` persists full canonical doc JSON, so unknown keys inside `Block.props` survive round-trip storage.
+- Guard layer calls `sanitizeBlockProps` during import validation, so unknown keys may be normalized/filtered depending on block registry constraints. Implication: bound-block metadata can survive only if sanitizer rules permit those keys for relevant block types.
+
+### Verdict on `bound_blocks` extraction
+- **(b) Feasible only after schema extension** — current model lacks strongly-typed canonical binding fields (`cube_id/semantic_key/dims/members/period`) even though `Block.props` is flexible. Recon-proper should add an explicit binding schema contract (or documented per-block prop keys + sanitizer allowances) before locking Q5 implementation.
 
 ## §E — i18n status for new strings
 
@@ -199,8 +270,20 @@ frontend-public/src/components/editor/index.tsx:4:import { useTranslations } fro
 
 - Next.js uses **next-intl** (`useTranslations`, `getTranslations`) with message JSON files.
 
-### Glossary check
-- `docs/i18n-glossary.md` exists (checked/read).
+### Glossary check (terms actually viewed in `docs/i18n-glossary.md`)
+
+| Term (EN) | Term (RU) | In glossary? | Citation |
+|-----------|-----------|--------------|----------|
+| stale | — | no | — |
+| fresh | — | no | — |
+| drift | — | no | — |
+| snapshot | — | no | — |
+| refresh | Обновить / обновление данных | yes | Section 4 (`Refresh`), Section 3 (`data refresh`) |
+| republish | — | no | — |
+| compare | сравнение | yes | Section 2 (`comparison`) |
+| unknown | — | no | — |
+
+If 4+ terms missing: recon-proper must add glossary entries before next-intl key freeze.
 
 ### Required answers (§E)
 - Flutter library: **AppLocalizations with ARB-generated messages**.
@@ -223,7 +306,7 @@ frontend-public/src/components/editor/index.tsx:4:import { useTranslations } fro
 
 **Q3 — Republish-as-refresh UX.**
 - Options: (a) single refresh via publish, (b) split refresh vs republish endpoint, (c) refresh confirm modal.
-- Pre-recon recommendation: **(a) for milestone v1** (aligned with deferred dedicated refresh endpoint debt item).
+- Pre-recon recommendation: **(a) for milestone v1** with explicit operator-facing language. The action MUST be labeled "Republish to refresh snapshot" (not silently "Refresh") — it triggers full publish semantics, not a pure snapshot refresh. Dedicated refresh endpoint remains DEBT-070; until that ships, refresh = republish.
 
 **Q4 — Severity rendering.**
 - Options: (a) color badge, (b) icon+label, (c) placement variants.
@@ -231,7 +314,7 @@ frontend-public/src/components/editor/index.tsx:4:import { useTranslations } fro
 
 **Q5 — `bound_blocks` source of truth at publish.**
 - Options: (a) walk live doc, (b) maintain snapshot list while editing, (c) send empty until opt-in.
-- Pre-recon recommendation: **(a)** if/when schema path is confirmed in recon-proper; avoids drift between editor state and outbound capture payload.
+- Pre-recon recommendation: **BLOCKED — pending §D2 verdict.** Preliminary preference is (a) live doc walk *if* §D2 confirms binding metadata is canonical and stable in document state. Fallback (c) until binding model is added if §D2 returns verdict (b) or (c). Founder cannot lock Q5 until §D2 returns a concrete verdict.
 
 **Q6 — Pre-3.1d publications (snapshot_missing).**
 - Options: (a) unknown tooltip, (b) refresh-required CTA, (c) hide badge.
@@ -256,10 +339,12 @@ frontend-public/src/components/editor/index.tsx:4:import { useTranslations } fro
 ## §G — Recommended scope split
 
 Given §A-§E findings:
-1. **Slice 1 (Next.js):** manual compare trigger + top-level status badge (`fresh/stale/unknown`) on admin editor/publication context.
-2. **Slice 2 (Next.js):** republish-as-refresh wiring with `bound_blocks` payload (after §D schema-path confirmation).
-3. **Slice 3 (optional):** per-block drift detail UX.
-4. **Flutter track:** separate later milestone unless founder explicitly wants dual-frontend parity now.
+1. **Slice 1a (Next.js, API layer):** add `compareAdminPublication(id)` and `publishAdminPublication(id, body?)` to `admin.ts` + corresponding TypeScript types for `PublicationComparatorResponse`, `BlockComparatorResult`, `CompareBasis`, `BoundBlockReference`, `PublicationPublishRequest`. Pure API client work, no UI changes.
+2. **Slice 1b (Next.js, UI):** manual compare trigger button + top-level status badge (`fresh/stale/unknown`) on admin editor/publication context. Consumes Slice 1a types.
+3. **Slice 2a (Next.js, schema):** binding collector — walker that traverses canonical document and emits `bound_blocks[]` array. Conditional on §D2 verdict (a). If §D2 returns (b)/(c), this slice is replaced by a backend/schema track.
+4. **Slice 2b (Next.js, UI):** republish-as-refresh button wiring `bound_blocks` payload from Slice 2a collector. Confirmation modal per Q3 recommendation.
+5. **Slice 3 (optional, Next.js):** per-block drift detail UX (drill-down list and/or inline annotations).
+6. **Flutter track:** separate later milestone unless founder explicitly wants dual-frontend parity now. Greenfield scope per §B.
 
 Rationale: publication edit/publish workflow is currently centered in Next.js; Flutter lacks publication CRUD primitives.
 
@@ -272,12 +357,9 @@ Rationale: publication edit/publish workflow is currently centered in Next.js; F
 
 ---
 
-## Summary Report
+## Summary Report (findings only — operational metadata in PR description)
 
 PHASE 3.1d FRONTEND PRE-RECON
-
-Branch: claude/phase-3-1d-frontend-pre-recon (off main)  
-New commit: <sha>
 
 Pre-reading completed:
   recon doc (Phase 3.1d backend):                         YES
@@ -287,56 +369,32 @@ Pre-reading completed:
   FRONTEND_AUTOSAVE_ARCHITECTURE.md:                      YES
   EDITOR_ARCHITECTURE.md:                                 YES
   DEBT-064..070 entries:                                  YES
+  i18n-glossary.md:                                       YES (after fix)
 
 Discovery sections completed:
-  §A Publication CRUD/publish location:                   COMPLETE — Next.js owns editor/admin publication surface; Flutter lacks publications CRUD feature.
-  §B Flutter publication UI:                              COMPLETE — none found
-  §C Next.js publication editor:                          COMPLETE — /app/admin/editor/[id], editor component + admin API exports inventoried
-  §D Binding state in document:                           COMPLETE — feasibility needs recon-proper schema-path confirmation
-  §E i18n status:                                         COMPLETE — Flutter ARB/AppLocalizations; Next.js next-intl
-  §F 10 founder questions:                                DRAFTED — surfaced
-  §G Scope split recommendation:                          DRAFTED
+  §A Publication CRUD/publish location:                   COMPLETE — Next.js owns editor; explicit publish action NOT confirmed
+  §B Flutter publication UI:                              COMPLETE — greenfield + adjacent references documented
+  §C Next.js publication editor:                          COMPLETE — /app/admin/editor/[id], admin API exports inventoried
+  §D Binding state in document:                           COMPLETE — see §D2 for verdict
+  §D2 Canonical document/block schema inventory:          COMPLETE — verdict (b) recorded
+  §E i18n status:                                         COMPLETE — Flutter ARB/AppLocalizations; Next.js next-intl; glossary terms checked
+  §F 10 founder questions:                                DRAFTED — Q5 marked BLOCKED pending §D2
+  §G Scope split recommendation:                          DRAFTED — 6 slices including 1a/1b API+UI split
   §H Open risks:                                          4 items
 
 Key findings (executive summary):
-  1. Publication editor/admin publication API surface is currently in Next.js, not Flutter.
-  2. Flutter has no publications feature module/providers/models; publication UX there is greenfield.
-  3. `bound_blocks` collection path is not yet proven by pre-recon grep probes and is the central implementation risk.
+  1. Publication editor/admin publication API surface is currently in Next.js. Flutter has only adjacent references; publication CRUD is greenfield there.
+  2. Explicit publish action wiring (`publishAdminPublication`) NOT found in this frontend; only edit/save (`updateAdminPublication`) and clone are wired.
+  3. `bound_blocks` extraction feasibility: see §D2 verdict.
 
 Critical surface for founder review:
   - Q1 frontend split: Next.js-first recommended
-  - Q5 bound_blocks source of truth: live document walk recommended (pending schema mapping)
-  - Q9 scope split: sliced rollout recommended
-  - §G recommendation: Next.js slices first; Flutter deferred track
+  - Q5 bound_blocks source of truth: BLOCKED pending §D2 verdict
+  - Q9 scope split: sliced rollout (6 slices)
+  - §G recommendation: Next.js slices 1a/1b first; 2a/2b conditional on §D2
 
-Files created:
-  docs/recon/phase-3-1d-frontend-pre-recon.md            <N> lines
+Honest-STOP triggers:
+  - IMPLEMENTATION HALT: bound_blocks schema/path must be confirmed by §D2 before Slice 2a/2b begin.
+  - Pre-recon itself may proceed to founder review for non-§D2-blocked questions.
 
-GATE-A files read (full path list):
-- /workspace/Summa-vision-can/docs/recon/phase-3-1d-recon.md
-- /workspace/Summa-vision-can/backend/src/schemas/staleness.py
-- /workspace/Summa-vision-can/backend/src/api/routers/admin_publications.py
-- /workspace/Summa-vision-can/docs/architecture/FLUTTER_ADMIN_MAP.md
-- /workspace/Summa-vision-can/docs/architecture/FRONTEND_AUTOSAVE_ARCHITECTURE.md
-- /workspace/Summa-vision-can/docs/EDITOR_ARCHITECTURE.md
-- /workspace/Summa-vision-can/DEBT.md
-- /workspace/Summa-vision-can/docs/i18n-glossary.md
-
-GATE-B grep outputs cited inline:
-- Included verbatim blocks in §A-§E.
-
-GATE-C git status --porcelain:
-<to fill after commit>
-
-GATE-D git log --oneline -3:
-<to fill after commit>
-
-GATE-E git remote -v:
-<to fill>
-
-GATE-F push attempt:
-<to fill>
-
-Honest-STOP triggers:                                     none
-
-Ready for founder review of §F questions:                 YES
+Ready for founder review of §F questions (excluding Q5): YES
