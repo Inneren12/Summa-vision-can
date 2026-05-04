@@ -17,8 +17,9 @@ type WalkerWarning = {
   reason:
     | 'unsupported_block_type'
     | 'unsupported_kind'
-    | 'invalid_filters'
-    | 'invalid_binding_shape';
+    | 'missing_identity'    // cube_id, semantic_key, or period is empty/absent
+    | 'invalid_filters'     // filter map malformed, empty, or non-numeric
+    | 'invalid_binding_shape'; // structurally invalid binding object
 };
 
 interface WalkerResult {
@@ -47,7 +48,12 @@ function walkBoundBlocks(doc: CanonicalDocument): WalkerResult {
 
     const ref = bindingToBoundBlockRef(block, block.binding);
     if (!ref) {
-      warnings.push({ block_id: blockId, reason: 'invalid_filters' });
+      // Distinguish between identity-missing and filter-malformed cases.
+      const reason: WalkerWarning['reason'] =
+        (!block.binding.cube_id || !block.binding.semantic_key || !block.binding.period)
+          ? 'missing_identity'
+          : 'invalid_filters';
+      warnings.push({ block_id: blockId, reason });
       continue;
     }
     refs.push(ref);
@@ -60,6 +66,12 @@ function bindingToBoundBlockRef(
   block: Block,
   binding: SingleValueBinding,
 ): BoundBlockReference | null {
+  // Identity guard: cube_id, semantic_key, and period must be present and non-empty.
+  // An incomplete binding must not produce a backend payload with empty identity fields.
+  if (!binding.cube_id || !binding.semantic_key || !binding.period) {
+    return null;
+  }
+
   // Sort filter pairs by numeric dim_id for deterministic snapshot identity.
   // Object.entries() iteration order is implementation-defined for mixed keys;
   // explicit numeric sort ensures stable dims[]/members[] ordering across
@@ -88,6 +100,9 @@ Notes:
 - v1 handles `kind === 'single'` only.
 - `time_series` / `multi_metric` / `tabular` walker expansion is explicitly deferred to Phase 3.1e.
 - Unit tests target `walkBoundBlocks` and `bindingToBoundBlockRef` independently from UI.
+- Missing cube_id: binding `{ cube_id: '', semantic_key: 'foo', filters: {1:50}, period: '2024-Q3' }` → `missing_identity` warning, no ref.
+- Missing semantic_key: similarly emits `missing_identity` warning.
+- Missing period: similarly emits `missing_identity` warning.
 
 ### §G.2 Republish trigger surfaces
 - Editor TopBar is the v1 trigger surface; no visible publish button exists in current TopBar, so Slice 4 will add one near clone/export controls.
@@ -337,14 +352,18 @@ Any new user-visible copy in these namespaces requires glossary + recon delta be
 - Files: Inspector + NEW BindingEditor + picker subcomponents + `admin.ts` clients.
 - Tests: visibility matrix by block type; picker chain behavior.
 - Dependencies: 2.
-- Acceptance: hero_stat/delta_badge can choose cube + semantic key.
+- **Acceptance:**
+  - Select hero_stat → see Data binding section → click Add → cube + key pickers work
+  - **delta_badge constraint:** binding editor for `delta_badge` only accepts `semantic_key` values that the cube exposes as precomputed delta semantics. No client-side current-vs-baseline delta computation is implemented. If cube does not expose precomputed delta semantics for the selected scope, surface an explicit message: "This cube does not expose precomputed delta values. delta_badge binding deferred until a `DerivedDeltaBinding` kind is introduced."
 - Risk: medium-high.
 
 #### Slice 3b — Binding editor (filters/period/format + preview)
 - Files: BindingEditor extension + NEW subpickers + NEW ResolvePreview + `previewBindingResolve` in admin client.
 - Tests: preview state machine; resolver error code rendering.
 - Dependencies: 3a.
-- Acceptance: full single-value binding resolves preview.
+- **Acceptance:**
+  - Complete binding for hero_stat → preview shows resolved value with formatter applied
+  - **delta_badge formatter constraint:** formatter list for `delta_badge` excludes any client-side delta computation. Allowed formatters apply only to a precomputed-delta numeric value: `delta_bps_passthrough` (sign + bps suffix on pre-signed value), `delta_percent_passthrough` (sign + % suffix on pre-signed value). Forbidden in v1: any formatter that subtracts a baseline from a current value at format time.
 - Risk: medium-high.
 
 #### Slice 4 — Walker + publish confirm modal
@@ -393,9 +412,9 @@ Next available ID verified as **DEBT-071**.
 - **Severity:** high
 - **Category:** architecture
 - **Status:** active
-- **Description:** Phase 3.1d backend captures single-value snapshot rows only. Multi-value blocks (`comparison_kpi`, `bar_horizontal`, `line_editorial`, `table_enriched`, `small_multiple`) need JSONB `points` expansion to represent per-point snapshots.
+- **Description:** Phase 3.1d backend captures single-value snapshot rows only. Multi-value blocks (`comparison_kpi`, `bar_horizontal`, `line_editorial`, `table_enriched`, `small_multiple`, plus `categorical_series` candidates) require a backend snapshot-point extension. Storage shape is NOT locked: §B1 founder gate must choose between Option B (JSONB points array on existing block snapshot table) or Option C (first-class point table). This DEBT entry tracks the dependency without pre-locking the shape.
 - **Impact:** 5/7 bindable block types remain non-functional for live binding in v1.
-- **Resolution:** Phase 3.1e extends snapshot model/capture/compare paths to point arrays and aggregate severity rules.
+- **Resolution:** Phase 3.1e recon/implementation must first lock the §B1 storage choice (Option B JSONB points array OR Option C first-class point table) via founder decision at the consolidated recon-proper approval gate. Once locked, Phase 3.1e extends capture path to emit N points per block and extends compare path to iterate points and aggregate to block-level severity, using the chosen storage shape.
 - **Target:** Phase 3.1e milestone
 
 ### DEBT-072: Multi-value resolver iteration strategy
