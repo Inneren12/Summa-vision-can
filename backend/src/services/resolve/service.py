@@ -137,11 +137,20 @@ class ResolveService:
         dims: list[int],
         members: list[int],
         period: str | None,
+        allow_auto_prime: bool = True,
     ) -> ResolvedValueResponse:
         """Execute the 8-step resolve state machine.
 
         See module docstring for the full sequence. Pure orchestration
         — every leaf I/O lives in an injected collaborator.
+
+        ``allow_auto_prime`` (Phase 3.1d, recon §3.2 BLOCKER-1 Option 1):
+        when ``False``, a cache miss after step 4 raises
+        :class:`ResolveCacheMissError` immediately instead of running
+        the auto-prime + re-query workflow. The compare path uses this
+        cached-only mode so POST /compare is strictly side-effect-free.
+        Default ``True`` preserves existing behavior for all other
+        callers.
         """
         # Step 1 — active mapping lookup (C1).
         async with self._session_factory() as session:
@@ -181,6 +190,18 @@ class ResolveService:
         if rows:
             row = pick_row(rows, period=period)
             return map_to_resolved(row, mapping, cache_status="hit")
+
+        # Phase 3.1d cached-only short-circuit: compare path opts out of
+        # auto-prime so the operation has no storage side effects.
+        if not allow_auto_prime:
+            raise ResolveCacheMissError(
+                cube_id=cube_id,
+                semantic_key=semantic_key,
+                coord=coord,
+                period=period,
+                prime_attempted=False,
+                prime_error_code=None,
+            )
 
         # Step 5 — auto-prime (best-effort; never raises into the caller).
         frequency_code = await resolve_frequency_code(
