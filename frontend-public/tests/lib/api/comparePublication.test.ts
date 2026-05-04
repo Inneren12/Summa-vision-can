@@ -30,24 +30,25 @@ describe('comparePublication', () => {
       json: async () => validResponse,
     });
 
-    const result = await comparePublication(42);
+    const result = await comparePublication('42');
     expect(result.publication_id).toBe(42);
     expect(result.overall_status).toBe('fresh');
     expect(result.block_results).toEqual([]);
   });
 
-  it('POSTs with no body and cache: no-store', async () => {
+  it('POSTs with no body, no headers, and cache: no-store', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => validResponse,
     });
 
-    await comparePublication(42);
+    await comparePublication('42');
     const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
     expect(url).toBe('/api/admin/publications/42/compare');
     expect(init.method).toBe('POST');
     expect(init.body).toBeUndefined();
+    expect(init.headers).toBeUndefined();
     expect(init.cache).toBe('no-store');
   });
 
@@ -58,7 +59,7 @@ describe('comparePublication', () => {
       json: async () => ({ detail: { error_code: 'PUBLICATION_NOT_FOUND' } }),
     });
 
-    await expect(comparePublication(999)).rejects.toThrow(AdminPublicationNotFoundError);
+    await expect(comparePublication('999')).rejects.toThrow(AdminPublicationNotFoundError);
   });
 
   it('throws AdminPublicationNotFoundError on shapeless 404', async () => {
@@ -68,7 +69,7 @@ describe('comparePublication', () => {
       json: async () => ({}),
     });
 
-    await expect(comparePublication(999)).rejects.toThrow(AdminPublicationNotFoundError);
+    await expect(comparePublication('999')).rejects.toThrow(AdminPublicationNotFoundError);
   });
 
   it('throws BackendApiError on 500', async () => {
@@ -78,7 +79,7 @@ describe('comparePublication', () => {
       json: async () => ({ detail: 'Internal server error' }),
     });
 
-    await expect(comparePublication(1)).rejects.toThrow(BackendApiError);
+    await expect(comparePublication('1')).rejects.toThrow(BackendApiError);
   });
 
   it('forwards AbortSignal to fetch', async () => {
@@ -89,7 +90,7 @@ describe('comparePublication', () => {
     });
 
     const controller = new AbortController();
-    await comparePublication(42, { signal: controller.signal });
+    await comparePublication('42', { signal: controller.signal });
     const [, init] = (global.fetch as jest.Mock).mock.calls[0];
     expect(init.signal).toBe(controller.signal);
   });

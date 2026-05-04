@@ -204,10 +204,10 @@ export async function updateAdminPublication(
  * no body to avoid unnecessary content-type negotiation surface.
  */
 export async function comparePublication(
-  id: number,
+  id: string,
   options: { signal?: AbortSignal } = {},
 ): Promise<CompareResponse> {
-  const res = await fetch(`${PROXY_BASE}/${encodeURIComponent(String(id))}/compare`, {
+  const res = await fetch(`${PROXY_BASE}/${encodeURIComponent(id)}/compare`, {
     method: 'POST',
     signal: options.signal,
     cache: 'no-store',
@@ -218,10 +218,10 @@ export async function comparePublication(
     const payload = extractBackendErrorPayload(body);
 
     if (payload.code === 'PUBLICATION_NOT_FOUND') {
-      throw new AdminPublicationNotFoundError(String(id));
+      throw new AdminPublicationNotFoundError(id);
     }
     if (!payload.code && res.status === 404) {
-      throw new AdminPublicationNotFoundError(String(id));
+      throw new AdminPublicationNotFoundError(id);
     }
 
     throw new BackendApiError({
@@ -245,8 +245,8 @@ export async function comparePublication(
  * Supports If-Match for ETag concurrency (Phase 1.3 pattern).
  */
 export async function publishAdminPublication(
-  id: number,
-  payload: PublishPayload,
+  id: string,
+  payload: PublishPayload = {},
   options: { signal?: AbortSignal; ifMatch?: string | null } = {},
 ): Promise<{ etag: string | null; document: AdminPublicationResponse }> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -254,7 +254,7 @@ export async function publishAdminPublication(
     headers['If-Match'] = options.ifMatch;
   }
 
-  const res = await fetch(`${PROXY_BASE}/${encodeURIComponent(String(id))}/publish`, {
+  const res = await fetch(`${PROXY_BASE}/${encodeURIComponent(id)}/publish`, {
     method: 'POST',
     headers,
     body: JSON.stringify(payload),
@@ -267,10 +267,10 @@ export async function publishAdminPublication(
     const errorPayload = extractBackendErrorPayload(body);
 
     if (errorPayload.code === 'PUBLICATION_NOT_FOUND') {
-      throw new AdminPublicationNotFoundError(String(id));
+      throw new AdminPublicationNotFoundError(id);
     }
     if (!errorPayload.code && res.status === 404) {
-      throw new AdminPublicationNotFoundError(String(id));
+      throw new AdminPublicationNotFoundError(id);
     }
 
     throw new BackendApiError({
