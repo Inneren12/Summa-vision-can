@@ -187,6 +187,14 @@ async def _seed_cache_row(session_factory, *, value: Decimal = _VALUE_INITIAL) -
 
 
 async def _mutate_cache_value(session_factory, *, new_value: Decimal) -> None:
+    """Simulate upstream value drift.
+
+    `source_hash` is intentionally left unchanged so this test isolates
+    `value_changed` as the sole drift reason. A real upstream update
+    typically refreshes both, but the comparator's per-reason logic is
+    independent — locking `value_changed` alone here keeps the
+    regression target tight.
+    """
     async with session_factory() as session:
         await session.execute(
             update(SemanticValueCache)
@@ -338,7 +346,14 @@ async def test_publish_then_compare_full_pipeline(session_factory) -> None:
         assert snap.semantic_key == _SEMANTIC_KEY
         assert snap.coord == _COORD
         assert snap.period == _PERIOD
-        assert snap.value_at_publish == str(_VALUE_INITIAL)
+        # dims/members must roundtrip identically — compare-time re-resolve
+        # depends on stored values matching the bound_block input.
+        assert snap.dims_json == [_DIM_POSITION]
+        assert snap.members_json == [_MEMBER_ID]
+        # Numeric equivalence rather than string equality — cache-layer
+        # decimal normalisation (e.g. trailing zeros) must not make this
+        # assertion brittle.
+        assert Decimal(snap.value_at_publish) == _VALUE_INITIAL
         assert snap.source_hash_at_publish == _SOURCE_HASH
         assert snap.mapping_version_at_publish == 1
         assert snap.missing_at_publish is False
@@ -358,6 +373,15 @@ async def test_publish_then_compare_full_pipeline(session_factory) -> None:
         assert fresh_block["stale_status"] == "fresh"
         assert fresh_block["stale_reasons"] == []
         assert fresh_block["compare_basis"]["compare_kind"] == "drift_check"
+        # BLOCKER-2 provenance regression shield (PR 1 Part 2):
+        # ResolveFingerprint.resolved_at must carry the cache row's
+        # provenance metadata, not be overridden by compared_at.
+        # If a regression collapses these two timestamps, this fails.
+        assert fresh_block["current"] is not None
+        assert (
+            fresh_block["current"]["resolved_at"]
+            != fresh_block["compared_at"]
+        )
 
         # Step 4 — simulate upstream drift in the cache row
         await _mutate_cache_value(session_factory, new_value=_VALUE_DRIFTED)
@@ -375,3 +399,14 @@ async def test_publish_then_compare_full_pipeline(session_factory) -> None:
         assert "value_changed" in stale_block["stale_reasons"]
         assert stale_block["compare_basis"]["compare_kind"] == "drift_check"
         assert "value" in stale_block["compare_basis"]["drift_fields"]
+        # Provenance preserved on stale path too.
+        assert stale_block["current"] is not None
+        assert (
+            stale_block["current"]["resolved_at"]
+            != stale_block["compared_at"]
+        )
+        # Numeric value-drift confirmation (avoids decimal-representation
+        # brittleness with str compares).
+        assert stale_block["snapshot"] is not None
+        assert Decimal(stale_block["snapshot"]["value"]) == _VALUE_INITIAL
+        assert Decimal(stale_block["current"]["value"]) == _VALUE_DRIFTED
