@@ -398,6 +398,94 @@ cache row — F-fix-3 missing-observation contract).
 
 ---
 
+## Admin Publications — Phase 3.1d (publish + compare)
+
+### `POST /api/v1/admin/publications/{publication_id}/publish` — Phase 3.1d body extension
+
+Optional request body added in Phase 3.1d for publish-time snapshot capture:
+
+```json
+{
+  "bound_blocks": [
+    {
+      "block_id": "block-1",
+      "cube_id": "1810000401",
+      "semantic_key": "housing.starts.total",
+      "dims": [1],
+      "members": [1],
+      "period": "2025-12"
+    }
+  ]
+}
+```
+
+Backward compatible: no body, `null`, `{}`, or an object with `bound_blocks=[]`
+all publish without capture. A bare-array body is rejected with `422`.
+
+Capture is best-effort: per-block resolve or shape-validation failures are
+logged inside `PublicationStalenessService.capture_for_publication` and never
+raise into the caller. Publish success is independent of capture success.
+
+### `POST /api/v1/admin/publications/{publication_id}/compare`
+
+Compare a publication's snapshot fingerprint against current cached values
+to detect staleness. Side-effect-free — never writes to
+`publication_block_snapshot`, never auto-primes the cache, never emits
+`AuditEvent` rows.
+
+**Auth:** admin API key.
+
+**Path params:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `publication_id` | `int` | Target publication. |
+
+**Request body:** none.
+
+**Response (200) — `PublicationComparatorResponse`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `publication_id` | `int` | |
+| `overall_status` | `"fresh" \| "stale" \| "unknown"` | Aggregated across blocks. |
+| `overall_severity` | `"info" \| "warning" \| "blocking"` | Aggregated across blocks. |
+| `compared_at` | ISO datetime | Single timestamp shared by all block results. |
+| `block_results` | list of `BlockComparatorResult` | One per snapshot row, plus a synthetic entry when no snapshots exist. |
+
+Each `BlockComparatorResult`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `block_id`, `cube_id`, `semantic_key` | `str` | Empty for the synthetic publication-level entry returned when no snapshot rows exist. |
+| `stale_status` | `"fresh" \| "stale" \| "unknown"` | |
+| `stale_reasons` | list | One or more of: `mapping_version_changed`, `source_hash_changed`, `value_changed`, `missing_state_changed`, `cache_row_stale`, `compare_failed`, `snapshot_missing`. |
+| `severity` | `"info" \| "warning" \| "blocking"` | |
+| `compared_at` | ISO datetime | |
+| `snapshot` | `SnapshotFingerprint \| null` | Captured fingerprint at publish-time. |
+| `current` | `ResolveFingerprint \| null` | Current cached fingerprint (cache-only resolve). |
+| `compare_basis` | discriminated union | `compare_kind`: `drift_check` \| `snapshot_missing` \| `compare_failed`. |
+
+**Errors:**
+
+| Status | `error_code` | Condition |
+|--------|--------------|-----------|
+| 401 | `auth.*` | Missing or invalid `X-API-KEY`. |
+| 404 | `PUBLICATION_NOT_FOUND` | No publication with that id. |
+
+**Behavior:**
+
+- If the publication exists but has zero snapshot rows (pre-3.1d publication,
+  fresh clone, or capture-failed publish), returns a single synthetic
+  `BlockComparatorResult` with empty identity fields, `stale_reasons=["snapshot_missing"]`,
+  and `overall_status="unknown"`.
+- Cached-only resolve mode is enforced internally (`allow_auto_prime=False`):
+  cache miss surfaces as `compare_failed(resolve_error="RESOLVE_CACHE_MISS")`,
+  never as a write. See `ARCH-CACHED-ONLY-RESOLVE-001` in
+  `docs/architecture/ARCHITECTURE_INVARIANTS.md`.
+
+---
+
 ## Maintenance
 
 This file MUST be updated in the same PR that changes the described API.
