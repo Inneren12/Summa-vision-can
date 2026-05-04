@@ -106,6 +106,9 @@ def _make_service(
     snap_repo.get_for_publication = AsyncMock(return_value=snapshots or [])
     snap_repo.upsert_for_block = AsyncMock()
     pub_repo = MagicMock()
+    # Default: publication exists (BLOCKER-1 guard satisfied).
+    # Override in individual tests to assert NotFound path.
+    pub_repo.get_by_id = AsyncMock(return_value=object())
     resolve_service = MagicMock()
     if resolve_side_effect is not None:
         resolve_service.resolve_value = AsyncMock(
@@ -233,7 +236,12 @@ async def test_compare_fresh_when_all_fields_match() -> None:
         "source_hash",
         "value",
         "missing",
+        "is_stale",
     }
+    # BLOCKER-2 lock: resolve provenance preserved, not overridden by compared_at.
+    assert block.current is not None
+    assert block.current.resolved_at == _RESOLVED_AT
+    assert block.current.resolved_at != block.compared_at
 
 
 @pytest.mark.asyncio
@@ -345,6 +353,8 @@ async def test_compare_cache_row_stale_when_current_is_stale() -> None:
     block = response.block_results[0]
     assert StaleReason.CACHE_ROW_STALE in block.stale_reasons
     assert block.stale_status == StaleStatus.STALE
+    # P2 lock: is_stale must surface in drift_fields diagnostic.
+    assert "is_stale" in block.compare_basis.drift_fields
 
 
 @pytest.mark.asyncio
@@ -495,10 +505,17 @@ async def test_compare_failed_uses_cached_only_mode() -> None:
 
 @pytest.mark.asyncio
 async def test_compare_failed_message_is_sanitized() -> None:
+    """BLOCKER-3 lock: ``str(exc)`` MUST NOT leak into response.
+
+    Returned message comes from a whitelisted fixed-message dict per
+    resolve_error code. SQL fragments, passwords, API keys, paths in
+    the original exception text are never surfaced.
+    """
     snap = _build_snapshot()
     sensitive = (
         "SELECT * FROM users WHERE password='hunter2' "
-        + ("X" * 1000)  # long payload to verify cap
+        "API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx "
+        + ("X" * 1000)
     )
     exc = RuntimeError(sensitive)
     service, *_ = _make_service(snapshots=[snap], resolve_side_effect=exc)
@@ -509,10 +526,90 @@ async def test_compare_failed_message_is_sanitized() -> None:
 
     block = response.block_results[0]
     msg = block.compare_basis.details.message
-    # Length capped per service contract.
-    assert len(msg) <= 500
-    # No newlines / stack-trace fragments leaked.
+    # No raw exception text leaks.
+    assert "SELECT" not in msg
+    assert "password" not in msg
+    assert "hunter2" not in msg
+    assert "API_KEY" not in msg
+    assert "sk-" not in msg
     assert "Traceback" not in msg
+    # Message comes from the fixed whitelist for UNEXPECTED.
+    assert msg == "Unexpected compare failure"
+
+
+# ---------------------------------------------------------------------------
+# Group 4b — BLOCKER-1 / P1 reviewer-fix locks
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_compare_publication_not_found_raises_before_snapshot_lookup() -> None:
+    """BLOCKER-1 lock: 404 path precedes snapshot_missing path.
+
+    Nonexistent publication MUST raise PublicationNotFoundError so
+    the endpoint layer can map to 404 PUBLICATION_NOT_FOUND.
+    """
+    from src.services.publications.exceptions import (
+        PublicationNotFoundError,
+    )
+
+    service, resolve_mock, snap_get_mock, _ = _make_service(snapshots=[])
+    # Override pub_repo to return None for the requested id.
+    service._publication_repo.get_by_id = AsyncMock(return_value=None)
+
+    with pytest.raises(PublicationNotFoundError):
+        await service.compare_for_publication(publication_id=999)
+
+    snap_get_mock.assert_not_awaited()
+    resolve_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_compare_publication_exists_then_proceeds_to_snapshot_path() -> None:
+    """Companion to the not-found test: when publication exists, flow proceeds."""
+    snap = _build_snapshot()
+    service, _, snap_get_mock, _ = _make_service(snapshots=[snap])
+
+    response = await service.compare_for_publication(
+        publication_id=_PUBLICATION_ID
+    )
+
+    assert response.publication_id == _PUBLICATION_ID
+    assert len(response.block_results) == 1
+    snap_get_mock.assert_awaited_once_with(_PUBLICATION_ID)
+
+
+@pytest.mark.asyncio
+async def test_capture_uses_single_captured_at_for_all_blocks() -> None:
+    """P1 lock: one publish action = one captured_at across all rows
+    (recon §3.3 — captured_at is the publish action timestamp)."""
+    from src.schemas.staleness import BoundBlockReference
+
+    blocks = [
+        BoundBlockReference(
+            block_id=f"b{i}",
+            cube_id="18-10-0004",
+            semantic_key="cpi.canada.all_items.index",
+            dims=[1, 2],
+            members=[10, 20],
+            period="2024-01",
+        )
+        for i in range(3)
+    ]
+
+    service, _, _, upsert_mock = _make_service(snapshots=[])
+
+    captured = await service.capture_for_publication(
+        publication_id=_PUBLICATION_ID, bound_blocks=blocks
+    )
+
+    assert captured == 3
+    assert upsert_mock.await_count == 3
+    timestamps = {
+        call.kwargs["captured_at"] for call in upsert_mock.await_args_list
+    }
+    # All three blocks share exactly one timestamp.
+    assert len(timestamps) == 1
 
 
 # ---------------------------------------------------------------------------

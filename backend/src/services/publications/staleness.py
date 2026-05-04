@@ -22,6 +22,7 @@ from src.repositories.publication_block_snapshot_repository import (
 )
 from src.repositories.publication_repository import PublicationRepository
 from src.schemas.resolve import ResolvedValueResponse
+from src.services.publications.exceptions import PublicationNotFoundError
 from src.schemas.staleness import (
     BlockComparatorResult,
     BoundBlockReference,
@@ -70,6 +71,7 @@ _DRIFT_FIELD_NAMES: tuple[str, ...] = (
     "source_hash",
     "value",
     "missing",
+    "is_stale",
 )
 
 
@@ -142,6 +144,11 @@ class PublicationStalenessService:
         skipped so a partial capture failure NEVER fails the publish.
         Returns the count of successfully captured blocks.
         """
+        # One publish action = one captured_at across all snapshot rows
+        # (recon §3.3). Per-block now() would split rows from the same
+        # publish into different timestamps, breaking deterministic
+        # audit semantics.
+        captured_at = datetime.now(timezone.utc)
         captured = 0
         for block in bound_blocks:
             try:
@@ -167,7 +174,7 @@ class PublicationStalenessService:
                     value_at_publish=resolved.value,
                     missing_at_publish=resolved.missing,
                     is_stale_at_publish=resolved.is_stale,
-                    captured_at=datetime.now(timezone.utc),
+                    captured_at=captured_at,
                 )
                 captured += 1
             except Exception:  # noqa: BLE001 — best-effort capture
@@ -199,6 +206,15 @@ class PublicationStalenessService:
         No-snapshot-rows case (recon §3.4 BLOCKER-2 Option C): returns
         a single synthetic publication-level :class:`BlockComparatorResult`.
         """
+        # Existence guard (recon §3.1): 404 PUBLICATION_NOT_FOUND must
+        # precede the snapshot_missing path so a nonexistent id does
+        # not masquerade as a fresh-clone synthetic result.
+        publication = await self._publication_repo.get_by_id(publication_id)
+        if publication is None:
+            raise PublicationNotFoundError(
+                details={"publication_id": publication_id}
+            )
+
         compared_at = datetime.now(timezone.utc)
         snapshots = await self._snapshot_repo.get_for_publication(publication_id)
 
@@ -281,7 +297,10 @@ class PublicationStalenessService:
             value=current.value,
             missing=current.missing,
             is_stale=current.is_stale,
-            resolved_at=compared_at,
+            # Carry the cache row's resolve provenance, not the compare
+            # timestamp. Compare metadata lives in `compared_at` on the
+            # parent BlockComparatorResult.
+            resolved_at=current.resolved_at,
         )
 
         drift_fields = self._drift_fields(snap, current)
@@ -347,6 +366,11 @@ class PublicationStalenessService:
             fields.append("value")
         if snap.missing_at_publish != current.missing:
             fields.append("missing")
+        # cache_row_stale is triggered solely by the current row's flag,
+        # not by snapshot-vs-current diff. Surface it on the diagnostic
+        # so UI can explain why the reason fired.
+        if current.is_stale:
+            fields.append("is_stale")
         return fields
 
     @staticmethod
@@ -390,6 +414,16 @@ class PublicationStalenessService:
             captured_at=snap.captured_at,
         )
 
+    # Whitelist of safe messages per resolve_error code. ``str(exc)``
+    # is NEVER returned because the underlying exception may carry SQL
+    # fragments, API keys, paths, or upstream payloads (recon §3.4 lock).
+    _SAFE_COMPARE_FAILED_MESSAGES: dict[str, str] = {
+        "MAPPING_NOT_FOUND": "Mapping not found for snapshot identity",
+        "RESOLVE_CACHE_MISS": "Current cache row is missing",
+        "RESOLVE_INVALID_FILTERS": "Snapshot filters are invalid",
+        "UNEXPECTED": "Unexpected compare failure",
+    }
+
     def _build_compare_failed(
         self,
         snap: PublicationBlockSnapshot,
@@ -400,12 +434,18 @@ class PublicationStalenessService:
         """Build a ``compare_failed`` result with sanitized diagnostics.
 
         Per recon §3.4: ``message`` MUST NOT carry stack traces, SQL,
-        API keys, or raw upstream payloads. We pass the exception class
-        name plus a length-capped ``str(exc)`` only.
+        API keys, or raw upstream payloads. We never return
+        ``str(exc)`` — only a fixed whitelisted message per
+        ``resolve_error`` code. The exception class name is safe to
+        return because exception classes are part of code, not user
+        data.
         """
         details = CompareFailedDetails(
             exception_type=type(exc).__name__,
-            message=str(exc)[:500],
+            message=self._SAFE_COMPARE_FAILED_MESSAGES.get(
+                resolve_error,
+                self._SAFE_COMPARE_FAILED_MESSAGES["UNEXPECTED"],
+            ),
         )
         return BlockComparatorResult(
             block_id=snap.block_id,

@@ -390,3 +390,35 @@ async def test_http_to_service_pipeline_wiring() -> None:
     )
     # Cache-row coord echoed (the seeded row uses the canonical encoding).
     assert dto.coord == "1.10.0.0.0.0.0.0.0.0"
+
+
+@pytest.mark.asyncio
+async def test_resolve_value_cache_miss_with_allow_auto_prime_false_does_not_prime() -> None:
+    """Phase 3.1d (recon §3.2 BLOCKER-1 Option 1): when
+    ``allow_auto_prime=False``, a cache miss after step 4 raises
+    :class:`ResolveCacheMissError` immediately and does NOT invoke
+    auto_prime. This is the storage-side-effect-free contract used by
+    the compare path.
+    """
+    service, vc, _ = _build_service(
+        mapping=_mapping(),
+        get_cached_returns=[[]],  # cold cache; only one lookup expected
+    )
+
+    with pytest.raises(ResolveCacheMissError) as info:
+        await service.resolve_value(
+            cube_id="18-10-0004",
+            semantic_key="cpi.canada.all_items.index",
+            dims=[1, 2],
+            members=[1, 10],
+            period=None,
+            allow_auto_prime=False,
+        )
+
+    # Auto-prime path is never entered.
+    vc.auto_prime.assert_not_called()
+    # Re-query is also skipped (only the initial step-4 lookup ran).
+    assert vc.get_cached.await_count == 1
+    # Exception carries the cached-only signal, not "prime attempted".
+    assert info.value.prime_attempted is False
+    assert info.value.prime_error_code is None
