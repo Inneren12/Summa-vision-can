@@ -195,6 +195,24 @@ class TestPublicationBlockSnapshotRepository:
 
         assert await repo.get_for_publication(pub.id) == []
 
+    async def test_column_lengths_match_locked_recon_contract(self):
+        """Snapshot column lengths must match recon §2.1 lock + cache parity.
+
+        coord parity rule: publication_block_snapshot.coord MUST NOT be
+        narrower than semantic_value_cache.coord (snapshot stores identity
+        for re-resolve through cache).
+        """
+        cols = PublicationBlockSnapshot.__table__.c
+        assert cols.block_id.type.length == 128, "block_id locked at String(128)"
+        assert cols.cube_id.type.length == 50, "cube_id matches semantic_value_cache.cube_id"
+        assert cols.semantic_key.type.length == 200, "semantic_key=200 per DEBT-063"
+        assert cols.coord.type.length == 50, (
+            "coord must match semantic_value_cache.coord = String(50); "
+            "narrower would truncate/fail on long StatCan coords"
+        )
+        assert cols.period.type.length == 20, "period locked at String(20)"
+        assert cols.source_hash_at_publish.type.length == 64, "source_hash=64"
+
     async def test_unique_constraint_violation(self, db_session):
         pub = await _seed_publication(db_session)
 

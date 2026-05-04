@@ -60,7 +60,7 @@ class PublicationBlockSnapshot(Base):
     block_id: Mapped[str] = mapped_column(String(length=128), nullable=False)
     cube_id: Mapped[str] = mapped_column(String(length=50), nullable=False)
     semantic_key: Mapped[str] = mapped_column(String(length=200), nullable=False)
-    coord: Mapped[str] = mapped_column(String(length=40), nullable=False)
+    coord: Mapped[str] = mapped_column(String(length=50), nullable=False)
     period: Mapped[str | None] = mapped_column(String(length=20), nullable=True)
     dims_json: Mapped[list[int]] = mapped_column(
         JSONB(astext_type=sa.Text()).with_variant(JSON(), "sqlite"),

@@ -34,7 +34,7 @@ def upgrade() -> None:
         sa.Column("block_id", sa.String(length=128), nullable=False),
         sa.Column("cube_id", sa.String(length=50), nullable=False),
         sa.Column("semantic_key", sa.String(length=200), nullable=False),
-        sa.Column("coord", sa.String(length=40), nullable=False),
+        sa.Column("coord", sa.String(length=50), nullable=False),
         sa.Column("period", sa.String(length=20), nullable=True),
         sa.Column(
             "dims_json",
