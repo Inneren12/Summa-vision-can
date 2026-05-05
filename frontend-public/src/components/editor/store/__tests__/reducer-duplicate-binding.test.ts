@@ -90,6 +90,7 @@ describe("reducer / DUPLICATE_BLOCK — binding (Phase 3.1d Slice 2)", () => {
     const s2 = reducer(s1, { type: "DUPLICATE_BLOCK", blockId, newId: "blk_dup_3" });
 
     const dupBinding = s2.doc.blocks["blk_dup_3"].binding as SingleValueBinding;
+    // Intentional mutation: proves the duplicate's binding is not aliased to source.
     dupBinding.filters.geo = "QC";
 
     const sourceBinding = s2.doc.blocks[blockId].binding as SingleValueBinding;

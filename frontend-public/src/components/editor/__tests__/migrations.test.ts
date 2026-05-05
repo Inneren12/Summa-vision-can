@@ -707,7 +707,9 @@ describe("migrateV2toV3 — preset id rename + exportPresets default", () => {
 // ────────────────────────────────────────────────────────────────────
 
 describe("hydrateImportedDoc — Block.binding (Phase 3.1d Slice 2)", () => {
-  function docWithBlockBinding(blockBinding: unknown): unknown {
+  function docWithBlockBinding(
+    blockBinding: unknown,
+  ): { base: CanonicalDocument; blockKey: string } {
     const base = v2Doc() as any;
     const firstBlockKey = Object.keys(base.blocks)[0];
     base.blocks[firstBlockKey] = { ...base.blocks[firstBlockKey], binding: blockBinding };
@@ -730,7 +732,7 @@ describe("hydrateImportedDoc — Block.binding (Phase 3.1d Slice 2)", () => {
       filters: { geo: "ON" },
       period: "2024-Q3",
     };
-    const { base, blockKey } = docWithBlockBinding(validBinding) as any;
+    const { base, blockKey } = docWithBlockBinding(validBinding);
     const { doc, warnings } = hydrateImportedDoc(base);
     expect(doc.blocks[blockKey].binding).toEqual(validBinding);
     expect(warnings.some((w) => /Invalid block binding dropped/.test(w))).toBe(false);
@@ -738,7 +740,7 @@ describe("hydrateImportedDoc — Block.binding (Phase 3.1d Slice 2)", () => {
 
   it("drops malformed binding and emits warning", () => {
     const malformed = { kind: "single", cube_id: 42 }; // wrong type
-    const { base, blockKey } = docWithBlockBinding(malformed) as any;
+    const { base, blockKey } = docWithBlockBinding(malformed);
     const { doc, warnings } = hydrateImportedDoc(base);
     expect(doc.blocks[blockKey]).not.toHaveProperty("binding");
     const w = warnings.find((s) => /Invalid block binding dropped/.test(s));
@@ -748,7 +750,7 @@ describe("hydrateImportedDoc — Block.binding (Phase 3.1d Slice 2)", () => {
   });
 
   it("treats binding=undefined as absent (no key, no warning)", () => {
-    const { base, blockKey } = docWithBlockBinding(undefined) as any;
+    const { base, blockKey } = docWithBlockBinding(undefined);
     const { doc, warnings } = hydrateImportedDoc(base);
     expect(doc.blocks[blockKey]).not.toHaveProperty("binding");
     expect(warnings.some((w) => /Invalid block binding dropped/.test(w))).toBe(false);
@@ -756,7 +758,7 @@ describe("hydrateImportedDoc — Block.binding (Phase 3.1d Slice 2)", () => {
 
   it("warning text uses kind=unknown when input has no kind field", () => {
     const malformed = { cube_id: "c" };
-    const { base, blockKey } = docWithBlockBinding(malformed) as any;
+    const { base, blockKey } = docWithBlockBinding(malformed);
     const { warnings } = hydrateImportedDoc(base);
     const w = warnings.find((s) => /Invalid block binding dropped/.test(s));
     expect(w).toBeDefined();
@@ -771,7 +773,7 @@ describe("hydrateImportedDoc — Block.binding (Phase 3.1d Slice 2)", () => {
       filters: { geo: "ON" },
       period_range: { last_n: 12 },
     };
-    const { base, blockKey } = docWithBlockBinding(tsBinding) as any;
+    const { base, blockKey } = docWithBlockBinding(tsBinding);
     const { doc } = hydrateImportedDoc(base);
     expect(doc.blocks[blockKey].binding).toEqual(tsBinding);
   });
@@ -785,7 +787,7 @@ describe("hydrateImportedDoc — Block.binding (Phase 3.1d Slice 2)", () => {
       period: "2024-Q3",
       mystery_field: "drop me",
     };
-    const { base, blockKey } = docWithBlockBinding(validWithExtra) as any;
+    const { base, blockKey } = docWithBlockBinding(validWithExtra);
     const { doc } = hydrateImportedDoc(base);
     expect(doc.blocks[blockKey].binding).not.toHaveProperty("mystery_field");
     expect(doc.blocks[blockKey].binding).toEqual({
@@ -808,7 +810,7 @@ describe("hydrateImportedDoc — Block.binding (Phase 3.1d Slice 2)", () => {
       sort: "value_desc" as const,
       limit: 5,
     };
-    const { base, blockKey } = docWithBlockBinding(validBinding) as any;
+    const { base, blockKey } = docWithBlockBinding(validBinding);
     const { doc: hydrated } = hydrateImportedDoc(base);
     const json = JSON.stringify(hydrated);
     const reimported = hydrateImportedDoc(JSON.parse(json));
@@ -834,5 +836,28 @@ describe("hydrateImportedDoc — Block.binding (Phase 3.1d Slice 2)", () => {
     for (const k of keys.slice(1)) {
       expect(reimported.doc.blocks[k]).not.toHaveProperty("binding");
     }
+  });
+
+  it("hydrate isolates binding from raw input (no aliasing)", () => {
+    const rawBinding = {
+      kind: "single" as const,
+      cube_id: "cube_a",
+      semantic_key: "metric_x",
+      filters: { geo: "ON" } as Record<string, string>,
+      period: "2024-Q3",
+    };
+    const { base, blockKey } = docWithBlockBinding(rawBinding);
+    const { doc: hydrated } = hydrateImportedDoc(base);
+    const hydratedBlock = hydrated.blocks[blockKey];
+
+    expect(hydratedBlock.binding).not.toBeUndefined();
+    // Object identity: hydrated binding is a fresh object (not the raw one)
+    expect(hydratedBlock.binding).not.toBe(rawBinding);
+    const hydratedSingle = hydratedBlock.binding as { filters: Record<string, string> };
+    // Filters: hydrated filters is a fresh object
+    expect(hydratedSingle.filters).not.toBe(rawBinding.filters);
+    // Mutation of raw does not leak into hydrated
+    rawBinding.filters.geo = "QC";
+    expect(hydratedSingle.filters.geo).toBe("ON");
   });
 });

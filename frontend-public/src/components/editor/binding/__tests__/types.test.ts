@@ -280,6 +280,48 @@ describe('validateBinding', () => {
       ).toBeNull();
     });
 
+    it('rejects categorical_series with limit: -1', () => {
+      expect(
+        validateBinding({
+          kind: 'categorical_series',
+          cube_id: 'cube_a',
+          semantic_key: 'metric_x',
+          category_dim: 'industry',
+          filters: { geo: 'ON' },
+          period: '2024-Q3',
+          limit: -1,
+        }),
+      ).toBeNull();
+    });
+
+    it('rejects categorical_series with limit: 1.5', () => {
+      expect(
+        validateBinding({
+          kind: 'categorical_series',
+          cube_id: 'cube_a',
+          semantic_key: 'metric_x',
+          category_dim: 'industry',
+          filters: { geo: 'ON' },
+          period: '2024-Q3',
+          limit: 1.5,
+        }),
+      ).toBeNull();
+    });
+
+    it('rejects categorical_series with limit: NaN', () => {
+      expect(
+        validateBinding({
+          kind: 'categorical_series',
+          cube_id: 'cube_a',
+          semantic_key: 'metric_x',
+          category_dim: 'industry',
+          filters: { geo: 'ON' },
+          period: '2024-Q3',
+          limit: NaN,
+        }),
+      ).toBeNull();
+    });
+
     it('rejects limit: 0', () => {
       expect(
         validateBinding({
@@ -376,6 +418,45 @@ describe('validateBinding', () => {
         filters: { geo: 'ON' },
         period: '2024-Q3',
       });
+    });
+
+    it('clones filters (does not return original reference)', () => {
+      const input = {
+        kind: 'single' as const,
+        cube_id: 'cube_a',
+        semantic_key: 'metric_x',
+        filters: { geo: 'ON' },
+        period: '2024-Q3',
+      };
+      const result = validateBinding(input);
+      expect(result).not.toBeNull();
+      expect((result as SingleValueBinding).filters).not.toBe(input.filters);
+      expect((result as SingleValueBinding).filters).toEqual({ geo: 'ON' });
+    });
+
+    it('does not propagate post-validation mutation of input filters', () => {
+      const input = {
+        kind: 'single' as const,
+        cube_id: 'cube_a',
+        semantic_key: 'metric_x',
+        filters: { geo: 'ON' },
+        period: '2024-Q3',
+      };
+      const result = validateBinding(input) as SingleValueBinding;
+      input.filters.geo = 'QC';
+      expect(result.filters.geo).toBe('ON');
+    });
+
+    it('canonicalizes filters with deterministic key ordering', () => {
+      const input = {
+        kind: 'single' as const,
+        cube_id: 'cube_a',
+        semantic_key: 'metric_x',
+        filters: { zeta: 'z', alpha: 'a', mu: 'm' },
+        period: '2024-Q3',
+      };
+      const result = validateBinding(input) as SingleValueBinding;
+      expect(Object.keys(result.filters)).toEqual(['alpha', 'mu', 'zeta']);
     });
   });
 });

@@ -106,6 +106,16 @@ export function validateBinding(value: unknown): Binding | null {
     );
   const isPositiveInt = (x: unknown): x is number =>
     typeof x === 'number' && Number.isInteger(x) && x > 0;
+  /**
+   * Canonical filters reconstruction:
+   * - breaks aliasing with input (callers may mutate input freely)
+   * - sorts keys for deterministic ordering (stable JSON.stringify; aligns
+   *   with future Slice 4 deterministic dims/members emission)
+   */
+  const canonicalFilters = (x: Record<string, string>): Record<string, string> =>
+    Object.fromEntries(
+      Object.entries(x).sort(([a], [b]) => a.localeCompare(b)),
+    );
 
   switch (v.kind) {
     case 'single': {
@@ -117,7 +127,7 @@ export function validateBinding(value: unknown): Binding | null {
         kind: 'single',
         cube_id: v.cube_id as string,
         semantic_key: v.semantic_key as string,
-        filters: v.filters as Record<string, string>,
+        filters: canonicalFilters(v.filters as Record<string, string>),
         period: v.period as string,
         ...(v.format !== undefined ? { format: v.format as string } : {}),
       };
@@ -137,7 +147,7 @@ export function validateBinding(value: unknown): Binding | null {
         kind: 'time_series',
         cube_id: v.cube_id as string,
         semantic_key: v.semantic_key as string,
-        filters: v.filters as Record<string, string>,
+        filters: canonicalFilters(v.filters as Record<string, string>),
         period_range:
           pr.last_n !== undefined
             ? { last_n: pr.last_n as number }
@@ -161,7 +171,7 @@ export function validateBinding(value: unknown): Binding | null {
         cube_id: v.cube_id as string,
         semantic_key: v.semantic_key as string,
         category_dim: v.category_dim as string,
-        filters: v.filters as Record<string, string>,
+        filters: canonicalFilters(v.filters as Record<string, string>),
         period: v.period as string,
         ...(v.sort !== undefined
           ? { sort: v.sort as 'value_desc' | 'value_asc' | 'source_order' }
@@ -192,7 +202,7 @@ export function validateBinding(value: unknown): Binding | null {
           semantic_key: m.semantic_key as string,
           ...(m.label !== undefined ? { label: m.label as string } : {}),
         })),
-        filters: v.filters as Record<string, string>,
+        filters: canonicalFilters(v.filters as Record<string, string>),
         period: v.period as string,
         ...(v.format !== undefined ? { format: v.format as string } : {}),
       };
@@ -222,7 +232,7 @@ export function validateBinding(value: unknown): Binding | null {
           ...(c.label !== undefined ? { label: c.label as string } : {}),
         })),
         row_dim: v.row_dim as string,
-        filters: v.filters as Record<string, string>,
+        filters: canonicalFilters(v.filters as Record<string, string>),
         period: v.period as string,
         ...(v.format !== undefined ? { format: v.format as string } : {}),
       };
