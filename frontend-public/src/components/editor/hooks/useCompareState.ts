@@ -32,11 +32,17 @@ export function useCompareState(publicationId: string): UseCompareStateResult {
   }, []);
 
   const compare = useCallback(() => {
+    // Guard against empty/falsy publicationId (e.g. template-only editor session
+    // where TopBar passes ''). TopBar disables the button via compareDisabled,
+    // but the defensive guard prevents accidental programmatic calls from
+    // hitting the API with an invalid URL like /publications//compare.
+    if (!publicationId) return;
+
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    dispatch({ type: 'compare:start' });
+    dispatch({ type: 'compare:start', startedAt: Date.now() });
 
     comparePublication(publicationId, { signal: controller.signal })
       .then((result) => {

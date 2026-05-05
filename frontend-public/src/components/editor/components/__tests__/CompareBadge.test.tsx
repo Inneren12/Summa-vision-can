@@ -47,4 +47,12 @@ describe('CompareBadge', () => {
     expect(badge).toHaveAttribute('data-severity', 'not_compared');
     expect(badge).toHaveTextContent('publication.compare.badge.not_compared');
   });
+
+  it('renders unknown severity with ? glyph', () => {
+    render(<CompareBadge severity="unknown" />);
+    const badge = screen.getByTestId('compare-badge');
+    expect(badge).toHaveAttribute('data-severity', 'unknown');
+    expect(badge).toHaveTextContent('?');
+    expect(badge).toHaveTextContent('publication.compare.badge.unknown');
+  });
 });

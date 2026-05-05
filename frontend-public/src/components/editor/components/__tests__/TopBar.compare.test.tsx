@@ -72,7 +72,7 @@ describe('TopBar — compare integration (Phase 3.1d Slice 1b)', () => {
     });
   });
 
-  it('after success, badge shows aggregated severity (unknown for empty blocks)', async () => {
+  it('after success with empty blocks falls through to overall_status', async () => {
     const result: CompareResponse = {
       publication_id: 42,
       overall_status: 'fresh',
@@ -85,8 +85,8 @@ describe('TopBar — compare integration (Phase 3.1d Slice 1b)', () => {
     fireEvent.click(screen.getByTestId('compare-button'));
     await waitFor(() => {
       const badge = screen.getByTestId('compare-badge');
-      // Empty block_results → unknown bucket via aggregateCompareSeverity
-      expect(badge).toHaveAttribute('data-severity', 'unknown');
+      // Empty block_results falls through to overall_status: 'fresh'
+      expect(badge).toHaveAttribute('data-severity', 'fresh');
     });
   });
 
@@ -131,5 +131,50 @@ describe('TopBar — compare integration (Phase 3.1d Slice 1b)', () => {
   it('compare button disabled when no publicationId (template-only session)', () => {
     render(<TopBar {...makeProps({ publicationId: undefined })} />);
     expect(screen.getByTestId('compare-button')).toBeDisabled();
+  });
+
+  it('shows inline error label and retry when compare fails', async () => {
+    mockedCompare.mockRejectedValue(new Error('Network down'));
+    render(<TopBar {...makeProps()} />);
+    fireEvent.click(screen.getByTestId('compare-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('compare-error')).toHaveTextContent(
+        'publication.compare.error.label',
+      );
+      expect(screen.getByTestId('compare-error-retry')).toHaveTextContent(
+        'publication.compare.error.retry',
+      );
+    });
+
+    // Badge is NOT shown in error state
+    expect(screen.queryByTestId('compare-badge')).not.toBeInTheDocument();
+  });
+
+  it('clicking error retry triggers a new compare', async () => {
+    mockedCompare.mockRejectedValueOnce(new Error('First fail'));
+    render(<TopBar {...makeProps()} />);
+    fireEvent.click(screen.getByTestId('compare-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('compare-error-retry')).toBeInTheDocument();
+    });
+
+    mockedCompare.mockResolvedValueOnce({
+      publication_id: 42,
+      overall_status: 'fresh',
+      overall_severity: 'info',
+      compared_at: new Date().toISOString(),
+      block_results: [],
+    });
+
+    fireEvent.click(screen.getByTestId('compare-error-retry'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('compare-badge')).toHaveAttribute(
+        'data-severity',
+        'fresh',
+      );
+    });
   });
 });

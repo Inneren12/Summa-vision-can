@@ -26,7 +26,7 @@ export type CompareState =
   | { kind: 'error'; error: BackendApiError | Error };
 
 export type CompareAction =
-  | { type: 'compare:start' }
+  | { type: 'compare:start'; startedAt: number }
   | { type: 'compare:success'; result: CompareResponse }
   | { type: 'compare:error'; error: BackendApiError | Error }
   | { type: 'compare:reset' };
@@ -39,7 +39,7 @@ export function compareReducer(
 ): CompareState {
   switch (action.type) {
     case 'compare:start':
-      return { kind: 'loading', startedAt: Date.now() };
+      return { kind: 'loading', startedAt: action.startedAt };
 
     case 'compare:success': {
       const badge = aggregateCompareSeverity(action.result);

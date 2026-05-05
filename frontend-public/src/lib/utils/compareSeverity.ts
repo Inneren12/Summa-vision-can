@@ -20,8 +20,16 @@ import type {
 export function aggregateCompareSeverity(
   result: CompareResponse,
 ): CompareBadgeSeverity {
+  // Aggregate precedence (recon Part 2 §E.4 + Slice 1b recon §C.4):
+  //   1. Any block has stale_reasons including 'compare_failed' → 'partial'
+  //   2. Else any block has stale_reasons including 'snapshot_missing' → 'missing'
+  //   3. Else fall through to backend overall_status ('fresh' | 'stale' | 'unknown')
+  //
+  // Empty block_results is a valid "editorial-only publication" state where
+  // the backend returns its own overall_status (typically 'fresh') with no
+  // bound blocks. The aggregate must defer to overall_status — it is NOT
+  // hard-coded to 'unknown'.
   const blocks = result.block_results;
-  if (blocks.length === 0) return 'unknown';
 
   if (blocks.some((b) => b.stale_reasons.includes('compare_failed'))) {
     return 'partial';

@@ -199,9 +199,22 @@ export function TopBar({
         <button type="button" onClick={markSaved} disabled={!dirty} aria-label={dirty ? tDraft('save.unsaved') : tDraft('save.unchanged')} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: dirty ? TK.c.pos : TK.c.bgSurf, color: dirty ? TK.c.bgApp : TK.c.txtM, border: `1px solid ${dirty ? TK.c.pos : TK.c.brd}`, borderRadius: "2px", cursor: dirty ? "pointer" : "default", fontWeight: dirty ? 700 : 400, opacity: dirty ? 1 : .5 }} title={tSave('shortcut')}>{tSave('label_short')}</button>
         <button type="button" onClick={onClone} disabled={!canClone || cloneInFlight} aria-label={cloneInFlight ? tActions('cloneInFlight') : tActions('clone')} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: !canClone || cloneInFlight ? TK.c.bgSurf : TK.c.acc, color: !canClone || cloneInFlight ? TK.c.txtM : TK.c.bgApp, border: `1px solid ${!canClone || cloneInFlight ? TK.c.brd : TK.c.acc}`, borderRadius: "2px", cursor: !canClone || cloneInFlight ? "default" : "pointer", fontWeight: 700, opacity: !canClone || cloneInFlight ? .6 : 1 }} title={!canClone && !cloneInFlight ? cloneTooltip : tActions('clone')}>{cloneInFlight ? tActions('cloneInFlight') : tActions('clone')}</button>
         <CompareButton state={compareState} onClick={compare} disabled={compareDisabled} />
-        {compareState.kind !== 'loading' && (
+        {compareState.kind === 'error' ? (
+          <>
+            <span
+              data-testid="compare-error"
+              style={{ fontSize: "8px", fontFamily: TK.font.data, color: TK.c.err, whiteSpace: "nowrap" }}
+            >{tCompare('error.label')}</span>
+            <button
+              type="button"
+              onClick={compare}
+              data-testid="compare-error-retry"
+              style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.acc, border: `1px solid ${TK.c.acc}`, borderRadius: "2px", cursor: "pointer" }}
+            >{tCompare('error.retry')}</button>
+          </>
+        ) : compareState.kind !== 'loading' ? (
           <CompareBadge severity={compareBadgeSeverity} comparedAt={compareComparedAt} />
-        )}
+        ) : null}
         {showCompareRetry && (
           <button
             type="button"

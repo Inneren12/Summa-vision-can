@@ -47,8 +47,16 @@ function response(
 }
 
 describe('aggregateCompareSeverity', () => {
-  it('returns unknown for empty block_results', () => {
-    expect(aggregateCompareSeverity(response([]))).toBe('unknown');
+  it('falls back to overall_status (fresh) for empty block_results', () => {
+    expect(aggregateCompareSeverity(response([], 'fresh'))).toBe('fresh');
+  });
+
+  it('falls back to overall_status (unknown) for empty block_results', () => {
+    expect(aggregateCompareSeverity(response([], 'unknown'))).toBe('unknown');
+  });
+
+  it('falls back to overall_status (stale) for empty block_results', () => {
+    expect(aggregateCompareSeverity(response([], 'stale'))).toBe('stale');
   });
 
   it('returns fresh when all blocks fresh and overall fresh', () => {

@@ -45,8 +45,8 @@ describe('useCompareState', () => {
 
     await waitFor(() => expect(result.current.state.kind).toBe('success'));
     if (result.current.state.kind === 'success') {
-      // Empty block_results → unknown bucket per aggregate logic
-      expect(result.current.state.badge).toBe('unknown');
+      // Empty block_results falls through to overall_status: 'fresh' (okResult.overall_status)
+      expect(result.current.state.badge).toBe('fresh');
     }
   });
 
@@ -114,5 +114,14 @@ describe('useCompareState', () => {
     });
     expect(result.current.state.kind).toBe('idle');
     expect(capturedSignal?.aborted).toBe(true);
+  });
+
+  it('does not call API when publicationId is empty string', () => {
+    const { result } = renderHook(() => useCompareState(''));
+    act(() => {
+      result.current.compare();
+    });
+    expect(mockedCompare).not.toHaveBeenCalled();
+    expect(result.current.state.kind).toBe('idle');
   });
 });

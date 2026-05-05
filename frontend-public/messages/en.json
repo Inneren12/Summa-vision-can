@@ -52,6 +52,10 @@
       "partial": {
         "toast": "Some blocks could not be compared"
       },
+      "error": {
+        "label": "Check failed",
+        "retry": "Retry"
+      },
       "refresh_required": {
         "label": "Refresh required",
         "body": "This publication was created before snapshot tracking was enabled. Republish to enable comparison.",
