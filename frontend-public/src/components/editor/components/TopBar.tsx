@@ -8,6 +8,9 @@ import { TPLS } from '../registry/templates';
 import { StatusBadge } from './StatusBadge';
 import { SaveStatusIndicator } from './SaveStatusIndicator';
 import { ZipExportProgress } from './ZipExportProgress';
+import { CompareButton } from './CompareButton';
+import { CompareBadge } from './CompareBadge';
+import { useCompareState } from '../hooks/useCompareState';
 import type { ZipExportPhase } from '../export/zipExport';
 
 interface TopBarProps {
@@ -48,6 +51,10 @@ interface TopBarProps {
   cloneInFlight?: boolean;
   onClone?: () => void;
   cloneTooltip?: string;
+  // Phase 3.1d Slice 1b: compare surface. Compare button + badge sit
+  // between clone and export-zip in the right cluster. Compare is
+  // disabled when no publicationId (template-only editor session).
+  publicationId?: string;
 }
 
 export function TopBar({
@@ -80,6 +87,7 @@ export function TopBar({
   cloneInFlight = false,
   onClone,
   cloneTooltip,
+  publicationId,
 }: TopBarProps) {
   const tQa = useTranslations('qa');
   const tDebug = useTranslations('debug');
@@ -93,6 +101,20 @@ export function TopBar({
   const tDraft = useTranslations('draft');
   const tActions = useTranslations('editor.actions');
   const tZipBtn = useTranslations('editor.export_zip.button');
+  const tCompare = useTranslations('publication.compare');
+
+  // Phase 3.1d Slice 1b: compare state machine. The hook owns AbortController
+  // lifecycle; reducer is pure. publicationId may be undefined for the
+  // template-only editor session — pass empty string to keep hook stable
+  // and disable the button via `compareDisabled`.
+  const { state: compareState, compare } = useCompareState(publicationId ?? '');
+  const compareDisabled = !publicationId;
+  const compareBadgeSeverity =
+    compareState.kind === 'success' ? compareState.badge : 'not_compared';
+  const compareComparedAt =
+    compareState.kind === 'success' ? compareState.comparedAt : undefined;
+  const showCompareRetry =
+    compareState.kind === 'success' && compareState.badge === 'partial';
 
   // Stage 4 Task 3 + PR#3: EXPORT (ZIP) button composes three gates.
   // Validation errors take priority in the tooltip — the user has to fix
@@ -176,6 +198,18 @@ export function TopBar({
         <button type="button" onClick={exportJSON} aria-label={tExport('document_json')} title={tExport('document_json')} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.txtS, border: `1px solid ${TK.c.brd}`, borderRadius: "2px", cursor: "pointer" }}>{tExport('json_label_short')}</button>
         <button type="button" onClick={markSaved} disabled={!dirty} aria-label={dirty ? tDraft('save.unsaved') : tDraft('save.unchanged')} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: dirty ? TK.c.pos : TK.c.bgSurf, color: dirty ? TK.c.bgApp : TK.c.txtM, border: `1px solid ${dirty ? TK.c.pos : TK.c.brd}`, borderRadius: "2px", cursor: dirty ? "pointer" : "default", fontWeight: dirty ? 700 : 400, opacity: dirty ? 1 : .5 }} title={tSave('shortcut')}>{tSave('label_short')}</button>
         <button type="button" onClick={onClone} disabled={!canClone || cloneInFlight} aria-label={cloneInFlight ? tActions('cloneInFlight') : tActions('clone')} style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: !canClone || cloneInFlight ? TK.c.bgSurf : TK.c.acc, color: !canClone || cloneInFlight ? TK.c.txtM : TK.c.bgApp, border: `1px solid ${!canClone || cloneInFlight ? TK.c.brd : TK.c.acc}`, borderRadius: "2px", cursor: !canClone || cloneInFlight ? "default" : "pointer", fontWeight: 700, opacity: !canClone || cloneInFlight ? .6 : 1 }} title={!canClone && !cloneInFlight ? cloneTooltip : tActions('clone')}>{cloneInFlight ? tActions('cloneInFlight') : tActions('clone')}</button>
+        <CompareButton state={compareState} onClick={compare} disabled={compareDisabled} />
+        {compareState.kind !== 'loading' && (
+          <CompareBadge severity={compareBadgeSeverity} comparedAt={compareComparedAt} />
+        )}
+        {showCompareRetry && (
+          <button
+            type="button"
+            onClick={compare}
+            data-testid="compare-retry"
+            style={{ padding: "3px 6px", fontSize: "8px", fontFamily: TK.font.data, background: TK.c.bgSurf, color: TK.c.acc, border: `1px solid ${TK.c.acc}`, borderRadius: "2px", cursor: "pointer" }}
+          >{tCompare('button.retry')}</button>
+        )}
         <button
           type="button"
           onClick={exportZip}

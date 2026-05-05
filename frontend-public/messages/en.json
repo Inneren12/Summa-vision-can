@@ -31,6 +31,32 @@
         "invalid_filters": "Invalid filter set",
         "cache_miss": "Cache miss (no row after prime)"
       }
+    },
+    "compare": {
+      "button": {
+        "compare": "Compare",
+        "comparing": "Comparing…",
+        "retry": "Retry failed blocks"
+      },
+      "badge": {
+        "fresh": "Fresh",
+        "stale": "Stale",
+        "missing": "Missing",
+        "unknown": "Unknown",
+        "partial": "Partial",
+        "not_compared": "Not compared"
+      },
+      "timestamp": {
+        "compared_relative": "Compared {time} ago"
+      },
+      "partial": {
+        "toast": "Some blocks could not be compared"
+      },
+      "refresh_required": {
+        "label": "Refresh required",
+        "body": "This publication was created before snapshot tracking was enabled. Republish to enable comparison.",
+        "cta": "Republish to refresh"
+      }
     }
   },
   "import": {
