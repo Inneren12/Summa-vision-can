@@ -1,4 +1,5 @@
-import type { EditorState, EditorAction, CanonicalDocument, WorkflowAction, WorkflowHistoryEntry, TimestampProvider } from '../types';
+import type { Block, EditorState, EditorAction, CanonicalDocument, WorkflowAction, WorkflowHistoryEntry, TimestampProvider } from '../types';
+import type { Binding } from '../binding/types';
 import { BREG } from '../registry/blocks';
 import { TPLS, mkDoc } from '../registry/templates';
 import { validateImportStrict } from '../registry/guards';
@@ -403,11 +404,15 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       // Duplicate carries identical props (deep-cloned to break aliasing) but
       // does NOT inherit `locked` — the operator gets a fresh, editable copy.
       const clonedProps = JSON.parse(JSON.stringify(sourceBlock.props));
-      const newBlock = {
+      const newBlock: Block = {
         id: nextId,
         type: sourceBlock.type,
         props: clonedProps,
         visible: sourceBlock.visible,
+        // Phase 3.1d Slice 2: preserve binding via deep-clone (matches `props` precedent above).
+        ...(sourceBlock.binding
+          ? { binding: JSON.parse(JSON.stringify(sourceBlock.binding)) as Binding }
+          : {}),
       };
       nextState = push(
         {

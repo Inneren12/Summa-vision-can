@@ -109,64 +109,8 @@ export interface PublishPayload {
   bound_blocks?: BoundBlockReference[];
 }
 
-// ─── Binding types (shape lock; consumers in later slices) ──────────────────
-
-export interface SingleValueBinding {
-  kind: 'single';
-  cube_id: string;
-  semantic_key: string;
-  filters: Record<string, string>;
-  /** Explicit backend-supported period, e.g. '2024-Q3'. Symbolic 'latest' out of scope per recon §J.4. */
-  period: string;
-  format?: string;
-}
-
-export interface TimeSeriesBinding {
-  kind: 'time_series';
-  cube_id: string;
-  semantic_key: string;
-  filters: Record<string, string>;
-  period_range: { from: string; to: string } | { last_n: number };
-  series_dim?: string;
-  format?: string;
-}
-
-export interface CategoricalSeriesBinding {
-  kind: 'categorical_series';
-  cube_id: string;
-  semantic_key: string;
-  category_dim: string;
-  filters: Record<string, string>;
-  period: string;
-  sort?: 'value_desc' | 'value_asc' | 'source_order';
-  limit?: number;
-}
-
-export interface MultiMetricBinding {
-  kind: 'multi_metric';
-  cube_id: string;
-  metrics: Array<{ semantic_key: string; label?: string }>;
-  filters: Record<string, string>;
-  period: string;
-  format?: string;
-}
-
-export interface TabularBinding {
-  kind: 'tabular';
-  cube_id: string;
-  columns: Array<{ semantic_key: string; label?: string }>;
-  row_dim: string;
-  filters: Record<string, string>;
-  period: string;
-  format?: string;
-}
-
-export type Binding =
-  | SingleValueBinding
-  | TimeSeriesBinding
-  | CategoricalSeriesBinding
-  | MultiMetricBinding
-  | TabularBinding;
+// Binding types moved to `components/editor/binding/types.ts` per P3-033 (Phase 3.1d Slice 2).
+// `BoundBlockReference` remains here because it is the wire/API shape sent to backend at publish time.
 
 // ─── UI-only bucket type ────────────────────────────────────────────────────
 

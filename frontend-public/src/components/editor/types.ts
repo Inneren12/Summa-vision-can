@@ -1,6 +1,7 @@
 import type { ContrastIssue } from './validation/contrast';
 import type { ValidationMessage } from './validation/types';
 import type { PresetId } from './config/sizes';
+import type { Binding } from './binding/types';
 
 export type EditorMode = 'template' | 'design';
 export type QAMode = 'draft' | 'publish';
@@ -42,6 +43,8 @@ export interface Block {
   // Optional + undefined-coalesce-to-false for additive backward compat
   // (no schemaVersion bump in v1).
   locked?: boolean;
+  /** Phase 3.1d Slice 2: optional editor-domain binding. Universal across 5 kinds (see editor/binding/types). */
+  binding?: Binding;
 }
 
 export interface Section {

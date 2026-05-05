@@ -3,6 +3,7 @@ import { BREG } from './blocks';
 import { validateBlockData, normalizeBlockData } from '../validation/block-data';
 import { formatValidationMessageDev } from '../validation/types';
 import { DEFAULT_EXPORT_PRESETS, normalizeExportPresets } from '../config/sizes';
+import { validateBinding, type Binding } from '../binding/types';
 
 export const SUPPORTED_SCHEMA_VERSIONS = [1, 2, 3] as const;
 export const CURRENT_SCHEMA_VERSION = 3;
@@ -670,6 +671,18 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
       const type = String(b.type ?? "");
       if (!BREG[type]) unknownTypeBlocks++;
       if (typeof b.id === "string" && b.id !== key) idRealigned++;
+      // Phase 3.1d Slice 2: validate optional `binding` and preserve only canonical shape.
+      let validatedBinding: Binding | null = null;
+      if (b.binding !== undefined) {
+        validatedBinding = validateBinding(b.binding);
+        if (validatedBinding === null) {
+          const rawKind =
+            b.binding && typeof b.binding === "object" && "kind" in (b.binding as object)
+              ? String((b.binding as { kind?: unknown }).kind ?? "unknown")
+              : "unknown";
+          warnings.push(`Block ${key} (${type}): Invalid block binding dropped (kind=${rawKind})`);
+        }
+      }
       doc.blocks[key] = {
         id: key, // FORCE id to match object key — cannot drift out of sync
         type,
@@ -679,6 +692,8 @@ export function hydrateImportedDoc(raw: any): HydrationResult {
         // Optional; absent / non-boolean values normalize to undefined
         // (treated as false everywhere via `=== true` checks).
         ...(typeof b.locked === "boolean" ? { locked: b.locked } : {}),
+        // Phase 3.1d Slice 2: preserve canonical binding when present and valid.
+        ...(validatedBinding !== null ? { binding: validatedBinding } : {}),
       };
     }
   }

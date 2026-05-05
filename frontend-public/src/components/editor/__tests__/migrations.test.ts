@@ -1,6 +1,7 @@
 import {
   migrateDoc,
   validateImportStrict,
+  hydrateImportedDoc,
   CURRENT_SCHEMA_VERSION,
   MIGRATIONS,
   applyMigrations,
@@ -698,5 +699,140 @@ describe("migrateV2toV3 — preset id rename + exportPresets default", () => {
       review: { workflow: "draft", history: [], comments: [] },
     };
     expect(() => applyMigrations(veryOldDoc)).toThrow(/Missing migration/);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// Phase 3.1d Slice 2 — hydrateImportedDoc binding handling
+// ────────────────────────────────────────────────────────────────────
+
+describe("hydrateImportedDoc — Block.binding (Phase 3.1d Slice 2)", () => {
+  function docWithBlockBinding(blockBinding: unknown): unknown {
+    const base = v2Doc() as any;
+    const firstBlockKey = Object.keys(base.blocks)[0];
+    base.blocks[firstBlockKey] = { ...base.blocks[firstBlockKey], binding: blockBinding };
+    return { base, blockKey: firstBlockKey };
+  }
+
+  it("hydrates a block without `binding` cleanly (no key on result)", () => {
+    const base = v2Doc() as any;
+    const blockKey = Object.keys(base.blocks)[0];
+    const { doc, warnings } = hydrateImportedDoc(base);
+    expect(doc.blocks[blockKey]).not.toHaveProperty("binding");
+    expect(warnings.some((w) => /binding/i.test(w))).toBe(false);
+  });
+
+  it("preserves a valid binding through hydration", () => {
+    const validBinding = {
+      kind: "single",
+      cube_id: "cube_a",
+      semantic_key: "metric_x",
+      filters: { geo: "ON" },
+      period: "2024-Q3",
+    };
+    const { base, blockKey } = docWithBlockBinding(validBinding) as any;
+    const { doc, warnings } = hydrateImportedDoc(base);
+    expect(doc.blocks[blockKey].binding).toEqual(validBinding);
+    expect(warnings.some((w) => /Invalid block binding dropped/.test(w))).toBe(false);
+  });
+
+  it("drops malformed binding and emits warning", () => {
+    const malformed = { kind: "single", cube_id: 42 }; // wrong type
+    const { base, blockKey } = docWithBlockBinding(malformed) as any;
+    const { doc, warnings } = hydrateImportedDoc(base);
+    expect(doc.blocks[blockKey]).not.toHaveProperty("binding");
+    const w = warnings.find((s) => /Invalid block binding dropped/.test(s));
+    expect(w).toBeDefined();
+    expect(w).toContain(blockKey);
+    expect(w).toContain("kind=single");
+  });
+
+  it("treats binding=undefined as absent (no key, no warning)", () => {
+    const { base, blockKey } = docWithBlockBinding(undefined) as any;
+    const { doc, warnings } = hydrateImportedDoc(base);
+    expect(doc.blocks[blockKey]).not.toHaveProperty("binding");
+    expect(warnings.some((w) => /Invalid block binding dropped/.test(w))).toBe(false);
+  });
+
+  it("warning text uses kind=unknown when input has no kind field", () => {
+    const malformed = { cube_id: "c" };
+    const { base, blockKey } = docWithBlockBinding(malformed) as any;
+    const { warnings } = hydrateImportedDoc(base);
+    const w = warnings.find((s) => /Invalid block binding dropped/.test(s));
+    expect(w).toBeDefined();
+    expect(w).toContain("kind=unknown");
+  });
+
+  it("preserves time_series binding on any block type (universal validation)", () => {
+    const tsBinding = {
+      kind: "time_series",
+      cube_id: "cube_a",
+      semantic_key: "metric_x",
+      filters: { geo: "ON" },
+      period_range: { last_n: 12 },
+    };
+    const { base, blockKey } = docWithBlockBinding(tsBinding) as any;
+    const { doc } = hydrateImportedDoc(base);
+    expect(doc.blocks[blockKey].binding).toEqual(tsBinding);
+  });
+
+  it("strips unknown extra keys on otherwise-valid binding (canonical reconstruction)", () => {
+    const validWithExtra = {
+      kind: "single",
+      cube_id: "cube_a",
+      semantic_key: "metric_x",
+      filters: { geo: "ON" },
+      period: "2024-Q3",
+      mystery_field: "drop me",
+    };
+    const { base, blockKey } = docWithBlockBinding(validWithExtra) as any;
+    const { doc } = hydrateImportedDoc(base);
+    expect(doc.blocks[blockKey].binding).not.toHaveProperty("mystery_field");
+    expect(doc.blocks[blockKey].binding).toEqual({
+      kind: "single",
+      cube_id: "cube_a",
+      semantic_key: "metric_x",
+      filters: { geo: "ON" },
+      period: "2024-Q3",
+    });
+  });
+
+  it("preserves binding through JSON round-trip (export → re-import)", () => {
+    const validBinding = {
+      kind: "categorical_series",
+      cube_id: "cube_a",
+      semantic_key: "metric_x",
+      category_dim: "province",
+      filters: { year: "2024" },
+      period: "2024-Q3",
+      sort: "value_desc" as const,
+      limit: 5,
+    };
+    const { base, blockKey } = docWithBlockBinding(validBinding) as any;
+    const { doc: hydrated } = hydrateImportedDoc(base);
+    const json = JSON.stringify(hydrated);
+    const reimported = hydrateImportedDoc(JSON.parse(json));
+    expect(reimported.doc.blocks[blockKey].binding).toEqual(validBinding);
+  });
+
+  it("preserves binding presence/absence per-block in mixed round-trip", () => {
+    const base = v2Doc() as any;
+    const keys = Object.keys(base.blocks);
+    expect(keys.length).toBeGreaterThanOrEqual(1);
+    const validBinding = {
+      kind: "single",
+      cube_id: "cube_a",
+      semantic_key: "metric_x",
+      filters: { geo: "ON" },
+      period: "2024-Q3",
+    };
+    base.blocks[keys[0]] = { ...base.blocks[keys[0]], binding: validBinding };
+    // (other blocks intentionally have no binding)
+    const { doc: hydrated } = hydrateImportedDoc(base);
+    const reimported = hydrateImportedDoc(JSON.parse(JSON.stringify(hydrated)));
+    expect(reimported.doc.blocks[keys[0]].binding).toEqual(validBinding);
+    for (const k of keys.slice(1)) {
+      expect(reimported.doc.blocks[k]).not.toHaveProperty("binding");
+    }
   });
 });
