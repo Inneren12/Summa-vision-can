@@ -54,7 +54,16 @@ If any endpoint or client is missing:
 - STOP
 - Do NOT build mock-only dropdowns
 - Do NOT hardcode cube/semantic_key/member lists
-- File backend/discovery endpoint work first OR produce Recon Delta describing the gap
+
+Allowed outcomes when discovery endpoints are absent:
+- Dispatch backend discovery endpoint work before Slice 3a impl resumes; OR
+- Produce a Recon Delta that narrows Slice 3a scope to editing only existing/imported bindings (e.g. bindings already present in the loaded document or in `chart_config` / import metadata) — no free cube/semantic/dim picker UI in this fallback
+
+Forbidden in either outcome:
+- Mock-only picker UI (hardcoded cube/semantic/member lists)
+- "Temporary" stubs that ship to production
+
+Founder ack required for the fallback path before Slice 3a impl proceeds under reduced scope.
 
 DEBT-073 tracks this dependency.
 
@@ -100,13 +109,15 @@ Frontend Block interface, `Block.binding` shape, `validateBinding` behavior, and
 - Produce Recon Delta documenting code reality vs locked recon
 - Do NOT silently adapt
 
-### HALT-5 — Backend clone preservation
+### HALT-5 — Backend clone preservation check
 
-Locked decision #7 (split): Slice 2 frontend acceptance does NOT depend on backend clone preserving `binding`. But Slice 4a publish + clone-then-publish flow does.
+Locked decision #7 (split): Slice 2 frontend acceptance does NOT depend on backend clone preserving `binding`. But Slice 4b's clone-then-republish flow does.
 
-Before Slice 4b ships:
-- Phase 3.1e backend recon must verify backend `mutate_document_state_for_clone` (or equivalent) preserves unknown block sibling fields including `binding`
-- If backend strips, file as backend bug; do NOT work around in frontend
+Before any clone-then-republish flow is tested or shipped:
+- Verify backend clone path (likely `mutate_document_state_for_clone` or equivalent) preserves `Block.binding` as an unknown block sibling field
+- If backend clone strips `binding`, file as backend bug AND exclude clone-then-publish from 3.1d milestone close criteria until fixed (frontend code remains correct in either case)
+
+This check is a targeted backend-clone-preservation verification, NOT a dependency on the full Phase 3.1e multi-value backend recon. 3.1d frontend can close once clone preservation is verified, independently of when 3.1e ships.
 
 ---
 
@@ -285,7 +296,12 @@ Phase 3.1d frontend milestone is CLOSED only when ALL of:
 9. Integration / e2e covers:
    - Happy path: bind → publish → compare fresh/stale
    - 412 conflict path: republish with stale ETag → modal → recover
-   - Pre-3.1d refresh path: legacy publication → CTA → republish → compare works
+   - Pre-3.1d refresh path (with explicit binding precondition):
+     - Legacy publication initially has no snapshots
+     - User adds (or already has) at least one valid v1 `single` binding via the binding editor
+     - Republish sends `bound_blocks` based on that binding
+     - Subsequent compare returns `fresh` / `stale` instead of `snapshot_missing`
+     - If no valid local binding exists, the "Refresh required" CTA must explain that adding a binding is a precondition (not promise magic refresh on a doc with no bindable content)
 10. NO multi-value binding sent to backend in 3.1d (HALT-3)
 11. NO ad-hoc i18n strings outside `publication.compare.*` and `publication.binding.*` namespaces (DEBT-077)
 
