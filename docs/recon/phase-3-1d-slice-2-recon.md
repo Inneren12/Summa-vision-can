@@ -9,7 +9,11 @@
 > 1. Field name `Block.binding`, top-level sibling of `props`, optional.
 > 2. Universal validation across 5 binding kinds.
 > 3. `Binding` union moves to `frontend-public/src/components/editor/binding/types.ts`.
-> 4. No schemaVersion bump. Clone preserves binding. No UI in Slice 2. No backend changes.
+> 4. No schemaVersion bump. No UI in Slice 2. No backend changes.
+> 7. **Clone preservation — split between frontend acceptance and backend dependency.**
+>    - **Frontend Slice 2 acceptance (locked):** `DUPLICATE_BLOCK` preserves binding via JSON deep-clone (per §D.2); import/export round-trip preserves binding (per §C.3); ZIP export type-agnostic (per §D.5).
+>    - **Backend dependency (NOT locked by Slice 2):** full publication clone preserves `binding` IF backend `mutate_document_state_for_clone` (or equivalent) copies block dicts opaquely without stripping unknown sibling fields. Backend verification deferred to Phase 3.1e backend recon. Slice 2 does NOT guarantee end-to-end full-clone binding preservation.
+>    - If Phase 3.1e finds backend strips unknown siblings, that's a backend fix — Slice 2 frontend code remains correct in either case.
 > 5. **No re-export shim.** Slice 2 cleanly removes Binding union and 5 binding interfaces from `lib/types/compare.ts`. Part A §B.3 confirmed zero in-tree consumers of `Binding` from `compare.ts`, so no shim is needed. Future imports use `editor/binding/types.ts` directly.
 
 ---
@@ -457,7 +461,7 @@ const newBlock = {
 };
 ```
 
-`structuredClone` (or deep-JSON) breaks aliasing, matching the `props` precedent at `:405`. Surface to Part C §H founder review for sign-off.
+JSON deep-clone breaks aliasing, matching the `props` precedent at `:405`.
 
 ### §D.3 Other clone-like reducer actions
 
@@ -493,9 +497,13 @@ Test surface (Part C §G territory): fixture document with mixed binding/no-bind
 
 `grep -n "binding" frontend-public/src/components/editor/export/zipExport.ts` → 0 matches (type-agnostic w.r.t. binding). Confirmation: ZIP output preserves `binding` on each block transparently. No Slice 2 change in `zipExport.ts`.
 
-### §D.6 Backend clone preservation expectation
+### §D.6 Backend clone preservation — deferred to Phase 3.1e
 
-Locked decision #7: clone preserves binding. This is enforced **server-side** by `mutate_document_state_for_clone` (out of scope for Slice 2). Frontend correctness is independent: the editor deserializes whatever the backend returns. Phase 3.1e backend recon to verify the contract; Slice 2 carries no enforcement burden.
+Slice 2 frontend cannot enforce backend behavior. The locked decision #7 split makes this honest:
+- Frontend acceptance scope: `DUPLICATE_BLOCK` + import roundtrip + ZIP export (all in §D.2-§D.5)
+- Backend acceptance scope: Phase 3.1e backend recon verifies `mutate_document_state_for_clone` and any other clone/serialize paths preserve unknown block sibling fields
+
+If Phase 3.1e finds backend strips unknown siblings, file as backend bug. Slice 2 frontend code merges either way.
 
 ---
 
@@ -618,7 +626,9 @@ export function validateBinding(value: unknown): Binding | null {
     x === undefined || isNonEmptyStr(x);
   const isFilters = (x: unknown): x is Record<string, string> =>
     !!x && typeof x === 'object' && !Array.isArray(x) &&
-    Object.values(x as object).every(isNonEmptyStr);
+    Object.entries(x as Record<string, unknown>).every(
+    ([k, val]) => isNonEmptyStr(k) && isNonEmptyStr(val),
+  );
   const isPositiveInt = (x: unknown): x is number =>
     typeof x === 'number' && Number.isInteger(x) && x > 0;
 
@@ -628,7 +638,14 @@ export function validateBinding(value: unknown): Binding | null {
       if (!isFilters(v.filters)) return null;
       if (!isNonEmptyStr(v.period)) return null;
       if (!isOptStr(v.format)) return null;
-      return v as unknown as SingleValueBinding;
+      return {
+        kind: 'single',
+        cube_id: v.cube_id as string,
+        semantic_key: v.semantic_key as string,
+        filters: v.filters as Record<string, string>,
+        period: v.period as string,
+        ...(v.format !== undefined ? { format: v.format as string } : {}),
+      };
     }
     case 'time_series': {
       if (!isNonEmptyStr(v.cube_id) || !isNonEmptyStr(v.semantic_key)) return null;
@@ -641,7 +658,17 @@ export function validateBinding(value: unknown): Binding | null {
         isPositiveInt(pr.last_n) && pr.from === undefined && pr.to === undefined;
       if (!(hasFromTo || hasLastN)) return null;
       if (!isOptNonEmptyStr(v.series_dim) || !isOptStr(v.format)) return null;
-      return v as unknown as TimeSeriesBinding;
+      return {
+        kind: 'time_series',
+        cube_id: v.cube_id as string,
+        semantic_key: v.semantic_key as string,
+        filters: v.filters as Record<string, string>,
+        period_range: pr.last_n !== undefined
+          ? { last_n: pr.last_n as number }
+          : { from: pr.from as string, to: pr.to as string },
+        ...(v.series_dim !== undefined ? { series_dim: v.series_dim as string } : {}),
+        ...(v.format !== undefined ? { format: v.format as string } : {}),
+      };
     }
     case 'categorical_series': {
       if (!isNonEmptyStr(v.cube_id) || !isNonEmptyStr(v.semantic_key)) return null;
@@ -650,23 +677,55 @@ export function validateBinding(value: unknown): Binding | null {
       if (v.sort !== undefined &&
           !['value_desc','value_asc','source_order'].includes(v.sort as string)) return null;
       if (v.limit !== undefined && !isPositiveInt(v.limit)) return null;
-      return v as unknown as CategoricalSeriesBinding;
+      return {
+        kind: 'categorical_series',
+        cube_id: v.cube_id as string,
+        semantic_key: v.semantic_key as string,
+        category_dim: v.category_dim as string,
+        filters: v.filters as Record<string, string>,
+        period: v.period as string,
+        ...(v.sort !== undefined ? { sort: v.sort as 'value_desc' | 'value_asc' | 'source_order' } : {}),
+        ...(v.limit !== undefined ? { limit: v.limit as number } : {}),
+      };
     }
     case 'multi_metric': {
       if (!isNonEmptyStr(v.cube_id) || !isNonEmptyStr(v.period)) return null;
       if (!isFilters(v.filters)) return null;
-      if (!Array.isArray(v.metrics) || !v.metrics.every((m: any) =>
-        m && isNonEmptyStr(m.semantic_key) && isOptStr(m.label))) return null;
+      if (!Array.isArray(v.metrics) || v.metrics.length === 0 ||
+        !v.metrics.every((m: any) =>
+          m && isNonEmptyStr(m.semantic_key) && isOptStr(m.label))) return null;
       if (!isOptStr(v.format)) return null;
-      return v as unknown as MultiMetricBinding;
+      return {
+        kind: 'multi_metric',
+        cube_id: v.cube_id as string,
+        metrics: (v.metrics as any[]).map(m => ({
+          semantic_key: m.semantic_key as string,
+          ...(m.label !== undefined ? { label: m.label as string } : {}),
+        })),
+        filters: v.filters as Record<string, string>,
+        period: v.period as string,
+        ...(v.format !== undefined ? { format: v.format as string } : {}),
+      };
     }
     case 'tabular': {
       if (!isNonEmptyStr(v.cube_id) || !isNonEmptyStr(v.row_dim) || !isNonEmptyStr(v.period)) return null;
       if (!isFilters(v.filters)) return null;
-      if (!Array.isArray(v.columns) || !v.columns.every((c: any) =>
-        c && isNonEmptyStr(c.semantic_key) && isOptStr(c.label))) return null;
+      if (!Array.isArray(v.columns) || v.columns.length === 0 ||
+        !v.columns.every((c: any) =>
+          c && isNonEmptyStr(c.semantic_key) && isOptStr(c.label))) return null;
       if (!isOptStr(v.format)) return null;
-      return v as unknown as TabularBinding;
+      return {
+        kind: 'tabular',
+        cube_id: v.cube_id as string,
+        columns: (v.columns as any[]).map(c => ({
+          semantic_key: c.semantic_key as string,
+          ...(c.label !== undefined ? { label: c.label as string } : {}),
+        })),
+        row_dim: v.row_dim as string,
+        filters: v.filters as Record<string, string>,
+        period: v.period as string,
+        ...(v.format !== undefined ? { format: v.format as string } : {}),
+      };
     }
     default:
       return null;
@@ -786,14 +845,16 @@ Test categories:
 | `limit: 1.5` rejects | 1 | `null` |
 | `period_range` with both `from/to` and `last_n` rejects | 1 | `null` |
 | Filters with empty member id rejects | 1 | `null` |
-| Valid `time_series` on `hero_stat` (universal validation, no per-type rejection) | 1 | `binding` preserved |
-| Valid `single` on `table_enriched` (universal validation) | 1 | `binding` preserved |
+| Empty `metrics: []` rejects | 1 | `null` |
+| Empty `columns: []` rejects | 1 | `null` |
+| Filter with empty key (`{ "": "value" }`) rejects | 1 | `null` |
+| Valid binding with extra unknown keys returns canonical stripped object | 1 | returned object contains only canonical schema fields |
 
 **~26 cases (after FIX-3 + FIX-7 expansion).** Pure function tests, no mocks. Cover 7 valid configurations across 5 kinds (single, time_series with from/to, time_series with last_n, categorical_series without sort/limit, categorical_series with sort/limit, multi_metric, tabular) + 19 invalid paths (missing/wrong-type/empty-string/non-positive-int/mutex-violation/cross-type-block-type test locks).
 
 ### G.2 — `hydrateImportedDoc` extension tests (extend existing)
 
-Add ~5–6 cases in the existing guards hydration test file:
+Add ~7–8 cases in the existing guards hydration test file:
 
 | Case | Expected |
 |---|---|
@@ -803,8 +864,10 @@ Add ~5–6 cases in the existing guards hydration test file:
 | Block with `binding: undefined` hydrates without binding | no `binding` key (not `binding: undefined`) |
 | Block with extra unknown top-level fields | existing strictness unchanged; unknown fields dropped |
 | Block with malformed binding emits stable warning text | warning contains "Invalid block binding dropped" and block id |
+| Hydrate `hero_stat` block with valid `time_series` binding (universal validation; no per-type rejection) | block.binding preserved as `time_series` |
+| Hydrate `table_enriched` block with valid `single` binding | block.binding preserved as `single` |
 
-**~5–6 cases.** Mirrors existing `hydrateImportedDoc` test style.
+**~7–8 cases.** Mirrors existing `hydrateImportedDoc` test style.
 
 ### G.3 — `sanitizeBlockProps` tests
 
@@ -837,67 +900,54 @@ Add ~2 cases in existing import/export suite:
 
 | Layer | Cases |
 |---|---|
-| `validateBinding` (NEW) | 14 |
-| `hydrateImportedDoc` (extend) | 4–5 |
+| `validateBinding` (NEW) | 28 |
+| `hydrateImportedDoc` (extend) | 7–8 |
 | `sanitizeBlockProps` | 0 (no change needed per §G.3) |
 | `DUPLICATE_BLOCK` reducer (extend) | 3 |
 | Import/export round-trip (extend) | 2 |
-| **Total** | **36–37 tests** |
+| **Total** | **40–41 tests** |
 
-Within the 20–25 target range. Most additions are extensions to existing files; only `validateBinding` needs a new test file.
+Within the updated 35–45 expanded forecast range. The original 20–25 target was set before BLOCKER-3 strengthened validation surface (non-empty strings, positive integers, mutex check, canonicalize, non-empty arrays, filter key validation).
+
+---
+
+## §H — Locked decisions reaffirmed + future-slice questions
+
+### §H.1 LOCKED — No re-export shim
+Per locked decision #5 (and Part A §B.3 finding zero in-tree Binding consumers). `lib/types/compare.ts` cleanly removes the 5 binding interfaces and `Binding` union; no shim. NOT a founder question.
+
+### §H.2 LOCKED — DUPLICATE_BLOCK preserves binding
+Per locked decision #7 (frontend acceptance scope) and §D.2 Option B. Block-level duplicate preserves binding via JSON deep-clone (`JSON.parse(JSON.stringify(sourceBlock.binding)) as Binding`). NOT a founder question.
+
+### §H.3 LOCKED — `validateBinding` strict-reject + canonicalize
+Per §E.4 + FIX-4 below. Returns `null` on malformed input; returns canonical stripped object on valid input (NOT raw cast). NOT a founder question.
+
+### §H.4 LOCKED — No schemaVersion bump
+Per locked decision #6 + §C.4. Additive optional field follows Phase 1.6 `Block.locked?: boolean` precedent. NOT a founder question.
+
+### §H.5 LOCKED — `format?: string` shape preserved
+Per Part B §E.2. `NumberFormat` interface does not exist; binding interfaces use free-form `format?: string`. NOT a founder question. Future structured format work is a separate concern.
+
+### §H.6 LOCKED — P3-033 closes inline at Slice 2 impl PR merge
+Closure via Slice 2 impl PR commit message (`closes P3-033`). NOT a founder question.
 
 ---
 
-## §H — Founder questions
+## Future-slice questions (NOT for Slice 2)
 
-Target length in recon doc: 30–60 lines. **Down from 8 originally planned to 6** because Parts A+B resolved several items.
+These surface for downstream slices. Slice 2 does NOT decide them.
 
-Resolved items NOT requiring founder review:
-- ~~`validateBinding` strictness~~ — locked in §E.4 (strict reject)
-- ~~Validator behavior on malformed binding~~ — locked in §C.3 (omit key when invalid; warn)
-- ~~NumberFormat location~~ — does not exist; no relocation needed (§E.2)
+### §H.future.1 — `acceptsBinding` metadata location (Slice 3a concern)
+Where do per-block-type binding-fit hints live for Slice 3a binding editor UI?
+- Option A: registry entry has `acceptsBinding?: BindingKind[]` field
+- Option B: separate `bindingFitMap` constant in `editor/binding/`
 
-Items requiring founder review:
+Recommend Option A. Slice 3a recon (when drafted) will lock.
 
-### H.1 — Re-export shim strategy (LOCKED in decision #5; founder ack)
-Per §F.3, recon now recommends **Option C (clean removal, no shim)** based on Part A §B.3 finding (zero in-tree consumers). Original Part A draft recommended Option A (defensive shim).
+### §H.future.2 — `small_multiple` binding kind (Slice 3a concern)
+Recon Part 1 §C lists `small_multiple` as accepting `multi_metric` OR `categorical_series`. Currently unresolved. Slice 3a UI does NOT ship `small_multiple` binding picker until dedicated recon picks one (or supports both with mode toggle).
 
-Founder confirms Option C OR overrides to Option A if external/future-proofing concern.
-
-### H.2 — `DUPLICATE_BLOCK` preserves binding (NEW from Part B §D.2)
-Per Part B §D.2: Option B recommended (preserve binding via `structuredClone`), with documented asymmetry versus `Block.locked` (stripped on duplicate).
-
-Asymmetry rationale:
-- `locked` strip: UX-protection role (duplicate starts editable)
-- `binding` preserve: data-source pointer users can retarget after duplicate
-
-Founder confirms Option B OR overrides to Option A (strip).
-
-### H.3 — Per-block-type binding fit hints (defer to Slice 3a)
-For Slice 3a binding editor UI, registry needs binding-fit metadata by block type (per §E.3 table). Placement options:
-- Option A: `BlockRegistryEntry` grows `acceptsBinding?: BindingKind[]`
-- Option B: standalone `bindingFitMap` under `editor/binding/`
-
-Recommend **Option A** — registry-co-located metadata adjacent to block definitions.
-
-### H.4 — `binding/index.ts` barrel export (style)
-Per §F.1, recon drops the originally planned barrel and uses direct imports from `@/components/editor/binding/types`.
-
-Founder confirms drop OR overrides for style consistency with other editor subdirs.
-
-### H.5 — `format?: string` shape (no `NumberFormat`)
-Per Part B §E.2, all 5 binding interfaces use `format?: string` (free-form tokens like `percent`, `currency:CAD`).
-
-Founder confirms preserving this shape as-is, or flags that structured formatting must be introduced now (scope expansion).
-
-### H.6 — P3-033 closure timing
-After Slice 2 lands, P3-033 flips from pending to closed. Founder chooses:
-- Option A: close inline in Slice 2 implementation PR/commit message
-- Option B: close in a separate polish follow-up PR
-
-Recommend **Option A** for single-PR traceability.
-
----
+Slice 2 schema accepts both — universal validation; no enforcement. Forward-compatible.
 
 ## §I — Anti-hallucination gates (final matrix for impl prompt)
 
@@ -943,11 +993,11 @@ This section lists gates the **implementation prompt** must enforce.
 
 ### I.5 — Test gates (impl-time)
 
-- `validateBinding` unit tests: ≥26 cases (7 valid configurations + 19 invalid paths including strict numeric/string/mutex checks and universal-validation locks)
-- `hydrateImportedDoc` extension tests: ≥5 cases (includes stable warning text assertion)
+- `validateBinding` unit tests: 28 cases
+- `hydrateImportedDoc` extension tests: 7–8 cases (includes stable warning text assertion)
 - `DUPLICATE_BLOCK` extension tests: ≥3 cases
 - Import/export round-trip tests: ≥2 cases
-- Total additions: ≥36 tests (within 30–40 expanded forecast range)
+- Total additions: 40–41 tests (within 35–45 expanded forecast range)
 - Existing suites stay green (no regressions in hydration/duplicate behavior)
 
 ### I.6 — Honest stop conditions (impl-time)
