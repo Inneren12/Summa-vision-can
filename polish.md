@@ -1078,6 +1078,63 @@ enough to justify a sprint slot.
 
 ---
 
+## P3-039 — Locale wording for `cache_miss` resolver error
+
+- **Source:** Phase 3.1d Slice 1b impl PR review (post-merge note; round 1 P1 finding downgraded to P3 by founder)
+- **Added:** 2026-05-04
+- **Severity:** P3 (P1 in review; downgraded because not blocking compare flow — string surfaces only in resolve preview UI which doesn't ship until Slice 3b)
+- **Category:** i18n / wording
+- **Files:**
+  - `frontend-public/messages/en.json` (1 line edit)
+  - `frontend-public/messages/ru.json` (1 line edit)
+  - `docs/recon/phase-3-1d-frontend-recon-proper-part3.md` §I.4 (update locked recon text)
+- **Description:** `publication.binding.resolve.cache_miss` was locked
+  at recon Part 3 §I.4 with EN text `"Cache miss (no row after prime)"`
+  and RU `"Промах кэша"`. The "(no row after prime)" wording is
+  misleading for the compare-path consumer: compare is cached-only and
+  does not prime the cache. The resolver returns `RESOLVE_CACHE_MISS`
+  when no cached value is available regardless of priming history.
+  Reviewer flagged on Slice 1b impl PR review.
+- **Fix sketch:**
+  - EN: `"cache_miss": "Cache miss: no cached value is available"`
+  - RU: `"cache_miss": "Нет кэшированного значения"`
+  - Recon Part 3 §I.4 row update with same EN+RU text + note
+    "wording revised post-merge per Slice 1b review (P3-039)"
+- **Defer trigger:** Slice 3b (resolve preview UI) is the first
+  consumer that surfaces this string in the UI. Land before Slice 3b
+  ships, OR batch with other locale wording cleanups when threshold
+  met. Until then, the existing wording lives only in `errorCodes.ts`
+  registry (not user-rendered).
+- **Status:** pending
+
+---
+
+## P3-040 — Type-only `BackendApiError` import in `compareReducer.ts`
+
+- **Source:** Phase 3.1d Slice 1b round 2 review (P1 finding; ranked separately from round 2's main BLOCKER which was a stale-baseline false positive — see Slice 1b honest-stop report on branch `claude/phase-3-1d-slice-1b-impl`)
+- **Added:** 2026-05-04
+- **Severity:** P3 (P1 in review; downgraded because purely cosmetic — TypeScript erases unused runtime values in modern bundlers, but `import type` is stylistically clearer and removes the runtime module-graph edge from reducer to API client)
+- **Category:** code-quality / type-hygiene
+- **File:** `frontend-public/src/components/editor/hooks/compareReducer.ts`
+- **Description:** `BackendApiError` is imported via runtime value
+  import (`import { BackendApiError } from '@/lib/api/admin'`) but
+  used only as a type annotation in the `CompareState` and
+  `CompareAction` discriminated unions. Reducer module has no runtime
+  constructor calls, no `instanceof` checks, no value usage. The
+  runtime import creates an unnecessary module-graph dependency from
+  a pure domain reducer onto the API client module.
+- **Fix sketch:**
+  - Change `import { BackendApiError } from '@/lib/api/admin';` to
+    `import type { BackendApiError } from '@/lib/api/admin';`
+  - Single-line change. No test changes (type-only edit). No
+    behavior change. `tsc --noEmit` passes either way.
+- **Defer trigger:** trivial 1-line change. Bundle with any other
+  Slice 1b polish round, or land standalone whenever convenient. No
+  specific dependency.
+- **Status:** pending
+
+---
+
 ## Batch dispatch policy
 
 When 3+ items accumulate in same category, OR 5+ items total:
@@ -1118,15 +1175,16 @@ Current batch candidates:
   — 3 items), P3-027 (BLE001 audit). Spans backend/, migrations/, and
   flutter_admin/. ~2 hours total. Dispatch after Phase 3.1d closes,
   before Phase 3.2 starts. Single PR, single review pass.
-- **Phase 3.1d Slice 1a closeout batch (residual)**: P3-032, P3-033 —
-  both `frontend-public/` items. P3-032 (`parseAdminPublicationError`
-  helper extraction) defer until 3rd error-helper caller exists
-  (Slice 1b adds compare badge state, Slice 4 adds publish flow —
-  natural batch trigger). P3-033 (`Binding` union split out of
-  `compare.ts` into `editor/binding/types.ts`) bundles naturally with
-  Slice 2 (Block.binding schema extension) review-fix round.
+- **Phase 3.1d Slice 1a/1b closeout batch (residual)**: P3-032, P3-033,
+  P3-039, P3-040 — P3-032 (`parseAdminPublicationError` helper) defer
+  until 3rd error-helper caller exists (Slice 4 publish flow).
+  P3-033 (`Binding` union split) bundles with Slice 2 review-fix round.
+  P3-039 (`cache_miss` locale wording revision) lands before Slice 3b
+  (resolve preview UI) — first user-facing consumer.
+  P3-040 (type-only `BackendApiError` import in compareReducer) is
+  trivial 1-line; bundle with any of the above or land standalone.
   Note: P3-028, P3-029, P3-030, P3-031, P3-034 (originally part of
-  this batch) were closed inline in Slice 1a fix round (PR #<TBD>).
+  this batch) were closed inline in Slice 1a fix round.
 - **Phase 3.1d agent-prompt-template improvements**: P3-035, P3-036,
   P3-037 — meta-process items. Apply to template files (if formalized)
   or as claude self-instruction updates. Single review pass when
