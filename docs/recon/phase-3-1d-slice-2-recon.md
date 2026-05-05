@@ -683,10 +683,260 @@ If Phase 3.1f introduces a 6th `kind` (e.g. `'geographic_choropleth'`), older bu
 
 ---
 
-## §F — File structure plan — DEFERRED to Part C
+## §F — File structure plan
 
-## §G — Test plan — DEFERRED to Part C
+Target length in recon doc: 50–80 lines.
 
-## §H — Founder questions — DEFERRED to Part C
+### F.1 — New files (Slice 2 creates)
 
-## §I — Anti-hallucination gates — DEFERRED to Part C
+| Path | Purpose | Approx lines |
+|---|---|---|
+| `frontend-public/src/components/editor/binding/types.ts` | 5 binding interfaces + `Binding` union + `validateBinding` function | ~120 |
+| `frontend-public/src/components/editor/binding/__tests__/types.test.ts` | Unit tests for `validateBinding` (5 valid + invalid kinds) | ~150 |
+
+**Note:** original Part A plan included `binding/index.ts` barrel re-export. Recon recommends DROPPING this — single `types.ts` is small enough that a barrel adds no value. Imports use `from '@/components/editor/binding/types'` directly.
+
+If founder prefers the barrel for consistency with other editor subdirs (check `editor/store/index.ts` and `editor/registry/index.ts` if they exist), document. Surface in §H.
+
+### F.2 — Modified files (Slice 2 extends)
+
+| Path | Change | Approx delta |
+|---|---|---|
+| `frontend-public/src/lib/types/compare.ts` | Remove 5 binding interfaces + Binding union (lines 114-169); no re-export shim | -56 |
+| `frontend-public/src/components/editor/types.ts` | Add `binding?: Binding` to Block interface | +2 (and 1 import) |
+| `frontend-public/src/components/editor/registry/guards.ts` | Add optional-spread for binding in `hydrateImportedDoc` block construction (~line 681) | +5 |
+| `frontend-public/src/components/editor/store/reducer.ts` | DUPLICATE_BLOCK preserves binding via `structuredClone` | +1-3 |
+| Existing test files for hydration / DUPLICATE_BLOCK / round-trip | Add binding-preservation assertions | +30-60 |
+
+**Total: 5 modified files.** Smaller surface than originally planned in Part A draft (which estimated ~5 files but with larger per-file diffs).
+
+### F.3 — Re-export shim strategy (UPDATED based on Part A §B.3 finding)
+
+Originally Part A planned Option A (defensive shim with full re-exports). Part B confirmed **zero in-tree Binding consumers**, which makes Option C cleaner:
+
+**Decision (recommend lock):** Option C — clean removal from `lib/types/compare.ts`, NO re-export shim.
+
+Rationale:
+- Zero in-tree imports of Binding types means no breakage to fix (Part A §B.3)
+- Re-export shim accumulates technical debt with no benefit (no consumers of the shim path exist)
+- Removing types from `lib/types/compare.ts` clarifies layer boundaries (`compare.ts` = wire types only)
+- If external/future code accidentally imports from old path, fast-fail at compile time is better than silent re-export
+
+**Caveat:** If Slice 2 impl finds a Binding import that wasn't surfaced in Part A §B.3 (e.g. generated fixture), surface in §H founder review. Part A's grep was exhaustive, so this should not happen.
+
+Surface to §H as confirmation H.1.
+
+### F.4 — Files NOT touched (scope discipline)
+
+- All Slice 1b files (`useCompareState.ts`, `compareReducer.ts`, `CompareBadge.tsx`, etc.) — Slice 2 doesn't touch UI
+- `lib/api/admin.ts` — no API changes
+- `lib/api/errorCodes.ts` — no error code changes
+- Locale files (`messages/en.json`, `messages/ru.json`) — no new locale keys
+- Backend files — Phase 3.1e territory
+- `validation/validate.ts`, `validation/invariants.ts`, `validation/contrast.ts`, `validation/block-data.ts` — read-only validators that ignore unknown sibling fields (per Part B §C.5)
+- `editor/registry/blocks.ts` — block-type catalog unchanged
+- `editor/registry/templates.ts` — templates unchanged
+- `editor/export/zipExport.ts` — type-agnostic per Part B §D.5
+- DEBT.md, CHANGELOG, other recon docs (except this Part C update)
+- `polish.md` — P3-033 closure happens at Slice 2 impl PR merge time, not recon time
+
+---
+
+## §G — Test plan
+
+Target length in recon doc: 60–100 lines.
+
+### G.1 — `validateBinding` unit tests (`binding/__tests__/types.test.ts`, NEW)
+
+Test categories:
+
+| Category | Cases | Expected |
+|---|---|---|
+| Valid SingleValueBinding | 1 | returns same value typed |
+| Valid TimeSeriesBinding (`period_range` with `from`/`to`) | 1 | returns same |
+| Valid TimeSeriesBinding (`period_range` with `last_n`) | 1 | returns same |
+| Valid CategoricalSeriesBinding (no `sort`/`limit`) | 1 | returns same |
+| Valid CategoricalSeriesBinding (with `sort` + `limit`) | 1 | returns same |
+| Valid MultiMetricBinding | 1 | returns same |
+| Valid TabularBinding | 1 | returns same |
+| Missing `kind` field | 1 | `null` |
+| Unknown `kind` value | 1 | `null` |
+| `kind: 'single'` missing `cube_id` | 1 | `null` |
+| Wrong field type (`cube_id: 42`) | 1 | `null` |
+| `null` / `undefined` / non-object input | 1 | `null` |
+| Invalid filters (`Record<string,string>` violation) | 1 | `null` |
+| Invalid sort enum value | 1 | `null` |
+
+**~14 cases.** Pure function tests, no mocks. Covers all 5 valid kinds plus key invalid paths.
+
+### G.2 — `hydrateImportedDoc` extension tests (extend existing)
+
+Add ~4–5 cases in the existing guards hydration test file:
+
+| Case | Expected |
+|---|---|
+| Block without `binding` hydrates cleanly | block in result has no `binding` key |
+| Block with valid `binding` hydrates with binding preserved | `block.binding` deep-equals input |
+| Block with malformed `binding` hydrates without binding | block has no `binding` key; warning emitted |
+| Block with `binding: undefined` hydrates without binding | no `binding` key (not `binding: undefined`) |
+| Block with extra unknown top-level fields | existing strictness unchanged; unknown fields dropped |
+
+**~4–5 cases.** Mirrors existing `hydrateImportedDoc` test style.
+
+### G.3 — `sanitizeBlockProps` tests
+
+**Per Part B §C.2:** sanitizer operates on `props` only, top-level fields never traverse it. **No sanitizer test changes needed.** Document this explicitly as a negative finding.
+
+### G.4 — `DUPLICATE_BLOCK` reducer tests (extend existing)
+
+Add ~3 cases in existing reducer tests:
+
+| Case | Expected |
+|---|---|
+| `DUPLICATE_BLOCK` on block with binding | clone has same binding (deep-equal, not same reference) |
+| `DUPLICATE_BLOCK` on block without binding | clone has no binding |
+| Mutating duplicated block binding does not mutate source | source binding remains unchanged |
+
+**~3 cases.** Last test prevents shallow-copy regressions.
+
+### G.5 — Import/export round-trip tests (extend existing)
+
+Add ~2 cases in existing import/export suite:
+
+| Case | Expected |
+|---|---|
+| Export doc with bound blocks → JSON → re-import | `binding` preserved (deep-equal) |
+| Round-trip with mixed binding/no-binding blocks | each block’s binding state preserved |
+
+**~2 cases.**
+
+### G.6 — Total test forecast
+
+| Layer | Cases |
+|---|---|
+| `validateBinding` (NEW) | 14 |
+| `hydrateImportedDoc` (extend) | 4–5 |
+| `sanitizeBlockProps` | 0 (no change needed per §G.3) |
+| `DUPLICATE_BLOCK` reducer (extend) | 3 |
+| Import/export round-trip (extend) | 2 |
+| **Total** | **23–24 tests** |
+
+Within the 20–25 target range. Most additions are extensions to existing files; only `validateBinding` needs a new test file.
+
+---
+
+## §H — Founder questions
+
+Target length in recon doc: 30–60 lines. **Down from 8 originally planned to 6** because Parts A+B resolved several items.
+
+Resolved items NOT requiring founder review:
+- ~~`validateBinding` strictness~~ — locked in §E.4 (strict reject)
+- ~~Validator behavior on malformed binding~~ — locked in §C.3 (omit key when invalid; warn)
+- ~~NumberFormat location~~ — does not exist; no relocation needed (§E.2)
+
+Items requiring founder review:
+
+### H.1 — Re-export shim strategy (UPDATED)
+Per §F.3, recon now recommends **Option C (clean removal, no shim)** based on Part A §B.3 finding (zero in-tree consumers). Original Part A draft recommended Option A (defensive shim).
+
+Founder confirms Option C OR overrides to Option A if external/future-proofing concern.
+
+### H.2 — `DUPLICATE_BLOCK` preserves binding (NEW from Part B §D.2)
+Per Part B §D.2: Option B recommended (preserve binding via `structuredClone`), with documented asymmetry versus `Block.locked` (stripped on duplicate).
+
+Asymmetry rationale:
+- `locked` strip: UX-protection role (duplicate starts editable)
+- `binding` preserve: data-source pointer users can retarget after duplicate
+
+Founder confirms Option B OR overrides to Option A (strip).
+
+### H.3 — Per-block-type binding fit hints (defer to Slice 3a)
+For Slice 3a binding editor UI, registry needs binding-fit metadata by block type (per §E.3 table). Placement options:
+- Option A: `BlockRegistryEntry` grows `acceptsBinding?: BindingKind[]`
+- Option B: standalone `bindingFitMap` under `editor/binding/`
+
+Recommend **Option A** — registry-co-located metadata adjacent to block definitions.
+
+### H.4 — `binding/index.ts` barrel export (style)
+Per §F.1, recon drops the originally planned barrel and uses direct imports from `@/components/editor/binding/types`.
+
+Founder confirms drop OR overrides for style consistency with other editor subdirs.
+
+### H.5 — `format?: string` shape (no `NumberFormat`)
+Per Part B §E.2, all 5 binding interfaces use `format?: string` (free-form tokens like `percent`, `currency:CAD`).
+
+Founder confirms preserving this shape as-is, or flags that structured formatting must be introduced now (scope expansion).
+
+### H.6 — P3-033 closure timing
+After Slice 2 lands, P3-033 flips from pending to closed. Founder chooses:
+- Option A: close inline in Slice 2 implementation PR/commit message
+- Option B: close in a separate polish follow-up PR
+
+Recommend **Option A** for single-PR traceability.
+
+---
+
+## §I — Anti-hallucination gates (final matrix for impl prompt)
+
+Target length in recon doc: 30–50 lines.
+
+This section lists gates the **implementation prompt** must enforce.
+
+### I.1 — Pre-flight gates (impl-time)
+
+- Verify branch is `claude/phase-3-1d-slice-2-impl` cut from `main`
+- Verify recon Parts A+B+C are merged on `main`
+- Verify Slice 1b implementation branch is merged (avoid cross-slice merge conflicts)
+- Ignore Slice 1a polish state (Slice 2 does not touch `admin.ts`)
+- Record baseline md5 for each file targeted by impl
+
+### I.2 — Construction-pattern gates
+
+- `hydrateImportedDoc` extension must mirror the existing Phase 1.6 `locked` optional-spread style near lines 678–682
+- `DUPLICATE_BLOCK` extension must preserve deep-clone precedent (`JSON.parse(JSON.stringify(...))` for props; `structuredClone` for binding)
+- `validateBinding` must follow §E.4 pseudocode shape (5 cases + 3 helpers; no per-kind extracted validators)
+
+### I.3 — Forbidden patterns (impl-time)
+
+- `import { Binding } from '@/lib/types/compare'`
+- `Block.binding: Binding` (required field) instead of optional `binding?: Binding`
+- Per-block-type validation logic inside `validateBinding`
+- Introducing a new `NumberFormat` interface/type
+- Adding `binding/index.ts` barrel
+- Bumping `schemaVersion`
+
+### I.4 — Required patterns (impl-time)
+
+- Move all 5 binding interfaces from `lib/types/compare.ts` to `editor/binding/types.ts`
+- Move/export `Binding` union from `editor/binding/types.ts`
+- Export `validateBinding` from `editor/binding/types.ts`
+- Extend `Block` in `editor/types.ts` with `binding?: Binding` (plus import)
+- In reducer `DUPLICATE_BLOCK`, preserve binding via optional spread with `structuredClone(sourceBlock.binding)`
+- In `hydrateImportedDoc`, preserve valid binding via optional spread gated by `validateBinding(b.binding)`
+
+### I.5 — Test gates (impl-time)
+
+- `validateBinding` unit tests: ≥14 cases (5 valid kinds + 9 invalid)
+- `hydrateImportedDoc` extension tests: ≥4 cases
+- `DUPLICATE_BLOCK` extension tests: ≥3 cases
+- Import/export round-trip tests: ≥2 cases
+- Total additions: ≥23 tests (expected range 23–24)
+- Existing suites stay green (no regressions in hydration/duplicate behavior)
+
+### I.6 — Honest stop conditions (impl-time)
+
+- If `Block` interface baseline diverges from §A assumptions, STOP
+- If `hydrateImportedDoc` construction shape diverges from §C.3 pattern, STOP
+- If `DUPLICATE_BLOCK` shape diverges from §D.2 pattern, STOP
+- If new Binding consumers appear in `lib/types/compare.ts` path since recon, STOP and revisit shim decision
+- If `editor/binding/types.ts` already exists with nontrivial content, STOP and reassess file plan
+
+### I.7 — Out-of-scope discipline (impl-time)
+
+- No UI changes (Slice 3a/3b)
+- No backend changes (Phase 3.1e)
+- No locale changes
+- No `parseAdminPublicationError` extraction (P3-032 defer)
+- No cache-miss locale wording tweak (P3-039 defer)
+- No DEBT.md status edits during implementation
+
