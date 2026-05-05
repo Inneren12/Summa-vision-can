@@ -258,6 +258,21 @@ export function checkWorkflowPermission(
       return { allowed: true };
     }
 
+    case "UPDATE_BINDING": {
+      // Phase 3.1d Slice 3a: bindings are a data-content selection
+      // (cube/semantic_key/filters/period). Same workflow axis as
+      // UPDATE_DATA — copy-editors should not be re-pointing data
+      // sources during in_review.
+      if (workflow === "draft") return { allowed: true };
+      if (!wp.dataContent) {
+        return {
+          allowed: false,
+          reason: workflow === "in_review" ? COPY_EDIT_ONLY_REASON : READ_ONLY_REASON,
+        };
+      }
+      return { allowed: true };
+    }
+
     case "TOGGLE_VIS":
       // Toggling block visibility is a structural change.
       return wp.structural

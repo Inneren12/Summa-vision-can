@@ -86,6 +86,24 @@ function checkModePermission(state: EditorState, action: EditorAction): { allowe
       return { allowed: true };
     }
 
+    case "UPDATE_BINDING": {
+      // Phase 3.1d Slice 3a: binding edits follow the same lock + mode
+      // gating as prop edits — bindings are an editorial choice the
+      // operator makes alongside content.
+      const block = state.doc.blocks[action.blockId];
+      if (!block) return { allowed: false, reason: `Block ${action.blockId} not found` };
+      if (block.locked === true) {
+        return { allowed: false, reason: `Block ${action.blockId} is locked` };
+      }
+      const reg = BREG[block.type];
+      if (!reg) return { allowed: false, reason: `Unknown block type: ${block.type}` };
+      // Mode gate: bindings are content-axis edits; design mode only.
+      if (state.mode !== "design") {
+        return { allowed: false, reason: `Cannot edit binding on ${reg.name} in ${state.mode} mode` };
+      }
+      return { allowed: true };
+    }
+
     case "TOGGLE_VIS": {
       const block = state.doc.blocks[action.blockId];
       if (!block) return { allowed: false, reason: `Block ${action.blockId} not found` };
@@ -318,6 +336,37 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       const b = state.doc.blocks[blockId];
       if (!b) { nextState = state; break; }
       nextState = push({ ...state.doc, blocks: { ...state.doc.blocks, [blockId]: { ...b, props: { ...b.props, ...data } } } }, `Updated ${BREG[b.type]?.name} data`);
+      break;
+    }
+    case "UPDATE_BINDING": {
+      // Phase 3.1d Slice 3a: replace or clear the block's binding wholesale.
+      // The picker emits a canonical Binding (post-validateBinding) when the
+      // form is valid, or `undefined` to clear. No partial merge — bindings
+      // are atomic per the Slice 2 strict-reject contract.
+      const { blockId, binding } = action;
+      const b = state.doc.blocks[blockId];
+      if (!b) { nextState = state; break; }
+      // No-op short-circuit: BindingEditor's controlled-form contract emits
+      // `onChange(undefined)` on every render where the form is invalid,
+      // including the very first render of a freshly-mounted block with no
+      // binding. Dispatching a `push()` for that no-op would bump version /
+      // dirty and trigger a re-render, looping the editor. Detect equality
+      // structurally so a clear-on-already-empty (or re-emit of identical
+      // binding) is a true no-op.
+      const prev = b.binding;
+      const sameUndefined = !binding && !prev;
+      const sameValue = !!binding && !!prev && JSON.stringify(binding) === JSON.stringify(prev);
+      if (sameUndefined || sameValue) { nextState = state; break; }
+      const next: Block = { ...b };
+      if (binding) {
+        next.binding = binding;
+      } else {
+        delete next.binding;
+      }
+      nextState = push(
+        { ...state.doc, blocks: { ...state.doc.blocks, [blockId]: next } },
+        `${binding ? "Updated" : "Cleared"} ${BREG[b.type]?.name ?? b.type} binding`,
+      );
       break;
     }
     case "TOGGLE_VIS": {

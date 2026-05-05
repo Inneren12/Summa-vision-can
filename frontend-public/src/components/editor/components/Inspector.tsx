@@ -10,6 +10,7 @@ import { badgeColor, badgeLabel } from '../utils/badge';
 import { BarItemsEditor } from './data-editors/BarItemsEditor';
 import { KPIItemsEditor } from './data-editors/KPIItemsEditor';
 import { LineSeriesEditor } from './data-editors/LineSeriesEditor';
+import { BindingEditor } from '../binding/BindingEditor';
 
 interface InspectorProps {
   selB: Block | null;
@@ -146,6 +147,19 @@ function InspectorImpl({ selB, selR, selId, mode, canEdit, dispatch, contrastIss
                 (and edit xLabels for line chart). Template mode restricts the
                 latter — shape is template-owned. */}
             {dataEditor}
+
+            {/* Phase 3.1d Slice 3a: binding picker for blocks whose registry
+                entry declares `acceptsBinding: ['single']` (currently
+                hero_stat + delta_badge). Emits the canonical Binding from
+                validateBinding, or undefined to clear. */}
+            {selR.acceptsBinding?.includes('single') && (
+              <BindingEditor
+                block={selB}
+                onChange={(binding) =>
+                  dispatch({ type: 'UPDATE_BINDING', blockId: selId, binding })
+                }
+              />
+            )}
 
             <div style={{ marginTop: "4px", padding: "5px 7px", background: TK.c.bgSurf, borderRadius: "3px", fontSize: "7px", fontFamily: TK.font.data, color: TK.c.txtM, lineHeight: 1.6 }}>
               <span style={{ color: TK.c.txtS }}>{tInspector('meta.type')}</span> {selB.type} <span style={{ color: TK.c.txtS }}>{tInspector('meta.status')}</span> {selR.status}<br />

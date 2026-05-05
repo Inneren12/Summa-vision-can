@@ -69,6 +69,12 @@ export type Binding =
   | TabularBinding;
 
 /**
+ * Phase 3.1d Slice 3a: per-block-type binding-fit hints (Slice 2 recon
+ * §H.future.1 Option A — registry entry has `acceptsBinding?: BindingKind[]`).
+ */
+export type BindingKind = Binding['kind'];
+
+/**
  * Validate an unknown value as a `Binding`.
  *
  * Behavior:
