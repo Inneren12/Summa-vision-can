@@ -1,7 +1,7 @@
-# Phase 3.1d Slice 2 — Recon (Part A: Block shape + Binding ownership inventory)
+# Phase 3.1d Slice 2 — Recon (Parts A + B: Block shape, Binding inventory, Validator + Clone + Binding union design)
 
-> **Scope:** Part A of 3 (read-only inventory).
-> Sections §A and §B only. §C–§I are deferred stubs to Parts B and C.
+> **Scope:** Parts A and B of 3 (read-only inventory + design at type-signature level).
+> Sections §A, §B (Part A) and §C, §D, §E (Part B). §F–§I are deferred stubs to Part C.
 > No design decisions, no impl code, no DEBT/locale/CHANGELOG edits.
 >
 > **Locked architectural decisions** (context only; not relitigated in Part A):
@@ -297,11 +297,391 @@ PR merge.
 
 ---
 
-## §C — Schema validator inventory — DEFERRED to Part B
+## §C — Schema validator inventory
 
-## §D — Clone / copy / paste / import / export — DEFERRED to Part B
+### §C.1 Validator location and pipeline
 
-## §E — Binding union design — DEFERRED to Part B
+Sole canonical home for block / document validation: `frontend-public/src/components/editor/registry/guards.ts`. No `zod` (`grep -rn "z\\.object\\|from \"zod\"" frontend-public/src/components/editor/` → 0 matches); validation is **hand-written, type-narrowing checks**.
+
+Two related top-level entry points (`registry/guards.ts`):
+
+| Function | Lines | Role |
+|---|---|---|
+| `hydrateImportedDoc(raw)` | 554–690 | Structural hydration. Builds the `CanonicalDocument` literal from raw input; per-block construction at 673–682; emits warnings on coercion. |
+| `validateImportStrict(raw)` | 754–771 | Strict gateway — calls `migrateDoc` then `assertCanonicalDocumentV2Shape` + `validateSectionReferences` + `validateRegistryConstraints`; throws on any violation. |
+
+Caller wiring (`frontend-public/src/components/editor/index.tsx:1187-1195`):
+```ts
+result = hydrateImportedDoc(raw);   // construct + coerce
+validated = validateImportStrict(result.doc); // shape/ref/registry assert
+```
+
+**Correction to Part A §A.3:** Part A pointed to "`validateImportStrict` at lines 660-689" as the hydration gateway; the actual function at that range is `hydrateImportedDoc`, and `validateImportStrict` lives at 754-771. Substantive Part A claim (Phase 1.6 `locked` optional-spread pattern at 678-682) stands — it just lives inside `hydrateImportedDoc`, which is called *upstream* of `validateImportStrict` by the import flow. **No honest-stop trigger** — the construction-literal pattern Part A relies on is exactly where Part A described it; only the function name needs adjusting going forward.
+
+Other validation surfaces (read-only, no Block-field construction):
+- `validation/validate.ts` — `validateDocument` / `validatePresetSize` / `validate` (`:27,172,238`); reads `doc.blocks` for editorial rules. Will not reject unknown block fields.
+- `validation/invariants.ts` — `assertDocumentIntegrity` (`:19`); INV-1..5 cover refs, required types, section placement, id≡key. Block-shape oblivious to `binding`.
+- `validation/contrast.ts`, `validation/block-data.ts` — read `block.props` only.
+
+→ Slice 2 only needs to touch the **construction literal in `hydrateImportedDoc`**. All read-only validators ignore unknown sibling fields by definition.
+
+### §C.2 `sanitizeBlockProps` deep dive (linchpin)
+
+`registry/guards.ts:468-531`. Signature:
+
+```ts
+function sanitizeBlockProps(
+  type: string,
+  blockId: string,
+  rawProps: any,
+  warnings: string[],
+): Record<string, any>
+```
+
+Allowlist source: `BREG[type].dp` (per-block-type default-props map). Construction (`:474-477`):
+
+```ts
+const reg = BREG[type];
+if (!reg) return rawProps || {};
+const defaults = reg.dp || {};
+const result: Record<string, any> = { ...defaults };
+```
+
+Loop iterates **`Object.entries(defaults)`**, NOT `Object.entries(rawProps)` (`:487`). Each known key is type-coerced (boolean/number/string/array/object) against its default; type mismatches re-warn and substitute the default.
+
+Strict allowlist behaviour confirmed at `:527`:
+```ts
+// Unknown keys (not in defaults) are dropped — strict mode
+```
+Because the loop is over `defaults`, any key in `rawProps` that is not in `BREG[type].dp` is silently absent from `result` (no warning emitted).
+
+**Scope confirmation (Part A §A.2 verified):** the function takes `rawProps` (i.e. `b.props`), not a full `Block`. It is called at `:676` as `sanitizeBlockProps(type, key, b.props, warnings)`. Top-level Block fields (`id`, `type`, `visible`, `locked`, future `binding`) are constructed by the caller's literal at 673–682 and never traverse `sanitizeBlockProps`.
+
+→ **No `sanitizeBlockProps` change required for `Block.binding`.** The sanitizer surface for Slice 2 is empty.
+
+### §C.3 `hydrateImportedDoc` block-construction literal — Slice 2 extension point
+
+Verbatim block construction (`registry/guards.ts:673-682`):
+
+```ts
+doc.blocks[key] = {
+  id: key, // FORCE id to match object key — cannot drift out of sync
+  type,
+  props: sanitizeBlockProps(type, key, b.props, warnings),
+  visible: typeof b.visible === "boolean" ? b.visible : true,
+  // Phase 1.6: preserve user-toggled instance lock when present.
+  ...(typeof b.locked === "boolean" ? { locked: b.locked } : {}),
+};
+```
+
+Top-level fields explicitly handled: `id`, `type`, `props`, `visible`, `locked` (optional spread). Anything else on the raw input (e.g. `binding`) is **silently dropped** today.
+
+Slice 2 adds one optional-spread line mirroring the Phase 1.6 pattern:
+
+```ts
+...(b.binding !== undefined ? (() => {
+  const v = validateBinding(b.binding);
+  return v ? { binding: v } : {};
+})() : {}),
+```
+
+Or equivalent simpler form (impl-prompt to choose). Key constraints:
+- Match Phase 1.6 opt-in optional-spread style — never insert `binding: undefined`.
+- Run input through `validateBinding` (§E.4); strict-reject malformed → no `binding` key.
+- Emit a warning on rejection, mirroring `sanitizeBlockProps` warning pattern (impl-prompt territory).
+
+`validateImportStrict` (754–771) needs **no change** — `assertCanonicalDocumentV2Shape` (197–340) checks top-level doc fields only, never iterates per-block structure to reject unknown keys. `validateRegistryConstraints` checks `block.type` against `BREG`; ignores siblings. `binding` rides through transparently once `hydrateImportedDoc` preserves it.
+
+### §C.4 Migration considerations
+
+`schemaVersion` lives at `editor/types.ts:124` and `:143` (CURRENT = 1 in v1 doc shape, but `CURRENT_SCHEMA_VERSION` import-side is currently 3; see migrations test at `__tests__/migrations.test.ts`). Phase 1.6 `Block.locked?: boolean` was additive optional with **no schemaVersion bump** (`editor/types.ts:43` comment: "no schemaVersion bump in v1").
+
+Slice 2 follows the same precedent:
+- Existing documents lacking `binding` validate cleanly (optional sibling).
+- New documents with `binding` validate cleanly once §C.3 extension is in place.
+- Migrations map (`MIGRATIONS` / `applyMigrations` / `migrateDoc` at 708–738) does not iterate Block fields; existing migration steps are version-bumping doc transforms only.
+- → **No schemaVersion bump for Slice 2.** No migration step needed.
+
+If founder/reviewer disagrees (e.g. wants explicit "binding-aware" version marker for forward-compat tooling), surface in Part C §H — but recon recommends no bump.
+
+### §C.5 Other validation surfaces touching block shape
+
+`grep -n "doc\.blocks\|\.blocks\[" frontend-public/src/components/editor/validation/` — `validate.ts` and `invariants.ts` are the only files; both iterate `doc.blocks` for *value* checks (props text, type membership, section placement) and never inspect arbitrary sibling fields. Confirmation: zero impact on `binding` round-trip; no Slice 2 change.
+
+---
+
+## §D — Clone / copy / paste / import / export
+
+### §D.1 Full publication clone (`cloneAdminPublication`)
+
+Frontend caller `components/editor/index.tsx:908` (handleClone) and `:945` (forkLocalSnapshotAsNewDraft). Both forms are **trust-the-backend-response** — frontend hits `cloneAdminPublication(publicationId)`, gets `{ id, etag, ... }` back, then `router.push` to the new editor URL. The receiving editor session re-fetches the document from the backend and runs it through `hydrateImportedDoc → validateImportStrict` like any other load. No frontend manipulation of block contents during clone.
+
+→ For `Block.binding`: per locked decision #7 (clone preserves binding), the *backend* `mutate_document_state_for_clone(workflow=draft, history=[], comments=[])` MUST preserve `binding` on each block. This is a backend contract; frontend just deserializes whatever is returned. **Phase 3.1e backend recon will verify** the contract; if backend strips `binding` today, that's a Phase 3.1e bug, not a Slice 2 blocker.
+
+### §D.2 `DUPLICATE_BLOCK` reducer — asymmetry resolution
+
+`store/reducer.ts:345-422`. Construction literal (`:405-411`):
+
+```ts
+const clonedProps = JSON.parse(JSON.stringify(sourceBlock.props));
+const newBlock = {
+  id: nextId,
+  type: sourceBlock.type,
+  props: clonedProps,
+  visible: sourceBlock.visible,
+};
+```
+
+Inline comment (`:403-404`):
+> Duplicate carries identical props (deep-cloned to break aliasing) but does NOT inherit `locked` — the operator gets a fresh, editable copy.
+
+`locked` is intentionally absent from the new-block literal. Slice 2 must explicitly resolve where `binding` lands relative to this precedent.
+
+**Three options:**
+
+- **Option A — strip `binding` (mirror `locked`).** Rationale: same-data-source duplicates are not what the user wants; mirror the "fresh editable copy" semantic. *Cost:* contradicts the "clone preserves binding" mental model from full publication clone (decision #7), introducing an inconsistency between operations.
+
+- **Option B — preserve `binding` (recommended).** Rationale: a block-level duplicate is a structural copy; preserving binding lets the operator land a fresh visual instance pointing at the same data, then edit the binding to retarget if desired. Aligns with full clone semantics → consistent mental model: *clone (any granularity) preserves binding; user edits afterwards*. `locked` strip remains an *exception* justified by its UX-protection role (locked = "do not touch by accident"); binding has no analogous protective role.
+
+- **Option C — strip and revisit.** Rationale: maximal initial conservatism, defer to user feedback. *Cost:* introduces churn risk in Slice 3a binding-editor UX research.
+
+**Recommendation: Option B (preserve binding on `DUPLICATE_BLOCK`).** Implementation in Slice 2:
+
+```ts
+const newBlock = {
+  id: nextId,
+  type: sourceBlock.type,
+  props: clonedProps,
+  visible: sourceBlock.visible,
+  ...(sourceBlock.binding ? { binding: structuredClone(sourceBlock.binding) } : {}),
+};
+```
+
+`structuredClone` (or deep-JSON) breaks aliasing, matching the `props` precedent at `:405`. Surface to Part C §H founder review for sign-off.
+
+### §D.3 Other clone-like reducer actions
+
+`grep` of reducer actions surfaced (line numbers from `store/reducer.ts`):
+
+| Action | Line | Block-creation behaviour | binding handling |
+|---|---|---|---|
+| `DUPLICATE_BLOCK` | 345 | Clones existing block | §D.2 — preserve recommended |
+| `REMOVE_BLOCK` | 113 | Deletes only | n/a |
+| `SWITCH_TPL` | 149 | Replaces doc from template (`mkDoc`) | New blocks; `binding` undefined by construction |
+| `IMPORT` | 156 | Replaces doc with hydrated import | Routed via §C.3 — preserved when present |
+
+No `ADD_BLOCK` / `INSERT_BLOCK` / `COPY_BLOCK` / `PASTE_BLOCK` actions exist today. Block creation outside duplicate/import is template-driven (`mkDoc` from `registry/templates`) and produces blocks with no `binding` field. → No further binding-handling decisions needed at the reducer level.
+
+### §D.4 Import / export round-trip
+
+Export path (`components/editor/index.tsx:617-625`):
+```ts
+const exportJSON = useCallback(() => {
+  const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
+  ...
+});
+```
+Plain `JSON.stringify(doc)` — type-agnostic. Whatever sits on each `Block` (including `binding`) flows verbatim into the JSON payload. **No export-side change required.**
+
+Import path: file input → parse → `hydrateImportedDoc` → `validateImportStrict` (`index.tsx:1187-1195`). After §C.3 extension, `binding` is preserved on hydration. Round-trip is closed.
+
+Test surface (Part C §G territory): fixture document with mixed binding/no-binding blocks; export → re-parse → import → assert deep-equal on each `Block.binding`.
+
+### §D.5 ZIP export (Phase 2.2 distribution)
+
+`export/zipExport.ts:62 exportZip(...)` snapshots `doc` via `structuredClone` (`:68`), then composes `manifest.json` + `distribution.json` + `publish-kit.txt` + render blobs. The doc is consumed by `buildManifest(doc, ...)`, `buildDistributionJson({ doc, ... })`, `renderDocumentToBlob(doc, pal, presetId)`. None of these strip block-level fields — they read presentation/distribution-relevant fields (page, sections, blocks for rendering) and serialize at the manifest/distribution layer.
+
+`grep -n "binding" frontend-public/src/components/editor/export/zipExport.ts` → 0 matches (type-agnostic w.r.t. binding). Confirmation: ZIP output preserves `binding` on each block transparently. No Slice 2 change in `zipExport.ts`.
+
+### §D.6 Backend clone preservation expectation
+
+Locked decision #7: clone preserves binding. This is enforced **server-side** by `mutate_document_state_for_clone` (out of scope for Slice 2). Frontend correctness is independent: the editor deserializes whatever the backend returns. Phase 3.1e backend recon to verify the contract; Slice 2 carries no enforcement burden.
+
+---
+
+## §E — Binding union design
+
+### §E.1 5 binding kinds (verbatim from `lib/types/compare.ts:114-169`)
+
+```ts
+export interface SingleValueBinding {
+  kind: 'single';
+  cube_id: string;
+  semantic_key: string;
+  filters: Record<string, string>;
+  /** Explicit backend-supported period, e.g. '2024-Q3'. Symbolic 'latest' out of scope per recon §J.4. */
+  period: string;
+  format?: string;
+}
+
+export interface TimeSeriesBinding {
+  kind: 'time_series';
+  cube_id: string;
+  semantic_key: string;
+  filters: Record<string, string>;
+  period_range: { from: string; to: string } | { last_n: number };
+  series_dim?: string;
+  format?: string;
+}
+
+export interface CategoricalSeriesBinding {
+  kind: 'categorical_series';
+  cube_id: string;
+  semantic_key: string;
+  category_dim: string;
+  filters: Record<string, string>;
+  period: string;
+  sort?: 'value_desc' | 'value_asc' | 'source_order';
+  limit?: number;
+}
+
+export interface MultiMetricBinding {
+  kind: 'multi_metric';
+  cube_id: string;
+  metrics: Array<{ semantic_key: string; label?: string }>;
+  filters: Record<string, string>;
+  period: string;
+  format?: string;
+}
+
+export interface TabularBinding {
+  kind: 'tabular';
+  cube_id: string;
+  columns: Array<{ semantic_key: string; label?: string }>;
+  row_dim: string;
+  filters: Record<string, string>;
+  period: string;
+  format?: string;
+}
+
+export type Binding =
+  | SingleValueBinding
+  | TimeSeriesBinding
+  | CategoricalSeriesBinding
+  | MultiMetricBinding
+  | TabularBinding;
+```
+
+Cross-ref: `docs/recon/phase-3-1d-frontend-recon-proper-part1.md:380-457`. Field-by-field match per Part A §B.2 — no divergence.
+
+After Slice 2 these definitions move to `frontend-public/src/components/editor/binding/types.ts` (per locked decision #3), with a re-export shim in `lib/types/compare.ts` (per decision #5).
+
+### §E.2 `NumberFormat` type — does not exist
+
+`grep -rn "NumberFormat\\|interface NumberFormat\\|type NumberFormat" frontend-public/src/` → **0 matches**. The 5 binding interfaces use `format?: string` (a free-form string format token, e.g. `"percent"`, `"currency:CAD"`); there is no structured `NumberFormat` type today.
+
+**Slice 2 implication: no `NumberFormat` to relocate.** Keep the existing `format?: string` shape verbatim on the moved interfaces; `validateBinding` validates `format` as `string | undefined`. If a future slice introduces structured number formatting (`{ style: 'percent', precision: 1, ... }`), that work locates the new `NumberFormat` interface alongside `Binding` in `editor/binding/types.ts` — but recon-proper Part 1 §B2 spec did not require it, so Slice 2 keeps it out.
+
+### §E.3 Per-block-type binding fit (registry territory, NOT schema)
+
+| Block type | Acceptable binding kinds | Slice 2 schema | Phase 3.1e resolver |
+|---|---|---|---|
+| `hero_stat` | `single` | accepted | supported |
+| `delta_badge` | `single` (precomputed delta semantics) | accepted | supported |
+| `comparison_kpi` | `multi_metric` | accepted | pending |
+| `bar_horizontal` | `categorical_series` | accepted | pending |
+| `line_editorial` | `time_series` | accepted | pending |
+| `table_enriched` | `tabular` | accepted | pending |
+| `small_multiple` | `multi_metric` OR `categorical_series` | accepted | pending |
+| `eyebrow_tag` / `headline_editorial` / `subtitle_descriptor` / `body_annotation` / `source_footer` | none | n/a | n/a |
+| `brand_stamp` | none | n/a | n/a |
+
+Cross-ref `phase-3-1d-frontend-recon-proper-part1.md:497-518`.
+
+**Slice 2 schema accepts ALL 5 kinds on ANY block.** Per-type fit is registry-level metadata for the Slice 3a binding-picker UI; schema does not enforce because:
+1. Registry mapping evolves without schema migration.
+2. UI picker enforces fit at construction time.
+3. Schema-level rejection of "wrong" binding would block forward extensibility (e.g. Phase 3.1f could add a kind that retroactively fits an existing block type).
+
+**Impl-prompt note:** do NOT add per-type binding-kind validation to `validateBinding` or to `validateImportStrict`. Universal validation (locked decision #2) is intentional.
+
+### §E.4 `validateBinding` signature + behaviour
+
+Pure function in `editor/binding/types.ts`:
+
+```ts
+export function validateBinding(value: unknown): Binding | null;
+```
+
+Pseudocode skeleton:
+
+```ts
+export function validateBinding(value: unknown): Binding | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+
+  const isStr = (x: unknown): x is string => typeof x === 'string';
+  const isFilters = (x: unknown): x is Record<string, string> =>
+    !!x && typeof x === 'object' && !Array.isArray(x) &&
+    Object.values(x as object).every(isStr);
+  const isOptStr = (x: unknown) => x === undefined || isStr(x);
+
+  switch (v.kind) {
+    case 'single': {
+      if (!isStr(v.cube_id) || !isStr(v.semantic_key)) return null;
+      if (!isFilters(v.filters)) return null;
+      if (!isStr(v.period)) return null;
+      if (!isOptStr(v.format)) return null;
+      return v as unknown as SingleValueBinding;
+    }
+    case 'time_series': {
+      if (!isStr(v.cube_id) || !isStr(v.semantic_key)) return null;
+      if (!isFilters(v.filters)) return null;
+      const pr = v.period_range as any;
+      const okRange =
+        pr && typeof pr === 'object' &&
+        ((isStr(pr.from) && isStr(pr.to)) || typeof pr.last_n === 'number');
+      if (!okRange) return null;
+      if (!isOptStr(v.series_dim) || !isOptStr(v.format)) return null;
+      return v as unknown as TimeSeriesBinding;
+    }
+    case 'categorical_series': {
+      if (!isStr(v.cube_id) || !isStr(v.semantic_key)) return null;
+      if (!isStr(v.category_dim) || !isStr(v.period)) return null;
+      if (!isFilters(v.filters)) return null;
+      if (v.sort !== undefined &&
+          !['value_desc','value_asc','source_order'].includes(v.sort as string)) return null;
+      if (v.limit !== undefined && typeof v.limit !== 'number') return null;
+      return v as unknown as CategoricalSeriesBinding;
+    }
+    case 'multi_metric': {
+      if (!isStr(v.cube_id) || !isStr(v.period)) return null;
+      if (!isFilters(v.filters)) return null;
+      if (!Array.isArray(v.metrics) || !v.metrics.every((m: any) =>
+        m && isStr(m.semantic_key) && isOptStr(m.label))) return null;
+      if (!isOptStr(v.format)) return null;
+      return v as unknown as MultiMetricBinding;
+    }
+    case 'tabular': {
+      if (!isStr(v.cube_id) || !isStr(v.row_dim) || !isStr(v.period)) return null;
+      if (!isFilters(v.filters)) return null;
+      if (!Array.isArray(v.columns) || !v.columns.every((c: any) =>
+        c && isStr(c.semantic_key) && isOptStr(c.label))) return null;
+      if (!isOptStr(v.format)) return null;
+      return v as unknown as TabularBinding;
+    }
+    default:
+      return null;
+  }
+}
+```
+
+**Strict-reject (`null`) on any malformed input.** Rationale:
+- Mirrors `sanitizeBlockProps` strict-allowlist drop (`registry/guards.ts:527`).
+- Mirrors `validateImportStrict`/Phase 1.6 optional-spread "include only when valid" pattern (`registry/guards.ts:681`).
+- Malformed binding ⇒ treated as no binding (graceful degradation; never throws; never partially-shaped).
+
+Approximate file size: ~80–110 lines including the Binding interfaces themselves.
+
+### §E.5 Helper extraction (style note)
+
+Recon recommends inline checks per case, with two tiny helpers (`isStr`, `isFilters`) to keep cases readable. DRY-extracting per-kind validators (`isValidSingle(v)`, etc.) is a style preference; recon does not see a functional advantage at five short cases. Surface to Part C §H if founder prefers extraction; recon-default is inline.
+
+### §E.6 Forward compatibility
+
+If Phase 3.1f introduces a 6th `kind` (e.g. `'geographic_choropleth'`), older builds running `validateBinding` against new data return `null` for the unknown discriminator (default branch) → frontend treats the block as having no binding. This is **graceful degradation by design** (locked decision #4 universal validation). No version negotiation, no client-version pin, no special handling. Future kinds extend without breaking older clients. Documented for impl-prompt so the universal-validation guarantee is preserved.
+
+---
 
 ## §F — File structure plan — DEFERRED to Part C
 
