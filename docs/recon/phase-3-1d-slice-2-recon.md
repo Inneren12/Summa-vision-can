@@ -907,7 +907,7 @@ Add ~2 cases in existing import/export suite:
 | Import/export round-trip (extend) | 2 |
 | **Total** | **40–41 tests** |
 
-Within the updated 35–45 expanded forecast range. The original 20–25 target was set before BLOCKER-3 strengthened validation surface (non-empty strings, positive integers, mutex check, canonicalize, non-empty arrays, filter key validation).
+Within the updated 35–45 expanded forecast range. Validation surface strengthened by FIX-4 (canonical reconstruction, non-empty arrays, filter key validation) and reorganized by FIX-5 (universal validation tests moved from §G.1 to §G.2 hydration tests).
 
 ---
 
