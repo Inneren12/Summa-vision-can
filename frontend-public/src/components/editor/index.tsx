@@ -1354,6 +1354,7 @@ export default function InfographicEditor({
         cloneInFlight={cloneInFlight}
         onClone={handleClone}
         cloneTooltip={tEditorActions('cloneCannotBeCloned')}
+        publicationId={publicationId}
       />
       {zipExportNotice && (
         <div
