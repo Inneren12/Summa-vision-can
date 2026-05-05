@@ -1,15 +1,16 @@
 # Phase 3.1d Slice 2 — Recon (Parts A + B: Block shape, Binding inventory, Validator + Clone + Binding union design)
 
-> **Scope:** Parts A and B of 3 (read-only inventory + design at type-signature level).
-> Sections §A, §B (Part A) and §C, §D, §E (Part B). §F–§I are deferred stubs to Part C.
-> No design decisions, no impl code, no DEBT/locale/CHANGELOG edits.
+> **Scope:** Slice 2 recon-proper, Parts A+B+C (full).
+> §A–§B inventory, §C–§E design, §F–§I implementation plan and gates for impl prompt.
+> No production code changes in this recon commit. No backend/UI/locale/DEBT edits.
+> Pseudocode in §E.4 is type-signature-level scaffolding for impl prompt; not committed source.
 >
 > **Locked architectural decisions** (context only; not relitigated in Part A):
 > 1. Field name `Block.binding`, top-level sibling of `props`, optional.
 > 2. Universal validation across 5 binding kinds.
 > 3. `Binding` union moves to `frontend-public/src/components/editor/binding/types.ts`.
 > 4. No schemaVersion bump. Clone preserves binding. No UI in Slice 2. No backend changes.
-> 5. Slice 1a imports redirect via re-export shim from `lib/types/compare.ts`.
+> 5. **No re-export shim.** Slice 2 cleanly removes Binding union and 5 binding interfaces from `lib/types/compare.ts`. Part A §B.3 confirmed zero in-tree consumers of `Binding` from `compare.ts`, so no shim is needed. Future imports use `editor/binding/types.ts` directly.
 
 ---
 
@@ -94,10 +95,7 @@ absent from `BREG[type].dp`.
 Block-type catalog confirmed at `frontend-public/src/components/editor/registry/blocks.ts:11-47`
 (13 entries total):
 
-- **DATA-bindable (7 — `Block.binding` will apply):** `hero_stat`,
-  `delta_badge`, `comparison_kpi`, `bar_horizontal`, `line_editorial`,
-  `table_enriched`, `small_multiple`. Cross-ref recon-proper Part 1 §C.1
-  (`phase-3-1d-frontend-recon-proper-part1.md:497-509`).
+- **Schema-capable / future binding-capable (7 — schema may carry `Block.binding`; UI/resolver support is phased):** `hero_stat`, `delta_badge`, `comparison_kpi`, `bar_horizontal`, `line_editorial`, `table_enriched`, `small_multiple`. Cross-ref recon-proper Part 1 §C.1 (`phase-3-1d-frontend-recon-proper-part1.md:497-509`). Note: Slice 2 schema accepts `Block.binding` for all 7; Slice 3a/3b UI ships binding editor for `hero_stat` + `delta_badge` only in v1; Phase 3.1e resolver support extends incrementally.
 - **TEXT/MEDIA (6 — `Block.binding` not applicable):** `eyebrow_tag`,
   `headline_editorial`, `subtitle_descriptor`, `body_annotation`,
   `source_footer`, `brand_stamp`. Cross-ref §C.2
@@ -211,7 +209,7 @@ the same order as spec §B2.4 (`phase-3-1d-frontend-recon-proper-part1.md:451-45
 tests) returns **no consumer outside `lib/types/compare.ts` itself**. Slice 1a
 defined the union; no Slice 1a/1b code imports it yet. Implication for Part C
 import migration: zero in-tree call sites need rewriting at Slice 2 — the
-re-export shim is purely a public-API safety net (locked decision #10).
+re-export shim is purely a public-API safety net (locked decision #5 (no shim — clean removal)).
 
 Compare-related imports of `lib/types/compare.ts` (these are NOT binding-related;
 class **(b) Compare-related types only**, no migration needed):
@@ -453,7 +451,9 @@ const newBlock = {
   type: sourceBlock.type,
   props: clonedProps,
   visible: sourceBlock.visible,
-  ...(sourceBlock.binding ? { binding: structuredClone(sourceBlock.binding) } : {}),
+  ...(sourceBlock.binding
+    ? { binding: JSON.parse(JSON.stringify(sourceBlock.binding)) as Binding }
+    : {}),
 };
 ```
 
@@ -564,7 +564,7 @@ export type Binding =
 
 Cross-ref: `docs/recon/phase-3-1d-frontend-recon-proper-part1.md:380-457`. Field-by-field match per Part A §B.2 — no divergence.
 
-After Slice 2 these definitions move to `frontend-public/src/components/editor/binding/types.ts` (per locked decision #3), with a re-export shim in `lib/types/compare.ts` (per decision #5).
+After Slice 2 these definitions move to `frontend-public/src/components/editor/binding/types.ts` (per locked decision #3). No re-export shim remains in `lib/types/compare.ts` (per locked decision #5 — Part A §B.3 confirmed zero in-tree consumers).
 
 ### §E.2 `NumberFormat` type — does not exist
 
@@ -582,7 +582,7 @@ After Slice 2 these definitions move to `frontend-public/src/components/editor/b
 | `bar_horizontal` | `categorical_series` | accepted | pending |
 | `line_editorial` | `time_series` | accepted | pending |
 | `table_enriched` | `tabular` | accepted | pending |
-| `small_multiple` | `multi_metric` OR `categorical_series` | accepted | pending |
+| `small_multiple` | unresolved: `multi_metric` or `categorical_series`; no Slice 3a UI support until dedicated recon | accepted | pending |
 | `eyebrow_tag` / `headline_editorial` / `subtitle_descriptor` / `body_annotation` / `source_footer` | none | n/a | n/a |
 | `brand_stamp` | none | n/a | n/a |
 
@@ -611,52 +611,60 @@ export function validateBinding(value: unknown): Binding | null {
   const v = value as Record<string, unknown>;
 
   const isStr = (x: unknown): x is string => typeof x === 'string';
+  const isNonEmptyStr = (x: unknown): x is string =>
+    typeof x === 'string' && x.trim().length > 0;
+  const isOptStr = (x: unknown) => x === undefined || isStr(x);
+  const isOptNonEmptyStr = (x: unknown) =>
+    x === undefined || isNonEmptyStr(x);
   const isFilters = (x: unknown): x is Record<string, string> =>
     !!x && typeof x === 'object' && !Array.isArray(x) &&
-    Object.values(x as object).every(isStr);
-  const isOptStr = (x: unknown) => x === undefined || isStr(x);
+    Object.values(x as object).every(isNonEmptyStr);
+  const isPositiveInt = (x: unknown): x is number =>
+    typeof x === 'number' && Number.isInteger(x) && x > 0;
 
   switch (v.kind) {
     case 'single': {
-      if (!isStr(v.cube_id) || !isStr(v.semantic_key)) return null;
+      if (!isNonEmptyStr(v.cube_id) || !isNonEmptyStr(v.semantic_key)) return null;
       if (!isFilters(v.filters)) return null;
-      if (!isStr(v.period)) return null;
+      if (!isNonEmptyStr(v.period)) return null;
       if (!isOptStr(v.format)) return null;
       return v as unknown as SingleValueBinding;
     }
     case 'time_series': {
-      if (!isStr(v.cube_id) || !isStr(v.semantic_key)) return null;
+      if (!isNonEmptyStr(v.cube_id) || !isNonEmptyStr(v.semantic_key)) return null;
       if (!isFilters(v.filters)) return null;
       const pr = v.period_range as any;
-      const okRange =
-        pr && typeof pr === 'object' &&
-        ((isStr(pr.from) && isStr(pr.to)) || typeof pr.last_n === 'number');
-      if (!okRange) return null;
-      if (!isOptStr(v.series_dim) || !isOptStr(v.format)) return null;
+      if (!pr || typeof pr !== 'object') return null;
+      const hasFromTo =
+        isNonEmptyStr(pr.from) && isNonEmptyStr(pr.to) && pr.last_n === undefined;
+      const hasLastN =
+        isPositiveInt(pr.last_n) && pr.from === undefined && pr.to === undefined;
+      if (!(hasFromTo || hasLastN)) return null;
+      if (!isOptNonEmptyStr(v.series_dim) || !isOptStr(v.format)) return null;
       return v as unknown as TimeSeriesBinding;
     }
     case 'categorical_series': {
-      if (!isStr(v.cube_id) || !isStr(v.semantic_key)) return null;
-      if (!isStr(v.category_dim) || !isStr(v.period)) return null;
+      if (!isNonEmptyStr(v.cube_id) || !isNonEmptyStr(v.semantic_key)) return null;
+      if (!isNonEmptyStr(v.category_dim) || !isNonEmptyStr(v.period)) return null;
       if (!isFilters(v.filters)) return null;
       if (v.sort !== undefined &&
           !['value_desc','value_asc','source_order'].includes(v.sort as string)) return null;
-      if (v.limit !== undefined && typeof v.limit !== 'number') return null;
+      if (v.limit !== undefined && !isPositiveInt(v.limit)) return null;
       return v as unknown as CategoricalSeriesBinding;
     }
     case 'multi_metric': {
-      if (!isStr(v.cube_id) || !isStr(v.period)) return null;
+      if (!isNonEmptyStr(v.cube_id) || !isNonEmptyStr(v.period)) return null;
       if (!isFilters(v.filters)) return null;
       if (!Array.isArray(v.metrics) || !v.metrics.every((m: any) =>
-        m && isStr(m.semantic_key) && isOptStr(m.label))) return null;
+        m && isNonEmptyStr(m.semantic_key) && isOptStr(m.label))) return null;
       if (!isOptStr(v.format)) return null;
       return v as unknown as MultiMetricBinding;
     }
     case 'tabular': {
-      if (!isStr(v.cube_id) || !isStr(v.row_dim) || !isStr(v.period)) return null;
+      if (!isNonEmptyStr(v.cube_id) || !isNonEmptyStr(v.row_dim) || !isNonEmptyStr(v.period)) return null;
       if (!isFilters(v.filters)) return null;
       if (!Array.isArray(v.columns) || !v.columns.every((c: any) =>
-        c && isStr(c.semantic_key) && isOptStr(c.label))) return null;
+        c && isNonEmptyStr(c.semantic_key) && isOptStr(c.label))) return null;
       if (!isOptStr(v.format)) return null;
       return v as unknown as TabularBinding;
     }
@@ -705,7 +713,7 @@ If founder prefers the barrel for consistency with other editor subdirs (check `
 | `frontend-public/src/lib/types/compare.ts` | Remove 5 binding interfaces + Binding union (lines 114-169); no re-export shim | -56 |
 | `frontend-public/src/components/editor/types.ts` | Add `binding?: Binding` to Block interface | +2 (and 1 import) |
 | `frontend-public/src/components/editor/registry/guards.ts` | Add optional-spread for binding in `hydrateImportedDoc` block construction (~line 681) | +5 |
-| `frontend-public/src/components/editor/store/reducer.ts` | DUPLICATE_BLOCK preserves binding via `structuredClone` | +1-3 |
+| `frontend-public/src/components/editor/store/reducer.ts` | DUPLICATE_BLOCK preserves binding via JSON deep-clone (`JSON.parse(JSON.stringify(sourceBlock.binding)) as Binding`) to match `props` precedent | +1-3 |
 | Existing test files for hydration / DUPLICATE_BLOCK / round-trip | Add binding-preservation assertions | +30-60 |
 
 **Total: 5 modified files.** Smaller surface than originally planned in Part A draft (which estimated ~5 files but with larger per-file diffs).
@@ -766,12 +774,26 @@ Test categories:
 | `null` / `undefined` / non-object input | 1 | `null` |
 | Invalid filters (`Record<string,string>` violation) | 1 | `null` |
 | Invalid sort enum value | 1 | `null` |
+| Empty `cube_id` rejects | 1 | `null` |
+| Empty `period` rejects | 1 | `null` |
+| Empty `semantic_key` rejects | 1 | `null` |
+| `last_n: 0` rejects | 1 | `null` |
+| `last_n: -1` rejects | 1 | `null` |
+| `last_n: 1.5` rejects | 1 | `null` |
+| `last_n: NaN` rejects | 1 | `null` |
+| `limit: 0` rejects | 1 | `null` |
+| `limit: -1` rejects | 1 | `null` |
+| `limit: 1.5` rejects | 1 | `null` |
+| `period_range` with both `from/to` and `last_n` rejects | 1 | `null` |
+| Filters with empty member id rejects | 1 | `null` |
+| Valid `time_series` on `hero_stat` (universal validation, no per-type rejection) | 1 | `binding` preserved |
+| Valid `single` on `table_enriched` (universal validation) | 1 | `binding` preserved |
 
-**~14 cases.** Pure function tests, no mocks. Covers all 5 valid kinds plus key invalid paths.
+**~26 cases (after FIX-3 + FIX-7 expansion).** Pure function tests, no mocks. Cover 7 valid configurations across 5 kinds (single, time_series with from/to, time_series with last_n, categorical_series without sort/limit, categorical_series with sort/limit, multi_metric, tabular) + 19 invalid paths (missing/wrong-type/empty-string/non-positive-int/mutex-violation/cross-type-block-type test locks).
 
 ### G.2 — `hydrateImportedDoc` extension tests (extend existing)
 
-Add ~4–5 cases in the existing guards hydration test file:
+Add ~5–6 cases in the existing guards hydration test file:
 
 | Case | Expected |
 |---|---|
@@ -780,8 +802,9 @@ Add ~4–5 cases in the existing guards hydration test file:
 | Block with malformed `binding` hydrates without binding | block has no `binding` key; warning emitted |
 | Block with `binding: undefined` hydrates without binding | no `binding` key (not `binding: undefined`) |
 | Block with extra unknown top-level fields | existing strictness unchanged; unknown fields dropped |
+| Block with malformed binding emits stable warning text | warning contains "Invalid block binding dropped" and block id |
 
-**~4–5 cases.** Mirrors existing `hydrateImportedDoc` test style.
+**~5–6 cases.** Mirrors existing `hydrateImportedDoc` test style.
 
 ### G.3 — `sanitizeBlockProps` tests
 
@@ -819,7 +842,7 @@ Add ~2 cases in existing import/export suite:
 | `sanitizeBlockProps` | 0 (no change needed per §G.3) |
 | `DUPLICATE_BLOCK` reducer (extend) | 3 |
 | Import/export round-trip (extend) | 2 |
-| **Total** | **23–24 tests** |
+| **Total** | **36–37 tests** |
 
 Within the 20–25 target range. Most additions are extensions to existing files; only `validateBinding` needs a new test file.
 
@@ -836,7 +859,7 @@ Resolved items NOT requiring founder review:
 
 Items requiring founder review:
 
-### H.1 — Re-export shim strategy (UPDATED)
+### H.1 — Re-export shim strategy (LOCKED in decision #5; founder ack)
 Per §F.3, recon now recommends **Option C (clean removal, no shim)** based on Part A §B.3 finding (zero in-tree consumers). Original Part A draft recommended Option A (defensive shim).
 
 Founder confirms Option C OR overrides to Option A if external/future-proofing concern.
@@ -893,7 +916,7 @@ This section lists gates the **implementation prompt** must enforce.
 ### I.2 — Construction-pattern gates
 
 - `hydrateImportedDoc` extension must mirror the existing Phase 1.6 `locked` optional-spread style near lines 678–682
-- `DUPLICATE_BLOCK` extension must preserve deep-clone precedent (`JSON.parse(JSON.stringify(...))` for props; `structuredClone` for binding)
+- `DUPLICATE_BLOCK` extension preserves precedent's deep-clone pattern uniformly: `JSON.parse(JSON.stringify(sourceBlock.binding)) as Binding` (matches `props` precedent at same line in `store/reducer.ts:405`)
 - `validateBinding` must follow §E.4 pseudocode shape (5 cases + 3 helpers; no per-kind extracted validators)
 
 ### I.3 — Forbidden patterns (impl-time)
@@ -904,6 +927,9 @@ This section lists gates the **implementation prompt** must enforce.
 - Introducing a new `NumberFormat` interface/type
 - Adding `binding/index.ts` barrel
 - Bumping `schemaVersion`
+- Empty identity strings in binding (`cube_id: ""`, `period: ""`, etc.) — `validateBinding` must reject
+- Non-positive or non-integer `last_n` / `limit` — `validateBinding` must reject
+- `period_range` containing both `from/to` and `last_n` — `validateBinding` must reject
 
 ### I.4 — Required patterns (impl-time)
 
@@ -911,16 +937,17 @@ This section lists gates the **implementation prompt** must enforce.
 - Move/export `Binding` union from `editor/binding/types.ts`
 - Export `validateBinding` from `editor/binding/types.ts`
 - Extend `Block` in `editor/types.ts` with `binding?: Binding` (plus import)
-- In reducer `DUPLICATE_BLOCK`, preserve binding via optional spread with `structuredClone(sourceBlock.binding)`
+- DUPLICATE_BLOCK constructs `binding` via `JSON.parse(JSON.stringify(sourceBlock.binding)) as Binding` in optional spread (matches the immediate local precedent at `store/reducer.ts:405` for `props` deep-cloning).
 - In `hydrateImportedDoc`, preserve valid binding via optional spread gated by `validateBinding(b.binding)`
+- Warning text on malformed binding rejection follows stable format: `"Block <id> (<type>): Invalid block binding dropped (kind=<kind>)"`
 
 ### I.5 — Test gates (impl-time)
 
-- `validateBinding` unit tests: ≥14 cases (5 valid kinds + 9 invalid)
-- `hydrateImportedDoc` extension tests: ≥4 cases
+- `validateBinding` unit tests: ≥26 cases (7 valid configurations + 19 invalid paths including strict numeric/string/mutex checks and universal-validation locks)
+- `hydrateImportedDoc` extension tests: ≥5 cases (includes stable warning text assertion)
 - `DUPLICATE_BLOCK` extension tests: ≥3 cases
 - Import/export round-trip tests: ≥2 cases
-- Total additions: ≥23 tests (expected range 23–24)
+- Total additions: ≥36 tests (within 30–40 expanded forecast range)
 - Existing suites stay green (no regressions in hydration/duplicate behavior)
 
 ### I.6 — Honest stop conditions (impl-time)
@@ -939,4 +966,3 @@ This section lists gates the **implementation prompt** must enforce.
 - No `parseAdminPublicationError` extraction (P3-032 defer)
 - No cache-miss locale wording tweak (P3-039 defer)
 - No DEBT.md status edits during implementation
-
