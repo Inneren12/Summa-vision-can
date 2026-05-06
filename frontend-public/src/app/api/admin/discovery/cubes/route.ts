@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Defence in depth: forward only `q`. Reject any other params.
+  // Defence in depth: forward only `q`; ignore any other params.
   const q = request.nextUrl.searchParams.get('q') ?? '';
   const search = `?q=${encodeURIComponent(q)}`;
   const target = `${apiUrl}${BACKEND_PATH}${search}`;

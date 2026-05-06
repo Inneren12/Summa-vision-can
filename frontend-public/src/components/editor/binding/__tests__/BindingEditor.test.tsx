@@ -111,33 +111,17 @@ describe('BindingEditor — initial state from block.binding', () => {
 });
 
 describe('BindingEditor — onChange contract', () => {
-  it('emits undefined for an empty / invalid form', () => {
+  it('does NOT emit on mount with empty form (touched gate)', () => {
     const onChange = jest.fn();
     render(<BindingEditor block={makeBlock()} onChange={onChange} />);
-    expect(onChange).toHaveBeenLastCalledWith(undefined);
+    // Pre-fix this test asserted onChange(undefined); under the touched
+    // gate (Phase 3.1d Slice 3a fix), no emit until user interacts.
+    expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('emits canonical Binding when all fields are valid', () => {
-    const onChange = jest.fn();
-    const binding: SingleValueBinding = {
-      kind: 'single',
-      cube_id: '18100004',
-      semantic_key: 'metric_x',
-      filters: { geo: 'CA' },
-      period: '2024-Q3',
-    };
-    mockListSemanticMappings.mockReturnValue(neverResolves());
-    mockGetCubeMetadata.mockReturnValue(neverResolves());
-    render(<BindingEditor block={makeBlock({ binding })} onChange={onChange} />);
-    expect(onChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        kind: 'single',
-        cube_id: '18100004',
-        semantic_key: 'metric_x',
-        period: '2024-Q3',
-      }),
-    );
-  });
+  // (Removed: pre-fix test "emits canonical Binding when all fields are valid"
+  //  asserted mount-time emit, which the touched gate now blocks. Equivalent
+  //  user-interaction-driven assertion lives in the touched-gate describe.)
 
   it('emits undefined when period is cleared', () => {
     const onChange = jest.fn();
@@ -376,5 +360,210 @@ describe('BindingEditor — semantic mappings + cube metadata', () => {
         filters: { geo: 'ON' },
       }),
     );
+  });
+});
+
+describe('BindingEditor — touched gate (Phase 3.1d Slice 3a fix)', () => {
+  it('does NOT call onChange on mount when block has an existing valid binding', () => {
+    const onChange = jest.fn();
+    const binding: SingleValueBinding = {
+      kind: 'single',
+      cube_id: '18100004',
+      semantic_key: 'metric_x',
+      filters: { geo: 'CA' },
+      period: '2024-Q3',
+    };
+    mockListSemanticMappings.mockReturnValue(neverResolves());
+    mockGetCubeMetadata.mockReturnValue(neverResolves());
+    render(<BindingEditor block={makeBlock({ binding })} onChange={onChange} />);
+    // No interaction → no emit.
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call onChange on mount when block has no binding', () => {
+    const onChange = jest.fn();
+    render(<BindingEditor block={makeBlock()} onChange={onChange} />);
+    // touched=false, so the emit useEffect short-circuits.
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('emits canonical binding when user touches a field after mount with existing binding', () => {
+    const onChange = jest.fn();
+    const binding: SingleValueBinding = {
+      kind: 'single',
+      cube_id: '18100004',
+      semantic_key: 'metric_x',
+      filters: { geo: 'CA' },
+      period: '2024-Q3',
+    };
+    mockListSemanticMappings.mockReturnValue(neverResolves());
+    mockGetCubeMetadata.mockReturnValue(neverResolves());
+    render(<BindingEditor block={makeBlock({ binding })} onChange={onChange} />);
+    fireEvent.change(screen.getByTestId('binding-editor-period'), {
+      target: { value: '2024-Q4' },
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'single', period: '2024-Q4' }),
+    );
+  });
+
+  it('emits undefined when user clears a required field (user-initiated invalid)', () => {
+    const onChange = jest.fn();
+    const binding: SingleValueBinding = {
+      kind: 'single',
+      cube_id: '18100004',
+      semantic_key: 'metric_x',
+      filters: { geo: 'CA' },
+      period: '2024-Q3',
+    };
+    mockListSemanticMappings.mockReturnValue(neverResolves());
+    mockGetCubeMetadata.mockReturnValue(neverResolves());
+    render(<BindingEditor block={makeBlock({ binding })} onChange={onChange} />);
+    fireEvent.change(screen.getByTestId('binding-editor-period'), {
+      target: { value: '' },
+    });
+    expect(onChange).toHaveBeenLastCalledWith(undefined);
+  });
+});
+
+describe('BindingEditor — block.id sync (Phase 3.1d Slice 3a fix)', () => {
+  it('resets form state when inspector switches to a different bindable block', () => {
+    const onChange = jest.fn();
+    mockListSemanticMappings.mockReturnValue(neverResolves());
+    mockGetCubeMetadata.mockReturnValue(neverResolves());
+
+    const blockA = makeBlock({
+      id: 'blk_a',
+      type: 'hero_stat',
+      binding: {
+        kind: 'single',
+        cube_id: '18100004',
+        semantic_key: 'metric_a',
+        filters: { geo: 'CA' },
+        period: '2024-Q1',
+      },
+    });
+    const blockB = makeBlock({
+      id: 'blk_b',
+      type: 'delta_badge',
+      props: { value: '+1pp', direction: 'positive' },
+      binding: {
+        kind: 'single',
+        cube_id: '36100434',
+        semantic_key: 'metric_b',
+        filters: { geo: 'ON' },
+        period: '2024-Q3',
+      },
+    });
+
+    const { rerender } = render(<BindingEditor block={blockA} onChange={onChange} />);
+    expect(screen.getByTestId('binding-editor-selected-cube')).toHaveTextContent('18100004');
+
+    onChange.mockClear();
+    rerender(<BindingEditor block={blockB} onChange={onChange} />);
+    expect(screen.getByTestId('binding-editor-selected-cube')).toHaveTextContent('36100434');
+    expect((screen.getByTestId('binding-editor-period') as HTMLInputElement).value).toBe('2024-Q3');
+    // No emit on the rerender — touched is reset.
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('renders empty form when switching to a block with no binding', () => {
+    const onChange = jest.fn();
+    mockListSemanticMappings.mockReturnValue(neverResolves());
+    mockGetCubeMetadata.mockReturnValue(neverResolves());
+    const blockA = makeBlock({
+      id: 'blk_a',
+      binding: {
+        kind: 'single',
+        cube_id: '18100004',
+        semantic_key: 'metric_a',
+        filters: { geo: 'CA' },
+        period: '2024-Q1',
+      },
+    });
+    const blockB = makeBlock({ id: 'blk_b' });
+    const { rerender } = render(<BindingEditor block={blockA} onChange={onChange} />);
+    rerender(<BindingEditor block={blockB} onChange={onChange} />);
+    expect(screen.queryByTestId('binding-editor-selected-cube')).toBeNull();
+    expect((screen.getByTestId('binding-editor-period') as HTMLInputElement).value).toBe('');
+  });
+});
+
+describe('BindingEditor — cube change resets dependent fields (Phase 3.1d Slice 3a fix)', () => {
+  it('selecting a new cube clears semanticKey and filters', async () => {
+    const onChange = jest.fn();
+    const binding: SingleValueBinding = {
+      kind: 'single',
+      cube_id: '18100004',
+      semantic_key: 'rate_5yr_fixed',
+      filters: { geo: 'CA' },
+      period: '2024-Q3',
+    };
+    mockSearchCubes.mockResolvedValue([
+      {
+        product_id: '36100434',
+        cube_id_statcan: 36100434,
+        title_en: 'Different cube',
+        subject_en: 'Other',
+        frequency: 'A',
+      },
+    ]);
+    mockListSemanticMappings.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 100,
+      offset: 0,
+    });
+    mockGetCubeMetadata.mockResolvedValue({
+      cube_id: '36100434',
+      product_id: 36100434,
+      dimensions: {},
+      frequency_code: 'A',
+      cube_title_en: null,
+      cube_title_fr: null,
+    });
+
+    render(<BindingEditor block={makeBlock({ binding })} onChange={onChange} />);
+    onChange.mockClear();
+
+    fireEvent.change(screen.getByLabelText('Cube search'), { target: { value: 'diff' } });
+    await act(async () => {
+      jest.advanceTimersByTime(260);
+    });
+    await waitFor(() => screen.getByTestId('binding-editor-cube-results'));
+    fireEvent.click(screen.getByText('Different cube'));
+
+    // Cube changed → semanticKey + filters reset → emit undefined (semantic_key empty).
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalled();
+    });
+    expect(onChange).toHaveBeenLastCalledWith(undefined);
+  });
+});
+
+describe('BindingEditor — Clear binding button (Phase 3.1d Slice 3a fix)', () => {
+  it('Clear button is disabled when block has no binding', () => {
+    render(<BindingEditor block={makeBlock()} onChange={jest.fn()} />);
+    const btn = screen.getByTestId('binding-editor-clear') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('Clear button is enabled and emits undefined when block has a binding', () => {
+    const onChange = jest.fn();
+    const binding: SingleValueBinding = {
+      kind: 'single',
+      cube_id: '18100004',
+      semantic_key: 'metric_x',
+      filters: { geo: 'CA' },
+      period: '2024-Q3',
+    };
+    mockListSemanticMappings.mockReturnValue(neverResolves());
+    mockGetCubeMetadata.mockReturnValue(neverResolves());
+    render(<BindingEditor block={makeBlock({ binding })} onChange={onChange} />);
+    onChange.mockClear();
+    const btn = screen.getByTestId('binding-editor-clear') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    fireEvent.click(btn);
+    expect(onChange).toHaveBeenLastCalledWith(undefined);
   });
 });
