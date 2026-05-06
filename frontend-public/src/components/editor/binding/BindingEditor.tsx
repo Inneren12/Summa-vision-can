@@ -38,6 +38,17 @@ export function BindingEditor({ block, onChange }: BindingEditorProps) {
   const [period, setPeriod] = useState<string>(initial?.period ?? '');
   const [format, setFormat] = useState<string>(initial?.format ?? '');
 
+  // Phase 3.1d Slice 3a fix: `touched` gate prevents two destructive paths:
+  //   1. Mount-time emit when form is empty/invalid would clear an existing
+  //      binding via onChange(undefined).
+  //   2. When Inspector selection moves to another bindable block, this
+  //      component does NOT remount — the prev block's state would emit
+  //      onto the new block. The `block.id` sync effect below resets state
+  //      AND resets `touched` to false, blocking emit until user interacts.
+  // User-initiated invalid form (e.g. clearing period) DOES emit undefined
+  // — that is the intended destructive action.
+  const [touched, setTouched] = useState(false);
+
   const [cubeQuery, setCubeQuery] = useState<string>('');
   const [cubeResults, setCubeResults] = useState<CubeSearchResult[]>([]);
   const [cubeLoading, setCubeLoading] = useState(false);
@@ -55,6 +66,10 @@ export function BindingEditor({ block, onChange }: BindingEditorProps) {
     if (cubeQuery.trim().length === 0) {
       setCubeResults([]);
       cubeAbortRef.current?.abort();
+      // Phase 3.1d Slice 3a fix (Codex P2): the in-flight finally block only
+      // clears cubeLoading for non-aborted requests, so clearing the search
+      // box mid-flight could leave the indicator stuck. Clear it explicitly.
+      setCubeLoading(false);
       return;
     }
     cubeDebounceRef.current = setTimeout(() => {
@@ -111,12 +126,15 @@ export function BindingEditor({ block, onChange }: BindingEditorProps) {
     return () => ctrl.abort();
   }, [cubeId]);
 
-  // Emit binding on every change. validateBinding either returns a canonical
-  // Binding (valid) or null (invalid → emit undefined per strict-reject).
+  // Emit binding on every change AFTER user has interacted (touched=true).
+  // validateBinding either returns a canonical Binding (valid) or null
+  // (invalid → emit undefined). User-initiated invalid form is a deliberate
+  // clear; mount-time invalid is gated by `touched` to prevent silent data loss.
   // JSON.stringify(filters) is a deliberate object-equality fingerprint;
   // filter values are flat strings so this is safe.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    if (!touched) return;
     const candidate: Partial<SingleValueBinding> = {
       kind: 'single',
       cube_id: cubeId.trim(),
@@ -127,11 +145,36 @@ export function BindingEditor({ block, onChange }: BindingEditorProps) {
     };
     const validated = validateBinding(candidate);
     onChange(validated ?? undefined);
-  }, [cubeId, semanticKey, JSON.stringify(filters), period, format, onChange]);
+  }, [touched, cubeId, semanticKey, JSON.stringify(filters), period, format, onChange]);
+
+  // Phase 3.1d Slice 3a fix: when the inspector switches to a different
+  // bindable block, this component instance is NOT remounted. We must
+  // explicitly resync form state from the new block's binding and reset the
+  // touched gate. Without this, the previous block's form state could
+  // emit onto the new block and overwrite its binding.
+  // Tracks block.id (not block.binding) — same block + binding-mutation-via-emit
+  // is a normal in-place edit, NOT a re-sync trigger.
+  useEffect(() => {
+    const v = block.binding;
+    const seed = v && v.kind === 'single' ? v : null;
+    setCubeId(seed?.cube_id ?? '');
+    setSemanticKey(seed?.semantic_key ?? '');
+    setFilters(seed?.filters ?? {});
+    setPeriod(seed?.period ?? '');
+    setFormat(seed?.format ?? '');
+    setTouched(false);
+    // Also clear search/results UI state — those are global to the component.
+    setCubeQuery('');
+    setCubeResults([]);
+    setSemanticMappings([]);
+    setCubeMetadata(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [block.id]);
 
   const isDeltaBadge = block.type === 'delta_badge';
 
   const updateFilter = (dimKey: string, memberId: string) => {
+    setTouched(true);
     setFilters((prev) => {
       const next = { ...prev };
       if (memberId) next[dimKey] = memberId;
@@ -203,16 +246,30 @@ export function BindingEditor({ block, onChange }: BindingEditorProps) {
               role="button"
               tabIndex={0}
               onClick={() => {
+                setTouched(true);
                 setCubeId(c.product_id);
+                setSemanticKey('');
+                setFilters({});
+                setFormat('');
                 setCubeQuery('');
                 setCubeResults([]);
+                // metadata + mappings will reload via cubeId effect; clear
+                // the stale UI immediately to avoid showing prev-cube options.
+                setSemanticMappings([]);
+                setCubeMetadata(null);
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
+                  setTouched(true);
                   setCubeId(c.product_id);
+                  setSemanticKey('');
+                  setFilters({});
+                  setFormat('');
                   setCubeQuery('');
                   setCubeResults([]);
+                  setSemanticMappings([]);
+                  setCubeMetadata(null);
                 }
               }}
               style={{
@@ -242,7 +299,10 @@ export function BindingEditor({ block, onChange }: BindingEditorProps) {
         </span>
         <select
           value={semanticKey}
-          onChange={(e) => setSemanticKey(e.target.value)}
+          onChange={(e) => {
+            setTouched(true);
+            setSemanticKey(e.target.value);
+          }}
           disabled={!cubeId || semanticLoading}
           aria-label="Semantic key"
           data-testid="binding-editor-semantic-key"
@@ -287,7 +347,10 @@ export function BindingEditor({ block, onChange }: BindingEditorProps) {
         <input
           type="text"
           value={period}
-          onChange={(e) => setPeriod(e.target.value)}
+          onChange={(e) => {
+            setTouched(true);
+            setPeriod(e.target.value);
+          }}
           placeholder="e.g. 2024-Q3"
           aria-label="Period"
           data-testid="binding-editor-period"
@@ -302,13 +365,47 @@ export function BindingEditor({ block, onChange }: BindingEditorProps) {
         <input
           type="text"
           value={format}
-          onChange={(e) => setFormat(e.target.value)}
+          onChange={(e) => {
+            setTouched(true);
+            setFormat(e.target.value);
+          }}
           placeholder="e.g. percent, currency:CAD"
           aria-label="Format"
           data-testid="binding-editor-format"
           style={{ width: '100%', padding: '4px 6px', fontSize: '10px', boxSizing: 'border-box' }}
         />
       </label>
+      <button
+        type="button"
+        data-testid="binding-editor-clear"
+        onClick={() => {
+          setTouched(true);
+          setCubeId('');
+          setSemanticKey('');
+          setFilters({});
+          setPeriod('');
+          setFormat('');
+          setCubeQuery('');
+          setCubeResults([]);
+          setSemanticMappings([]);
+          setCubeMetadata(null);
+          onChange(undefined);
+        }}
+        disabled={!block.binding}
+        style={{
+          marginTop: '4px',
+          padding: '4px 8px',
+          fontSize: '9px',
+          background: 'transparent',
+          border: '1px solid #c66',
+          color: '#c66',
+          borderRadius: '3px',
+          cursor: block.binding ? 'pointer' : 'not-allowed',
+          opacity: block.binding ? 1 : 0.4,
+        }}
+      >
+        Clear binding
+      </button>
     </div>
   );
 }

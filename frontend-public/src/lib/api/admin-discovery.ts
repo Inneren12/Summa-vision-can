@@ -3,7 +3,8 @@
  *
  * Wraps three same-origin proxy routes that surface backend discovery
  * endpoints to the binding editor. The browser does NOT see the admin
- * API key — proxy routes attach it server-side via `admin-server.ts`.
+ * API key — proxy routes (under app/api/admin/discovery/) read
+ * process.env.ADMIN_API_KEY server-side and forward via X-API-KEY header.
  *
  * Backend endpoints (proxied):
  * - GET /api/v1/admin/cubes/search                — cube search-as-you-type
