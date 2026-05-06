@@ -86,4 +86,29 @@ describe('reducer / UPDATE_BINDING (Phase 3.1d Slice 3a)', () => {
     expect(s2.doc.blocks[BLOCK_ID]).not.toHaveProperty('binding');
     expect(s2._lastRejection?.type).toBe('UPDATE_BINDING');
   });
+
+  it('rejects malformed binding payload via _lastRejection (no doc mutation, FIX-8)', () => {
+    const s0 = baseState();
+    // Cast bypasses TypeScript — simulates devtools / future code /
+    // refactored caller dispatching a malformed Binding-shaped object.
+    // validateBinding at the reducer boundary must reject this.
+    const malformed = {
+      kind: 'single',
+      cube_id: '',           // empty cube_id is invalid per Slice 2 contract
+      semantic_key: 'metric_x',
+      filters: { geo: 'CA' },
+      period: '2024-Q3',
+    } as unknown as SingleValueBinding;
+    const s1 = reducer(s0, {
+      type: 'UPDATE_BINDING',
+      blockId: BLOCK_ID,
+      binding: malformed,
+    });
+    // No mutation: doc reference unchanged, no binding set on the block.
+    expect(s1.doc).toBe(s0.doc);
+    expect(s1.doc.blocks[BLOCK_ID]).not.toHaveProperty('binding');
+    // _lastRejection captures the boundary rejection.
+    expect(s1._lastRejection?.type).toBe('UPDATE_BINDING');
+    expect(s1._lastRejection?.reason).toMatch(/[Ii]nvalid binding/);
+  });
 });

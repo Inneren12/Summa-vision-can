@@ -1,5 +1,6 @@
 import type { Block, EditorState, EditorAction, CanonicalDocument, WorkflowAction, WorkflowHistoryEntry, TimestampProvider } from '../types';
 import type { Binding } from '../binding/types';
+import { validateBinding } from '../binding/types';
 import { BREG } from '../registry/blocks';
 import { TPLS, mkDoc } from '../registry/templates';
 import { validateImportStrict } from '../registry/guards';
@@ -343,29 +344,47 @@ export function reducer(state: EditorState, action: EditorAction): EditorState {
       // The picker emits a canonical Binding (post-validateBinding) when the
       // form is valid, or `undefined` to clear. No partial merge — bindings
       // are atomic per the Slice 2 strict-reject contract.
+      //
+      // Phase 3.1d Slice 3a fix (FIX-8): the reducer is a state-write
+      // boundary. We do NOT trust the UI to have called validateBinding —
+      // devtools / future code / refactored callers can dispatch arbitrary
+      // payloads. Re-validate here. Malformed payload is rejected via
+      // _lastRejection with NO mutation of the document.
       const { blockId, binding } = action;
       const b = state.doc.blocks[blockId];
       if (!b) { nextState = state; break; }
+      // Re-validate at boundary. `undefined` is a valid signal to clear;
+      // anything else MUST validate or we reject.
+      const canonical: Binding | undefined =
+        binding === undefined ? undefined : (validateBinding(binding) ?? undefined);
+      if (binding !== undefined && canonical === undefined) {
+        nextState = withRejection(
+          state,
+          "UPDATE_BINDING",
+          "Invalid binding payload (failed validateBinding at state boundary)",
+        );
+        break;
+      }
       // No-op short-circuit: BindingEditor's controlled-form contract emits
       // `onChange(undefined)` on every render where the form is invalid,
       // including the very first render of a freshly-mounted block with no
       // binding. Dispatching a `push()` for that no-op would bump version /
-      // dirty and trigger a re-render, looping the editor. Detect equality
-      // structurally so a clear-on-already-empty (or re-emit of identical
-      // binding) is a true no-op.
+      // dirty and trigger a re-render, looping the editor. Compare against
+      // the canonicalized payload (which strips unknown keys + sorts
+      // filters per Slice 2) so cosmetic-only payloads also short-circuit.
       const prev = b.binding;
-      const sameUndefined = !binding && !prev;
-      const sameValue = !!binding && !!prev && JSON.stringify(binding) === JSON.stringify(prev);
+      const sameUndefined = !canonical && !prev;
+      const sameValue = !!canonical && !!prev && JSON.stringify(canonical) === JSON.stringify(prev);
       if (sameUndefined || sameValue) { nextState = state; break; }
       const next: Block = { ...b };
-      if (binding) {
-        next.binding = binding;
+      if (canonical) {
+        next.binding = canonical;
       } else {
         delete next.binding;
       }
       nextState = push(
         { ...state.doc, blocks: { ...state.doc.blocks, [blockId]: next } },
-        `${binding ? "Updated" : "Cleared"} ${BREG[b.type]?.name ?? b.type} binding`,
+        `${canonical ? "Updated" : "Cleared"} ${BREG[b.type]?.name ?? b.type} binding`,
       );
       break;
     }
