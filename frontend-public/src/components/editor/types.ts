@@ -1,7 +1,7 @@
 import type { ContrastIssue } from './validation/contrast';
 import type { ValidationMessage } from './validation/types';
 import type { PresetId } from './config/sizes';
-import type { Binding } from './binding/types';
+import type { Binding, BindingKind } from './binding/types';
 
 export type EditorMode = 'template' | 'design';
 export type QAMode = 'draft' | 'publish';
@@ -177,6 +177,13 @@ export interface BlockRegistryEntry {
   cst?: { maxChars?: number; maxLines?: number };
   ctrl: ControlDef[];
   guard?: (props: BlockProps) => boolean;
+  /**
+   * Phase 3.1d Slice 3a: which Binding.kind values this block type accepts
+   * in the binding picker UI. Universal validation (Slice 2) accepts all 5
+   * kinds at the schema level; this field gates which picker variant the
+   * Inspector renders. v1 ships only `'single'` for `hero_stat` + `delta_badge`.
+   */
+  acceptsBinding?: BindingKind[];
 }
 
 export interface ValidationResult {
@@ -272,6 +279,9 @@ export interface EditorState {
 export type EditorAction =
   | { type: 'UPDATE_PROP'; blockId: string; key: string; value: any }
   | { type: 'UPDATE_DATA'; blockId: string; data: Record<string, any> }
+  // Phase 3.1d Slice 3a: binding picker emits the entire Binding (canonical
+  // form from validateBinding) or undefined (clear). No partial updates.
+  | { type: 'UPDATE_BINDING'; blockId: string; binding: Binding | undefined }
   | { type: 'TOGGLE_VIS'; blockId: string }
   | { type: 'TOGGLE_LOCK'; blockId: string }
   | { type: 'DUPLICATE_BLOCK'; blockId: string; newId?: string }
