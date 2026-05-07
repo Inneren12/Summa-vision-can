@@ -318,28 +318,40 @@ export function BindingEditor({ block, onChange }: BindingEditorProps) {
         </select>
       </label>
 
-      {cubeMetadata && (
+      {cubeMetadata && cubeMetadata.dimensions.length > 0 && (
         <div data-testid="binding-editor-filters" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {/* Phase 3.1d Slice 3b fix (Recon Delta 02 F-03):
+              - cubeMetadata.dimensions is now an array (backend
+                normalize_dimensions output).
+              - filter KEY = String(position_id) — matches backend
+                `?dim=<int>` query param contract.
+              - filter VALUE = String(member_id) — matches backend
+                `?member=<int>` query param contract.
+              - Display label uses name_en (i18n localization is closeout
+                batch DEBT-077; English is current EN-only baseline). */}
           <div style={{ fontSize: '8px', textTransform: 'uppercase', opacity: 0.6 }}>Filters:</div>
-          {Object.entries(cubeMetadata.dimensions).map(([dimKey, dim]) => (
-            <label key={dimKey} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{ fontSize: '8px', opacity: 0.6 }}>{dim.label ?? dimKey}:</span>
-              <select
-                value={filters[dimKey] ?? ''}
-                onChange={(e) => updateFilter(dimKey, e.target.value)}
-                aria-label={`Filter ${dimKey}`}
-                data-testid={`binding-editor-filter-${dimKey}`}
-                style={{ width: '100%', padding: '4px 6px', fontSize: '10px', boxSizing: 'border-box' }}
-              >
-                <option value="">— any —</option>
-                {dim.members.map((m) => (
-                  <option key={String(m.id)} value={String(m.id)}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
+          {cubeMetadata.dimensions.map((dim) => {
+            const filterKey = String(dim.position_id);
+            return (
+              <label key={filterKey} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <span style={{ fontSize: '8px', opacity: 0.6 }}>{dim.name_en}:</span>
+                <select
+                  value={filters[filterKey] ?? ''}
+                  onChange={(e) => updateFilter(filterKey, e.target.value)}
+                  aria-label={`Filter ${dim.name_en}`}
+                  data-testid={`binding-editor-filter-${filterKey}`}
+                  style={{ width: '100%', padding: '4px 6px', fontSize: '10px', boxSizing: 'border-box' }}
+                >
+                  <option value="">— any —</option>
+                  {dim.members.map((m) => (
+                    <option key={m.member_id} value={String(m.member_id)}>
+                      {m.name_en}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            );
+          })}
         </div>
       )}
 

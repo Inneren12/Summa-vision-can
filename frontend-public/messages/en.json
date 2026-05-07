@@ -29,7 +29,8 @@
       "resolve": {
         "mapping_not_found": "Mapping not found for selected filters",
         "invalid_filters": "Invalid filter set",
-        "cache_miss": "Cache miss (no row after prime)"
+        "cache_miss": "Cache miss (no row after prime)",
+        "unknown": "Resolve failed"
       }
     },
     "compare": {

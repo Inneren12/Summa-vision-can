@@ -1,6 +1,6 @@
 # Recon Delta 02 — Slice 3b Resolve Endpoint Reality
 
-**Status:** SURFACED (awaiting founder ack)
+**Status:** ACKED (founder accepted 2026-05-07; fix batch resolves F-01, F-02, F-03 inline in same PR)
 **Triggered by:** Slice 3b (PR-05) preflight inspection of
 `backend/src/schemas/resolve.py`, `backend/src/api/routers/admin_resolve.py`,
 `backend/src/services/resolve/filters.py` (this session, 2026-05-07).
@@ -150,6 +150,17 @@ Surfacing here is appropriate; Slice 3a integration shape is its own
 prior issue (Slice 3a comment at `admin-discovery.ts:54` already
 flags this).
 
+**RESOLUTION (this fix batch):** F-03 resolved inline by Slice 3b fix batch:
+1. `CubeMetadataResponse.dimensions` TS interface in `admin-discovery.ts`
+   rewritten from `Record<string, CubeMetadataDimension>` to
+   `CubeMetadataDimension[]` matching backend `normalize_dimensions` output.
+2. `BindingEditor.tsx` filter render rewritten to consume the array,
+   storing `String(position_id)` as filter keys and `String(member_id)`
+   as filter values. `binding.filters` content semantics now align with
+   backend `?dim=<int>&member=<int>` query params.
+3. Preview path is end-to-end functional for picker-built bindings.
+4. Existing 3a tests (filter render, cube change reset) updated to new shape.
+
 ## Contradiction
 
 Per the milestone wrapper §HALT and prompt §"Recon discipline":
@@ -215,23 +226,32 @@ export interface ResolvedValueResponse {
 accordingly. No `release_time`, `ref_period`, `scalar_factor`, or
 `coord: number[]` references in shipped code.
 
-### D-02: Client forwards `binding.filters` values verbatim
+### D-02: Client forwards numeric position_id/member_id pairs
 
-`fetchResolvedValue(binding)` builds `?dim=<key>&member=<value>` pairs in
-alphabetical key order from `binding.filters`, forwarding strings as-is.
-The proxy route forwards as-is to backend. Result:
+`fetchResolvedValue(binding)` builds `?dim=<position_id_str>&member=<member_id_str>`
+pairs in alphabetical key order from `binding.filters`. The picker UI
+(BindingEditor.tsx, post-fix) emits `binding.filters` with stringified
+integer keys (`String(position_id)`) and stringified integer values
+(`String(member_id)`). Backend resolve service (`backend/src/api/routers/
+admin_resolve.py:120-122`) accepts these as `dim: list[int]` + `member: list[int]`
+via FastAPI int coercion.
 
-- IF the picker's emitted filter shape happens to be numeric strings
-  for both keys and values, backend processes correctly.
-- IF the picker emits non-numeric filter shapes (current state, per F-03),
-  backend returns 422 Unprocessable Entity → client maps to
-  `code: 'UNKNOWN'` with raw backend message. Operator sees the gap
-  inline.
+Slice 2 `SingleValueBinding.filters: Record<string, string>` type is unchanged —
+the SEMANTIC constraint (numeric stringified content) is enforced by:
+- the picker UI (renders only `position_id` keys + `member_id` values),
+- backend runtime validation (FastAPI 422 on non-int input),
+- 422 array-detail parsing in `admin-resolve.ts` (`extractResolveError`).
 
-This is the lowest-risk choice — does NOT add a translation layer
-(out of 3b scope), surfaces the F-03 gap visibly in operator UX,
-and lets Slice 3a verification resolve the root cause via a separate
-recon item.
+This is the production-correct path. The earlier "verbatim forwarding +
+surface 422 to operator" approach is REJECTED in favor of this fix.
+
+**Known limitation accepted by founder:** if a hand-edited or imported
+binding (rare; not via picker) carries non-numeric filters, preview
+surfaces RESOLVE_INVALID_FILTERS via 422-array parsing. UI displays
+operator-friendly locale + raw msg. This is acceptable v1 behavior; no
+upstream guard added in 3b (not within Slice 3b scope to validate
+Binding.filters semantic constraints — Slice 2's `validateBinding`
+ensures *type* correctness, not numeric content).
 
 ### D-03: No locale changes
 
@@ -256,10 +276,14 @@ extraction).
 
 ## Acceptance
 
-This delta MUST be founder-acked before Slice 3b PR is merged.
-Slice 3b implementation continues with provisional decisions D-01/D-02/D-03
-above; if founder rejects D-02 (filter forwarding strategy), the resolve
-client will need a translation layer added in a follow-up PR.
+ACKED 2026-05-07. F-01, F-02, F-03 all resolved inline in same PR
+(Slice 3b PR-05). Carry-forward to Slice 4a: walker emits to backend
+using the same numeric-stringified `binding.filters` shape established
+here — no contract drift.
+
+DEBT-081 (BACKEND_API_INVENTORY discovery section) closes by way of
+Recon Delta 01 + Recon Delta 02 reconciling the truth at TS-interface
+level and committing fixed code.
 
 ---
 

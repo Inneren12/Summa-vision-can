@@ -152,7 +152,24 @@ export function ResolvePreview({ binding }: ResolvePreviewProps) {
           {state.code === 'MAPPING_NOT_FOUND' && t('mapping_not_found')}
           {state.code === 'RESOLVE_CACHE_MISS' && t('cache_miss')}
           {state.code === 'RESOLVE_INVALID_FILTERS' && t('invalid_filters')}
-          {state.code === 'UNKNOWN' && state.message}
+          {state.code === 'UNKNOWN' && (
+            <>
+              {t('unknown')}
+              {state.message ? (
+                <span
+                  data-testid="resolve-preview-error-detail"
+                  style={{
+                    display: 'block',
+                    marginTop: '2px',
+                    opacity: 0.7,
+                    fontSize: '9px',
+                  }}
+                >
+                  {state.message}
+                </span>
+              ) : null}
+            </>
+          )}
         </div>
       )}
     </div>

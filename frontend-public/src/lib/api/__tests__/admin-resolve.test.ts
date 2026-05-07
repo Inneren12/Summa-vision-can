@@ -245,6 +245,35 @@ describe('fetchResolvedValue — error mapping', () => {
       code: 'UNKNOWN',
     });
   });
+
+  it('maps FastAPI 422 array detail to RESOLVE_INVALID_FILTERS with joined msgs', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          detail: [
+            {
+              type: 'int_parsing',
+              loc: ['query', 'dim', 0],
+              msg: 'Input should be a valid integer',
+            },
+            {
+              type: 'int_parsing',
+              loc: ['query', 'member', 0],
+              msg: 'Input should be a valid integer',
+            },
+          ],
+        },
+        { status: 422 },
+      ),
+    );
+    await expect(fetchResolvedValue(makeBinding())).rejects.toMatchObject({
+      name: 'ResolveFetchError',
+      status: 422,
+      code: 'RESOLVE_INVALID_FILTERS',
+      message:
+        'Input should be a valid integer; Input should be a valid integer',
+    });
+  });
 });
 
 describe('ResolveFetchError', () => {

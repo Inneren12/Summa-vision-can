@@ -260,7 +260,7 @@ describe('ResolvePreview — error states', () => {
     );
   });
 
-  it('renders raw message when error code is UNKNOWN', async () => {
+  it('renders unknown locale + raw detail when error code is UNKNOWN', async () => {
     mockFetch.mockRejectedValueOnce(
       new ResolveFetchError(500, 'UNKNOWN', 'something blew up'),
     );
@@ -271,8 +271,34 @@ describe('ResolvePreview — error states', () => {
     await waitFor(() =>
       expect(
         screen.getByTestId('resolve-preview-error-unknown'),
-      ).toHaveTextContent('something blew up'),
+      ).toBeInTheDocument(),
     );
+    // Locale key rendered (next-intl mock returns dotted-key identifier)
+    expect(
+      screen.getByTestId('resolve-preview-error-unknown'),
+    ).toHaveTextContent('publication.binding.resolve.unknown');
+    // Raw detail also rendered (operator visibility)
+    expect(
+      screen.getByTestId('resolve-preview-error-detail'),
+    ).toHaveTextContent('something blew up');
+  });
+
+  it('renders unknown locale only when error has no message', async () => {
+    mockFetch.mockRejectedValueOnce(
+      new ResolveFetchError(500, 'UNKNOWN', ''),
+    );
+    render(<ResolvePreview binding={makeBinding()} />);
+    await act(async () => {
+      jest.advanceTimersByTime(310);
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('resolve-preview-error-unknown'),
+      ).toHaveTextContent('publication.binding.resolve.unknown'),
+    );
+    expect(
+      screen.queryByTestId('resolve-preview-error-detail'),
+    ).toBeNull();
   });
 
   it('falls back to UNKNOWN when error is not a ResolveFetchError', async () => {

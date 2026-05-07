@@ -73,6 +73,60 @@ function mapErrorCode(raw: unknown): ResolveErrorCode {
   return 'UNKNOWN';
 }
 
+/**
+ * Phase 3.1d Slice 3b fix: backend admin_resolve.py raises HTTPException
+ * with a DICT detail ({ error_code, message, details? }) for domain
+ * errors (404 MAPPING_NOT_FOUND / RESOLVE_CACHE_MISS, 400
+ * RESOLVE_INVALID_FILTERS). FastAPI 422 (Unprocessable Entity), however,
+ * emits an ARRAY detail with [{ loc, msg, type }] entries — one per
+ * failed query-param validation. We map 422 → RESOLVE_INVALID_FILTERS
+ * since this endpoint's only request input is the query string + path
+ * params, so any 422 is filter-related from the operator's perspective.
+ */
+function extractResolveError(
+  body: unknown,
+  status: number,
+): { code: ResolveErrorCode; message: string } {
+  const detail = (body as { detail?: unknown })?.detail;
+
+  // Domain error envelope (object detail)
+  if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+    const d = detail as { error_code?: unknown; message?: unknown };
+    return {
+      code: mapErrorCode(d.error_code),
+      message:
+        typeof d.message === 'string'
+          ? d.message
+          : `Resolve fetch failed: ${status}`,
+    };
+  }
+
+  // FastAPI 422 array detail
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((entry) => {
+        if (entry && typeof entry === 'object' && 'msg' in entry) {
+          const m = (entry as { msg?: unknown }).msg;
+          return typeof m === 'string' ? m : null;
+        }
+        return null;
+      })
+      .filter((m): m is string => m !== null);
+    return {
+      code: 'RESOLVE_INVALID_FILTERS',
+      message:
+        messages.length > 0
+          ? messages.join('; ')
+          : `Resolve fetch failed: ${status}`,
+    };
+  }
+
+  return {
+    code: 'UNKNOWN',
+    message: `Resolve fetch failed: ${status}`,
+  };
+}
+
 // ---- client function ---------------------------------------------------------
 
 export interface FetchResolvedValueOptions {
@@ -111,16 +165,8 @@ export async function fetchResolvedValue(
   const res = await fetch(url, { signal: opts.signal, cache: 'no-store' });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    // Backend error envelope: { detail: { error_code, message, details? } }
-    // (admin_resolve.py raises HTTPException with a dict detail).
-    const detail = (body as { detail?: { error_code?: unknown; message?: unknown } })
-      ?.detail;
-    const code = mapErrorCode(detail?.error_code);
-    const message =
-      typeof detail?.message === 'string'
-        ? detail.message
-        : `Resolve fetch failed: ${res.status}`;
-    throw new ResolveFetchError(res.status, code, message);
+    const parsed = extractResolveError(body, res.status);
+    throw new ResolveFetchError(res.status, parsed.code, parsed.message);
   }
   return res.json() as Promise<ResolvedValueResponse>;
 }
