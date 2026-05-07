@@ -12,6 +12,7 @@
  */
 
 import type {
+  BlockComparatorResult,
   CompareResponse,
   CompareBadgeSeverity,
   StaleReason,
@@ -64,6 +65,50 @@ const STALE_REASONS: ReadonlyArray<StaleReason> = [
   'missing_state_changed',
   'cache_row_stale',
 ];
+
+/**
+ * Phase 3.1d Slice 5 (PR-08): aggregate the union of stale reasons across
+ * all block results into a deduplicated, stably-ordered list.
+ *
+ * Order: stable per StaleReason enum-declaration order (matches backend
+ * recon §3 — same order as `lib/types/compare.ts` declares the union).
+ * Empty array if no block has reasons (fresh publication).
+ */
+const REASON_ORDER: ReadonlyArray<StaleReason> = [
+  'mapping_version_changed',
+  'source_hash_changed',
+  'value_changed',
+  'missing_state_changed',
+  'cache_row_stale',
+  'compare_failed',
+  'snapshot_missing',
+];
+
+export function aggregateReasons(
+  blockResults: ReadonlyArray<BlockComparatorResult>,
+): StaleReason[] {
+  const seen = new Set<StaleReason>();
+  for (const block of blockResults) {
+    for (const reason of block.stale_reasons) {
+      seen.add(reason);
+    }
+  }
+  return REASON_ORDER.filter((r) => seen.has(r));
+}
+
+/**
+ * Phase 3.1d Slice 5 (PR-08): detect whether the Pre-3.1d "Republish to
+ * refresh" CTA should render. Founder lock 2026-05-07: any block result
+ * carrying the `snapshot_missing` reason triggers the CTA. This single
+ * condition covers true-pre-3.1d publications AND any future
+ * DEBT-069 snapshot-cleanup case (recon §3.4 collapses all sub-causes
+ * to the same SNAPSHOT_MISSING synthetic entry).
+ */
+export function shouldShowRepublishCta(
+  blockResults: ReadonlyArray<BlockComparatorResult>,
+): boolean {
+  return blockResults.some((b) => b.stale_reasons.includes('snapshot_missing'));
+}
 
 export function summarizeCompare(result: CompareResponse): CompareSummary {
   // Block-level uniqueness: a single block with multiple stale reasons counts once.

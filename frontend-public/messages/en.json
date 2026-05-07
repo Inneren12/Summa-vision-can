@@ -72,6 +72,20 @@
         "label": "Refresh required",
         "body": "This publication was created before snapshot tracking was enabled. Republish to enable comparison.",
         "cta": "Republish to refresh"
+      },
+      "reasons": {
+        "mapping_version_changed": "Semantic mapping changed",
+        "source_hash_changed": "Source data changed",
+        "value_changed": "Value changed",
+        "missing_state_changed": "Data availability changed",
+        "cache_row_stale": "Cached data is stale",
+        "compare_failed": "Comparison failed",
+        "snapshot_missing": "No snapshot to compare against"
+      },
+      "tooltip": {
+        "title": "Why this is {severity}",
+        "single_reason": "Reason: {reason}",
+        "multiple_reasons": "Reasons: {reasons}"
       }
     }
   },

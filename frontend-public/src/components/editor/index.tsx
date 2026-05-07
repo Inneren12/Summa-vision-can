@@ -45,12 +45,18 @@ import { ReadOnlyBanner } from './components/ReadOnlyBanner';
 import { NotificationBanner } from './components/NotificationBanner';
 import { NoteModal } from './components/NoteModal';
 import { PreconditionFailedModal } from './components/PreconditionFailedModal';
+import { PublishConfirmModal } from './components/PublishConfirmModal';
 import { BlockContextMenu } from './components/BlockContextMenu';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { isBlockEmpty } from './utils/empty-block';
 import type { NoteRequestConfig } from './components/noteRequest';
 import { exportZip, type ZipExportPhase } from './export/zipExport';
 import { useCompareState } from './hooks/useCompareState';
+import { usePublishAction } from './hooks/usePublishAction';
+import {
+  aggregateReasons,
+  shouldShowRepublishCta,
+} from '@/lib/utils/compareSeverity';
 
 // Autosave cadence (Stage 4 Task 2). `AUTOSAVE_DEBOUNCE_MS` is the quiet
 // window after the last mutating reducer action before a PATCH fires.
@@ -268,6 +274,51 @@ export default function InfographicEditor({
   const { state: compareState, compare: triggerCompare } = useCompareState(
     publicationId ?? '',
   );
+
+  // Phase 3.1d Slice 5 (PR-08): publish action lifted from ReviewPanel to
+  // editor root so both ReviewPanel transition button AND the TopBar
+  // "Republish to refresh" CTA share a single hook instance + a single
+  // PublishConfirmModal. ReviewPanel was mounted only when its tab is
+  // active, so a ref-chain pattern is unsafe — full lift mirrors the
+  // PR-07 useCompareState lift.
+  const publishAction = usePublishAction({
+    publicationId: publicationId ?? null,
+    etag: etagRef.current,
+    onPublishSuccess: (newEtag) => {
+      // Slice 4b sequencing preserved (Recon Delta 03):
+      //   1. refresh etagRef so any subsequent PATCH carries the new ETag
+      //   2. auto-trigger compare (badge → "Comparing…")
+      //   3. dispatch MARK_PUBLISHED (workflow advance)
+      etagRef.current = newEtag;
+      triggerCompare();
+      dispatch({ type: 'MARK_PUBLISHED', channel: 'manual' });
+    },
+    onNotFound: () => {
+      dispatch({
+        type: 'SAVE_FAILED',
+        error: tPublication('not_found.reload'),
+        canAutoRetry: false,
+      });
+    },
+    onPreconditionFailed: (info) => {
+      setPreconditionFailedModal({
+        open: true,
+        serverEtag: info.serverEtag,
+        source: 'publish',
+      });
+    },
+  });
+
+  // Phase 3.1d Slice 5: derive presentation flags from compareState.
+  //   compareReasons      — deduped union shown in CompareBadge tooltip
+  //   showRepublishCta    — gates the standalone "Republish to refresh"
+  //                         button (founder lock 2026-05-07: any block
+  //                         with `snapshot_missing` reason triggers it).
+  const compareBlockResults =
+    compareState.kind === 'success' ? compareState.result.block_results : [];
+  const compareReasons = aggregateReasons(compareBlockResults);
+  const showRepublishCta =
+    Boolean(publicationId) && shouldShowRepublishCta(compareBlockResults);
 
   const [ltab, setLtab] = useState<LeftTab>("templates");
   const [qaOpen, setQaOpen] = useState(true);
@@ -1369,6 +1420,9 @@ export default function InfographicEditor({
         publicationId={publicationId}
         compareState={compareState}
         onCompare={triggerCompare}
+        compareReasons={compareReasons}
+        showRepublishCta={showRepublishCta}
+        onRequestRepublish={publishAction.initiate}
       />
       {zipExportNotice && (
         <div
@@ -1482,18 +1536,8 @@ export default function InfographicEditor({
           onRequestNote={requestNote}
           contrastIssues={vr.contrastIssues}
           publicationId={publicationId}
-          etag={etagRef.current}
-          onEtagUpdate={(newEtag) => {
-            etagRef.current = newEtag;
-          }}
-          onCompareRequest={triggerCompare}
-          onPreconditionFailed={(info) =>
-            setPreconditionFailedModal({
-              open: true,
-              serverEtag: info.serverEtag,
-              source: 'publish',
-            })
-          }
+          isPublishing={publishAction.isPublishing}
+          onRequestPublish={publishAction.initiate}
         />
       </div>
 
@@ -1516,6 +1560,15 @@ export default function InfographicEditor({
         onReload={handlePreconditionReload}
         onSaveAsNewDraft={handlePreconditionSaveAsNewDraft}
         onDismiss={handlePreconditionDismiss}
+      />
+
+      <PublishConfirmModal
+        isOpen={publishAction.isModalOpen}
+        doc={doc}
+        isPublishing={publishAction.isPublishing}
+        error={publishAction.error}
+        onConfirm={publishAction.confirm}
+        onCancel={publishAction.cancel}
       />
 
       {contextMenu && doc.blocks[contextMenu.blockId] && (

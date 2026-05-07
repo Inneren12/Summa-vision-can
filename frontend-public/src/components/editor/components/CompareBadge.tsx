@@ -5,13 +5,19 @@
  *
  * Text glyph + label badge. No icon library dependency (DEBT-074 closed:
  * text glyphs sufficient for v1). Inline styles match TopBar conventions.
+ *
+ * Phase 3.1d Slice 5 (PR-08): optional `reasons` prop. When non-empty
+ * the badge becomes hoverable/focusable and a sibling tooltip
+ * (role="tooltip", linked via aria-describedby) lists the deduped union
+ * of stale reasons. Visibility is component-local React state driven
+ * by mouseenter/leave + focus/blur — no CSS-framework dependency.
  */
 
 'use client';
 
-import React from 'react';
+import React, { useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import type { CompareBadgeSeverity } from '@/lib/types/compare';
+import type { CompareBadgeSeverity, StaleReason } from '@/lib/types/compare';
 import { TK } from '../config/tokens';
 
 const GLYPHS: Record<CompareBadgeSeverity, string> = {
@@ -37,6 +43,14 @@ const TONES: Record<
 export interface CompareBadgeProps {
   severity: CompareBadgeSeverity | 'not_compared';
   comparedAt?: string;
+  /**
+   * Phase 3.1d Slice 5 (PR-08): when non-empty, the badge wrapper
+   * becomes hoverable/focusable and reveals a tooltip listing each
+   * reason (i18n keys under `publication.compare.reasons.*`). When
+   * empty/undefined, no tooltip is rendered and the wrapper is not
+   * tab-stoppable.
+   */
+  reasons?: ReadonlyArray<StaleReason>;
 }
 
 function formatRelativeTime(iso: string): string {
@@ -49,8 +63,11 @@ function formatRelativeTime(iso: string): string {
   return `${Math.round(diffSec / 86400)}d`;
 }
 
-export function CompareBadge({ severity, comparedAt }: CompareBadgeProps) {
+export function CompareBadge({ severity, comparedAt, reasons }: CompareBadgeProps) {
   const t = useTranslations('publication.compare');
+  const [isHovered, setIsHovered] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const tooltipId = useId();
 
   const labelKey =
     severity === 'not_compared' ? 'badge.not_compared' : `badge.${severity}`;
@@ -63,49 +80,114 @@ export function CompareBadge({ severity, comparedAt }: CompareBadgeProps) {
     ? t('timestamp.compared_relative', { time: formatRelativeTime(comparedAt) })
     : null;
 
+  const hasReasons = Boolean(reasons && reasons.length > 0);
+  const tooltipVisible = hasReasons && (isHovered || isFocused);
+
   return (
     <span
-      data-testid="compare-badge"
-      data-severity={severity}
-      role="status"
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '4px',
-        padding: '2px 5px',
-        fontFamily: TK.font.data,
-        fontSize: '8px',
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: '0.4px',
-        background: tone.background,
-        color: tone.color,
-        borderRadius: '2px',
-        whiteSpace: 'nowrap',
-      }}
+      data-testid="compare-badge-wrapper"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      tabIndex={hasReasons ? 0 : -1}
+      aria-describedby={tooltipVisible ? tooltipId : undefined}
+      style={{ position: 'relative', display: 'inline-flex' }}
     >
-      <span aria-hidden="true">{glyph}</span>
       <span
+        data-testid="compare-badge"
+        data-severity={severity}
+        role="status"
         style={{
-          position: 'absolute',
-          width: 1,
-          height: 1,
-          padding: 0,
-          margin: -1,
-          overflow: 'hidden',
-          clip: 'rect(0,0,0,0)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          padding: '2px 5px',
+          fontFamily: TK.font.data,
+          fontSize: '8px',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          letterSpacing: '0.4px',
+          background: tone.background,
+          color: tone.color,
+          borderRadius: '2px',
           whiteSpace: 'nowrap',
-          border: 0,
         }}
       >
-        {label}
-      </span>
-      <span aria-hidden="true">{label}</span>
-      {timestamp && (
-        <span aria-hidden="true" style={{ color: TK.c.txtM, fontWeight: 400 }}>
-          {timestamp}
+        <span aria-hidden="true">{glyph}</span>
+        <span
+          style={{
+            position: 'absolute',
+            width: 1,
+            height: 1,
+            padding: 0,
+            margin: -1,
+            overflow: 'hidden',
+            clip: 'rect(0,0,0,0)',
+            whiteSpace: 'nowrap',
+            border: 0,
+          }}
+        >
+          {label}
         </span>
+        <span aria-hidden="true">{label}</span>
+        {timestamp && (
+          <span aria-hidden="true" style={{ color: TK.c.txtM, fontWeight: 400 }}>
+            {timestamp}
+          </span>
+        )}
+      </span>
+      {tooltipVisible && reasons && (
+        <ReasonsTooltip
+          reasons={reasons}
+          severityLabel={label}
+          id={tooltipId}
+        />
       )}
+    </span>
+  );
+}
+
+interface ReasonsTooltipProps {
+  reasons: ReadonlyArray<StaleReason>;
+  severityLabel: string;
+  id: string;
+}
+
+function ReasonsTooltip({ reasons, severityLabel, id }: ReasonsTooltipProps) {
+  const tReasons = useTranslations('publication.compare.reasons');
+  const tTooltip = useTranslations('publication.compare.tooltip');
+  return (
+    <span
+      role="tooltip"
+      id={id}
+      data-testid="compare-reasons-tooltip"
+      style={{
+        position: 'absolute',
+        top: '100%',
+        right: 0,
+        marginTop: 4,
+        padding: '6px 8px',
+        background: TK.c.bgSurf,
+        color: TK.c.txtP,
+        fontFamily: TK.font.data,
+        fontSize: 9,
+        borderRadius: 3,
+        border: `1px solid ${TK.c.brd}`,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+        zIndex: 100,
+        maxWidth: 240,
+        whiteSpace: 'normal',
+      }}
+    >
+      <span style={{ fontWeight: 600, display: 'block', marginBottom: 2 }}>
+        {tTooltip('title', { severity: severityLabel })}
+      </span>
+      <ul style={{ margin: '4px 0 0', paddingLeft: 14, listStyle: 'disc' }}>
+        {reasons.map((r) => (
+          <li key={r}>{tReasons(r)}</li>
+        ))}
+      </ul>
     </span>
   );
 }
