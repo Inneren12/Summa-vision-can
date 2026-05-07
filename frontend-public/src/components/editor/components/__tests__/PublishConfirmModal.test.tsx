@@ -65,6 +65,40 @@ describe('PublishConfirmModal', () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it('does not invoke walker when isOpen=false (Badge P2-1)', () => {
+    // Behavioral proxy for "walker not called": pass a doc with a
+    // malformed-filter binding. If the walker ran, console.warn would
+    // fire (per walker.ts non_numeric_filters branch). Asserting the
+    // warn count stays at zero proves the early-return guard short-
+    // circuits before walkBoundBlocks executes — module-level spying
+    // would not catch the bound import inside PublishConfirmModal.
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const doc = makeDoc({
+      bad: makeBlock('bad', {
+        kind: 'single',
+        cube_id: 'c1',
+        semantic_key: 's1',
+        filters: { geo: 'CA' },
+        period: '2024-Q1',
+      }),
+    });
+
+    render(
+      <PublishConfirmModal
+        isOpen={false}
+        doc={doc}
+        isPublishing={false}
+        error={null}
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />,
+    );
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
   it('renders title + summary when open', () => {
     const doc = makeDoc({ b1: makeBlock('b1', validSingle) });
     render(

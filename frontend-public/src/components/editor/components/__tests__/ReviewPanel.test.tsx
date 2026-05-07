@@ -170,4 +170,33 @@ describe('ReviewPanel — MARK_PUBLISHED publish modal interception', () => {
     // Modal closes after 404
     expect(screen.queryByTestId('publish-confirm-modal')).toBeNull();
   });
+
+  it('falls back to direct dispatch when publicationId is absent (template-only session, Badge P2-2)', () => {
+    const state = makeExportedState();
+    const dispatch = jest.fn();
+    render(
+      <ReviewPanel
+        state={state}
+        dispatch={dispatch}
+        onRequestNote={jest.fn()}
+        // publicationId intentionally omitted — template-only editor session
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('transition-MARK_PUBLISHED'));
+
+    // No modal — direct path
+    expect(screen.queryByTestId('publish-confirm-modal')).toBeNull();
+    // No network publish
+    expect(publishMock).not.toHaveBeenCalled();
+    // Direct MARK_PUBLISHED dispatch (pre-Slice-4a behavior preserved)
+    const markCalls = dispatch.mock.calls.filter(
+      (c) => (c[0] as EditorAction).type === 'MARK_PUBLISHED',
+    );
+    expect(markCalls).toHaveLength(1);
+    expect(markCalls[0][0]).toEqual({
+      type: 'MARK_PUBLISHED',
+      channel: 'manual',
+    });
+  });
 });

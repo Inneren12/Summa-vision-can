@@ -167,7 +167,15 @@ export function walkBoundBlocks(doc: CanonicalDocument): WalkerResult {
       semantic_key: binding.semantic_key,
       dims,
       members,
-      period: binding.period ?? null,
+      // Phase 3.1d Slice 4a fix (Polish P2-1): Slice 2 validateBinding
+      // guarantees `period: string` on a valid SingleValueBinding —
+      // walker should not soften that invariant with `?? null`. If a
+      // corrupted runtime state ever produces `period: undefined`,
+      // backend Pydantic accepts `null` (BoundBlockReference.period:
+      // str | None per recon §3.2), so the JSON-stringify of undefined
+      // (which becomes nothing — field omitted entirely) is also
+      // accepted. Either way, walker no longer adds defensive coercion.
+      period: binding.period,
     });
   }
 

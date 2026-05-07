@@ -202,8 +202,19 @@ export function ReviewPanel({
       // does not dispatch directly from the button click; instead it opens
       // the publish confirm modal. The reducer dispatch happens inside
       // `onPublishSuccess` once the network publish succeeds.
+      //
+      // Phase 3.1d Slice 4a fix (Badge P2-2): template-only sessions have
+      // no publicationId — there is no backend publication to send
+      // bound_blocks to. Preserve pre-Slice-4a behavior: direct dispatch
+      // advances the local workflow to "published" without a network
+      // call. Operator sees the workflow transition; no snapshot capture
+      // is attempted (and none is meaningful in a template-only session).
       if (descriptor.action.type === 'MARK_PUBLISHED') {
-        publishAction.initiate();
+        if (publicationId) {
+          publishAction.initiate();
+        } else {
+          dispatch(descriptor.action);
+        }
         return;
       }
       dispatch(descriptor.action);

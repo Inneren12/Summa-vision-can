@@ -1,6 +1,5 @@
 'use client';
 
-import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import type { CanonicalDocument } from '../types';
 import { walkBoundBlocks, type WalkerResult } from '../utils/walker';
@@ -23,10 +22,21 @@ export function PublishConfirmModal({
   onCancel,
 }: PublishConfirmModalProps) {
   const t = useTranslations('publication.publish.modal');
-  const walkerResult = useMemo(() => walkBoundBlocks(doc), [doc]);
 
+  // Phase 3.1d Slice 4a fix (Badge P2-1): walker only runs when modal is
+  // open. Mounted-but-closed ReviewPanel renders previously triggered a
+  // full-document walk on every parent rerender, plus repeated
+  // console.warn on malformed filters. Early return BEFORE the walker
+  // call guarantees zero side effects until operator opens the flow.
   if (!isOpen) return null;
 
+  // Walker is intentionally not memoized — modal is short-lived and
+  // typically renders 1-2 times during its lifecycle (open → confirm or
+  // open → cancel). The compute is O(blocks) and cheaper than the React
+  // hook overhead for tracking memo identity. If a future change makes
+  // the modal long-lived (e.g. preview-while-editing), reintroduce
+  // useMemo([doc]) here.
+  const walkerResult = walkBoundBlocks(doc);
   const skippedTotal = walkerResult.deferred.length + walkerResult.skipped.length;
 
   return (
