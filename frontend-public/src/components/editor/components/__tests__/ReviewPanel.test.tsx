@@ -25,7 +25,10 @@ jest.mock('@/lib/api/admin', () => {
   };
 });
 
-import { publishAdminPublication } from '@/lib/api/admin';
+import {
+  publishAdminPublication,
+  AdminPublicationNotFoundError,
+} from '@/lib/api/admin';
 
 const publishMock = publishAdminPublication as jest.MockedFunction<
   typeof publishAdminPublication
@@ -127,5 +130,44 @@ describe('ReviewPanel — MARK_PUBLISHED publish modal interception', () => {
         (c) => (c[0] as EditorAction).type === 'MARK_PUBLISHED',
       ),
     ).toBeUndefined();
+  });
+
+  it('modal confirm with 404 dispatches SAVE_FAILED, not MARK_PUBLISHED, and closes modal', async () => {
+    // The jest.mock factory at top of file exports a mocked
+    // AdminPublicationNotFoundError class; importing it via `@/lib/api/admin`
+    // returns that mocked class, which usePublishAction's `instanceof` check
+    // matches.
+    publishMock.mockRejectedValueOnce(new AdminPublicationNotFoundError('p1'));
+
+    const state = makeExportedState();
+    const dispatch = jest.fn();
+    render(
+      <ReviewPanel
+        state={state}
+        dispatch={dispatch}
+        onRequestNote={jest.fn()}
+        publicationId="p1"
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('transition-MARK_PUBLISHED'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('publish-modal-confirm'));
+    });
+
+    expect(publishMock).toHaveBeenCalledTimes(1);
+    // No MARK_PUBLISHED on 404 — workflow stays in pre-published state
+    expect(
+      dispatch.mock.calls.find(
+        (c) => (c[0] as EditorAction).type === 'MARK_PUBLISHED',
+      ),
+    ).toBeUndefined();
+    // SAVE_FAILED dispatched per ReviewPanel onNotFound handler
+    const saveFailedCalls = dispatch.mock.calls.filter(
+      (c) => (c[0] as EditorAction).type === 'SAVE_FAILED',
+    );
+    expect(saveFailedCalls).toHaveLength(1);
+    // Modal closes after 404
+    expect(screen.queryByTestId('publish-confirm-modal')).toBeNull();
   });
 });

@@ -95,7 +95,7 @@ describe('walkBoundBlocks — happy paths', () => {
     expect(result.boundBlocks[0].block_id).toBe('b1');
   });
 
-  it('emits dims/members in alphabetical filter key order', () => {
+  it('emits dims/members in numeric ascending order (Slice 4a fix P1-3)', () => {
     const binding: Binding = {
       kind: 'single',
       cube_id: 'c1',
@@ -105,9 +105,10 @@ describe('walkBoundBlocks — happy paths', () => {
     };
     const doc = makeDoc({ b1: makeBlock('b1', binding) });
     const result = walkBoundBlocks(doc);
-    // localeCompare on stringified keys: '10' < '2' < '3' alphabetically
-    expect(result.boundBlocks[0].dims).toEqual([10, 2, 3]);
-    expect(result.boundBlocks[0].members).toEqual([100, 20, 30]);
+    // Numeric sort: 2 < 3 < 10 (was lexicographic '10' < '2' < '3' pre-fix).
+    // Pairing stays positional: dim[i] ↔ member[i].
+    expect(result.boundBlocks[0].dims).toEqual([2, 3, 10]);
+    expect(result.boundBlocks[0].members).toEqual([20, 30, 100]);
   });
 
   it('handles empty filters: {} → dims=[], members=[]', () => {
@@ -151,6 +152,45 @@ describe('walkBoundBlocks — happy paths', () => {
     expect(result.boundBlocks).toHaveLength(2);
     const ids = result.boundBlocks.map((b) => b.block_id).sort();
     expect(ids).toEqual(['b1', 'b2']);
+  });
+});
+
+describe('walkBoundBlocks — block-type allowlist (Slice 4a fix P1-1)', () => {
+  it('skips single binding on unsupported block type (e.g. headline_editorial)', () => {
+    const doc = makeDoc({
+      h1: makeBlock('h1', validSingle, 'headline_editorial'),
+    });
+    const result = walkBoundBlocks(doc);
+    expect(result.boundBlocks).toEqual([]);
+    expect(result.skipped).toEqual([
+      { block_id: 'h1', reason: 'unsupported_block_type' },
+    ]);
+    expect(result.deferred).toEqual([]);
+  });
+
+  it('skips single binding on unsupported block type (e.g. bar_horizontal)', () => {
+    const doc = makeDoc({
+      bar1: makeBlock('bar1', validSingle, 'bar_horizontal'),
+    });
+    const result = walkBoundBlocks(doc);
+    expect(result.boundBlocks).toEqual([]);
+    expect(result.skipped).toEqual([
+      { block_id: 'bar1', reason: 'unsupported_block_type' },
+    ]);
+  });
+
+  it('emits hero_stat with valid single binding (allowlist enforced)', () => {
+    const doc = makeDoc({ b1: makeBlock('b1', validSingle, 'hero_stat') });
+    const result = walkBoundBlocks(doc);
+    expect(result.boundBlocks).toHaveLength(1);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it('emits delta_badge with valid single binding (allowlist enforced)', () => {
+    const doc = makeDoc({ b1: makeBlock('b1', validSingle, 'delta_badge') });
+    const result = walkBoundBlocks(doc);
+    expect(result.boundBlocks).toHaveLength(1);
+    expect(result.skipped).toEqual([]);
   });
 });
 
@@ -283,6 +323,128 @@ describe('walkBoundBlocks — skipped (malformed)', () => {
     const message = warnSpy.mock.calls[0][0] as string;
     expect(message).toContain('bad_block');
     expect(message).toContain('not_a_number');
+  });
+
+  it('drops block with float in filter key (e.g. "1.5")', () => {
+    const doc = makeDoc({
+      b1: makeBlock('b1', {
+        kind: 'single',
+        cube_id: 'c1',
+        semantic_key: 's1',
+        filters: { '1.5': '12' },
+        period: '2024-Q1',
+      }),
+    });
+    const result = walkBoundBlocks(doc);
+    expect(result.boundBlocks).toEqual([]);
+    expect(result.skipped).toEqual([
+      { block_id: 'b1', reason: 'non_numeric_filters' },
+    ]);
+  });
+
+  it('drops block with float in filter value (e.g. "12.5")', () => {
+    const doc = makeDoc({
+      b1: makeBlock('b1', {
+        kind: 'single',
+        cube_id: 'c1',
+        semantic_key: 's1',
+        filters: { '1': '12.5' },
+        period: '2024-Q1',
+      }),
+    });
+    const result = walkBoundBlocks(doc);
+    expect(result.boundBlocks).toEqual([]);
+    expect(result.skipped).toEqual([
+      { block_id: 'b1', reason: 'non_numeric_filters' },
+    ]);
+  });
+
+  it('drops block with empty-string filter key', () => {
+    const doc = makeDoc({
+      b1: makeBlock('b1', {
+        kind: 'single',
+        cube_id: 'c1',
+        semantic_key: 's1',
+        filters: { '': '12' },
+        period: '2024-Q1',
+      }),
+    });
+    const result = walkBoundBlocks(doc);
+    expect(result.skipped).toEqual([
+      { block_id: 'b1', reason: 'non_numeric_filters' },
+    ]);
+  });
+
+  it('drops block with empty-string filter value', () => {
+    const doc = makeDoc({
+      b1: makeBlock('b1', {
+        kind: 'single',
+        cube_id: 'c1',
+        semantic_key: 's1',
+        filters: { '1': '' },
+        period: '2024-Q1',
+      }),
+    });
+    const result = walkBoundBlocks(doc);
+    expect(result.skipped).toEqual([
+      { block_id: 'b1', reason: 'non_numeric_filters' },
+    ]);
+  });
+
+  it('drops block with whitespace filter key (e.g. " ")', () => {
+    const doc = makeDoc({
+      b1: makeBlock('b1', {
+        kind: 'single',
+        cube_id: 'c1',
+        semantic_key: 's1',
+        filters: { ' ': '12' },
+        period: '2024-Q1',
+      }),
+    });
+    const result = walkBoundBlocks(doc);
+    expect(result.skipped).toEqual([
+      { block_id: 'b1', reason: 'non_numeric_filters' },
+    ]);
+  });
+
+  it('drops block with leading-zero filter value (e.g. "01")', () => {
+    const doc = makeDoc({
+      b1: makeBlock('b1', {
+        kind: 'single',
+        cube_id: 'c1',
+        semantic_key: 's1',
+        filters: { '1': '01' },
+        period: '2024-Q1',
+      }),
+    });
+    const result = walkBoundBlocks(doc);
+    expect(result.skipped).toEqual([
+      { block_id: 'b1', reason: 'non_numeric_filters' },
+    ]);
+  });
+
+  it('accepts "0" as valid filter token', () => {
+    const doc = makeDoc({
+      b1: makeBlock('b1', {
+        kind: 'single',
+        cube_id: 'c1',
+        semantic_key: 's1',
+        filters: { '0': '0' },
+        period: '2024-Q1',
+      }),
+    });
+    const result = walkBoundBlocks(doc);
+    expect(result.boundBlocks).toEqual([
+      {
+        block_id: 'b1',
+        cube_id: 'c1',
+        semantic_key: 's1',
+        dims: [0],
+        members: [0],
+        period: '2024-Q1',
+      },
+    ]);
+    expect(result.skipped).toEqual([]);
   });
 });
 
