@@ -31,9 +31,9 @@ Slice 4 splits into 4a/4b because walker correctness and modal/conflict UX have 
 | PR-04 | 3a | PENDING | Binding editor picker shell + cube/semantic/dim discovery clients |
 | PR-05 | 3b | PENDING | Resolve preview via server-side proxy (Next.js Route Handler) |
 | PR-06 | 4a | PENDING | Single-value walker + publish payload adapter (`bound_blocks`) |
-| PR-07 | 4b | IN PROGRESS | Republish-to-refresh confirm modal + 412 ETag conflict handling + auto-refresh compare on publish-success (Recon Delta 03) |
-| PR-08 | 5 | IN PROGRESS | Pre-3.1d "Refresh required" CTA for legacy publications + reasons tooltip on `CompareBadge` + lift of `usePublishAction` / `PublishConfirmModal` from ReviewPanel to editor root |
-| PR-09 | 6 | PENDING | Integration / e2e closeout (happy / 412 conflict / pre-3.1d) |
+| PR-07 | 4b | DONE | Republish-to-refresh confirm modal + 412 ETag conflict handling + auto-refresh compare on publish-success (Recon Delta 03) |
+| PR-08 | 5 | DONE | Pre-3.1d "Refresh required" CTA for legacy publications + reasons tooltip on `CompareBadge` + lift of `usePublishAction` / `PublishConfirmModal` from ReviewPanel to editor root |
+| PR-09 | 6 | DONE | Integration / e2e closeout (happy / 412 conflict / pre-3.1d) |
 
 ---
 

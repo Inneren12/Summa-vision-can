@@ -896,3 +896,15 @@ Rules:
 - **Impact:** Operator-visible warn-log noise during the rollout window if any external publish callers exist. Tolerance-period publishes do not get optimistic-concurrency protection.
 - **Resolution:** after two clean weeks (frontend + Flutter rolled out everywhere AND no warn-log entries for the missing-If-Match codepath on POST /publish for 7 consecutive days), change the handler to require `If-Match` and return 428 Precondition Required if absent. Update `docs/architecture/BACKEND_API_INVENTORY.md` to reflect the new strictness. Remove the warn-log emitter and the `Deprecation: true` header.
 - **Target:** Phase 4, after two-week clean rollout window with zero missing-If-Match warnings on POST /publish for 7 consecutive days.
+
+### DEBT-080: Phase 3.1d e2e coverage limited to component-level integration; full Playwright harness deferred
+
+- **Source:** Phase 3.1d Slice 6 (PR-09) closeout, founder lock 2026-05-09
+- **Added:** 2026-05-09
+- **Severity:** medium
+- **Category:** testing
+- **Status:** active
+- **Description:** Phase 3.1d shipped with component-level integration coverage in `frontend-public/tests/components/editor/phase-3-1d-closeout-integration.test.tsx` covering 4 critical scenarios (happy publish, 412 conflict, Pre-3.1d CTA, reasons tooltip × 7 reasons) via real `<InfographicEditor />` mount with mocked `@/lib/api/admin`. This is sufficient for the 18 May 2026 deploy gate but does NOT cover real-network behavior: actual HTTP layer (CORS, headers, status codes from real backend), real next-intl SSR/CSR rendering, real IndexedDB / browser storage interactions, real auth middleware, or cross-browser rendering quirks. Specifically untested at e2e level: backend If-Match concurrency under real concurrent requests; pre-3.1d migration path on real production data; reasons tooltip rendering across browsers (Chrome/Firefox/Safari) for ARIA compliance.
+- **Impact:** Late-discovered bugs in network-layer behavior won't be caught before production. Mitigation: VPS staging deploy gates real-network smoke before 18 May; component-level integration covers the most common operator paths; Slice 4b/5/6 backend tests cover the contract surface. Remaining e2e gap is acceptable for v1 deploy but accumulates risk for Phase 4 features that build on this foundation.
+- **Resolution:** Stand up Playwright e2e harness in Phase 4. Initial scope: replicate the 4 PR-09 component scenarios at full-network e2e level against the staging environment; add cross-browser smoke for the reasons tooltip ARIA disclosure pattern; add a real-concurrent-request test for POST /publish If-Match (currently covered only by sequential mutation tests in the backend test suite). Decision deferred on harness location: separate `e2e/` directory at repo root vs `frontend-public/e2e/` — to be locked at Phase 4 kickoff.
+- **Target:** Phase 4 kickoff (post-2026-05-18 deploy)
