@@ -50,6 +50,7 @@ import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { isBlockEmpty } from './utils/empty-block';
 import type { NoteRequestConfig } from './components/noteRequest';
 import { exportZip, type ZipExportPhase } from './export/zipExport';
+import { useCompareState } from './hooks/useCompareState';
 
 // Autosave cadence (Stage 4 Task 2). `AUTOSAVE_DEBOUNCE_MS` is the quiet
 // window after the last mutating reducer action before a PATCH fires.
@@ -250,13 +251,24 @@ export default function InfographicEditor({
   // populated before the first edit lands.
   const etagRef = useRef<string | null>(initialEtag);
 
-  // 412 PRECONDITION_FAILED modal state (Phase 1.3 Q4=(a)).
+  // 412 PRECONDITION_FAILED modal state (Phase 1.3 Q4=(a) + Phase 3.1d
+  // Slice 4b which adds the publish source discriminator).
   // Two terminal actions: Reload (re-fetch + drop local edits) or
   // Save-as-new-draft (clone + PATCH clone with local snapshot via fresh ETag).
   const [preconditionFailedModal, setPreconditionFailedModal] = useState<{
     open: boolean;
     serverEtag: string | null;
-  }>({ open: false, serverEtag: null });
+    source: 'patch' | 'publish';
+  }>({ open: false, serverEtag: null, source: 'patch' });
+
+  // Phase 3.1d Slice 4b (Recon Delta 03): compare state lifted from TopBar
+  // to editor root so it can also be auto-triggered after a successful
+  // publish. TopBar consumes via props; ReviewPanel calls `triggerCompare`
+  // inside its publish-success handler.
+  const { state: compareState, compare: triggerCompare } = useCompareState(
+    publicationId ?? '',
+  );
+
   const [ltab, setLtab] = useState<LeftTab>("templates");
   const [qaOpen, setQaOpen] = useState(true);
   const [qaMode, setQaMode] = useState<QAMode>("publish");
@@ -695,7 +707,7 @@ export default function InfographicEditor({
         if (err instanceof BackendApiError && err.code === 'PRECONDITION_FAILED') {
           const serverEtagRaw = err.details?.server_etag;
           const serverEtag = typeof serverEtagRaw === 'string' ? serverEtagRaw : null;
-          setPreconditionFailedModal({ open: true, serverEtag });
+          setPreconditionFailedModal({ open: true, serverEtag, source: 'patch' });
           setSaveStatus('error');
           return;
         }
@@ -980,10 +992,10 @@ export default function InfographicEditor({
 
   const handlePreconditionReload = useCallback(async () => {
     if (!publicationId) {
-      setPreconditionFailedModal({ open: false, serverEtag: null });
+      setPreconditionFailedModal({ open: false, serverEtag: null, source: 'patch' });
       return;
     }
-    setPreconditionFailedModal({ open: false, serverEtag: null });
+    setPreconditionFailedModal({ open: false, serverEtag: null, source: 'patch' });
     try {
       const fresh = await fetchAdminPublication(publicationId);
       etagRef.current = fresh.etag;
@@ -999,7 +1011,7 @@ export default function InfographicEditor({
   }, [publicationId, dispatch]);
 
   const handlePreconditionSaveAsNewDraft = useCallback(async () => {
-    setPreconditionFailedModal({ open: false, serverEtag: null });
+    setPreconditionFailedModal({ open: false, serverEtag: null, source: 'patch' });
     await forkLocalSnapshotAsNewDraft();
   }, [forkLocalSnapshotAsNewDraft]);
 
@@ -1355,6 +1367,8 @@ export default function InfographicEditor({
         onClone={handleClone}
         cloneTooltip={tEditorActions('cloneCannotBeCloned')}
         publicationId={publicationId}
+        compareState={compareState}
+        onCompare={triggerCompare}
       />
       {zipExportNotice && (
         <div
@@ -1468,6 +1482,18 @@ export default function InfographicEditor({
           onRequestNote={requestNote}
           contrastIssues={vr.contrastIssues}
           publicationId={publicationId}
+          etag={etagRef.current}
+          onEtagUpdate={(newEtag) => {
+            etagRef.current = newEtag;
+          }}
+          onCompareRequest={triggerCompare}
+          onPreconditionFailed={(info) =>
+            setPreconditionFailedModal({
+              open: true,
+              serverEtag: info.serverEtag,
+              source: 'publish',
+            })
+          }
         />
       </div>
 
@@ -1486,6 +1512,7 @@ export default function InfographicEditor({
       <PreconditionFailedModal
         open={preconditionFailedModal.open}
         serverEtag={preconditionFailedModal.serverEtag}
+        source={preconditionFailedModal.source}
         onReload={handlePreconditionReload}
         onSaveAsNewDraft={handlePreconditionSaveAsNewDraft}
         onDismiss={handlePreconditionDismiss}

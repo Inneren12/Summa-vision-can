@@ -7,6 +7,12 @@ import { TK } from '../config/tokens';
 export interface PreconditionFailedModalProps {
   open: boolean;
   serverEtag: string | null;
+  /**
+   * Phase 3.1d Slice 4b (Recon Delta 03): which write path triggered 412.
+   * 'patch' → autosave-conflict copy (default, preserves Phase 1.3 UX);
+   * 'publish' → publish-time conflict copy via the `body_publish` i18n key.
+   */
+  source?: 'patch' | 'publish';
   onReload: () => void;
   onSaveAsNewDraft: () => void;
   onDismiss: () => void;
@@ -33,6 +39,7 @@ function focusables(container: HTMLElement): HTMLElement[] {
 export function PreconditionFailedModal({
   open,
   serverEtag,
+  source = 'patch',
   onReload,
   onSaveAsNewDraft,
   onDismiss,
@@ -173,7 +180,7 @@ export function PreconditionFailedModal({
             lineHeight: 1.5,
           }}
         >
-          {t('body')}
+          {t(source === 'publish' ? 'body_publish' : 'body')}
         </p>
         <div
           style={{

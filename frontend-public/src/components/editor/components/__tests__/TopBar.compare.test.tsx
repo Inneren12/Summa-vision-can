@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TopBar } from '../TopBar';
+import { useCompareState } from '../../hooks/useCompareState';
 import { initState } from '../../store/reducer';
 import type { CompareResponse } from '@/lib/types/compare';
 
@@ -18,18 +19,30 @@ const mockedCompare = comparePublication as jest.MockedFunction<
   typeof comparePublication
 >;
 
-function makeProps(overrides: Partial<React.ComponentProps<typeof TopBar>> = {}) {
+/**
+ * Phase 3.1d Slice 4b: `useCompareState` was lifted from TopBar to the
+ * editor root. These tests still want to exercise the compare lifecycle
+ * end-to-end through the TopBar UI, so we wrap TopBar in a thin parent
+ * that owns the hook — mirroring what `editor/index.tsx` now does. This
+ * keeps the integration coverage without resurrecting the in-component
+ * hook call (forbidden post-lift).
+ */
+function HostedTopBar(
+  overrides: Partial<React.ComponentProps<typeof TopBar>> = {},
+) {
+  const publicationId = (overrides.publicationId ?? '42') as string | undefined;
+  const { state: compareState, compare } = useCompareState(publicationId ?? '');
   const state = initState();
   const fileRef = React.createRef<HTMLInputElement>() as React.RefObject<
     HTMLInputElement | null
   >;
-  return {
+  const props: React.ComponentProps<typeof TopBar> = {
     doc: state.doc,
     dispatch: jest.fn(),
     undoStack: [],
     redoStack: [],
     dirty: false,
-    mode: 'design' as const,
+    mode: 'design',
     setMode: jest.fn(),
     errs: 0,
     warns: 0,
@@ -41,11 +54,14 @@ function makeProps(overrides: Partial<React.ComponentProps<typeof TopBar>> = {})
     markSaved: jest.fn(),
     exportZip: jest.fn(),
     zipExportPhase: null,
-    saveStatus: 'idle' as const,
+    saveStatus: 'idle',
     fontsReady: true,
-    publicationId: '42',
+    publicationId,
+    compareState,
+    onCompare: compare,
     ...overrides,
   };
+  return <TopBar {...props} />;
 }
 
 describe('TopBar — compare integration (Phase 3.1d Slice 1b)', () => {
@@ -54,7 +70,7 @@ describe('TopBar — compare integration (Phase 3.1d Slice 1b)', () => {
   });
 
   it('renders Compare button initially with idle label', () => {
-    render(<TopBar {...makeProps()} />);
+    render(<HostedTopBar />);
     const btn = screen.getByTestId('compare-button');
     expect(btn).toBeInTheDocument();
     expect(btn).toHaveTextContent('publication.compare.button.compare');
@@ -63,7 +79,7 @@ describe('TopBar — compare integration (Phase 3.1d Slice 1b)', () => {
 
   it('clicking Compare disables button and shows comparing label', async () => {
     mockedCompare.mockImplementation(() => new Promise(() => {}));
-    render(<TopBar {...makeProps()} />);
+    render(<HostedTopBar />);
     fireEvent.click(screen.getByTestId('compare-button'));
     await waitFor(() => {
       const btn = screen.getByTestId('compare-button');
@@ -81,7 +97,7 @@ describe('TopBar — compare integration (Phase 3.1d Slice 1b)', () => {
       block_results: [],
     };
     mockedCompare.mockResolvedValue(result);
-    render(<TopBar {...makeProps()} />);
+    render(<HostedTopBar />);
     fireEvent.click(screen.getByTestId('compare-button'));
     await waitFor(() => {
       const badge = screen.getByTestId('compare-badge');
@@ -116,7 +132,7 @@ describe('TopBar — compare integration (Phase 3.1d Slice 1b)', () => {
       ],
     };
     mockedCompare.mockResolvedValue(result);
-    render(<TopBar {...makeProps()} />);
+    render(<HostedTopBar />);
     fireEvent.click(screen.getByTestId('compare-button'));
     await waitFor(() => {
       const badge = screen.getByTestId('compare-badge');
@@ -129,13 +145,13 @@ describe('TopBar — compare integration (Phase 3.1d Slice 1b)', () => {
   });
 
   it('compare button disabled when no publicationId (template-only session)', () => {
-    render(<TopBar {...makeProps({ publicationId: undefined })} />);
+    render(<HostedTopBar publicationId={undefined} />);
     expect(screen.getByTestId('compare-button')).toBeDisabled();
   });
 
   it('shows inline error label and retry when compare fails', async () => {
     mockedCompare.mockRejectedValue(new Error('Network down'));
-    render(<TopBar {...makeProps()} />);
+    render(<HostedTopBar />);
     fireEvent.click(screen.getByTestId('compare-button'));
 
     await waitFor(() => {
@@ -153,7 +169,7 @@ describe('TopBar — compare integration (Phase 3.1d Slice 1b)', () => {
 
   it('clicking error retry triggers a new compare', async () => {
     mockedCompare.mockRejectedValueOnce(new Error('First fail'));
-    render(<TopBar {...makeProps()} />);
+    render(<HostedTopBar />);
     fireEvent.click(screen.getByTestId('compare-button'));
 
     await waitFor(() => {

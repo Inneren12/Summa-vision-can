@@ -13,15 +13,34 @@ jest.mock('@/lib/api/admin', () => {
       this.name = 'AdminPublicationNotFoundError';
     }
   }
+  class BackendApiError extends Error {
+    public readonly status: number;
+    public readonly code: string | null;
+    public readonly details: Record<string, unknown> | null;
+    constructor(args: {
+      status: number;
+      code: string | null;
+      message?: string;
+      details?: Record<string, unknown> | null;
+    }) {
+      super(args.message ?? `Backend error ${args.status}`);
+      this.name = 'BackendApiError';
+      this.status = args.status;
+      this.code = args.code;
+      this.details = args.details ?? null;
+    }
+  }
   return {
     publishAdminPublication: jest.fn(),
     AdminPublicationNotFoundError,
+    BackendApiError,
   };
 });
 
 import {
   publishAdminPublication,
   AdminPublicationNotFoundError,
+  BackendApiError,
 } from '@/lib/api/admin';
 
 const publishMock = publishAdminPublication as jest.MockedFunction<
@@ -116,9 +135,11 @@ describe('usePublishAction — confirm flow', () => {
       await result.current.confirm(oneBlockWalker);
     });
     expect(publishMock).toHaveBeenCalledTimes(1);
-    expect(publishMock).toHaveBeenCalledWith('p1', {
-      bound_blocks: oneBlockWalker.boundBlocks,
-    });
+    expect(publishMock).toHaveBeenCalledWith(
+      'p1',
+      { bound_blocks: oneBlockWalker.boundBlocks },
+      expect.objectContaining({ ifMatch: null }),
+    );
   });
 
   it('dispatches onPublishSuccess + closes modal on success', async () => {
@@ -249,6 +270,83 @@ describe('usePublishAction — confirm flow', () => {
     });
     expect(result.current.error?.message).toBe('boom');
     act(() => result.current.initiate());
+    expect(result.current.error).toBeNull();
+  });
+
+  it('forwards ifMatch from etag option (Slice 4b)', async () => {
+    publishMock.mockResolvedValueOnce({
+      etag: '"new-etag"',
+      document: {} as never,
+    });
+    const { result } = renderHook(() =>
+      usePublishAction({
+        publicationId: 'p1',
+        etag: '"current-etag"',
+        onPublishSuccess: jest.fn(),
+        onNotFound: jest.fn(),
+      }),
+    );
+    act(() => result.current.initiate());
+    await act(async () => {
+      await result.current.confirm(emptyWalker);
+    });
+    expect(publishMock).toHaveBeenCalledWith(
+      'p1',
+      { bound_blocks: [] },
+      expect.objectContaining({ ifMatch: '"current-etag"' }),
+    );
+  });
+
+  it('passes the new ETag to onPublishSuccess so caller can refresh etagRef', async () => {
+    publishMock.mockResolvedValueOnce({
+      etag: '"post-publish-etag"',
+      document: {} as never,
+    });
+    const onSuccess = jest.fn();
+    const { result } = renderHook(() =>
+      usePublishAction({
+        publicationId: 'p1',
+        etag: '"current"',
+        onPublishSuccess: onSuccess,
+        onNotFound: jest.fn(),
+      }),
+    );
+    act(() => result.current.initiate());
+    await act(async () => {
+      await result.current.confirm(emptyWalker);
+    });
+    expect(onSuccess).toHaveBeenCalledWith('"post-publish-etag"');
+  });
+
+  it('on 412 invokes onPreconditionFailed with serverEtag, closes modal, skips success', async () => {
+    publishMock.mockRejectedValueOnce(
+      new BackendApiError({
+        status: 412,
+        code: 'PRECONDITION_FAILED',
+        message: 'stale',
+        details: { server_etag: '"server-current"', client_etag: '"stale"' },
+      }),
+    );
+    const onSuccess = jest.fn();
+    const onPreconditionFailed = jest.fn();
+    const { result } = renderHook(() =>
+      usePublishAction({
+        publicationId: 'p1',
+        etag: '"stale"',
+        onPublishSuccess: onSuccess,
+        onNotFound: jest.fn(),
+        onPreconditionFailed,
+      }),
+    );
+    act(() => result.current.initiate());
+    await act(async () => {
+      await result.current.confirm(emptyWalker);
+    });
+    expect(onPreconditionFailed).toHaveBeenCalledWith({
+      serverEtag: '"server-current"',
+    });
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(result.current.isModalOpen).toBe(false);
     expect(result.current.error).toBeNull();
   });
 

@@ -1020,6 +1020,177 @@ async def test_412_envelope_jsonable(session_factory) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Phase 3.1d Slice 4b (Recon Delta 03) — POST /publish If-Match concurrency
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_publish_with_matching_if_match_succeeds(session_factory) -> None:
+    """ETag matches → 200, response carries fresh ETag header on the publish."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = resp.json()["id"]
+        get_resp = await client.get(
+            f"/api/v1/admin/publications/{pub_id}",
+            headers=_auth_headers(),
+        )
+        etag = get_resp.headers["etag"]
+
+        publish_resp = await client.post(
+            f"/api/v1/admin/publications/{pub_id}/publish",
+            headers={**_auth_headers(), "If-Match": etag},
+        )
+
+    assert publish_resp.status_code == 200, publish_resp.text
+    new_etag = publish_resp.headers.get("etag")
+    assert new_etag is not None
+    assert new_etag.startswith('"')
+    # publish mutates updated_at → ETag must rotate.
+    assert new_etag != etag
+
+
+@pytest.mark.asyncio
+async def test_publish_with_stale_if_match_returns_412(session_factory) -> None:
+    """Stale ``If-Match`` on POST /publish → 412 PRECONDITION_FAILED."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = resp.json()["id"]
+
+        publish_resp = await client.post(
+            f"/api/v1/admin/publications/{pub_id}/publish",
+            headers={**_auth_headers(), "If-Match": '"deadbeefdeadbeef"'},
+        )
+
+    assert publish_resp.status_code == 412, publish_resp.text
+    body = publish_resp.json()
+    assert body["detail"]["error_code"] == "PRECONDITION_FAILED"
+    details = body["detail"]["details"]
+    assert details["client_etag"] == '"deadbeefdeadbeef"'
+    assert details["server_etag"].startswith('"')
+    assert details["server_etag"] != details["client_etag"]
+
+
+@pytest.mark.asyncio
+async def test_publish_without_if_match_proceeds_with_deprecation_header(
+    session_factory,
+) -> None:
+    """v1 tolerance (DEBT-079): missing If-Match → 200 + Deprecation: true."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = resp.json()["id"]
+
+        publish_resp = await client.post(
+            f"/api/v1/admin/publications/{pub_id}/publish",
+            headers=_auth_headers(),
+        )
+
+    assert publish_resp.status_code == 200, publish_resp.text
+    assert publish_resp.headers.get("deprecation") == "true"
+    assert publish_resp.headers.get("etag", "").startswith('"')
+
+
+@pytest.mark.asyncio
+async def test_publish_412_when_publication_mutated_between_get_and_publish(
+    session_factory,
+) -> None:
+    """Realistic stale-after-mutation flow (reviewer P1, R2):
+
+    1. Create + GET → ETag A
+    2. PATCH publication → ETag rotates to B
+    3. POST /publish with If-Match: A → 412 with current_etag == B
+
+    Distinct from ``test_publish_with_stale_if_match_returns_412`` which
+    uses a synthetic ``"deadbeef..."`` value: this test exercises the
+    actual operator flow where another session mutated the row between
+    the editor's last read and the publish click.
+    """
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = create_resp.json()["id"]
+        get_resp = await client.get(
+            f"/api/v1/admin/publications/{pub_id}",
+            headers=_auth_headers(),
+        )
+        etag_a = get_resp.headers["etag"]
+
+        patch_resp = await client.patch(
+            f"/api/v1/admin/publications/{pub_id}",
+            json={"headline": "mutated between read and publish"},
+            headers={**_auth_headers(), "If-Match": etag_a},
+        )
+        assert patch_resp.status_code == 200, patch_resp.text
+        etag_b = patch_resp.headers["etag"]
+        assert etag_b != etag_a  # sanity: PATCH rotated the ETag
+
+        publish_resp = await client.post(
+            f"/api/v1/admin/publications/{pub_id}/publish",
+            headers={**_auth_headers(), "If-Match": etag_a},
+        )
+
+    assert publish_resp.status_code == 412, publish_resp.text
+    body = publish_resp.json()
+    assert body["detail"]["error_code"] == "PRECONDITION_FAILED"
+    details = body["detail"]["details"]
+    assert details["client_etag"] == etag_a
+    assert details["server_etag"] == etag_b
+
+
+@pytest.mark.asyncio
+async def test_publish_412_envelope_matches_patch_412_shape(session_factory) -> None:
+    """Schema parity: PATCH 412 and POST /publish 412 envelopes share structure."""
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = resp.json()["id"]
+
+        publish_resp = await client.post(
+            f"/api/v1/admin/publications/{pub_id}/publish",
+            headers={**_auth_headers(), "If-Match": '"wrong"'},
+        )
+        patch_resp = await client.patch(
+            f"/api/v1/admin/publications/{pub_id}",
+            json={"headline": "x"},
+            headers={**_auth_headers(), "If-Match": '"wrong"'},
+        )
+
+    assert publish_resp.status_code == patch_resp.status_code == 412
+    publish_detail = publish_resp.json()["detail"]
+    patch_detail = patch_resp.json()["detail"]
+    assert set(publish_detail.keys()) == set(patch_detail.keys())
+    assert set(publish_detail["details"].keys()) == set(patch_detail["details"].keys())
+    assert publish_detail["error_code"] == patch_detail["error_code"]
+
+
+# ---------------------------------------------------------------------------
 # Phase 2.2.0 chunk 3c — admin create / get lineage_key end-to-end coverage
 # ---------------------------------------------------------------------------
 

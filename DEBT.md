@@ -884,3 +884,15 @@ Rules:
 - **Impact:** If implemented as a direct backend call from the browser, `ADMIN_API_KEY` would leak into the client bundle, exposing full admin compromise.
 - **Resolution:** Slice 3b ships the server-side proxy at `frontend-public/src/app/api/admin/resolve/[cubeId]/[semanticKey]/route.ts` matching the Slice 3a discovery proxy pattern. Server-side `process.env.ADMIN_API_KEY` is read; browser uses `/api/admin/resolve/...` same-origin paths only via `frontend-public/src/lib/api/admin-resolve.ts`.
 - **Target:** Slice 3b (this PR — resolved on merge)
+
+### DEBT-079: POST /publish tolerates missing If-Match for v1 deploy compat
+
+- **Source:** Phase 3.1d Recon Delta 03 (`docs/recon/deltas/phase-3-1d-03.md`), Slice 4b implementation, founder lock 2026-05-07
+- **Added:** 2026-05-07
+- **Severity:** low
+- **Category:** architecture
+- **Status:** active
+- **Description:** v1 server tolerates an absent `If-Match` header on `POST /api/v1/admin/publications/{id}/publish` (warn-log, proceed without ETag check, response carries `Deprecation: true`) to avoid breaking any external/scripted publish caller mid-deploy. Mirrors DEBT-042 (the same tolerance on PATCH). Frontend public + Flutter admin both forward `If-Match` starting from PR-07; only ad-hoc `curl`/script callers are exposed to the tolerance window.
+- **Impact:** Operator-visible warn-log noise during the rollout window if any external publish callers exist. Tolerance-period publishes do not get optimistic-concurrency protection.
+- **Resolution:** after two clean weeks (frontend + Flutter rolled out everywhere AND no warn-log entries for the missing-If-Match codepath on POST /publish for 7 consecutive days), change the handler to require `If-Match` and return 428 Precondition Required if absent. Update `docs/architecture/BACKEND_API_INVENTORY.md` to reflect the new strictness. Remove the warn-log emitter and the `Deprecation: true` header.
+- **Target:** Phase 4, after two-week clean rollout window with zero missing-If-Match warnings on POST /publish for 7 consecutive days.

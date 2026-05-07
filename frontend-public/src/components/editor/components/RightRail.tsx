@@ -35,6 +35,11 @@ export interface RightRailProps {
   contrastIssues: ContrastIssue[];
   /** Phase 3.1d Slice 4a: forwarded to ReviewPanel for the publish confirm modal. */
   publicationId?: string;
+  /** Phase 3.1d Slice 4b: forwarded to ReviewPanel → usePublishAction. */
+  etag?: string | null;
+  onEtagUpdate?: (newEtag: string | null) => void;
+  onCompareRequest?: () => void;
+  onPreconditionFailed?: (info: { serverEtag: string | null }) => void;
 }
 
 function RightRailImpl({
@@ -48,6 +53,10 @@ function RightRailImpl({
   onRequestNote,
   contrastIssues,
   publicationId,
+  etag,
+  onEtagUpdate,
+  onCompareRequest,
+  onPreconditionFailed,
 }: RightRailProps) {
   const tRightRail = useTranslations('right_rail');
   const [tab, setTab] = useState<RightRailTab>('inspector');
@@ -184,6 +193,10 @@ function RightRailImpl({
             dispatch={dispatch}
             onRequestNote={onRequestNote}
             publicationId={publicationId}
+            etag={etag}
+            onEtagUpdate={onEtagUpdate}
+            onCompareRequest={onCompareRequest}
+            onPreconditionFailed={onPreconditionFailed}
           />
         )}
       </div>
