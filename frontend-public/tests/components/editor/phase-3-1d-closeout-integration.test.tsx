@@ -110,6 +110,7 @@ import {
   comparePublication,
   fetchAdminPublication,
   BackendApiError,
+  type AdminPublicationWithEtag,
 } from '@/lib/api/admin';
 
 const publishMock = publishAdminPublication as jest.MockedFunction<typeof publishAdminPublication>;
@@ -126,12 +127,17 @@ const SINGLE_BINDING: Binding = {
   period: '2024-Q3',
 };
 
-function makeBindableDoc(): CanonicalDocument {
-  // Start from the real single_stat_hero template so all required block
-  // props are normalized correctly, then attach a binding to the
-  // hero_stat block (v1 single-bindable allowlist) and force the
-  // workflow into `exported` so the MARK_PUBLISHED transition button
-  // is visible in the Review panel.
+/**
+ * Returns both the doc AND the bindable hero_stat block id, so tests
+ * can supply matching `block_id` values in compare-mock fixtures.
+ * Critical for `shouldShowRepublishCtaForDoc` correlation tests
+ * (P1-2 R2 fix) — the predicate matches by real block id, so the
+ * mock id MUST equal whatever `mkDoc` happened to assign.
+ */
+function makeBindableDocWithHeroId(): {
+  doc: CanonicalDocument;
+  heroStatId: string;
+} {
   const doc = mkDoc('single_stat_hero', TPLS.single_stat_hero);
   const heroStatId = Object.values(doc.blocks).find(
     (b: Block) => b.type === 'hero_stat',
@@ -141,7 +147,11 @@ function makeBindableDoc(): CanonicalDocument {
     binding: SINGLE_BINDING,
   };
   doc.review.workflow = 'exported';
-  return doc;
+  return { doc, heroStatId };
+}
+
+function makeBindableDoc(): CanonicalDocument {
+  return makeBindableDocWithHeroId().doc;
 }
 
 function makeEditorialDoc(): CanonicalDocument {
@@ -153,6 +163,24 @@ function makeEditorialDoc(): CanonicalDocument {
   }
   doc.review.workflow = 'exported';
   return doc;
+}
+
+function makeFetchedPublication(opts: {
+  etag: string;
+  document?: CanonicalDocument;
+}): AdminPublicationWithEtag {
+  const doc = opts.document ?? makeBindableDoc();
+  return {
+    etag: opts.etag,
+    id: '1',
+    slug: 'test-slug',
+    lineage_key: 'test-lineage',
+    headline: 'Test Headline',
+    chart_type: 'single_stat_hero',
+    status: 'EXPORTED',
+    created_at: '2026-05-09T00:00:00Z',
+    document_state: JSON.stringify(doc),
+  };
 }
 
 function makeCompareResponse(opts: {
@@ -263,6 +291,17 @@ describe('PR-09 Scenario 1 — Happy publish flow (Slice 4b sequencing end-to-en
     await waitFor(() => {
       expect(screen.queryByTestId('publish-confirm-modal')).toBeNull();
     });
+
+    // P1-1 fix (R2): observable proof that MARK_PUBLISHED was dispatched.
+    // The MARK_PUBLISHED transition descriptor only applies while
+    // workflow === 'exported' (ReviewPanel transition descriptor). Once
+    // the reducer advances workflow → 'published', `availableTransitions`
+    // no longer yields a from='exported' descriptor, so the button leaves
+    // the DOM. Without this assertion the test passed even if the
+    // dispatch was accidentally removed.
+    await waitFor(() => {
+      expect(screen.queryByTestId('transition-MARK_PUBLISHED')).not.toBeInTheDocument();
+    });
   });
 });
 
@@ -318,12 +357,12 @@ describe('PR-09 Scenario 2 — 412 publish conflict flow', () => {
       }),
     );
 
-    const freshDoc = makeBindableDoc();
-    fetchMock.mockResolvedValueOnce({
-      etag: '"etag-server-current"',
-      id: 1,
-      document_state: JSON.stringify(freshDoc),
-    } as never);
+    fetchMock.mockResolvedValueOnce(
+      makeFetchedPublication({
+        etag: '"etag-server-current"',
+        document: makeBindableDoc(),
+      }),
+    );
 
     renderEditor();
     openReviewTab();
@@ -378,12 +417,18 @@ describe('PR-09 Scenario 3 — Pre-3.1d Republish CTA flow', () => {
     fetchMock.mockReset();
   });
 
-  it('empty block_results + bindable doc → CTA renders → click opens publish modal', async () => {
+  it('Pre-3.1d CTA flow: empty block_results → CTA → republish → fresh result → CTA gone (full closeout)', async () => {
+    // P1-2 fix (R2): use the actual heroStatId assigned by mkDoc, not
+    // a hardcoded 'b1'. shouldShowRepublishCtaForDoc correlates by real
+    // block id — a mismatched id silently keeps the predicate true and
+    // makes the CTA-disappears acceptance untestable.
+    const { doc, heroStatId } = makeBindableDocWithHeroId();
+
     compareMock.mockResolvedValueOnce(
       makeCompareResponse({ overall_status: 'unknown', block_results: [] }),
     );
 
-    renderEditor();
+    renderEditor({ initialDoc: doc });
 
     fireEvent.click(screen.getByTestId('compare-button'));
 
@@ -397,11 +442,12 @@ describe('PR-09 Scenario 3 — Pre-3.1d Republish CTA flow', () => {
     });
     compareMock.mockResolvedValueOnce(
       makeCompareResponse({
+        overall_status: 'fresh',
         block_results: [
           {
-            block_id: 'b1',
-            cube_id: 'c1',
-            semantic_key: 's1',
+            block_id: heroStatId,
+            cube_id: SINGLE_BINDING.cube_id,
+            semantic_key: SINGLE_BINDING.semantic_key,
             stale_status: 'fresh',
             stale_reasons: [],
             severity: 'info',
@@ -425,6 +471,14 @@ describe('PR-09 Scenario 3 — Pre-3.1d Republish CTA flow', () => {
 
     await waitFor(() => {
       expect(publishMock).toHaveBeenCalled();
+    });
+
+    // P1-2 acceptance: CTA must disappear because compare now returns a
+    // fresh result for the operator's bindable block. This is THE main
+    // acceptance criterion of Slice 5/6 — pre-3.1d publication exits
+    // "Refresh required" state after republish.
+    await waitFor(() => {
+      expect(screen.queryByTestId('republish-cta')).not.toBeInTheDocument();
     });
   });
 
@@ -458,15 +512,22 @@ describe('PR-09 Scenario 4 — Reasons tooltip i18n coverage', () => {
     'snapshot_missing',
   ];
 
-  const EXPECTED_LABELS: Record<StaleReason, string> = {
-    mapping_version_changed: 'Semantic mapping changed',
-    source_hash_changed: 'Source data changed',
-    value_changed: 'Value changed',
-    missing_state_changed: 'Data availability changed',
-    cache_row_stale: 'Cached data is stale',
-    compare_failed: 'Comparison failed',
-    snapshot_missing: 'No snapshot to compare against',
-  };
+  // P2-3 fix (R2): derive expected labels from the actual messages bundle
+  // so this scenario verifies "component reads i18n from en.json", not
+  // "two duplicate string tables match". Hardcoded literals reduced this
+  // to a string-freeze regression test.
+  const REASON_MESSAGES = enMessages.publication.compare.reasons as Record<StaleReason, string>;
+
+  // Sanity check at module load: every StaleReason has a message. Fails
+  // fast with a clear error if i18n keys drift, instead of a cryptic
+  // "expected null" inside one of the parametrized cases.
+  for (const reason of ALL_REASONS) {
+    if (!REASON_MESSAGES[reason]) {
+      throw new Error(
+        `PR-09 Scenario 4 i18n contract violation: en.json missing publication.compare.reasons.${reason}`,
+      );
+    }
+  }
 
   beforeEach(() => {
     publishMock.mockReset();
@@ -519,6 +580,6 @@ describe('PR-09 Scenario 4 — Reasons tooltip i18n coverage', () => {
     fireEvent.mouseEnter(wrapper);
 
     const tooltip = await screen.findByTestId('compare-reasons-tooltip');
-    expect(within(tooltip).getByText(EXPECTED_LABELS[reason])).toBeInTheDocument();
+    expect(within(tooltip).getByText(REASON_MESSAGES[reason])).toBeInTheDocument();
   });
 });
