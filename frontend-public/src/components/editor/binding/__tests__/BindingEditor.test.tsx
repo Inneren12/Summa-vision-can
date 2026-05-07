@@ -10,6 +10,11 @@ jest.mock('@/lib/api/admin-discovery', () => ({
   DiscoveryFetchError: class extends Error {},
 }));
 
+jest.mock('../ResolvePreview', () => ({
+  ResolvePreview: ({ binding }: { binding: unknown }) =>
+    binding ? <div data-testid="mock-resolve-preview">mock</div> : null,
+}));
+
 import {
   searchCubes,
   listSemanticMappings,
@@ -538,6 +543,27 @@ describe('BindingEditor — cube change resets dependent fields (Phase 3.1d Slic
       expect(onChange).toHaveBeenCalled();
     });
     expect(onChange).toHaveBeenLastCalledWith(undefined);
+  });
+});
+
+describe('BindingEditor — ResolvePreview integration (Phase 3.1d Slice 3b)', () => {
+  it('mounts ResolvePreview when block has valid single binding', () => {
+    const binding: SingleValueBinding = {
+      kind: 'single',
+      cube_id: '18100004',
+      semantic_key: 'metric_x',
+      filters: { geo: 'CA' },
+      period: '2024-Q3',
+    };
+    mockListSemanticMappings.mockReturnValue(neverResolves());
+    mockGetCubeMetadata.mockReturnValue(neverResolves());
+    render(<BindingEditor block={makeBlock({ binding })} onChange={jest.fn()} />);
+    expect(screen.getByTestId('mock-resolve-preview')).toBeInTheDocument();
+  });
+
+  it('does not mount ResolvePreview when block has no binding', () => {
+    render(<BindingEditor block={makeBlock()} onChange={jest.fn()} />);
+    expect(screen.queryByTestId('mock-resolve-preview')).toBeNull();
   });
 });
 

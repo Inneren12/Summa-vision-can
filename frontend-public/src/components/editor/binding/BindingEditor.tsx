@@ -15,6 +15,7 @@ import {
   type SemanticMappingListItem,
   type CubeMetadataResponse,
 } from '@/lib/api/admin-discovery';
+import { ResolvePreview } from './ResolvePreview';
 
 interface BindingEditorProps {
   block: Block;
@@ -406,6 +407,11 @@ export function BindingEditor({ block, onChange }: BindingEditorProps) {
       >
         Clear binding
       </button>
+      <ResolvePreview
+        binding={
+          block.binding && block.binding.kind === 'single' ? block.binding : null
+        }
+      />
     </div>
   );
 }
