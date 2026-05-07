@@ -1078,6 +1078,166 @@ enough to justify a sprint slot.
 
 ---
 
+## P3-039 — Slice 3b admin-resolve.ts: lexicographic vs numeric filter-key sort divergence
+
+- **Source:** Phase 3.1d Slice 4a fix round 2 review (closure noted in Summary "Followup items")
+- **Added:** 2026-05-07
+- **Severity:** P2
+- **Category:** code-quality / consistency
+- **File:** `frontend-public/src/lib/api/admin-resolve.ts`
+- **Description:** Slice 4a walker (round-2) was switched to numeric
+  ascending sort over `binding.filters` keys before pairing into
+  `dims[]` / `members[]` arrays. Slice 3b's `fetchResolvedValue`
+  call site (admin-resolve.ts) still uses lexicographic
+  `Object.keys(...).sort()` (default `localeCompare`). Pairing is
+  positional in both, so functionally equivalent (backend reassembles
+  the dim→member mapping correctly), but the canonical wire form
+  diverges: walker emits `dims=[2,3,10]`, admin-resolve emits
+  `dims=[10,2,3]` for the same input. Hurts cross-PR comparability
+  in logs / debug / hash-based test fixtures.
+- **Fix sketch:** mirror walker's pair-then-sort-by-numeric-dim:
+  ```ts
+  const pairs = Object.entries(binding.filters)
+    .map(([k, v]) => ({ dim: Number(k), member: Number(v) }))
+    .sort((a, b) => a.dim - b.dim);
+  const dim = pairs.map((p) => p.dim);
+  const member = pairs.map((p) => p.member);
+  ```
+  Add a unit test asserting numeric ascending order on input like
+  `{ '10': '100', '2': '20', '3': '30' }` → `dim=[2,3,10]`.
+- **Status:** pending
+- **Note:** standalone item; not blocking deploy. Defer until Slice 6
+  e2e closeout OR a future Slice 3b touch lands.
+
+---
+
+## P3-040 — Walker comment drift in usePublishAction.ts
+
+- **Source:** Phase 3.1d Slice 4a fix round 3 review (founder catch)
+- **Added:** 2026-05-07
+- **Severity:** P3
+- **Category:** documentation / comment-accuracy
+- **File:** `frontend-public/src/components/editor/hooks/usePublishAction.ts`
+- **Description:** Hook docstring says "Walker is computed inside the
+  modal (memoized on doc)." Round-3 fix (Badge P2-1) deliberately
+  removed `useMemo` from `PublishConfirmModal` — walker now runs once
+  per modal-open render, NOT memoized. Comment drift: docstring lies
+  about behavior.
+- **Fix sketch:** rewrite the line in `usePublishAction.ts` docstring:
+  ```
+  // Before:
+  // Walker is computed inside the modal (memoized on doc).
+  // After:
+  // Walker is computed inside the modal only while open (no memoization;
+  // modal is short-lived and a fresh walk is cheaper than memo overhead).
+  ```
+- **Status:** pending
+- **Note:** trivial; combine with any next `usePublishAction.ts` touch
+  OR ship as part of Slice 5/6 closeout polish batch.
+
+---
+
+## P3-041 — PublishConfirmModal: useMemo import dropped if unused
+
+- **Source:** Phase 3.1d Slice 4a fix round 3 (honest-stop condition not exercised)
+- **Added:** 2026-05-07
+- **Severity:** P3
+- **Category:** code-quality / lint-hygiene
+- **File:** `frontend-public/src/components/editor/components/PublishConfirmModal.tsx`
+- **Description:** Round-3 fix (Badge P2-1) removed the `useMemo` call
+  from the modal body. The `useMemo` import in the file may still be
+  present unused. The honest-stop condition (GATE-G item 1) flagged
+  this as "drop import if single-use" but agent may not have exercised
+  it. Verify: if `useMemo` appears 0 times in file body, drop from
+  import statement.
+- **Fix sketch:**
+  ```bash
+  grep -c "useMemo" frontend-public/src/components/editor/components/PublishConfirmModal.tsx
+  # If 1 (only the import line), drop from `import { useMemo } from 'react'`
+  ```
+  If the import line reads `import { useMemo } from 'react'` (sole
+  symbol), remove the entire line. If it imports other React hooks,
+  remove only `useMemo` from the destructure.
+- **Status:** pending
+- **Note:** trivial cleanup; lint-aware editors flag it.
+
+---
+
+## P3-042 — Walker block-type allowlist duplicates registry source-of-truth
+
+- **Source:** Phase 3.1d Slice 4a impl + round-2 fix (architecture observation)
+- **Added:** 2026-05-07
+- **Severity:** P2
+- **Category:** architecture / single-source-of-truth
+- **File:** `frontend-public/src/components/editor/utils/walker.ts`
+- **Description:** Round-2 added
+  `SUPPORTED_SINGLE_BINDING_BLOCK_TYPES = new Set(['hero_stat', 'delta_badge'])`
+  to the walker. The same information lives in the block registry as
+  `acceptsBinding: ['single']` on each block-type entry. Two
+  source-of-truth locations: registry + walker hardcode. If a future
+  Slice (e.g. 3.1e or Phase 3.2) adds `'single'` to a third block
+  type's registry entry but forgets to update the walker's set, walker
+  silently drops valid bindings.
+- **Fix sketch:** drive the allowlist from registry:
+  ```ts
+  import { blockRegistry } from '../registry';
+
+  function isSupportedSingleBindingBlockType(blockType: string): boolean {
+    const entry = blockRegistry[blockType];
+    return entry?.acceptsBinding?.includes('single') ?? false;
+  }
+  ```
+  Then in walker:
+  ```ts
+  if (!isSupportedSingleBindingBlockType(block.type)) {
+    skipped.push({ block_id: blockId, reason: 'unsupported_block_type' });
+    continue;
+  }
+  ```
+- **Status:** pending
+- **Note:** Slice 4a round-2 hardcoded the set deliberately for tight
+  HALT-3 enforcement. Refactor when block registry exposes
+  `acceptsBinding` cleanly OR when a 3rd block type wants
+  single-binding capture.
+
+---
+
+## P3-043 — Walker block ordering: insertion vs section.children divergence
+
+- **Source:** Phase 3.1d Slice 4a preflight TASK 5 sub-finding
+- **Added:** 2026-05-07
+- **Severity:** P3
+- **Category:** code-quality / canonical-ordering
+- **File:** `frontend-public/src/components/editor/utils/walker.ts`
+- **Description:** Walker iterates `Object.entries(doc.blocks)`
+  (insertion order in V8/SpiderMonkey for string keys). Renderer /
+  measure / engine iterate via `section.children` for canonical visual
+  order. Validation iterates via `Object.values` (insertion). Order is
+  functionally irrelevant for backend snapshot upsert (keyed by
+  `(publication_id, block_id)`), but `bound_blocks[]` ordering shows
+  up in audit logs, structured-log breadcrumbs, and debug payloads.
+  Inconsistency between walker and renderer hurts forensic debugging.
+- **Fix sketch:** if visual-order capture is preferred, walk via
+  section traversal:
+  ```ts
+  for (const section of doc.sections) {
+    for (const blockId of section.children) {
+      const block = doc.blocks[blockId];
+      if (!block) continue;
+      // ... existing emit logic
+    }
+  }
+  ```
+  Trade-off: section-order excludes orphan blocks (blocks present in
+  `doc.blocks` but not in any `section.children`). Slice 4a's
+  insertion-order walk catches orphans; section-order doesn't. Verify
+  with founder which capture semantic is correct before fix.
+- **Status:** pending
+- **Note:** opportunistic; surface again if a forensic-debug session
+  hits ordering confusion. Defer until then.
+
+---
+
 ## Batch dispatch policy
 
 When 3+ items accumulate in same category, OR 5+ items total:
