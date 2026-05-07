@@ -30,6 +30,24 @@
   ): Promise<AdminPublicationResponse>
   ```
   Sends `PATCH /api/admin/publications/{id}` with JSON body. **No `If-Match`/version header today.**
+- `publishAdminPublication(id, payload, options)` — signature (admin.ts:247):
+  ```ts
+  export async function publishAdminPublication(
+    id: string,
+    payload: PublishPayload = {},
+    options: { signal?: AbortSignal; ifMatch?: string | null } = {},
+  ): Promise<{ etag: string | null; document: AdminPublicationResponse }>
+  ```
+  Sends `POST /api/admin/publications/{id}/publish` with JSON body
+  containing optional `bound_blocks: BoundBlockReference[]` (Phase 3.1d
+  Slice 4a). Empty body (no `bound_blocks` or `[]`) is backward-compatible:
+  publish succeeds with no snapshot capture; first compare returns
+  `unknown + [snapshot_missing] + info`. 404 surfaces as
+  `AdminPublicationNotFoundError` (terminal — no auto-retry, manual reload
+  via `publication.not_found.reload`). Other failures throw `BackendApiError`
+  carrying `code` / `details` / `status`. Supports `If-Match` for ETag
+  concurrency (Phase 1.3 pattern); ReviewPanel + `usePublishAction` do not
+  forward `ifMatch` today since the publish flow has no autosave race.
 
 ### BackendApiError class
 **Location:** `frontend-public/src/lib/api/admin.ts:34–51`

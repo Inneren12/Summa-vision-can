@@ -1467,6 +1467,7 @@ export default function InfographicEditor({
           canEdit={canEdit}
           onRequestNote={requestNote}
           contrastIssues={vr.contrastIssues}
+          publicationId={publicationId}
         />
       </div>
 

@@ -24,6 +24,8 @@ import { checkWorkflowPermission } from '../store/permissions';
 import { resolveBlockLabel } from '../utils/block-label';
 import { StatusBadge } from './StatusBadge';
 import type { NoteRequestConfig } from './noteRequest';
+import { usePublishAction } from '../hooks/usePublishAction';
+import { PublishConfirmModal } from './PublishConfirmModal';
 
 const ACTOR_YOU = 'you';
 const HISTORY_COLLAPSED_LIMIT = 6;
@@ -97,11 +99,26 @@ export interface ReviewPanelProps {
    * onSubmit(note) → dispatch.
    */
   onRequestNote: (config: NoteRequestConfig) => void;
+  /**
+   * Phase 3.1d Slice 4a: required for the publish confirm modal flow.
+   * MARK_PUBLISHED transitions intercept the descriptor, open the modal,
+   * and on confirm POST `bound_blocks` to the publish endpoint via
+   * `publishAdminPublication(publicationId, ...)`. Optional because the
+   * template-only editor session passes no publicationId; in that case
+   * the publish hook warns and the modal never opens.
+   */
+  publicationId?: string;
 }
 
-export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps) {
+export function ReviewPanel({
+  state,
+  dispatch,
+  onRequestNote,
+  publicationId,
+}: ReviewPanelProps) {
   const tReview = useTranslations('review');
   const tBlockType = useTranslations('block.type');
+  const tPublication = useTranslations('publication');
   const [showResolved, setShowResolved] = useState<boolean>(false);
   const [historyExpanded, setHistoryExpanded] = useState<boolean>(false);
 
@@ -161,8 +178,45 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
     });
   };
 
+  const publishAction = usePublishAction({
+    publicationId,
+    onPublishSuccess: () => {
+      dispatch({ type: 'MARK_PUBLISHED', channel: 'manual' });
+    },
+    onNotFound: () => {
+      // Surface "Publication not found — reload the page" via the existing
+      // saveError banner channel (matches editor.md NotificationBanner
+      // priority `saveError > importError > _lastRejection > warnings`).
+      // canAutoRetry: false — terminal, manual reload only.
+      dispatch({
+        type: 'SAVE_FAILED',
+        error: tPublication('not_found.reload'),
+        canAutoRetry: false,
+      });
+    },
+  });
+
   const handleTransitionClick = (descriptor: TransitionDescriptor) => {
     if (descriptor.kind === 'direct') {
+      // Phase 3.1d Slice 4a: combined-transition interception. MARK_PUBLISHED
+      // does not dispatch directly from the button click; instead it opens
+      // the publish confirm modal. The reducer dispatch happens inside
+      // `onPublishSuccess` once the network publish succeeds.
+      //
+      // Phase 3.1d Slice 4a fix (Badge P2-2): template-only sessions have
+      // no publicationId — there is no backend publication to send
+      // bound_blocks to. Preserve pre-Slice-4a behavior: direct dispatch
+      // advances the local workflow to "published" without a network
+      // call. Operator sees the workflow transition; no snapshot capture
+      // is attempted (and none is meaningful in a template-only session).
+      if (descriptor.action.type === 'MARK_PUBLISHED') {
+        if (publicationId) {
+          publishAction.initiate();
+        } else {
+          dispatch(descriptor.action);
+        }
+        return;
+      }
       dispatch(descriptor.action);
       return;
     }
@@ -468,6 +522,14 @@ export function ReviewPanel({ state, dispatch, onRequestNote }: ReviewPanelProps
         </ul>
       </div>
 
+      <PublishConfirmModal
+        isOpen={publishAction.isModalOpen}
+        doc={state.doc}
+        isPublishing={publishAction.isPublishing}
+        error={publishAction.error}
+        onConfirm={publishAction.confirm}
+        onCancel={publishAction.cancel}
+      />
     </div>
   );
 }

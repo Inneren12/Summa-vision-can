@@ -33,6 +33,17 @@
         "unknown": "Resolve failed"
       }
     },
+    "publish": {
+      "modal": {
+        "title": "Publish publication",
+        "summary": "Will capture snapshots for {count} bindings; {skipped} skipped.",
+        "deferred_heading": "Deferred ({count} multi-value bindings — not supported in v1)",
+        "skipped_heading": "Skipped ({count} bindings not captured)",
+        "confirm_button": "Publish",
+        "cancel_button": "Cancel",
+        "publishing": "Publishing…"
+      }
+    },
     "compare": {
       "button": {
         "compare": "Compare",

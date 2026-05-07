@@ -33,6 +33,8 @@ export interface RightRailProps {
   canEdit: (reg: BlockRegistryEntry, k: string) => boolean;
   onRequestNote: (config: NoteRequestConfig) => void;
   contrastIssues: ContrastIssue[];
+  /** Phase 3.1d Slice 4a: forwarded to ReviewPanel for the publish confirm modal. */
+  publicationId?: string;
 }
 
 function RightRailImpl({
@@ -45,6 +47,7 @@ function RightRailImpl({
   canEdit,
   onRequestNote,
   contrastIssues,
+  publicationId,
 }: RightRailProps) {
   const tRightRail = useTranslations('right_rail');
   const [tab, setTab] = useState<RightRailTab>('inspector');
@@ -180,6 +183,7 @@ function RightRailImpl({
             state={state}
             dispatch={dispatch}
             onRequestNote={onRequestNote}
+            publicationId={publicationId}
           />
         )}
       </div>
