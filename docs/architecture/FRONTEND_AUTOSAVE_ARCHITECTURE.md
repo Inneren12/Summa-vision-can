@@ -318,7 +318,27 @@ Three cases handled by `handleForkFailure` inside `forkLocalSnapshotAsNewDraft`:
 
 ### i18n keys
 
-Under `errors.backend.precondition_failed.*` (cross-cutting protocol namespace per the hybrid policy in §6, NOT `publication.*`). Five keys: `title`, `body`, `button_reload`, `button_save_as_draft`, `fork_partial`. EN + RU parity verified.
+Under `errors.backend.precondition_failed.*` (cross-cutting protocol namespace per the hybrid policy in §6, NOT `publication.*`). Six keys: `title`, `body`, **`body_publish`** (Phase 3.1d Slice 4b), `button_reload`, `button_save_as_draft`, `fork_partial`. EN + RU parity verified.
+
+### Phase 3.1d Slice 4b — Publish path mount + auto-refresh sequencing (Recon Delta 03)
+
+`PreconditionFailedModal` now serves two write paths via a `source: 'patch' | 'publish'` discriminator on the modal state in `editor/index.tsx`:
+
+- `source: 'patch'` (default, preserves Phase 1.3 UX) — mounted from `performSave`'s 412 catch branch; renders the `body` key.
+- `source: 'publish'` — mounted from `usePublishAction.onPreconditionFailed` (forwarded up through `ReviewPanel` and `RightRail`); renders the `body_publish` key.
+
+Publish flow with auto-refresh (sequencing per Recon Delta 03):
+
+1. Operator clicks `MARK_PUBLISHED` transition in `ReviewPanel` → `usePublishAction.initiate()` opens `PublishConfirmModal`.
+2. Operator confirms → `confirm(walkerResult)` → `publishAdminPublication(id, { bound_blocks }, { ifMatch: etag })` where `etag` is sourced from the editor's `etagRef` and forwarded down through `RightRail → ReviewPanel`.
+3. **On 200** → `onPublishSuccess(newEtag)` runs three side-effects, in order:
+   1. `onEtagUpdate(newEtag)` — refreshes `etagRef.current` so any subsequent PATCH carries the post-publish ETag.
+   2. `onCompareRequest()` — invokes the lifted `useCompareState.compare()` so the badge transitions to "Comparing…" immediately.
+   3. `dispatch({ type: 'MARK_PUBLISHED', channel: 'manual' })` — workflow advances synchronously.
+4. **On 412** → `onPreconditionFailed({ serverEtag })` opens `PreconditionFailedModal` with `source: 'publish'`. Compare is **not** invoked; workflow does **not** advance.
+5. **On 404** → existing `SAVE_FAILED` toast (unchanged).
+
+`useCompareState` was lifted from `TopBar` to the editor root in Slice 4b so a single hook instance can be driven both by the user's manual Compare button click (via `TopBar`) and by the publish-success auto-trigger. Initial-mount auto-trigger is **not** introduced — recon §2.3's "compare is operator-triggered" invariant is preserved for the no-publish case.
 
 ---
 
@@ -328,3 +348,4 @@ Under `errors.backend.precondition_failed.*` (cross-cutting protocol namespace p
 |---|---|---|---|
 | 2026-04-27 | initial | all | Created from Phase 1.3 Part B input (`docs/recon/phase-1-3-B-frontend-inventory.md`). |
 | 2026-04-27 | Phase 1.3 impl | §2, §3, §4, §5, §7 | `PRECONDITION_FAILED` added to `KNOWN_BACKEND_ERROR_CODES` with i18n key `errors.backend.precondition_failed`; new `PreconditionFailedModal` component; autosave catch branch + fork-path implementation; 5 EN + 5 RU keys added under `errors.backend.precondition_failed.*`. `admin.ts` returns `AdminPublicationWithEtag`. |
+| 2026-05-07 | PR-07 Slice 4b (Recon Delta 03) | §7 | `PreconditionFailedModal` extended with `source: 'patch' \| 'publish'` discriminator; `body_publish` i18n key added EN+RU. `usePublishAction` now forwards `If-Match` and surfaces `onPreconditionFailed`. `useCompareState` lifted from `TopBar` to editor root; on publish-success the editor refreshes `etagRef`, fires `compare()`, then dispatches `MARK_PUBLISHED` (in that order). Backend POST `/publish` honors `If-Match` (412 on mismatch; v1 tolerates absent header per DEBT-079). |

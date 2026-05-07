@@ -108,6 +108,28 @@ export interface ReviewPanelProps {
    * the publish hook warns and the modal never opens.
    */
   publicationId?: string;
+  /**
+   * Phase 3.1d Slice 4b (Recon Delta 03): current ETag forwarded as
+   * If-Match on POST /publish for optimistic concurrency. Sourced from
+   * the editor's etagRef.
+   */
+  etag?: string | null;
+  /**
+   * Phase 3.1d Slice 4b: notify caller of the new ETag returned by a
+   * successful publish so it can update etagRef before the next PATCH.
+   */
+  onEtagUpdate?: (newEtag: string | null) => void;
+  /**
+   * Phase 3.1d Slice 4b: editor root invokes compare() after publish
+   * success. Auto-refresh sequencing per Recon Delta 03 §"compare
+   * auto-trigger after publish".
+   */
+  onCompareRequest?: () => void;
+  /**
+   * Phase 3.1d Slice 4b: surface the PreconditionFailedModal on the
+   * publish path with the publish-specific copy variant.
+   */
+  onPreconditionFailed?: (info: { serverEtag: string | null }) => void;
 }
 
 export function ReviewPanel({
@@ -115,6 +137,10 @@ export function ReviewPanel({
   dispatch,
   onRequestNote,
   publicationId,
+  etag,
+  onEtagUpdate,
+  onCompareRequest,
+  onPreconditionFailed,
 }: ReviewPanelProps) {
   const tReview = useTranslations('review');
   const tBlockType = useTranslations('block.type');
@@ -180,7 +206,15 @@ export function ReviewPanel({
 
   const publishAction = usePublishAction({
     publicationId,
-    onPublishSuccess: () => {
+    etag,
+    onPublishSuccess: (newEtag) => {
+      // Phase 3.1d Slice 4b sequencing (Recon Delta 03): refresh etagRef
+      // first (so any subsequent PATCH carries the post-publish ETag),
+      // then auto-trigger compare so the badge transitions to
+      // "Comparing…" immediately, THEN dispatch MARK_PUBLISHED. The
+      // workflow transition is orthogonal and dispatches synchronously.
+      onEtagUpdate?.(newEtag);
+      onCompareRequest?.();
       dispatch({ type: 'MARK_PUBLISHED', channel: 'manual' });
     },
     onNotFound: () => {
@@ -193,6 +227,9 @@ export function ReviewPanel({
         error: tPublication('not_found.reload'),
         canAutoRetry: false,
       });
+    },
+    onPreconditionFailed: (info) => {
+      onPreconditionFailed?.(info);
     },
   });
 

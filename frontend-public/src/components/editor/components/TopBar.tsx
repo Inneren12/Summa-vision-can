@@ -10,7 +10,7 @@ import { SaveStatusIndicator } from './SaveStatusIndicator';
 import { ZipExportProgress } from './ZipExportProgress';
 import { CompareButton } from './CompareButton';
 import { CompareBadge } from './CompareBadge';
-import { useCompareState } from '../hooks/useCompareState';
+import type { CompareState } from '../hooks/compareReducer';
 import type { ZipExportPhase } from '../export/zipExport';
 
 interface TopBarProps {
@@ -54,7 +54,13 @@ interface TopBarProps {
   // Phase 3.1d Slice 1b: compare surface. Compare button + badge sit
   // between clone and export-zip in the right cluster. Compare is
   // disabled when no publicationId (template-only editor session).
+  //
+  // Phase 3.1d Slice 4b (Recon Delta 03): compareState + onCompare are
+  // owned by the editor root so a successful publish can auto-trigger
+  // compare. TopBar is a pure consumer.
   publicationId?: string;
+  compareState: CompareState;
+  onCompare: () => void;
 }
 
 export function TopBar({
@@ -88,6 +94,8 @@ export function TopBar({
   onClone,
   cloneTooltip,
   publicationId,
+  compareState,
+  onCompare,
 }: TopBarProps) {
   const tQa = useTranslations('qa');
   const tDebug = useTranslations('debug');
@@ -103,11 +111,10 @@ export function TopBar({
   const tZipBtn = useTranslations('editor.export_zip.button');
   const tCompare = useTranslations('publication.compare');
 
-  // Phase 3.1d Slice 1b: compare state machine. The hook owns AbortController
-  // lifecycle; reducer is pure. publicationId may be undefined for the
-  // template-only editor session — pass empty string to keep hook stable
-  // and disable the button via `compareDisabled`.
-  const { state: compareState, compare } = useCompareState(publicationId ?? '');
+  // Phase 3.1d Slice 4b: compareState lifted to editor root. TopBar
+  // consumes the reducer state + invoker via props. publicationId still
+  // gates the button (template-only editor session has no publication).
+  const compare = onCompare;
   const compareDisabled = !publicationId;
   const compareBadgeSeverity =
     compareState.kind === 'success' ? compareState.badge : 'not_compared';

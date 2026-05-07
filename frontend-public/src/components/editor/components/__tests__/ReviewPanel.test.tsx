@@ -19,15 +19,34 @@ jest.mock('@/lib/api/admin', () => {
       this.name = 'AdminPublicationNotFoundError';
     }
   }
+  class BackendApiError extends Error {
+    public readonly status: number;
+    public readonly code: string | null;
+    public readonly details: Record<string, unknown> | null;
+    constructor(args: {
+      status: number;
+      code: string | null;
+      message?: string;
+      details?: Record<string, unknown> | null;
+    }) {
+      super(args.message ?? `Backend error ${args.status}`);
+      this.name = 'BackendApiError';
+      this.status = args.status;
+      this.code = args.code;
+      this.details = args.details ?? null;
+    }
+  }
   return {
     publishAdminPublication: jest.fn(),
     AdminPublicationNotFoundError,
+    BackendApiError,
   };
 });
 
 import {
   publishAdminPublication,
   AdminPublicationNotFoundError,
+  BackendApiError,
 } from '@/lib/api/admin';
 
 const publishMock = publishAdminPublication as jest.MockedFunction<
@@ -97,7 +116,11 @@ describe('ReviewPanel — MARK_PUBLISHED publish modal interception', () => {
     });
 
     expect(publishMock).toHaveBeenCalledTimes(1);
-    expect(publishMock).toHaveBeenCalledWith('p1', { bound_blocks: [] });
+    expect(publishMock).toHaveBeenCalledWith(
+      'p1',
+      { bound_blocks: [] },
+      expect.objectContaining({ ifMatch: null }),
+    );
     const markCalls = dispatch.mock.calls.filter(
       (c) => (c[0] as EditorAction).type === 'MARK_PUBLISHED',
     );
@@ -198,5 +221,99 @@ describe('ReviewPanel — MARK_PUBLISHED publish modal interception', () => {
       type: 'MARK_PUBLISHED',
       channel: 'manual',
     });
+  });
+});
+
+describe('ReviewPanel — Slice 4b publish concurrency + auto-refresh', () => {
+  it('forwards etag as ifMatch and refreshes etag + fires compare BEFORE MARK_PUBLISHED', async () => {
+    publishMock.mockResolvedValueOnce({
+      etag: '"post-publish"',
+      document: {} as never,
+    });
+    const state = makeExportedState();
+    const dispatch = jest.fn();
+    const onEtagUpdate = jest.fn();
+    const onCompareRequest = jest.fn();
+
+    // Track callback ordering across the three side-effects.
+    const order: string[] = [];
+    onEtagUpdate.mockImplementation(() => order.push('etag'));
+    onCompareRequest.mockImplementation(() => order.push('compare'));
+    dispatch.mockImplementation((a: EditorAction) => {
+      if (a.type === 'MARK_PUBLISHED') order.push('mark_published');
+    });
+
+    render(
+      <ReviewPanel
+        state={state}
+        dispatch={dispatch}
+        onRequestNote={jest.fn()}
+        publicationId="p1"
+        etag='"current"'
+        onEtagUpdate={onEtagUpdate}
+        onCompareRequest={onCompareRequest}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('transition-MARK_PUBLISHED'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('publish-modal-confirm'));
+    });
+
+    expect(publishMock).toHaveBeenCalledWith(
+      'p1',
+      { bound_blocks: [] },
+      expect.objectContaining({ ifMatch: '"current"' }),
+    );
+    expect(onEtagUpdate).toHaveBeenCalledWith('"post-publish"');
+    expect(onCompareRequest).toHaveBeenCalledTimes(1);
+    // Auto-refresh sequencing per Recon Delta 03: compare fires BEFORE
+    // MARK_PUBLISHED so the badge transitions to "Comparing…" first.
+    expect(order).toEqual(['etag', 'compare', 'mark_published']);
+  });
+
+  it('on 412 calls onPreconditionFailed with serverEtag, skips compare + MARK_PUBLISHED', async () => {
+    publishMock.mockRejectedValueOnce(
+      new BackendApiError({
+        status: 412,
+        code: 'PRECONDITION_FAILED',
+        message: 'stale',
+        details: { server_etag: '"server-current"', client_etag: '"stale"' },
+      }),
+    );
+    const state = makeExportedState();
+    const dispatch = jest.fn();
+    const onCompareRequest = jest.fn();
+    const onPreconditionFailed = jest.fn();
+
+    render(
+      <ReviewPanel
+        state={state}
+        dispatch={dispatch}
+        onRequestNote={jest.fn()}
+        publicationId="p1"
+        etag='"stale"'
+        onCompareRequest={onCompareRequest}
+        onPreconditionFailed={onPreconditionFailed}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('transition-MARK_PUBLISHED'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('publish-modal-confirm'));
+    });
+
+    expect(onPreconditionFailed).toHaveBeenCalledWith({
+      serverEtag: '"server-current"',
+    });
+    expect(onCompareRequest).not.toHaveBeenCalled();
+    expect(
+      dispatch.mock.calls.find(
+        (c) => (c[0] as EditorAction).type === 'MARK_PUBLISHED',
+      ),
+    ).toBeUndefined();
+    // Modal closes after 412 — surface is now the PreconditionFailedModal
+    // owned by the editor root.
+    expect(screen.queryByTestId('publish-confirm-modal')).toBeNull();
   });
 });

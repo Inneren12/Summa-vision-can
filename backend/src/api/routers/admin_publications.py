@@ -540,11 +540,14 @@ async def update_publication(
     summary="Publish a draft publication",
     responses={
         404: {"description": "Publication not found."},
+        412: {"description": "ETag does not match — publication has changed."},
     },
 )
 async def publish_publication(
     publication_id: int,
+    response: Response,
     payload: PublicationPublishRequest | None = Body(default=None),
+    if_match: str | None = Header(default=None, alias="If-Match"),
     repo: PublicationRepository = Depends(_get_repo),
     audit: AuditWriter = Depends(_get_audit),
     staleness: PublicationStalenessService = Depends(_get_staleness_service),
@@ -564,6 +567,27 @@ async def publish_publication(
     upsert failures are logged inside the service and never raise into
     the caller, so publish success is not rolled back.
     """
+    # Phase 3.1d Slice 4b (Recon Delta 03): optional If-Match precondition
+    # check on POST /publish. Mirrors PATCH semantics. v1 tolerates absent
+    # If-Match (warn-log + Deprecation header) per DEBT-079.
+    previous = await repo.get_by_id(publication_id)
+    if previous is None:
+        raise PublicationNotFoundError()
+
+    if if_match is None:
+        response.headers["Deprecation"] = "true"
+        logger.warning(
+            "publish_publication_missing_if_match",
+            publication_id=publication_id,
+        )
+    else:
+        server_etag = compute_etag(previous)
+        if if_match != server_etag:
+            raise PublicationPreconditionFailedError(
+                server_etag=server_etag,
+                client_etag=if_match,
+            )
+
     publication = await repo.publish(publication_id)
     if publication is None:
         raise PublicationNotFoundError()
@@ -602,6 +626,7 @@ async def publish_publication(
         )
 
     logger.info("publication_published", publication_id=publication.id)
+    response.headers["ETag"] = compute_etag(publication)
     return _serialize(publication)
 
 
