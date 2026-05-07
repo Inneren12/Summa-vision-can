@@ -253,26 +253,39 @@ upstream guard added in 3b (not within Slice 3b scope to validate
 Binding.filters semantic constraints — Slice 2's `validateBinding`
 ensures *type* correctness, not numeric content).
 
-### D-03: No locale changes
+### D-03: One locale key added (`unknown`); other resolve keys reused
 
-Existing `publication.binding.resolve.{cache_miss,mapping_not_found,invalid_filters}`
-keys are reused. UNKNOWN errors fall back to raw backend message
-(dev-facing; acceptable per founder out-of-scope deferral on locale
-extraction).
+Round-1 fix added `publication.binding.resolve.unknown` to EN
+(`"Resolve failed"`) + RU (`"Ошибка резолва"`). Existing
+`cache_miss` / `mapping_not_found` / `invalid_filters` keys reused
+from Slice 3a milestone work. ResolvePreview renders `t('unknown')`
+plus a dimmed raw-message subline for operator visibility on truly
+unknown errors. Other ResolvePreview microcopy ("Preview", "Resolving…",
+"missing", "null", "hit"/"primed" cache_status badges) remains
+hardcoded EN — deferred to DEBT-077 string freeze closeout per
+milestone wrapper §close criteria.
 
 ## Recommended follow-up
 
-1. **F-03 root cause** — Slice 3a interface vs backend shape. Founder to
-   decide post-3b: add backend transformer at proxy OR adjust Slice 3a
-   TS interface OR adjust backend response shape. Tracked as a NEW
-   polish item (suggested ID P3-NN-RESOLVE-FILTERS-INTEGRATION).
-2. **F-02 picker translation** — once F-03 is resolved, the picker
-   should emit `binding.filters` with numeric position_ids as keys and
-   numeric member_ids as values OR a translation layer should sit
-   between the picker and the resolve client.
-3. **F-01** — corrected mirror is locked in 3b. No carry-forward.
+1. **F-03 live verification** — run integration / e2e test against the
+   backend resolve proxy with a picker-built binding to confirm
+   `dimensions[]` shape is consumed correctly and numeric filter
+   emission resolves successfully. Slice 6 e2e closeout is the natural
+   home for this; can also bundle with Slice 4a integration tests if
+   walker payload uses real picker fixtures.
+2. **F-02 carry-forward to Slice 4a walker** — the walker MUST emit
+   numeric-stringified `binding.filters` (matching post-fix picker
+   shape). No translation layer needed; same contract end-to-end.
+3. **F-01 closed inline** — ResolvedValueResponse mirror locked in 3b.
 4. **DEBT-081** (BACKEND_API_INVENTORY.md gap) — this delta reinforces
-   the existing tracked item.
+   the existing tracked item; Inventory section update for the resolve
+   row should reflect the correct `dimensions[]` array shape and
+   numeric `dim`/`member` query semantics.
+5. **P2 deferrals** — numeric-aware filter key sort (current
+   lexicographic sort over stringified ints suffices for v1 cubes with
+   <10 dimensions; revisit if a 10+ dim cube ships) and ResolvePreview
+   microcopy locale extraction (DEBT-077 string freeze closeout) are
+   tracked separately.
 
 ## Acceptance
 

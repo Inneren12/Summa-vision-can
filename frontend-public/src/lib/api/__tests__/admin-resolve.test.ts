@@ -87,27 +87,37 @@ describe('fetchResolvedValue — URL construction', () => {
     expect(parsed.searchParams.get('period')).toBe('2024-Q3');
   });
 
-  it('builds URL with one filter + period', async () => {
+  it('builds URL with one numeric filter + period (production picker shape)', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(SUCCESS));
-    await fetchResolvedValue(makeBinding({ filters: { geo: 'CA' } }));
+    // Per Delta 02 D-02 (post-fix), picker emits stringified position_id
+    // keys + stringified member_id values.
+    await fetchResolvedValue(makeBinding({ filters: { '1': '12' } }));
     const parsed = new URL(String(fetchMock.mock.calls[0]![0]), 'http://x');
-    expect(parsed.searchParams.getAll('dim')).toEqual(['geo']);
-    expect(parsed.searchParams.getAll('member')).toEqual(['CA']);
+    expect(parsed.searchParams.getAll('dim')).toEqual(['1']);
+    expect(parsed.searchParams.getAll('member')).toEqual(['12']);
     expect(parsed.searchParams.get('period')).toBe('2024-Q3');
   });
 
-  it('emits filters in alphabetical key order (deterministic)', async () => {
+  it('emits numeric filters in deterministic key order across multiple dims', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(SUCCESS));
+    // Two-dim picker output. Sort is lexicographic over stringified ints
+    // (so '10' < '2' lexically — fine for v1 cubes with <10 dims; future
+    // numeric-aware sort tracked as P2 for Slice 4a if it surfaces).
     await fetchResolvedValue(
-      makeBinding({ filters: { industry: '11', geo: 'CA' } }),
+      makeBinding({ filters: { '2': '5', '1': '12' } }),
     );
     const parsed = new URL(String(fetchMock.mock.calls[0]![0]), 'http://x');
-    expect(parsed.searchParams.getAll('dim')).toEqual(['geo', 'industry']);
-    expect(parsed.searchParams.getAll('member')).toEqual(['CA', '11']);
+    expect(parsed.searchParams.getAll('dim')).toEqual(['1', '2']);
+    expect(parsed.searchParams.getAll('member')).toEqual(['12', '5']);
   });
 
-  it('still alphabetizes when input object has reverse insertion order', async () => {
+  it('forwards non-numeric filters verbatim for hand-edited bindings (v1 contract)', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(SUCCESS));
+    // Picker only emits numeric stringified filters. Hand-edited or
+    // imported bindings can carry non-numeric strings; client forwards
+    // verbatim (no semantic guard at client layer). Backend returns
+    // 422 in that case; client surfaces RESOLVE_INVALID_FILTERS via
+    // extractResolveError. See Delta 02 D-02 known limitation.
     await fetchResolvedValue(
       makeBinding({ filters: { zeta: 'z', alpha: 'a', mu: 'm' } }),
     );

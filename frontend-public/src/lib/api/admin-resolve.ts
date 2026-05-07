@@ -140,11 +140,16 @@ export interface FetchResolvedValueOptions {
  * canonicalFilters already sorted alphabetically — the re-sort here is
  * defensive against runtime mutation).
  *
- * Per Recon Delta 02 D-02, filter values are forwarded verbatim. Backend
- * expects integer position_id / member_id pairs (`backend/src/services/
- * resolve/filters.py`). If the picker emits non-numeric filters (current
- * Slice 3a state per Delta 02 F-03), backend returns 422; client maps
- * to `code: 'UNKNOWN'` and surfaces the raw message in the UI.
+ * Per Recon Delta 02 D-02 (post-fix), the picker emits numeric-stringified
+ * position_id keys and member_id values. Backend
+ * (`backend/src/services/resolve/filters.py`) accepts them as
+ * `dim: list[int]` + `member: list[int]` via FastAPI int coercion.
+ *
+ * If a hand-edited or imported binding (rare; not via picker) carries
+ * non-numeric filters, backend returns FastAPI 422 with array detail.
+ * `extractResolveError` maps that array shape to
+ * `code: 'RESOLVE_INVALID_FILTERS'` (joined `msg` strings) so the operator
+ * sees a typed error in the UI rather than a generic UNKNOWN.
  */
 export async function fetchResolvedValue(
   binding: SingleValueBinding,
