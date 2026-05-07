@@ -46,8 +46,9 @@
   `AdminPublicationNotFoundError` (terminal — no auto-retry, manual reload
   via `publication.not_found.reload`). Other failures throw `BackendApiError`
   carrying `code` / `details` / `status`. Supports `If-Match` for ETag
-  concurrency (Phase 1.3 pattern); ReviewPanel + `usePublishAction` do not
-  forward `ifMatch` today since the publish flow has no autosave race.
+  concurrency (Phase 1.3 pattern); since Phase 3.1d Slice 4b (Recon Delta 03)
+  ReviewPanel forwards `etagRef.current` as `ifMatch` and surfaces 412
+  via the `PreconditionFailedModal` publish-source variant (see §7).
 
 ### BackendApiError class
 **Location:** `frontend-public/src/lib/api/admin.ts:34–51`

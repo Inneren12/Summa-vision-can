@@ -6,12 +6,18 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { TopBar } from '@/components/editor/components/TopBar';
 import { TPLS, mkDoc } from '@/components/editor/registry/templates';
+import { initialCompareState } from '@/components/editor/hooks/compareReducer';
 import type { EditorAction } from '@/components/editor/types';
 
 function makeDoc() {
   return mkDoc('single_stat_hero', TPLS.single_stat_hero);
 }
 
+// Phase 3.1d Slice 4b: useCompareState lifted from TopBar to editor
+// root, so TopBar now requires `compareState` and `onCompare` props.
+// These crop-zone tests do not exercise the compare surface; pass a
+// synthetic idle CompareState and a no-op onCompare so the component
+// renders without touching the compare lifecycle.
 function renderTopBar(overrides: Partial<React.ComponentProps<typeof TopBar>> = {}) {
   const fileRef = React.createRef<HTMLInputElement>();
   const baseProps: React.ComponentProps<typeof TopBar> = {
@@ -34,6 +40,8 @@ function renderTopBar(overrides: Partial<React.ComponentProps<typeof TopBar>> = 
     zipExportPhase: null,
     saveStatus: 'idle',
     fontsReady: true,
+    compareState: initialCompareState,
+    onCompare: () => undefined,
   };
   return render(<TopBar {...baseProps} {...overrides} />);
 }
@@ -88,6 +96,8 @@ describe('TopBar — Crop zone toggle', () => {
         onToggleCropZone={() => undefined}
         cropZoneAvailable={true}
         cropZoneEnabled={true}
+        compareState={initialCompareState}
+        onCompare={() => undefined}
       />,
     );
 

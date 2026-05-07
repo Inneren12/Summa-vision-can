@@ -570,7 +570,14 @@ async def publish_publication(
     # Phase 3.1d Slice 4b (Recon Delta 03): optional If-Match precondition
     # check on POST /publish. Mirrors PATCH semantics. v1 tolerates absent
     # If-Match (warn-log + Deprecation header) per DEBT-079.
-    previous = await repo.get_by_id(publication_id)
+    #
+    # R2 (reviewer P1 BLOCKER): the row is read with a SELECT ... FOR UPDATE
+    # so the ETag check and the subsequent ``repo.publish`` UPDATE happen
+    # inside the same locked transaction. ``get_db`` commits at the end of
+    # the request, releasing the lock; concurrent publish requests against
+    # the same row serialise. PATCH's same TOCTOU window is tracked
+    # separately under DEBT-043 and is out of scope for this slice.
+    previous = await repo.get_by_id_for_update(publication_id)
     if previous is None:
         raise PublicationNotFoundError()
 

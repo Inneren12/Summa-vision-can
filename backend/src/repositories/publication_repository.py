@@ -306,6 +306,31 @@ class PublicationRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_by_id_for_update(
+        self, publication_id: int
+    ) -> Publication | None:
+        """Like :meth:`get_by_id` but acquires a row-level write lock.
+
+        Phase 3.1d Slice 4b R2 (Recon Delta 03 + reviewer P1 BLOCKER): used
+        by the publish handler to make the ``If-Match`` precondition check
+        atomic with the subsequent status transition. The lock is held
+        for the lifetime of the request transaction (``get_db`` commits
+        on success), so a concurrent publisher contending for the same
+        row blocks until this transaction commits — eliminating the
+        TOCTOU window between the ETag read and the publish UPDATE.
+
+        SQLite (test backend) ignores ``FOR UPDATE`` silently because the
+        whole database is locked per write transaction; on PostgreSQL
+        (production) it acquires a real row lock.
+        """
+        stmt = (
+            select(Publication)
+            .where(Publication.id == publication_id)
+            .with_for_update()
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_drafts(self, limit: int) -> list[Publication]:
         """Return draft publications sorted by virality score (highest first).
 

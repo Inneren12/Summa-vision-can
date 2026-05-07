@@ -1108,6 +1108,58 @@ async def test_publish_without_if_match_proceeds_with_deprecation_header(
 
 
 @pytest.mark.asyncio
+async def test_publish_412_when_publication_mutated_between_get_and_publish(
+    session_factory,
+) -> None:
+    """Realistic stale-after-mutation flow (reviewer P1, R2):
+
+    1. Create + GET → ETag A
+    2. PATCH publication → ETag rotates to B
+    3. POST /publish with If-Match: A → 412 with current_etag == B
+
+    Distinct from ``test_publish_with_stale_if_match_returns_412`` which
+    uses a synthetic ``"deadbeef..."`` value: this test exercises the
+    actual operator flow where another session mutated the row between
+    the editor's last read and the publish click.
+    """
+    app = _make_app(session_factory)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/api/v1/admin/publications",
+            json=_VALID_BODY,
+            headers=_auth_headers(),
+        )
+        pub_id = create_resp.json()["id"]
+        get_resp = await client.get(
+            f"/api/v1/admin/publications/{pub_id}",
+            headers=_auth_headers(),
+        )
+        etag_a = get_resp.headers["etag"]
+
+        patch_resp = await client.patch(
+            f"/api/v1/admin/publications/{pub_id}",
+            json={"headline": "mutated between read and publish"},
+            headers={**_auth_headers(), "If-Match": etag_a},
+        )
+        assert patch_resp.status_code == 200, patch_resp.text
+        etag_b = patch_resp.headers["etag"]
+        assert etag_b != etag_a  # sanity: PATCH rotated the ETag
+
+        publish_resp = await client.post(
+            f"/api/v1/admin/publications/{pub_id}/publish",
+            headers={**_auth_headers(), "If-Match": etag_a},
+        )
+
+    assert publish_resp.status_code == 412, publish_resp.text
+    body = publish_resp.json()
+    assert body["detail"]["error_code"] == "PRECONDITION_FAILED"
+    details = body["detail"]["details"]
+    assert details["client_etag"] == etag_a
+    assert details["server_etag"] == etag_b
+
+
+@pytest.mark.asyncio
 async def test_publish_412_envelope_matches_patch_412_shape(session_factory) -> None:
     """Schema parity: PATCH 412 and POST /publish 412 envelopes share structure."""
     app = _make_app(session_factory)
