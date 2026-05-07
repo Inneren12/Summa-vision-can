@@ -167,6 +167,68 @@ describe('TopBar — compare integration (Phase 3.1d Slice 1b)', () => {
     expect(screen.queryByTestId('compare-badge')).not.toBeInTheDocument();
   });
 
+  describe('TopBar — Slice 5 republish CTA', () => {
+    it('does NOT render CTA when showRepublishCta is false', () => {
+      render(<HostedTopBar showRepublishCta={false} />);
+      expect(screen.queryByTestId('republish-cta')).toBeNull();
+    });
+
+    it('does NOT render CTA by default (omitted prop)', () => {
+      render(<HostedTopBar />);
+      expect(screen.queryByTestId('republish-cta')).toBeNull();
+    });
+
+    it('renders CTA button when showRepublishCta is true', () => {
+      render(
+        <HostedTopBar
+          showRepublishCta
+          compareReasons={['snapshot_missing']}
+        />,
+      );
+      const cta = screen.getByTestId('republish-cta');
+      expect(cta).toBeInTheDocument();
+      expect(cta).toHaveTextContent('publication.compare.refresh_required.cta');
+    });
+
+    it('CTA disabled when no publicationId', () => {
+      render(
+        <HostedTopBar
+          showRepublishCta
+          publicationId={undefined}
+          compareReasons={['snapshot_missing']}
+        />,
+      );
+      expect(screen.getByTestId('republish-cta')).toBeDisabled();
+    });
+
+    it('CTA disabled when onRequestRepublish callback is missing (P2-A)', () => {
+      // PR-08 R2 fix: clicking would otherwise be a silent no-op. Mirror
+      // the ReviewPanel P1-1 wiring-bug protection at the CTA level.
+      render(
+        <HostedTopBar
+          showRepublishCta
+          publicationId="p1"
+          compareReasons={['snapshot_missing']}
+          onRequestRepublish={undefined}
+        />,
+      );
+      expect(screen.getByTestId('republish-cta')).toBeDisabled();
+    });
+
+    it('clicking CTA invokes onRequestRepublish callback', () => {
+      const onRequestRepublish = jest.fn();
+      render(
+        <HostedTopBar
+          showRepublishCta
+          compareReasons={['snapshot_missing']}
+          onRequestRepublish={onRequestRepublish}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('republish-cta'));
+      expect(onRequestRepublish).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('clicking error retry triggers a new compare', async () => {
     mockedCompare.mockRejectedValueOnce(new Error('First fail'));
     render(<HostedTopBar />);

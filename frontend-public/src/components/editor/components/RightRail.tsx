@@ -33,13 +33,15 @@ export interface RightRailProps {
   canEdit: (reg: BlockRegistryEntry, k: string) => boolean;
   onRequestNote: (config: NoteRequestConfig) => void;
   contrastIssues: ContrastIssue[];
-  /** Phase 3.1d Slice 4a: forwarded to ReviewPanel for the publish confirm modal. */
+  /** Phase 3.1d Slice 4a: forwarded to ReviewPanel for publish-vs-direct branching. */
   publicationId?: string;
-  /** Phase 3.1d Slice 4b: forwarded to ReviewPanel → usePublishAction. */
-  etag?: string | null;
-  onEtagUpdate?: (newEtag: string | null) => void;
-  onCompareRequest?: () => void;
-  onPreconditionFailed?: (info: { serverEtag: string | null }) => void;
+  /**
+   * Phase 3.1d Slice 5 (PR-08): publish flow lifted to editor root. RightRail
+   * forwards the minimal surface to ReviewPanel — the active flag (for
+   * disabling the transition button) and the initiate callback.
+   */
+  isPublishing?: boolean;
+  onRequestPublish?: () => void;
 }
 
 function RightRailImpl({
@@ -53,10 +55,8 @@ function RightRailImpl({
   onRequestNote,
   contrastIssues,
   publicationId,
-  etag,
-  onEtagUpdate,
-  onCompareRequest,
-  onPreconditionFailed,
+  isPublishing,
+  onRequestPublish,
 }: RightRailProps) {
   const tRightRail = useTranslations('right_rail');
   const [tab, setTab] = useState<RightRailTab>('inspector');
@@ -193,10 +193,8 @@ function RightRailImpl({
             dispatch={dispatch}
             onRequestNote={onRequestNote}
             publicationId={publicationId}
-            etag={etag}
-            onEtagUpdate={onEtagUpdate}
-            onCompareRequest={onCompareRequest}
-            onPreconditionFailed={onPreconditionFailed}
+            isPublishing={isPublishing}
+            onRequestPublish={onRequestPublish}
           />
         )}
       </div>

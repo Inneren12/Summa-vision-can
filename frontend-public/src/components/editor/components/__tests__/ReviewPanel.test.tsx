@@ -1,60 +1,28 @@
 /**
- * Phase 3.1d Slice 4a — ReviewPanel publish-modal interception tests.
+ * Phase 3.1d Slice 5 (PR-08) — ReviewPanel publish-callback tests.
  *
- * Verifies that clicking the workflow MARK_PUBLISHED transition does NOT
- * directly dispatch to the reducer; instead it opens the PublishConfirmModal,
- * and the reducer dispatch fires only after the network publish succeeds.
+ * Post-lift, ReviewPanel no longer owns `usePublishAction` or
+ * `PublishConfirmModal` — both live in the editor root. ReviewPanel's
+ * publish surface is now:
+ *   - clicking the MARK_PUBLISHED transition fires `onRequestPublish`
+ *     (when publicationId is present)
+ *   - clicking the same transition without a publicationId falls back
+ *     to a direct MARK_PUBLISHED dispatch (template-only session,
+ *     pre-Slice-4a Badge P2-2 behavior)
+ *   - the transition button is disabled while `isPublishing` is true
+ *
+ * Network behavior (etag forwarding, 404, 412, ordering) is covered by
+ * `hooks/__tests__/usePublishAction.test.tsx` — the hook IS the publish
+ * flow now, regardless of which surface (TopBar CTA or ReviewPanel
+ * transition button) calls `initiate()`.
  */
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { ReviewPanel } from '../ReviewPanel';
-import { initState } from '../../store/reducer';
-import { reducer } from '../../store/reducer';
-import type { CanonicalDocument, EditorAction, EditorState } from '../../types';
-
-jest.mock('@/lib/api/admin', () => {
-  class AdminPublicationNotFoundError extends Error {
-    constructor(id: string) {
-      super(`Publication ${id} not found`);
-      this.name = 'AdminPublicationNotFoundError';
-    }
-  }
-  class BackendApiError extends Error {
-    public readonly status: number;
-    public readonly code: string | null;
-    public readonly details: Record<string, unknown> | null;
-    constructor(args: {
-      status: number;
-      code: string | null;
-      message?: string;
-      details?: Record<string, unknown> | null;
-    }) {
-      super(args.message ?? `Backend error ${args.status}`);
-      this.name = 'BackendApiError';
-      this.status = args.status;
-      this.code = args.code;
-      this.details = args.details ?? null;
-    }
-  }
-  return {
-    publishAdminPublication: jest.fn(),
-    AdminPublicationNotFoundError,
-    BackendApiError,
-  };
-});
-
-import {
-  publishAdminPublication,
-  AdminPublicationNotFoundError,
-  BackendApiError,
-} from '@/lib/api/admin';
-
-const publishMock = publishAdminPublication as jest.MockedFunction<
-  typeof publishAdminPublication
->;
+import { initState, reducer } from '../../store/reducer';
+import type { EditorAction, EditorState } from '../../types';
 
 function makeExportedState(): EditorState {
-  // Walk through the workflow: draft → in_review → approved → exported
   let state = initState();
   const path: EditorAction[] = [
     { type: 'SUBMIT_FOR_REVIEW' },
@@ -65,28 +33,26 @@ function makeExportedState(): EditorState {
   return state;
 }
 
-beforeEach(() => {
-  publishMock.mockReset();
-});
-
-describe('ReviewPanel — MARK_PUBLISHED publish modal interception', () => {
-  it('clicking publish transition opens modal but does NOT dispatch MARK_PUBLISHED', () => {
+describe('ReviewPanel — MARK_PUBLISHED transition (Slice 5 lift)', () => {
+  it('clicking publish transition with publicationId fires onRequestPublish', () => {
     const state = makeExportedState();
     const dispatch = jest.fn();
+    const onRequestPublish = jest.fn();
     render(
       <ReviewPanel
         state={state}
         dispatch={dispatch}
         onRequestNote={jest.fn()}
         publicationId="p1"
+        onRequestPublish={onRequestPublish}
       />,
     );
 
-    const publishBtn = screen.getByTestId('transition-MARK_PUBLISHED');
-    fireEvent.click(publishBtn);
+    fireEvent.click(screen.getByTestId('transition-MARK_PUBLISHED'));
 
-    expect(screen.getByTestId('publish-confirm-modal')).toBeTruthy();
-    // No MARK_PUBLISHED dispatch on click — modal is the gate
+    expect(onRequestPublish).toHaveBeenCalledTimes(1);
+    // No direct MARK_PUBLISHED dispatch — flow goes through the lifted
+    // confirm modal owned by editor root.
     expect(
       dispatch.mock.calls.find(
         (c) => (c[0] as EditorAction).type === 'MARK_PUBLISHED',
@@ -94,33 +60,23 @@ describe('ReviewPanel — MARK_PUBLISHED publish modal interception', () => {
     ).toBeUndefined();
   });
 
-  it('modal confirm dispatches MARK_PUBLISHED on successful publish', async () => {
-    publishMock.mockResolvedValueOnce({
-      etag: 'etag-1',
-      document: {} as never,
-    });
+  it('falls back to direct dispatch when publicationId is absent (template-only, Badge P2-2)', () => {
     const state = makeExportedState();
     const dispatch = jest.fn();
+    const onRequestPublish = jest.fn();
     render(
       <ReviewPanel
         state={state}
         dispatch={dispatch}
         onRequestNote={jest.fn()}
-        publicationId="p1"
+        // publicationId intentionally omitted
+        onRequestPublish={onRequestPublish}
       />,
     );
 
     fireEvent.click(screen.getByTestId('transition-MARK_PUBLISHED'));
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('publish-modal-confirm'));
-    });
 
-    expect(publishMock).toHaveBeenCalledTimes(1);
-    expect(publishMock).toHaveBeenCalledWith(
-      'p1',
-      { bound_blocks: [] },
-      expect.objectContaining({ ifMatch: null }),
-    );
+    expect(onRequestPublish).not.toHaveBeenCalled();
     const markCalls = dispatch.mock.calls.filter(
       (c) => (c[0] as EditorAction).type === 'MARK_PUBLISHED',
     );
@@ -131,7 +87,10 @@ describe('ReviewPanel — MARK_PUBLISHED publish modal interception', () => {
     });
   });
 
-  it('modal cancel does NOT dispatch any workflow action', () => {
+  it('publicationId present + missing onRequestPublish does NOT dispatch MARK_PUBLISHED (P1-1 safety)', () => {
+    // PR-08 R2 fix: silently advancing the workflow without a network
+    // publish would leave snapshots uncaptured. Defensive surface is a
+    // SAVE_FAILED toast naming the wiring bug.
     const state = makeExportedState();
     const dispatch = jest.fn();
     render(
@@ -140,180 +99,57 @@ describe('ReviewPanel — MARK_PUBLISHED publish modal interception', () => {
         dispatch={dispatch}
         onRequestNote={jest.fn()}
         publicationId="p1"
+        // onRequestPublish intentionally omitted — wiring-bug simulation
       />,
     );
 
     fireEvent.click(screen.getByTestId('transition-MARK_PUBLISHED'));
-    expect(screen.getByTestId('publish-confirm-modal')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('publish-modal-cancel'));
 
-    expect(publishMock).not.toHaveBeenCalled();
-    expect(
-      dispatch.mock.calls.find(
-        (c) => (c[0] as EditorAction).type === 'MARK_PUBLISHED',
-      ),
-    ).toBeUndefined();
-  });
-
-  it('modal confirm with 404 dispatches SAVE_FAILED, not MARK_PUBLISHED, and closes modal', async () => {
-    // The jest.mock factory at top of file exports a mocked
-    // AdminPublicationNotFoundError class; importing it via `@/lib/api/admin`
-    // returns that mocked class, which usePublishAction's `instanceof` check
-    // matches.
-    publishMock.mockRejectedValueOnce(new AdminPublicationNotFoundError('p1'));
-
-    const state = makeExportedState();
-    const dispatch = jest.fn();
-    render(
-      <ReviewPanel
-        state={state}
-        dispatch={dispatch}
-        onRequestNote={jest.fn()}
-        publicationId="p1"
-      />,
+    const markCalls = dispatch.mock.calls.filter(
+      (c) => (c[0] as EditorAction).type === 'MARK_PUBLISHED',
     );
+    expect(markCalls).toHaveLength(0);
 
-    fireEvent.click(screen.getByTestId('transition-MARK_PUBLISHED'));
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('publish-modal-confirm'));
-    });
-
-    expect(publishMock).toHaveBeenCalledTimes(1);
-    // No MARK_PUBLISHED on 404 — workflow stays in pre-published state
-    expect(
-      dispatch.mock.calls.find(
-        (c) => (c[0] as EditorAction).type === 'MARK_PUBLISHED',
-      ),
-    ).toBeUndefined();
-    // SAVE_FAILED dispatched per ReviewPanel onNotFound handler
     const saveFailedCalls = dispatch.mock.calls.filter(
       (c) => (c[0] as EditorAction).type === 'SAVE_FAILED',
     );
     expect(saveFailedCalls).toHaveLength(1);
-    // Modal closes after 404
-    expect(screen.queryByTestId('publish-confirm-modal')).toBeNull();
-  });
-
-  it('falls back to direct dispatch when publicationId is absent (template-only session, Badge P2-2)', () => {
-    const state = makeExportedState();
-    const dispatch = jest.fn();
-    render(
-      <ReviewPanel
-        state={state}
-        dispatch={dispatch}
-        onRequestNote={jest.fn()}
-        // publicationId intentionally omitted — template-only editor session
-      />,
-    );
-
-    fireEvent.click(screen.getByTestId('transition-MARK_PUBLISHED'));
-
-    // No modal — direct path
-    expect(screen.queryByTestId('publish-confirm-modal')).toBeNull();
-    // No network publish
-    expect(publishMock).not.toHaveBeenCalled();
-    // Direct MARK_PUBLISHED dispatch (pre-Slice-4a behavior preserved)
-    const markCalls = dispatch.mock.calls.filter(
-      (c) => (c[0] as EditorAction).type === 'MARK_PUBLISHED',
-    );
-    expect(markCalls).toHaveLength(1);
-    expect(markCalls[0][0]).toEqual({
-      type: 'MARK_PUBLISHED',
-      channel: 'manual',
-    });
-  });
-});
-
-describe('ReviewPanel — Slice 4b publish concurrency + auto-refresh', () => {
-  it('forwards etag as ifMatch and refreshes etag + fires compare BEFORE MARK_PUBLISHED', async () => {
-    publishMock.mockResolvedValueOnce({
-      etag: '"post-publish"',
-      document: {} as never,
-    });
-    const state = makeExportedState();
-    const dispatch = jest.fn();
-    const onEtagUpdate = jest.fn();
-    const onCompareRequest = jest.fn();
-
-    // Track callback ordering across the three side-effects.
-    const order: string[] = [];
-    onEtagUpdate.mockImplementation(() => order.push('etag'));
-    onCompareRequest.mockImplementation(() => order.push('compare'));
-    dispatch.mockImplementation((a: EditorAction) => {
-      if (a.type === 'MARK_PUBLISHED') order.push('mark_published');
-    });
-
-    render(
-      <ReviewPanel
-        state={state}
-        dispatch={dispatch}
-        onRequestNote={jest.fn()}
-        publicationId="p1"
-        etag='"current"'
-        onEtagUpdate={onEtagUpdate}
-        onCompareRequest={onCompareRequest}
-      />,
-    );
-
-    fireEvent.click(screen.getByTestId('transition-MARK_PUBLISHED'));
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('publish-modal-confirm'));
-    });
-
-    expect(publishMock).toHaveBeenCalledWith(
-      'p1',
-      { bound_blocks: [] },
-      expect.objectContaining({ ifMatch: '"current"' }),
-    );
-    expect(onEtagUpdate).toHaveBeenCalledWith('"post-publish"');
-    expect(onCompareRequest).toHaveBeenCalledTimes(1);
-    // Auto-refresh sequencing per Recon Delta 03: compare fires BEFORE
-    // MARK_PUBLISHED so the badge transitions to "Comparing…" first.
-    expect(order).toEqual(['etag', 'compare', 'mark_published']);
-  });
-
-  it('on 412 calls onPreconditionFailed with serverEtag, skips compare + MARK_PUBLISHED', async () => {
-    publishMock.mockRejectedValueOnce(
-      new BackendApiError({
-        status: 412,
-        code: 'PRECONDITION_FAILED',
-        message: 'stale',
-        details: { server_etag: '"server-current"', client_etag: '"stale"' },
-      }),
-    );
-    const state = makeExportedState();
-    const dispatch = jest.fn();
-    const onCompareRequest = jest.fn();
-    const onPreconditionFailed = jest.fn();
-
-    render(
-      <ReviewPanel
-        state={state}
-        dispatch={dispatch}
-        onRequestNote={jest.fn()}
-        publicationId="p1"
-        etag='"stale"'
-        onCompareRequest={onCompareRequest}
-        onPreconditionFailed={onPreconditionFailed}
-      />,
-    );
-
-    fireEvent.click(screen.getByTestId('transition-MARK_PUBLISHED'));
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('publish-modal-confirm'));
-    });
-
-    expect(onPreconditionFailed).toHaveBeenCalledWith({
-      serverEtag: '"server-current"',
-    });
-    expect(onCompareRequest).not.toHaveBeenCalled();
+    // Error message comes from publish_flow_unavailable.reload key —
+    // next-intl mock returns the dotted key as the resolved string.
     expect(
-      dispatch.mock.calls.find(
-        (c) => (c[0] as EditorAction).type === 'MARK_PUBLISHED',
-      ),
-    ).toBeUndefined();
-    // Modal closes after 412 — surface is now the PreconditionFailedModal
-    // owned by the editor root.
-    expect(screen.queryByTestId('publish-confirm-modal')).toBeNull();
+      (saveFailedCalls[0][0] as { error: string }).error,
+    ).toContain('publish_flow_unavailable');
+  });
+
+  it('publish transition button is disabled while isPublishing=true', () => {
+    const state = makeExportedState();
+    render(
+      <ReviewPanel
+        state={state}
+        dispatch={jest.fn()}
+        onRequestNote={jest.fn()}
+        publicationId="p1"
+        onRequestPublish={jest.fn()}
+        isPublishing
+      />,
+    );
+
+    expect(screen.getByTestId('transition-MARK_PUBLISHED')).toBeDisabled();
+  });
+
+  it('publish transition button is NOT disabled when isPublishing=false', () => {
+    const state = makeExportedState();
+    render(
+      <ReviewPanel
+        state={state}
+        dispatch={jest.fn()}
+        onRequestNote={jest.fn()}
+        publicationId="p1"
+        onRequestPublish={jest.fn()}
+        isPublishing={false}
+      />,
+    );
+
+    expect(screen.getByTestId('transition-MARK_PUBLISHED')).not.toBeDisabled();
   });
 });

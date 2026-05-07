@@ -24,8 +24,6 @@ import { checkWorkflowPermission } from '../store/permissions';
 import { resolveBlockLabel } from '../utils/block-label';
 import { StatusBadge } from './StatusBadge';
 import type { NoteRequestConfig } from './noteRequest';
-import { usePublishAction } from '../hooks/usePublishAction';
-import { PublishConfirmModal } from './PublishConfirmModal';
 
 const ACTOR_YOU = 'you';
 const HISTORY_COLLAPSED_LIMIT = 6;
@@ -101,35 +99,24 @@ export interface ReviewPanelProps {
   onRequestNote: (config: NoteRequestConfig) => void;
   /**
    * Phase 3.1d Slice 4a: required for the publish confirm modal flow.
-   * MARK_PUBLISHED transitions intercept the descriptor, open the modal,
-   * and on confirm POST `bound_blocks` to the publish endpoint via
-   * `publishAdminPublication(publicationId, ...)`. Optional because the
-   * template-only editor session passes no publicationId; in that case
-   * the publish hook warns and the modal never opens.
+   * MARK_PUBLISHED transitions on a publication-backed session route
+   * through `onRequestPublish` (which opens the lifted PublishConfirmModal).
+   * Without a publicationId the transition dispatches directly — preserves
+   * the template-only editor session behavior (no backend call).
+   *
+   * Phase 3.1d Slice 5 (PR-08) — `usePublishAction` lifted to editor
+   * root; this prop now only gates the route between modal vs direct
+   * dispatch.
    */
   publicationId?: string;
   /**
-   * Phase 3.1d Slice 4b (Recon Delta 03): current ETag forwarded as
-   * If-Match on POST /publish for optimistic concurrency. Sourced from
-   * the editor's etagRef.
+   * Phase 3.1d Slice 5 (PR-08): publish flow is owned by the editor
+   * root. ReviewPanel only fires the callback on a MARK_PUBLISHED
+   * transition click and reads `isPublishing` for the disabled state of
+   * the transition button.
    */
-  etag?: string | null;
-  /**
-   * Phase 3.1d Slice 4b: notify caller of the new ETag returned by a
-   * successful publish so it can update etagRef before the next PATCH.
-   */
-  onEtagUpdate?: (newEtag: string | null) => void;
-  /**
-   * Phase 3.1d Slice 4b: editor root invokes compare() after publish
-   * success. Auto-refresh sequencing per Recon Delta 03 §"compare
-   * auto-trigger after publish".
-   */
-  onCompareRequest?: () => void;
-  /**
-   * Phase 3.1d Slice 4b: surface the PreconditionFailedModal on the
-   * publish path with the publish-specific copy variant.
-   */
-  onPreconditionFailed?: (info: { serverEtag: string | null }) => void;
+  isPublishing?: boolean;
+  onRequestPublish?: () => void;
 }
 
 export function ReviewPanel({
@@ -137,10 +124,8 @@ export function ReviewPanel({
   dispatch,
   onRequestNote,
   publicationId,
-  etag,
-  onEtagUpdate,
-  onCompareRequest,
-  onPreconditionFailed,
+  isPublishing,
+  onRequestPublish,
 }: ReviewPanelProps) {
   const tReview = useTranslations('review');
   const tBlockType = useTranslations('block.type');
@@ -204,54 +189,44 @@ export function ReviewPanel({
     });
   };
 
-  const publishAction = usePublishAction({
-    publicationId,
-    etag,
-    onPublishSuccess: (newEtag) => {
-      // Phase 3.1d Slice 4b sequencing (Recon Delta 03): refresh etagRef
-      // first (so any subsequent PATCH carries the post-publish ETag),
-      // then auto-trigger compare so the badge transitions to
-      // "Comparing…" immediately, THEN dispatch MARK_PUBLISHED. The
-      // workflow transition is orthogonal and dispatches synchronously.
-      onEtagUpdate?.(newEtag);
-      onCompareRequest?.();
-      dispatch({ type: 'MARK_PUBLISHED', channel: 'manual' });
-    },
-    onNotFound: () => {
-      // Surface "Publication not found — reload the page" via the existing
-      // saveError banner channel (matches editor.md NotificationBanner
-      // priority `saveError > importError > _lastRejection > warnings`).
-      // canAutoRetry: false — terminal, manual reload only.
-      dispatch({
-        type: 'SAVE_FAILED',
-        error: tPublication('not_found.reload'),
-        canAutoRetry: false,
-      });
-    },
-    onPreconditionFailed: (info) => {
-      onPreconditionFailed?.(info);
-    },
-  });
-
   const handleTransitionClick = (descriptor: TransitionDescriptor) => {
     if (descriptor.kind === 'direct') {
       // Phase 3.1d Slice 4a: combined-transition interception. MARK_PUBLISHED
       // does not dispatch directly from the button click; instead it opens
-      // the publish confirm modal. The reducer dispatch happens inside
+      // the publish confirm modal owned by the editor root (Slice 5 lift).
+      // The reducer dispatch happens inside the editor root's
       // `onPublishSuccess` once the network publish succeeds.
       //
-      // Phase 3.1d Slice 4a fix (Badge P2-2): template-only sessions have
-      // no publicationId — there is no backend publication to send
-      // bound_blocks to. Preserve pre-Slice-4a behavior: direct dispatch
-      // advances the local workflow to "published" without a network
-      // call. Operator sees the workflow transition; no snapshot capture
-      // is attempted (and none is meaningful in a template-only session).
+      // Template-only sessions (no publicationId) preserve pre-Slice-4a
+      // behavior: direct dispatch advances the local workflow without a
+      // network call.
       if (descriptor.action.type === 'MARK_PUBLISHED') {
-        if (publicationId) {
-          publishAction.initiate();
-        } else {
+        // Template-only session (no publicationId): direct dispatch is
+        // correct — there is no backend publication to PUBLISH against,
+        // so workflow advance is purely local (Badge P2-2 behavior).
+        if (!publicationId) {
           dispatch(descriptor.action);
+          return;
         }
+
+        // Publication-backed session: MUST route through the lifted
+        // publish flow. PR-08 R2 fix (P1-1): if `onRequestPublish` is
+        // missing here, that is a wiring bug at the editor-root level.
+        // Surfacing it as SAVE_FAILED is far safer than silently
+        // advancing the workflow without a network publish (which would
+        // leave snapshots uncaptured and confuse the next compare into
+        // returning `snapshot_missing`, misleading the operator about
+        // publish state).
+        if (onRequestPublish) {
+          onRequestPublish();
+          return;
+        }
+
+        dispatch({
+          type: 'SAVE_FAILED',
+          error: tPublication('publish_flow_unavailable.reload'),
+          canAutoRetry: false,
+        });
         return;
       }
       dispatch(descriptor.action);
@@ -309,7 +284,9 @@ export function ReviewPanel({
             const actionType =
               t.kind === 'direct' ? t.action.type : t.actionType;
             const probe = checkWorkflowPermission(workflow, { type: actionType });
-            const disabled = !probe.allowed;
+            const publishingThis =
+              actionType === 'MARK_PUBLISHED' && Boolean(isPublishing);
+            const disabled = !probe.allowed || publishingThis;
             const showArrow = actionType !== 'DUPLICATE_AS_DRAFT';
             return (
               <button
@@ -559,14 +536,6 @@ export function ReviewPanel({
         </ul>
       </div>
 
-      <PublishConfirmModal
-        isOpen={publishAction.isModalOpen}
-        doc={state.doc}
-        isPublishing={publishAction.isPublishing}
-        error={publishAction.error}
-        onConfirm={publishAction.confirm}
-        onCancel={publishAction.cancel}
-      />
     </div>
   );
 }
