@@ -241,32 +241,38 @@ export function TopBar({
             reasons={compareReasons}
           />
         ) : null}
-        {showRepublishCta && (
-          <button
-            type="button"
-            data-testid="republish-cta"
-            onClick={onRequestRepublish}
-            disabled={!publicationId}
-            title={tCompare('refresh_required.body')}
-            style={{
-              padding: '3px 7px',
-              fontSize: '8px',
-              fontFamily: TK.font.data,
-              textTransform: 'uppercase',
-              letterSpacing: '0.3px',
-              background: TK.c.acc,
-              color: TK.c.bgApp,
-              border: `1px solid ${TK.c.acc}`,
-              borderRadius: '2px',
-              cursor: publicationId ? 'pointer' : 'not-allowed',
-              fontWeight: 700,
-              opacity: publicationId ? 1 : 0.5,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {tCompare('refresh_required.cta')}
-          </button>
-        )}
+        {showRepublishCta && (() => {
+          // PR-08 R2 fix (P2-A): CTA must be disabled when the callback
+          // is missing as well — visible UX guard mirroring the
+          // ReviewPanel P1-1 wiring-bug protection.
+          const republishDisabled = !publicationId || !onRequestRepublish;
+          return (
+            <button
+              type="button"
+              data-testid="republish-cta"
+              onClick={onRequestRepublish}
+              disabled={republishDisabled}
+              title={tCompare('refresh_required.body')}
+              style={{
+                padding: '3px 7px',
+                fontSize: '8px',
+                fontFamily: TK.font.data,
+                textTransform: 'uppercase',
+                letterSpacing: '0.3px',
+                background: TK.c.acc,
+                color: TK.c.bgApp,
+                border: `1px solid ${TK.c.acc}`,
+                borderRadius: '2px',
+                cursor: republishDisabled ? 'not-allowed' : 'pointer',
+                fontWeight: 700,
+                opacity: republishDisabled ? 0.5 : 1,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {tCompare('refresh_required.cta')}
+            </button>
+          );
+        })()}
         {showCompareRetry && (
           <button
             type="button"

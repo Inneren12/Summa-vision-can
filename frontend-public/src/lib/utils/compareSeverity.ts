@@ -17,6 +17,11 @@ import type {
   CompareBadgeSeverity,
   StaleReason,
 } from '@/lib/types/compare';
+import type { CanonicalDocument } from '@/components/editor/types';
+import {
+  collectV1SingleBindableBlockIds,
+  hasV1SinglePublishableBindings,
+} from '@/components/editor/utils/v1-single-bindable';
 
 export function aggregateCompareSeverity(
   result: CompareResponse,
@@ -97,17 +102,52 @@ export function aggregateReasons(
 }
 
 /**
- * Phase 3.1d Slice 5 (PR-08): detect whether the Pre-3.1d "Republish to
- * refresh" CTA should render. Founder lock 2026-05-07: any block result
- * carrying the `snapshot_missing` reason triggers the CTA. This single
- * condition covers true-pre-3.1d publications AND any future
- * DEBT-069 snapshot-cleanup case (recon §3.4 collapses all sub-causes
- * to the same SNAPSHOT_MISSING synthetic entry).
+ * Phase 3.1d Slice 5 (PR-08 R2): doc-aware "Republish to refresh" CTA
+ * predicate. Replaces the simpler R1 `shouldShowRepublishCta` which
+ * was both false-positive on editorial-only publications (synthetic
+ * snapshot_missing → infinite republish loop) and false-negative on
+ * pre-3.1d publications where backend returns `block_results: []`
+ * (the main legacy use-case).
+ *
+ * Returns true iff:
+ *   1. The document has at least one v1 single-bindable block (the
+ *      operator has actual publish intent), AND
+ *   2. Either backend returned no snapshot rows at all (pre-3.1d
+ *      legacy / cleared-snapshots), OR the synthetic publication-level
+ *      `snapshot_missing` entry is present, OR at least one of the
+ *      operator's bindable blocks lacks a fresh snapshot (missing from
+ *      `block_results` OR carries `snapshot_missing` reason).
+ *
+ * The predicate intentionally does NOT use `block_results.some(...)`
+ * over the backend's full set — backend may include snapshot rows for
+ * blocks the operator has since unbound. We only care about the
+ * operator's current bindable set (`collectV1SingleBindableBlockIds`).
  */
-export function shouldShowRepublishCta(
+export function shouldShowRepublishCtaForDoc(
+  doc: CanonicalDocument,
   blockResults: ReadonlyArray<BlockComparatorResult>,
 ): boolean {
-  return blockResults.some((b) => b.stale_reasons.includes('snapshot_missing'));
+  if (!hasV1SinglePublishableBindings(doc)) return false;
+
+  // Pre-3.1d legacy: backend returned no snapshot rows at all.
+  if (blockResults.length === 0) return true;
+
+  // Synthetic publication-level snapshot_missing entry (recon §3.4):
+  // empty block_id + `snapshot_missing` reason. Treat as "all bindables
+  // lack snapshots" — CTA shows.
+  const hasSyntheticSnapshotMissing = blockResults.some(
+    (b) => b.block_id === '' && b.stale_reasons.includes('snapshot_missing'),
+  );
+  if (hasSyntheticSnapshotMissing) return true;
+
+  // Per-block check: any bindable block whose backend result is missing
+  // OR carries `snapshot_missing` → CTA shows.
+  const bindableIds = collectV1SingleBindableBlockIds(doc);
+  const resultByBlockId = new Map(blockResults.map((r) => [r.block_id, r]));
+  return bindableIds.some((id) => {
+    const result = resultByBlockId.get(id);
+    return !result || result.stale_reasons.includes('snapshot_missing');
+  });
 }
 
 export function summarizeCompare(result: CompareResponse): CompareSummary {

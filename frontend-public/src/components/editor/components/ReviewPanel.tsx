@@ -129,6 +129,7 @@ export function ReviewPanel({
 }: ReviewPanelProps) {
   const tReview = useTranslations('review');
   const tBlockType = useTranslations('block.type');
+  const tPublication = useTranslations('publication');
   const [showResolved, setShowResolved] = useState<boolean>(false);
   const [historyExpanded, setHistoryExpanded] = useState<boolean>(false);
 
@@ -200,11 +201,32 @@ export function ReviewPanel({
       // behavior: direct dispatch advances the local workflow without a
       // network call.
       if (descriptor.action.type === 'MARK_PUBLISHED') {
-        if (publicationId && onRequestPublish) {
-          onRequestPublish();
-        } else {
+        // Template-only session (no publicationId): direct dispatch is
+        // correct — there is no backend publication to PUBLISH against,
+        // so workflow advance is purely local (Badge P2-2 behavior).
+        if (!publicationId) {
           dispatch(descriptor.action);
+          return;
         }
+
+        // Publication-backed session: MUST route through the lifted
+        // publish flow. PR-08 R2 fix (P1-1): if `onRequestPublish` is
+        // missing here, that is a wiring bug at the editor-root level.
+        // Surfacing it as SAVE_FAILED is far safer than silently
+        // advancing the workflow without a network publish (which would
+        // leave snapshots uncaptured and confuse the next compare into
+        // returning `snapshot_missing`, misleading the operator about
+        // publish state).
+        if (onRequestPublish) {
+          onRequestPublish();
+          return;
+        }
+
+        dispatch({
+          type: 'SAVE_FAILED',
+          error: tPublication('publish_flow_unavailable.reload'),
+          canAutoRetry: false,
+        });
         return;
       }
       dispatch(descriptor.action);

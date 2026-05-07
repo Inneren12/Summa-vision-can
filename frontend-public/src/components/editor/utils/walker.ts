@@ -30,6 +30,7 @@
  */
 import type { CanonicalDocument } from '../types';
 import type { BoundBlockReference } from '@/lib/types/compare';
+import { V1_SINGLE_BINDABLE_TYPES } from './v1-single-bindable';
 
 export type DeferredReason =
   | 'time_series'
@@ -72,11 +73,12 @@ const UNSUPPORTED_KINDS: ReadonlySet<DeferredReason> = new Set<DeferredReason>([
  * to these two in v1. Slice 4a/Slice 1a registry already declares
  * acceptsBinding=['single'] only on these two; the walker enforces the
  * same invariant at publish-payload boundary defensively.
+ *
+ * PR-08 R2 (closes polish P3-042): the allowlist now lives in
+ * `./v1-single-bindable.ts` so `shouldShowRepublishCtaForDoc` shares the
+ * single source of truth.
  */
-const SUPPORTED_SINGLE_BINDING_BLOCK_TYPES: ReadonlySet<string> = new Set<string>([
-  'hero_stat',
-  'delta_badge',
-]);
+const SUPPORTED_SINGLE_BINDING_BLOCK_TYPES = V1_SINGLE_BINDABLE_TYPES;
 
 /**
  * Phase 3.1d Slice 4a fix (P1-2): strict integer parser for filter

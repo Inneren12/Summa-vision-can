@@ -19,6 +19,9 @@
     "not_found": {
       "reload": "Publication not found — reload the page"
     },
+    "publish_flow_unavailable": {
+      "reload": "Publish flow is unavailable in this session. Reload the page and try again."
+    },
     "payload_invalid": {
       "message": "Changes were rejected. Review the publication fields and try again."
     },
@@ -83,9 +86,7 @@
         "snapshot_missing": "No snapshot to compare against"
       },
       "tooltip": {
-        "title": "Why this is {severity}",
-        "single_reason": "Reason: {reason}",
-        "multiple_reasons": "Reasons: {reasons}"
+        "title": "Why this is {severity}"
       }
     }
   },

@@ -1295,3 +1295,37 @@ Current batch candidates:
 - **Process discipline**: P3-038 — single-item, behavioral. Address
   via claude self-instruction at every file-output decision point.
   No batch dispatch; always-on discipline.
+
+
+## P3-044 — Walker block-type allowlist now centralized in v1-single-bindable.ts
+
+**Resolution of P3-042** (allowlist duplication). Phase 3.1d Slice 5 PR-08 R2
+needed the same allowlist for `shouldShowRepublishCtaForDoc`. Rather than
+duplicating, the constant was extracted to a new file
+`frontend-public/src/components/editor/utils/v1-single-bindable.ts`. The
+walker imports `V1_SINGLE_BINDABLE_TYPES` from there starting in this PR;
+its local `SUPPORTED_SINGLE_BINDING_BLOCK_TYPES` alias is preserved
+(zero-cost, keeps the comment trail) but now points at the shared set.
+The new file also exports `hasV1SinglePublishableBindings(doc)` and
+`collectV1SingleBindableBlockIds(doc)` — pure predicates used by the
+CTA gate.
+
+- **Source:** Phase 3.1d Slice 5 PR-08 R2
+- **Added:** 2026-05-07
+- **Status:** RESOLVED (closes P3-042)
+
+## P3-045 — Defensive SAVE_FAILED on missing publish wiring (Slice 5 hardening)
+
+ReviewPanel's MARK_PUBLISHED branch now dispatches `SAVE_FAILED` with the
+`publication.publish_flow_unavailable.reload` i18n key when `publicationId`
+is present but `onRequestPublish` callback is missing (editor-root wiring
+bug). The TopBar republish CTA applies the same guard via
+`disabled={!publicationId || !onRequestRepublish}`. Both prevent silent
+workflow corruption — previously a missed prop would advance the workflow
+to `published` locally without a backend POST `/publish`, leaving snapshots
+uncaptured and confusing the next compare.
+
+- **Source:** Phase 3.1d Slice 5 PR-08 R2 (P1-1 + P2-A reviewer feedback)
+- **Added:** 2026-05-07
+- **Severity:** low (defensive UX guard, not user-reachable on correctly-wired UI)
+- **Status:** active

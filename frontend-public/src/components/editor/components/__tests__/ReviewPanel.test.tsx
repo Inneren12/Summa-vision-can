@@ -87,7 +87,10 @@ describe('ReviewPanel — MARK_PUBLISHED transition (Slice 5 lift)', () => {
     });
   });
 
-  it('falls back to direct dispatch when onRequestPublish is missing', () => {
+  it('publicationId present + missing onRequestPublish does NOT dispatch MARK_PUBLISHED (P1-1 safety)', () => {
+    // PR-08 R2 fix: silently advancing the workflow without a network
+    // publish would leave snapshots uncaptured. Defensive surface is a
+    // SAVE_FAILED toast naming the wiring bug.
     const state = makeExportedState();
     const dispatch = jest.fn();
     render(
@@ -96,7 +99,7 @@ describe('ReviewPanel — MARK_PUBLISHED transition (Slice 5 lift)', () => {
         dispatch={dispatch}
         onRequestNote={jest.fn()}
         publicationId="p1"
-        // onRequestPublish intentionally omitted — defensive fallback
+        // onRequestPublish intentionally omitted — wiring-bug simulation
       />,
     );
 
@@ -105,7 +108,17 @@ describe('ReviewPanel — MARK_PUBLISHED transition (Slice 5 lift)', () => {
     const markCalls = dispatch.mock.calls.filter(
       (c) => (c[0] as EditorAction).type === 'MARK_PUBLISHED',
     );
-    expect(markCalls).toHaveLength(1);
+    expect(markCalls).toHaveLength(0);
+
+    const saveFailedCalls = dispatch.mock.calls.filter(
+      (c) => (c[0] as EditorAction).type === 'SAVE_FAILED',
+    );
+    expect(saveFailedCalls).toHaveLength(1);
+    // Error message comes from publish_flow_unavailable.reload key —
+    // next-intl mock returns the dotted key as the resolved string.
+    expect(
+      (saveFailedCalls[0][0] as { error: string }).error,
+    ).toContain('publish_flow_unavailable');
   });
 
   it('publish transition button is disabled while isPublishing=true', () => {

@@ -55,7 +55,7 @@ import { useCompareState } from './hooks/useCompareState';
 import { usePublishAction } from './hooks/usePublishAction';
 import {
   aggregateReasons,
-  shouldShowRepublishCta,
+  shouldShowRepublishCtaForDoc,
 } from '@/lib/utils/compareSeverity';
 
 // Autosave cadence (Stage 4 Task 2). `AUTOSAVE_DEBOUNCE_MS` is the quiet
@@ -318,7 +318,8 @@ export default function InfographicEditor({
     compareState.kind === 'success' ? compareState.result.block_results : [];
   const compareReasons = aggregateReasons(compareBlockResults);
   const showRepublishCta =
-    Boolean(publicationId) && shouldShowRepublishCta(compareBlockResults);
+    Boolean(publicationId) &&
+    shouldShowRepublishCtaForDoc(state.doc, compareBlockResults);
 
   const [ltab, setLtab] = useState<LeftTab>("templates");
   const [qaOpen, setQaOpen] = useState(true);

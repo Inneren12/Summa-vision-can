@@ -96,7 +96,7 @@ describe('CompareBadge — Slice 5 reasons tooltip', () => {
     expect(screen.getByTestId('compare-badge-wrapper')).toHaveAttribute('tabindex', '0');
   });
 
-  it('renders one <li> per unique reason', () => {
+  it('renders one <li> per reason in input order', () => {
     render(
       <CompareBadge
         severity="stale"
@@ -106,6 +106,22 @@ describe('CompareBadge — Slice 5 reasons tooltip', () => {
     fireEvent.mouseEnter(screen.getByTestId('compare-badge-wrapper'));
     const tooltip = screen.getByTestId('compare-reasons-tooltip');
     expect(tooltip.querySelectorAll('li').length).toBe(3);
+  });
+
+  it('does NOT dedupe input — caller (aggregateReasons) is responsible (PR-08 R2 contract)', () => {
+    // Defensive dedup in the component would mask upstream bugs.
+    // aggregateReasons is the documented dedup point.
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <CompareBadge
+        severity="stale"
+        reasons={['value_changed', 'value_changed']}
+      />,
+    );
+    fireEvent.mouseEnter(screen.getByTestId('compare-badge-wrapper'));
+    const tooltip = screen.getByTestId('compare-reasons-tooltip');
+    expect(tooltip.querySelectorAll('li').length).toBe(2);
+    errSpy.mockRestore();
   });
 
   it('exposes ARIA describedby linkage when tooltip is visible', () => {

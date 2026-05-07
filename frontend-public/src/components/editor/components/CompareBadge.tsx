@@ -49,6 +49,12 @@ export interface CompareBadgeProps {
    * reason (i18n keys under `publication.compare.reasons.*`). When
    * empty/undefined, no tooltip is rendered and the wrapper is not
    * tab-stoppable.
+   *
+   * Contract (R2): `reasons` is rendered as-is; one `<li>` per entry
+   * in the input order. Deduplication is the caller's responsibility
+   * (use `aggregateReasons` from `lib/utils/compareSeverity.ts`).
+   * Defensive dedup here would mask upstream bugs and conflict with
+   * React's `key` warnings on duplicate values.
    */
   reasons?: ReadonlyArray<StaleReason>;
 }
