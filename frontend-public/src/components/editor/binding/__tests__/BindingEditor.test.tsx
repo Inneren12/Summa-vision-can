@@ -10,6 +10,11 @@ jest.mock('@/lib/api/admin-discovery', () => ({
   DiscoveryFetchError: class extends Error {},
 }));
 
+jest.mock('../ResolvePreview', () => ({
+  ResolvePreview: ({ binding }: { binding: unknown }) =>
+    binding ? <div data-testid="mock-resolve-preview">mock</div> : null,
+}));
+
 import {
   searchCubes,
   listSemanticMappings,
@@ -216,7 +221,7 @@ describe('BindingEditor — cube search', () => {
     mockGetCubeMetadata.mockResolvedValue({
       cube_id: '18100004',
       product_id: 18100004,
-      dimensions: {},
+      dimensions: [],
       frequency_code: 'M',
       cube_title_en: null,
       cube_title_fr: null,
@@ -280,15 +285,18 @@ describe('BindingEditor — semantic mappings + cube metadata', () => {
     mockGetCubeMetadata.mockResolvedValue({
       cube_id: '18100004',
       product_id: 18100004,
-      dimensions: {
-        geo: {
-          label: 'Geography',
+      dimensions: [
+        {
+          position_id: 1,
+          name_en: 'Geography',
+          name_fr: 'Géographie',
+          has_uom: false,
           members: [
-            { id: 'CA', label: 'Canada' },
-            { id: 'ON', label: 'Ontario' },
+            { member_id: 1, name_en: 'Canada', name_fr: 'Canada' },
+            { member_id: 2, name_en: 'Ontario', name_fr: 'Ontario' },
           ],
         },
-      },
+      ],
       frequency_code: 'M',
       cube_title_en: null,
       cube_title_fr: null,
@@ -300,7 +308,7 @@ describe('BindingEditor — semantic mappings + cube metadata', () => {
       kind: 'single',
       cube_id: '18100004',
       semantic_key: '',
-      filters: { geo: 'CA' },
+      filters: { '1': '1' },
       period: '2024-Q3',
     };
     render(
@@ -329,14 +337,14 @@ describe('BindingEditor — semantic mappings + cube metadata', () => {
       kind: 'single',
       cube_id: '18100004',
       semantic_key: 'rate_5yr_fixed',
-      filters: { geo: 'CA' },
+      filters: { '1': '1' },
       period: '2024-Q3',
     };
     render(<BindingEditor block={makeBlock({ binding })} onChange={jest.fn()} />);
-    await waitFor(() => screen.getByTestId('binding-editor-filter-geo'));
-    const filter = screen.getByTestId('binding-editor-filter-geo') as HTMLSelectElement;
+    await waitFor(() => screen.getByTestId('binding-editor-filter-1'));
+    const filter = screen.getByTestId('binding-editor-filter-1') as HTMLSelectElement;
     expect(filter.options.length).toBe(3); // placeholder + 2 members
-    expect((filter as HTMLSelectElement).value).toBe('CA');
+    expect((filter as HTMLSelectElement).value).toBe('1');
   });
 
   it('selecting a member updates filters and re-emits binding', async () => {
@@ -345,19 +353,19 @@ describe('BindingEditor — semantic mappings + cube metadata', () => {
       kind: 'single',
       cube_id: '18100004',
       semantic_key: 'rate_5yr_fixed',
-      filters: { geo: 'CA' },
+      filters: { '1': '1' },
       period: '2024-Q3',
     };
     render(<BindingEditor block={makeBlock({ binding })} onChange={onChange} />);
-    await waitFor(() => screen.getByTestId('binding-editor-filter-geo'));
+    await waitFor(() => screen.getByTestId('binding-editor-filter-1'));
     onChange.mockClear();
-    fireEvent.change(screen.getByTestId('binding-editor-filter-geo'), {
-      target: { value: 'ON' },
+    fireEvent.change(screen.getByTestId('binding-editor-filter-1'), {
+      target: { value: '2' },
     });
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
         kind: 'single',
-        filters: { geo: 'ON' },
+        filters: { '1': '2' },
       }),
     );
   });
@@ -517,7 +525,7 @@ describe('BindingEditor — cube change resets dependent fields (Phase 3.1d Slic
     mockGetCubeMetadata.mockResolvedValue({
       cube_id: '36100434',
       product_id: 36100434,
-      dimensions: {},
+      dimensions: [],
       frequency_code: 'A',
       cube_title_en: null,
       cube_title_fr: null,
@@ -538,6 +546,27 @@ describe('BindingEditor — cube change resets dependent fields (Phase 3.1d Slic
       expect(onChange).toHaveBeenCalled();
     });
     expect(onChange).toHaveBeenLastCalledWith(undefined);
+  });
+});
+
+describe('BindingEditor — ResolvePreview integration (Phase 3.1d Slice 3b)', () => {
+  it('mounts ResolvePreview when block has valid single binding', () => {
+    const binding: SingleValueBinding = {
+      kind: 'single',
+      cube_id: '18100004',
+      semantic_key: 'metric_x',
+      filters: { '1': '1' },
+      period: '2024-Q3',
+    };
+    mockListSemanticMappings.mockReturnValue(neverResolves());
+    mockGetCubeMetadata.mockReturnValue(neverResolves());
+    render(<BindingEditor block={makeBlock({ binding })} onChange={jest.fn()} />);
+    expect(screen.getByTestId('mock-resolve-preview')).toBeInTheDocument();
+  });
+
+  it('does not mount ResolvePreview when block has no binding', () => {
+    render(<BindingEditor block={makeBlock()} onChange={jest.fn()} />);
+    expect(screen.queryByTestId('mock-resolve-preview')).toBeNull();
   });
 });
 

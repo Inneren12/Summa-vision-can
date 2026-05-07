@@ -51,20 +51,38 @@ export interface SemanticMappingListResponse {
 }
 
 /**
- * v1 assumption for `dimensions: dict` shape:
- *   { [dim_key]: { label?, members[] } }
- * Confirm against backend on first integration test; if shape diverges,
- * file Recon Delta 02.
+ * Phase 3.1d Slice 3b fix (Recon Delta 02 F-03): backend
+ * `normalize_dimensions` (`backend/src/services/statcan/metadata_cache.py:131`)
+ * stores cube dimensions as a LIST of dim objects, not a dict-keyed-by-name.
+ * Slice 3a's prior `Record<string, CubeMetadataDimension>` shape was
+ * unverified end-to-end (DEBT-081 BACKEND_API_INVENTORY gap).
+ *
+ * Backend per-dim shape:
+ *   { position_id: int, name_en: str, name_fr: str, has_uom: bool,
+ *     members: [{ member_id: int, name_en: str, name_fr: str }, ...] }
+ *
+ * Each member's `member_id` is the integer the backend resolve service
+ * expects in the `?member=<int>` query param. Each dim's `position_id`
+ * is the integer the backend resolve service expects in `?dim=<int>`.
  */
+export interface CubeMetadataMember {
+  member_id: number;
+  name_en: string;
+  name_fr: string;
+}
+
 export interface CubeMetadataDimension {
-  label?: string;
-  members: Array<{ id: string | number; label: string }>;
+  position_id: number;
+  name_en: string;
+  name_fr: string;
+  has_uom: boolean;
+  members: CubeMetadataMember[];
 }
 
 export interface CubeMetadataResponse {
   cube_id: string;
   product_id: number;
-  dimensions: Record<string, CubeMetadataDimension>;
+  dimensions: CubeMetadataDimension[];
   frequency_code: string | null;
   cube_title_en: string | null;
   cube_title_fr: string | null;

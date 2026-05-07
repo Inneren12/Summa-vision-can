@@ -871,3 +871,16 @@ Rules:
 - **Impact:** Operator must re-confirm publish workflow even when only data refresh is wanted; minor UX friction.
 - **Resolution:** New `POST /{publication_id}/recapture-snapshots` endpoint that runs capture flow without state transition.
 - **Target:** Phase 3.2 or operator-feedback-driven.
+
+
+### DEBT-078: Phase 3.1d Slice 3b — resolve preview must use server-side proxy
+
+- **Source:** Phase 3.1d milestone wrapper §HALT-2 (`docs/recon/phase-3-1d-milestone-wrapper.md`); backfilled into DEBT.md by Phase 3.1d Slice 3b PR
+- **Added:** 2026-05-07
+- **Severity:** medium
+- **Category:** security
+- **Status:** resolved
+- **Description:** Slice 3b resolve preview requires admin API credentials (`X-API-KEY`) to call backend `GET /api/v1/admin/resolve/{cube_id}/{semantic_key}`. The browser MUST NOT receive admin secrets via `NEXT_PUBLIC_*` env vars. Solution locked in milestone wrapper: browser calls a same-origin Next.js Route Handler at `/api/admin/resolve/[cubeId]/[semanticKey]`; server-side handler reads `process.env.ADMIN_API_KEY` and proxies to backend with the `X-API-KEY` header.
+- **Impact:** If implemented as a direct backend call from the browser, `ADMIN_API_KEY` would leak into the client bundle, exposing full admin compromise.
+- **Resolution:** Slice 3b ships the server-side proxy at `frontend-public/src/app/api/admin/resolve/[cubeId]/[semanticKey]/route.ts` matching the Slice 3a discovery proxy pattern. Server-side `process.env.ADMIN_API_KEY` is read; browser uses `/api/admin/resolve/...` same-origin paths only via `frontend-public/src/lib/api/admin-resolve.ts`.
+- **Target:** Slice 3b (this PR — resolved on merge)
